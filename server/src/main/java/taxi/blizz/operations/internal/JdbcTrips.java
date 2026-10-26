@@ -1,0 +1,288 @@
+package taxi.blizz.operations.internal;
+
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.operations.PaymentMethod;
+import taxi.blizz.operations.TripView;
+import taxi.blizz.operations.Trips;
+import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.IdempotentCommands;
+
+/**
+ * Trip phase commands. Each locks the order, then the driver's capacity, then the trip, checks that
+ * the caller is the driver of the active assignment and the expected trip version, and records the
+ * server time of every fact (REQ-ASG-07: one source of time for everybody).
+ */
+@Service
+class JdbcTrips implements Trips {
+
+    private final JdbcClient jdbc;
+    private final IdempotentCommands commands;
+    private final OrderCore core;
+    private final DispatchProperties properties;
+    private final PresenceProperties presence;
+
+    JdbcTrips(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchProperties properties,
+              PresenceProperties presence) {
+        this.jdbc = jdbc;
+        this.commands = commands;
+        this.core = core;
+        this.properties = properties;
+        this.presence = presence;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<TripView> current(Actor driver) {
+        requireDriver(driver);
+        return jdbc.sql("""
+                        select t.id from trip t join assignment a on a.id = t.assignment_id
+                        where a.driver_id = :driver and a.state = 'COMMITTED'
+                          and t.phase in ('TO_PICKUP', 'WAITING', 'IN_PROGRESS')""")
+                .param("driver", driver.id())
+                .query(UUID.class)
+                .optional()
+                .map(this::view);
+    }
+
+    record PhaseRequest(UUID tripId, long expectedVersion, String exceptionReason) {
+    }
+
+    @Override
+    public TripView arrive(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String exceptionReason) {
+        requireDriver(driver);
+        return commands.execute(new CommandKey(driver, "trip.arrive", commandId),
+                new PhaseRequest(tripId, expectedVersion, exceptionReason), TripView.class, () -> {
+                    Locked trip = lock(driver, tripId, expectedVersion);
+                    if (!"TO_PICKUP".equals(trip.phase())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Arrival is only possible on the way to the pickup");
+                    }
+                    Arrival check = arrivalCheck(driver, trip.orderId());
+                    String exception = blankToNull(exceptionReason);
+                    if (exception == null && check.problem() != null) {
+                        throw new DomainException(check.problem(), check.problem() == ErrorCode.PICKUP_TOO_FAR
+                                ? "Too far from the pickup point; confirm with a reason"
+                                : "No current location; confirm with a reason");
+                    }
+                    OffsetDateTime now = core.now();
+                    jdbc.sql("""
+                                    update trip set phase = 'WAITING', arrived_at = :now, arrival_distance_m = :distance,
+                                                    arrival_exception = :exception,
+                                                    needs_review = needs_review or :review, version = version + 1
+                                    where id = :id""")
+                            .param("now", now)
+                            .param("distance", check.distanceM())
+                            .param("exception", exception)
+                            .param("review", exception != null)
+                            .param("id", tripId)
+                            .update();
+                    core.setOccupancy(driver.id(), "WAITING", trip.assignmentId());
+                    event(trip, "DriverArrived", driver, exception, Map.<String, Object>of("distance_m",
+                            check.distanceM() == null ? "unknown" : check.distanceM()));
+                    return view(tripId);
+                });
+    }
+
+    @Override
+    public TripView start(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String exceptionReason) {
+        requireDriver(driver);
+        return commands.execute(new CommandKey(driver, "trip.start", commandId),
+                new PhaseRequest(tripId, expectedVersion, exceptionReason), TripView.class, () -> {
+                    Locked trip = lock(driver, tripId, expectedVersion);
+                    String exception = blankToNull(exceptionReason);
+                    if ("TO_PICKUP".equals(trip.phase())) {
+                        if (exception == null) {
+                            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                    "Confirm the arrival first, or start with an exception reason");
+                        }
+                    } else if (!"WAITING".equals(trip.phase())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The trip cannot start now");
+                    }
+                    OffsetDateTime now = core.now();
+                    jdbc.sql("""
+                                    update trip set phase = 'IN_PROGRESS', started_at = :now,
+                                                    arrived_at = coalesce(arrived_at, :now), start_exception = :exception,
+                                                    needs_review = needs_review or :review, version = version + 1
+                                    where id = :id""")
+                            .param("now", now)
+                            .param("exception", exception)
+                            .param("review", exception != null)
+                            .param("id", tripId)
+                            .update();
+                    core.setOccupancy(driver.id(), "ON_TRIP", trip.assignmentId());
+                    core.changeStatus(trip.order(), "IN_SERVICE", null, "TripStarted", driver,
+                            exception == null ? Map.<String, Object>of("trip_id", tripId.toString())
+                                    : Map.<String, Object>of("trip_id", tripId.toString(), "exception", exception));
+                    return view(tripId);
+                });
+    }
+
+    record CompleteRequest(UUID tripId, long expectedVersion, OffsetDateTime reportedAt, Boolean cashReceived) {
+    }
+
+    @Override
+    public TripView complete(Actor driver, UUID commandId, UUID tripId, long expectedVersion,
+                             OffsetDateTime reportedAt, Boolean cashReceived) {
+        requireDriver(driver);
+        if (reportedAt == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The device time of completion is required");
+        }
+        return commands.execute(new CommandKey(driver, "trip.complete", commandId),
+                new CompleteRequest(tripId, expectedVersion, reportedAt, cashReceived), TripView.class, () -> {
+                    Locked trip = lock(driver, tripId, expectedVersion);
+                    if (!"IN_PROGRESS".equals(trip.phase())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a started trip can be completed");
+                    }
+                    PaymentMethod payment = PaymentMethod.valueOf(jdbc.sql("select payment_method from ride_order where id = :id")
+                            .param("id", trip.orderId()).query(String.class).single());
+                    if (payment == PaymentMethod.CASH && cashReceived == null) {
+                        throw new DomainException(ErrorCode.VALIDATION_FAILED, "State whether the cash was received");
+                    }
+                    OffsetDateTime now = core.now();
+                    boolean suspiciousTime = Duration.between(reportedAt, now).abs()
+                            .compareTo(properties.reportedTimeTolerance()) > 0;
+                    jdbc.sql("""
+                                    update trip set phase = 'COMPLETED', completed_at = :now,
+                                                    completion_reported_at = :reported,
+                                                    needs_review = needs_review or :review, version = version + 1
+                                    where id = :id""")
+                            .param("now", now)
+                            .param("reported", reportedAt)
+                            .param("review", suspiciousTime)
+                            .param("id", tripId)
+                            .update();
+                    jdbc.sql("""
+                                    update assignment set state = 'COMPLETED', closed_at = :now, version = version + 1
+                                    where id = :id""")
+                            .param("now", now)
+                            .param("id", trip.assignmentId())
+                            .update();
+                    if (payment == PaymentMethod.CASH) {
+                        jdbc.sql("update ride_order set payment_state = :state where id = :id")
+                                .param("state", Boolean.TRUE.equals(cashReceived) ? "CASH_REPORTED" : "CASH_NOT_RECEIVED")
+                                .param("id", trip.orderId())
+                                .update();
+                    }
+                    // Free in the same transaction as the fact of completion (REQ-ASG-04, REQ-PAY-04).
+                    core.releaseDriver(driver.id());
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("trip_id", tripId.toString());
+                    payload.put("payment_method", payment.name());
+                    if (payment == PaymentMethod.CASH) {
+                        payload.put("cash_received", cashReceived);
+                    }
+                    payload.put("reported_at", reportedAt.toString());
+                    payload.put("needs_review", suspiciousTime);
+                    core.changeStatus(trip.order(), "FULFILLED", null, "TripCompleted", driver, payload);
+                    return view(tripId);
+                });
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private record Locked(UUID id, UUID orderId, UUID assignmentId, String phase, OrderCore.LockedOrder order) {
+    }
+
+    /** order → capacity → trip, and only the driver of the active assignment (REQ-DRV-09). */
+    private Locked lock(Actor driver, UUID tripId, long expectedVersion) {
+        UUID orderId = jdbc.sql("""
+                        select t.order_id from trip t join assignment a on a.id = t.assignment_id
+                        where t.id = :id and a.driver_id = :driver""")
+                .param("id", tripId)
+                .param("driver", driver.id())
+                .query(UUID.class)
+                .optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Trip not found"));
+        OrderCore.LockedOrder order = core.lockOrder(orderId);
+        core.lockCapacity(driver.id());
+        record Row(UUID assignmentId, String assignmentState, String phase, long version) {
+        }
+        Row row = jdbc.sql("""
+                        select t.assignment_id, a.state, t.phase, t.version
+                        from trip t join assignment a on a.id = t.assignment_id
+                        where t.id = :id for update of t""")
+                .param("id", tripId)
+                .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getLong(4)))
+                .single();
+        if (!"COMMITTED".equals(row.assignmentState())) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "The assignment is no longer active");
+        }
+        if (row.version() != expectedVersion) {
+            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The trip changed");
+        }
+        return new Locked(tripId, orderId, row.assignmentId(), row.phase(), order);
+    }
+
+    private record Arrival(Integer distanceM, ErrorCode problem) {
+    }
+
+    /** Distance from the driver's last server-side position to the pickup, and whether it is acceptable. */
+    private Arrival arrivalCheck(Actor driver, UUID orderId) {
+        record Row(Integer distance, OffsetDateTime locationAt) {
+        }
+        Optional<Row> row = jdbc.sql("""
+                        select cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance,
+                               ws.last_location_at
+                        from work_session ws, ride_order o
+                        where ws.driver_id = :driver and ws.state in ('OPEN', 'CLOSING') and o.id = :order
+                          and ws.last_location is not null""")
+                .param("driver", driver.id())
+                .param("order", orderId)
+                .query((rs, i) -> new Row((Integer) rs.getObject(1), rs.getObject(2, OffsetDateTime.class)))
+                .optional();
+        if (row.isEmpty() || row.get().locationAt() == null
+                || row.get().locationAt().isBefore(core.now().minus(presence.gpsMaxAge()))) {
+            return new Arrival(row.map(Row::distance).orElse(null), ErrorCode.LOCATION_NOT_FRESH);
+        }
+        if (row.get().distance() > properties.arrivalRadiusMeters()) {
+            return new Arrival(row.get().distance(), ErrorCode.PICKUP_TOO_FAR);
+        }
+        return new Arrival(row.get().distance(), null);
+    }
+
+    private void event(Locked trip, String type, Actor driver, String reason, Map<String, Object> payload) {
+        Map<String, Object> body = new LinkedHashMap<>(payload);
+        body.put("trip_id", trip.id().toString());
+        core.recordEvent(trip.orderId(), core.touch(trip.orderId()), type, driver, reason, body);
+    }
+
+    private TripView view(UUID tripId) {
+        return jdbc.sql("""
+                        select t.id, t.order_id, t.assignment_id, t.phase, t.version, ST_Y(o.pickup) as plat,
+                               ST_X(o.pickup) as plon, o.pickup_label, ST_Y(o.dropoff) as dlat, ST_X(o.dropoff) as dlon,
+                               o.dropoff_label, o.payment_method, o.price_minor, o.currency, t.arrived_at, t.started_at,
+                               t.completed_at, t.needs_review
+                        from trip t join ride_order o on o.id = t.order_id where t.id = :id""")
+                .param("id", tripId)
+                .query((rs, i) -> new TripView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
+                        rs.getObject("assignment_id", UUID.class), rs.getString("phase"), rs.getLong("version"),
+                        new GeoPoint(rs.getDouble("plat"), rs.getDouble("plon")), rs.getString("pickup_label"),
+                        new GeoPoint(rs.getDouble("dlat"), rs.getDouble("dlon")), rs.getString("dropoff_label"),
+                        PaymentMethod.valueOf(rs.getString("payment_method")), (Long) rs.getObject("price_minor"),
+                        rs.getString("currency"), rs.getObject("arrived_at", OffsetDateTime.class),
+                        rs.getObject("started_at", OffsetDateTime.class),
+                        rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review")))
+                .single();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static void requireDriver(Actor actor) {
+        if (!OrderCore.isDriver(actor)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only the assigned driver can do this");
+        }
+    }
+}

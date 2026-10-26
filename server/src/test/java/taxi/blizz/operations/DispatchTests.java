@@ -470,6 +470,35 @@ class DispatchTests {
     }
 
     @Test
+    void orderSourcesFollowWhoIsAsking() {
+        Actor web = client();
+        OrderView fromWeb = orders.create(web, UUID.randomUUID(), new CreateOrder(web.id(), "STANDARD", PICKUP, "x",
+                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.WEB, null));
+        assertThat(fromWeb.channel()).isEqualTo("WEB");
+        assertThat(order(client()).channel()).as("app by default").isEqualTo("APP");
+
+        Actor rider = client();
+        assertCode(() -> orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP, "x",
+                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PHONE, null)), ErrorCode.VALIDATION_FAILED);
+
+        UUID staffId = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, city_scope, state, created_at, updated_at)
+                        values (:id, :login, 'Operator', 'OPERATOR', '{orders.create}', :cities, 'ACTIVE', now(), now())""")
+                .param("id", staffId).param("login", "op-" + staffId).param("cities", new UUID[] {cityId}).update();
+        Actor operator = new Actor(SubjectType.STAFF, staffId);
+        OrderView phone = orders.create(operator, UUID.randomUUID(), new CreateOrder(null, "STANDARD", PICKUP, "x",
+                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PHONE, "call-123"));
+        assertThat(phone.channel()).isEqualTo("PHONE");
+        assertThat(phone.payerClientId()).isNull();
+
+        Actor partner = new Actor(SubjectType.PARTNER, UUID.randomUUID());
+        assertCode(() -> orders.create(partner, UUID.randomUUID(), new CreateOrder(null, "STANDARD", PICKUP, "x",
+                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PARTNER, "partner-order-1")),
+                ErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
     void historyRecordsEveryVersionOfTheOrder() {
         Driver driver = driverAt(north(200));
         OrderView order = order(client());

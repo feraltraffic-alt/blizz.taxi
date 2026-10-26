@@ -11,6 +11,7 @@ import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.CreateOrder;
+import taxi.blizz.operations.OrderChannel;
 import taxi.blizz.operations.OrderView;
 import taxi.blizz.operations.Orders;
 import taxi.blizz.operations.PaymentMethod;
@@ -57,12 +58,12 @@ class JdbcOrders implements Orders {
                 jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
-                                                        dropoff_label, payment_method, price_minor, currency, status,
-                                                        created_at, updated_at)
+                                                        dropoff_label, payment_method, payment_state, price_minor, currency,
+                                                        source_ref, status, created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
-                                        :payment, :price, :currency, 'READY', :now, :now)""")
+                                        :payment, :paymentState, :price, :currency, :sourceRef, 'READY', :now, :now)""")
                         .param("id", id)
                         .param("channel", channel)
                         .param("payer", order.payerClientId())
@@ -77,8 +78,10 @@ class JdbcOrders implements Orders {
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", order.paymentMethod().name())
+                        .param("paymentState", order.paymentMethod() == PaymentMethod.CASH ? "CASH_EXPECTED" : null)
                         .param("price", order.priceMinor())
                         .param("currency", order.currency())
+                        .param("sourceRef", order.sourceRef())
                         .param("now", core.now())
                         .update();
             } catch (DuplicateKeyException e) {
@@ -91,18 +94,30 @@ class JdbcOrders implements Orders {
         });
     }
 
+    /** Decides the channel from who is asking; the requested channel is accepted only where it fits. */
     private String authorizeCreate(Actor actor, CreateOrder order, City city) {
-        if (actor.type() == SubjectType.CLIENT) {
-            if (!actor.id().equals(order.payerClientId())) {
-                throw new DomainException(ErrorCode.ACCESS_DENIED, "A client orders only for itself");
+        OrderChannel requested = order.channel();
+        switch (actor.type()) {
+            case CLIENT -> {
+                if (!actor.id().equals(order.payerClientId())) {
+                    throw new DomainException(ErrorCode.ACCESS_DENIED, "A client orders only for itself");
+                }
+                if (requested != null && requested != OrderChannel.APP && requested != OrderChannel.WEB) {
+                    throw new DomainException(ErrorCode.VALIDATION_FAILED, "A client orders from the app or the website");
+                }
+                return (requested == null ? OrderChannel.APP : requested).name();
             }
-            return "APP";
+            case STAFF -> {
+                if (requested != null && requested != OrderChannel.PHONE) {
+                    throw new DomainException(ErrorCode.VALIDATION_FAILED, "Staff orders are phone orders");
+                }
+                requireStaff(actor, CREATE_PERMISSION, city.id());
+                return OrderChannel.PHONE.name();
+            }
+            case PARTNER -> throw new DomainException(ErrorCode.ACCESS_DENIED,
+                    "Partner orders arrive through the exchange protocol (M2)");
+            default -> throw new DomainException(ErrorCode.ACCESS_DENIED, "Not allowed to create orders");
         }
-        if (actor.type() == SubjectType.STAFF) {
-            requireStaff(actor, CREATE_PERMISSION, city.id());
-            return "PHONE";
-        }
-        throw new DomainException(ErrorCode.ACCESS_DENIED, "Not allowed to create orders");
     }
 
     record CancelRequest(UUID orderId, long expectedVersion, String reasonCode) {

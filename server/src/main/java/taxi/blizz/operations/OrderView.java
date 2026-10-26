@@ -20,6 +20,7 @@ public record OrderView(
         GeoPoint dropoff,
         String dropoffLabel,
         PaymentMethod paymentMethod,
+        String paymentState,
         Long priceMinor,
         String currency,
         String searchPhase,
