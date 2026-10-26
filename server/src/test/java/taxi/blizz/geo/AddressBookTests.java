@@ -47,6 +47,7 @@ class AddressBookTests {
     Actor manager;
     UUID city;
     List<UUID> cities = new ArrayList<>();
+    List<UUID> staffIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -176,6 +177,31 @@ class AddressBookTests {
         }
         reject(() -> addresses.search(city, "Synthetic", "en", null, 0), ErrorCode.VALIDATION_FAILED);
         reject(() -> addresses.nearest(city, POINT, -1), ErrorCode.VALIDATION_FAILED);
+        reject(() -> addresses.nearest(city, POINT, 501), ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    void staffManageAddressesOnlyInTheirCities() {
+        Address address = create(data("2", POINT));
+        UUID other = city();
+        UUID outsider = UUID.randomUUID();
+        jdbc.sql("""
+                insert into staff_user(id, login, name, role, permissions, city_scope, state, created_at, updated_at)
+                values (:id, :login, 'Other city manager', 'ADMIN', :permissions, :scope, 'ACTIVE', now(), now())
+                """).param("id", outsider).param("login", "address-" + outsider)
+                .param("permissions", new String[]{AddressBook.MANAGE_PERMISSION})
+                .param("scope", new UUID[]{other}).update();
+        Actor otherManager = new Actor(SubjectType.STAFF, outsider);
+
+        reject(() -> addresses.hide(new Change(UUID.randomUUID(), otherManager, address.id(), address.version(),
+                "Not my city")), ErrorCode.ACCESS_DENIED);
+        reject(() -> addresses.create(new Create(UUID.randomUUID(), otherManager, 0, data("4", POINT),
+                "Not my city")), ErrorCode.ACCESS_DENIED);
+        Data moved = data("2", POINT);
+        reject(() -> addresses.update(new Update(UUID.randomUUID(), otherManager, address.id(), address.version(),
+                new Data(other, moved.kind(), moved.label(), moved.language(), moved.street(), moved.houseRaw(),
+                        moved.building(), POINT, null, null), "Take it over")), ErrorCode.ACCESS_DENIED);
+        assertThat(addresses.find(address.id())).map(a -> a.data().cityId()).contains(city);
     }
 
     @Test
@@ -392,6 +418,9 @@ class AddressBookTests {
                 values (:id, :login, 'Address manager', 'ADMIN', :permissions, :state, now(), now())
                 """).param("id", id).param("login", "address-" + id)
                 .param("permissions", permissions).param("state", state).update();
+        jdbc.sql("update staff_user set city_scope = :cities where id = :id")
+                .param("cities", cities.toArray(UUID[]::new)).param("id", id).update();
+        staffIds.add(id);
         return new Actor(SubjectType.STAFF, id);
     }
 
@@ -404,6 +433,9 @@ class AddressBookTests {
                     0, 'DRAFT', now(), now())
                 """).param("id", id).param("code", "address-" + id).update();
         cities.add(id);
+        // Every fixture staff member manages every fixture city; scope itself is tested separately.
+        jdbc.sql("update staff_user set city_scope = array_append(city_scope, :city) where id = any(:ids)")
+                .param("city", id).param("ids", staffIds.toArray(UUID[]::new)).update();
         return id;
     }
 

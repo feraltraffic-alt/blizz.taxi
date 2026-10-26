@@ -5,7 +5,10 @@ import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
 
-/** Own service data only. Provider references are opaque override links, never provider content. */
+/**
+ * The service's own addresses (REQ-GEO-10..16). Own data only: provider references are opaque override
+ * links, never provider content (Q-08). Commands need {@link #MANAGE_PERMISSION} for the address's city.
+ */
 public interface AddressBook {
     String MANAGE_PERMISSION = GeoConfiguration.MANAGE_PERMISSION;
 
@@ -19,6 +22,7 @@ public interface AddressBook {
     Optional<Address> find(UUID id);
     /** All alias languages are searched; language is a ranking preference. Limits above 20 are capped. */
     List<Address> search(UUID cityId, String query, String language, GeoPoint near, int limit);
+    /** The closest visible address within {@code radiusMetres} (at most 500). */
     Optional<Address> nearest(UUID cityId, GeoPoint point, double radiusMetres);
 
     enum Kind {
@@ -46,6 +50,7 @@ public interface AddressBook {
         }
     }
 
+    /** {@code expectedVersion} is always 0 for a new address. */
     record Create(UUID commandId, Actor actor, long expectedVersion, Data data, String reason) {
     }
 

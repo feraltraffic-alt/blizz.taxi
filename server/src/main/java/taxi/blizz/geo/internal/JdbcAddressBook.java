@@ -25,6 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class JdbcAddressBook implements AddressBook {
+    /** Reverse lookup is for "where am I", not for scanning a city. */
+    static final int MAX_NEAREST_RADIUS_METRES = 500;
     private static final String READ = """
             select a.*, ST_Y(a.pickup_point) lat, ST_X(a.pickup_point) lon, o.provider, o.object_id,
                 coalesce((select jsonb_agg(jsonb_build_object('label', label, 'language', language)
@@ -47,7 +49,7 @@ class JdbcAddressBook implements AddressBook {
 
     @Override
     public Address create(Create c) {
-        return commands.execute(key(c.actor(), "address.create", c.commandId()), c, Address.class, () -> {
+        return commands.execute(key(c.actor(), "address.create", c.commandId(), cityOf(c.data())), c, Address.class, () -> {
             reason(c.reason());
             if (c.expectedVersion() != 0) {
                 throw error(ErrorCode.VERSION_CONFLICT, "New addresses require expected_version 0");
@@ -74,7 +76,7 @@ class JdbcAddressBook implements AddressBook {
 
     @Override
     public Address update(Update c) {
-        return commands.execute(key(c.actor(), "address.update", c.commandId()), c, Address.class, () -> {
+        return commands.execute(key(c.actor(), "address.update", c.commandId(), currentCity(c.id()), cityOf(c.data())), c, Address.class, () -> {
             reason(c.reason());
             lockOverrides();
             Address before = locked(c.id(), c.expectedVersion());
@@ -98,7 +100,7 @@ class JdbcAddressBook implements AddressBook {
 
     @Override
     public Address addAlias(AddAlias c) {
-        return commands.execute(key(c.actor(), "address.addAlias", c.commandId()), c, Address.class, () -> {
+        return commands.execute(key(c.actor(), "address.addAlias", c.commandId(), currentCity(c.id())), c, Address.class, () -> {
             reason(c.reason());
             Address before = locked(c.id(), c.expectedVersion());
             if (c.alias() == null) {
@@ -136,7 +138,7 @@ class JdbcAddressBook implements AddressBook {
 
     private Address visibility(Change c, Visibility target) {
         String action = target == Visibility.HIDDEN ? "address.hide" : "address.restore";
-        return commands.execute(key(c.actor(), action, c.commandId()), c, Address.class, () -> {
+        return commands.execute(key(c.actor(), action, c.commandId(), currentCity(c.id())), c, Address.class, () -> {
             reason(c.reason());
             Address before = locked(c.id(), c.expectedVersion());
             if (before.visibility() == target) {
@@ -199,8 +201,10 @@ class JdbcAddressBook implements AddressBook {
 
     @Override
     public Optional<Address> nearest(UUID cityId, GeoPoint point, double radiusMetres) {
-        if (cityId == null || point == null || !Double.isFinite(radiusMetres) || radiusMetres < 0) {
-            throw error(ErrorCode.VALIDATION_FAILED, "City, point and non-negative finite radius required");
+        if (cityId == null || point == null || !Double.isFinite(radiusMetres) || radiusMetres < 0
+                || radiusMetres > MAX_NEAREST_RADIUS_METRES) {
+            throw error(ErrorCode.VALIDATION_FAILED,
+                    "City, point and a radius from 0 to " + MAX_NEAREST_RADIUS_METRES + " m required");
         }
         return read(jdbc.sql(READ + """
                 where a.city_id = :city and a.visibility = 'ACTIVE'
@@ -209,7 +213,7 @@ class JdbcAddressBook implements AddressBook {
                 order by ST_Distance(a.pickup_point::geography,
                     ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography), a.id limit 1
                 """).param("city", cityId).param("lon", point.lon()).param("lat", point.lat())
-                .param("radius", radiusMetres))).optional();
+                .param("radius", radiusMetres)).optional();
     }
 
     private Optional<Address> get(UUID id, boolean lock) {
@@ -298,14 +302,20 @@ class JdbcAddressBook implements AddressBook {
         audit.record(new AuditEntry(actor, action, "address", after.id().toString(), reason, before, after));
     }
 
-    private CommandKey key(Actor actor, String action, UUID commandId) {
+    /**
+     * Permission and city scope before idempotency (AGENTS.md): an address belongs to its city, and an
+     * update that moves it needs both the current and the new city.
+     */
+    private CommandKey key(Actor actor, String action, UUID commandId, UUID... cityIds) {
         if (actor == null || actor.type() != SubjectType.STAFF) {
             throw error(ErrorCode.ACCESS_DENIED, "Staff permission required");
         }
+        UUID[] cities = Arrays.stream(cityIds).filter(java.util.Objects::nonNull).distinct().toArray(UUID[]::new);
         boolean allowed = jdbc.sql("""
                 select exists(select 1 from staff_user where id = :id
-                    and state = 'ACTIVE' and :permission = any(permissions))
-                """).param("id", actor.id()).param("permission", MANAGE_PERMISSION).query(Boolean.class).single();
+                    and state = 'ACTIVE' and :permission = any(permissions) and cast(:cities as uuid[]) <@ city_scope)
+                """).param("id", actor.id()).param("permission", MANAGE_PERMISSION).param("cities", cities)
+                .query(Boolean.class).single();
         if (!allowed) {
             throw error(ErrorCode.ACCESS_DENIED, "Missing permission " + MANAGE_PERMISSION);
         }
@@ -313,6 +323,15 @@ class JdbcAddressBook implements AddressBook {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }
         return new CommandKey(actor, action, commandId);
+    }
+
+    private static UUID cityOf(Data data) {
+        return data == null ? null : data.cityId();
+    }
+
+    private UUID currentCity(UUID addressId) {
+        return addressId == null ? null : jdbc.sql("select city_id from address where id = :id")
+                .param("id", addressId).query(UUID.class).optional().orElse(null);
     }
 
     private static String language(String value) {
