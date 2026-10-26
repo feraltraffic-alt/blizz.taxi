@@ -18,10 +18,10 @@ The launch market, city, currency and languages are confirmed in Q-01.
 | Path | What | Stack |
 |---|---|---|
 | `server/` | Backend, modular monolith | Java, Spring, Maven |
-| `apps/rider/` | Passenger app | React Native |
-| `apps/driver/` | Driver app | React Native |
-| `apps/admin/` | Admin panel, support, finance | React |
-| `apps/operator/` | Dispatcher / call-centre workstation | React |
+| `apps/mobile/rider/` | Passenger app | React Native |
+| `apps/mobile/driver/` | Driver app | React Native |
+| `apps/web/admin/` | Admin panel, support, finance | React |
+| `apps/web/operator/` | Dispatcher / call-centre workstation | React |
 | `packages/contracts/` | OpenAPI 3.1, JSON Schema / AsyncAPI | — |
 | `packages/api-client/` | Client types and transport generated from contracts | TypeScript |
 | `packages/localization/` | Shared UI strings and formats | — |
