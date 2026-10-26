@@ -2,6 +2,7 @@ package taxi.blizz.operations.internal;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
@@ -32,6 +33,13 @@ class DriverTripController {
                         @Size(max = 500) String exceptionReason) {
     }
 
+    record WithdrawCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                           @NotBlank @Size(max = 500) String reason) {
+    }
+
+    record VersionCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion) {
+    }
+
     record CompleteCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                            @NotNull OffsetDateTime reportedAt, Boolean cashReceived) {
     }
@@ -55,5 +63,15 @@ class DriverTripController {
     TripView complete(AccessClaims claims, @PathVariable UUID tripId, @Valid @RequestBody CompleteCommand body) {
         return trips.complete(claims.actor(), body.commandId(), tripId, body.expectedVersion(), body.reportedAt(),
                 body.cashReceived());
+    }
+
+    @PostMapping("/{tripId}/withdraw")
+    TripView withdraw(AccessClaims claims, @PathVariable UUID tripId, @Valid @RequestBody WithdrawCommand body) {
+        return trips.withdraw(claims.actor(), body.commandId(), tripId, body.expectedVersion(), body.reason());
+    }
+
+    @PostMapping("/{tripId}/no-show")
+    TripView noShow(AccessClaims claims, @PathVariable UUID tripId, @Valid @RequestBody VersionCommand body) {
+        return trips.reportNoShow(claims.actor(), body.commandId(), tripId, body.expectedVersion());
     }
 }

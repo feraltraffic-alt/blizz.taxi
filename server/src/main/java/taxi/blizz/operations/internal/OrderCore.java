@@ -162,6 +162,30 @@ class OrderCore {
                 .update();
     }
 
+    /**
+     * Ends an assignment before the trip started: assignment RELEASED or REVOKED with a reason, trip
+     * ABORTED, driver free again (REQ-ASG-04). The caller holds the order lock.
+     */
+    void endAssignmentBeforeStart(AssignmentView assignment, String state, String reason) {
+        if (!"TO_PICKUP".equals(assignment.tripPhase()) && !"WAITING".equals(assignment.tripPhase())) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "The trip has already started");
+        }
+        lockCapacity(assignment.driverId());
+        jdbc.sql("""
+                        update assignment set state = :state, closed_at = :now, close_reason = :reason,
+                                              version = version + 1
+                        where id = :id and state = 'COMMITTED'""")
+                .param("state", state)
+                .param("now", now())
+                .param("reason", reason)
+                .param("id", assignment.id())
+                .update();
+        jdbc.sql("update trip set phase = 'ABORTED', version = version + 1 where id = :id")
+                .param("id", assignment.tripId())
+                .update();
+        releaseDriver(assignment.driverId());
+    }
+
     // ---------------------------------------------------------------- offers
 
     /** Closes every open offer of the order and frees the offered drivers. */
@@ -277,6 +301,8 @@ class OrderCore {
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
                           and (:includeOffered or not exists (
                                 select 1 from offer f where f.order_id = o.id and f.driver_id = ws.driver_id))
+                          and not exists (
+                                select 1 from assignment x where x.order_id = o.id and x.driver_id = ws.driver_id)
                         order by distance_m, ws.driver_id
                         limit :limit""")
                 .param("orderId", orderId)

@@ -775,6 +775,80 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/driver/v1/trips/{trip_id}/withdraw:
+    post:
+      operationId: withdrawFromTrip
+      summary: Give up the order before the start
+      description: Only before the start (TO_PICKUP or WAITING), with a reason. The driver is free at once and is not offered this order again; the passenger's order goes back to the search with the remaining search time (REQ-ASG-04, REQ-CAN-05). After the start → 409.
+      tags: [Trip]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawCommand"
+      responses:
+        "200":
+          description: Trip after the command (phase ABORTED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/trips/{trip_id}/no-show:
+    post:
+      operationId: reportNoShow
+      summary: The passenger did not come out
+      description: Only in WAITING and not earlier than the minimum waiting time after the server-side arrival (REQ-CAN-06, T-20); earlier → 409. The order is cancelled with reason NO_SHOW and the driver is free. No fee until the cancellation policy is decided (Q-07).
+      tags: [Trip]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionCommand"
+      responses:
+        "200":
+          description: Trip after the command (phase ABORTED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
 tags:
   - name: Account
     description: The signed-in driver
@@ -787,7 +861,7 @@ tags:
   - name: Dispatch
     description: Offers, the ALL tab and assignments (sections 10, 11)
   - name: Trip
-    description: Arrival, start and completion (sections 9, 10)
+    description: Arrival, start, completion, withdrawal and no-show (sections 9, 10)
 
 components:
   parameters:
@@ -1253,6 +1327,37 @@ components:
           description: Confirms an arrival or start that failed the normal checks; flags the trip for review.
           type: string
           maxLength: 500
+
+    WithdrawCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: Trip version from the last snapshot.
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          description: Why the driver gives up the order; kept in the order history.
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    VersionCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: Trip version from the last snapshot.
+          type: integer
+          format: int64
+          minimum: 0
 
     CompleteCommand:
       type: object

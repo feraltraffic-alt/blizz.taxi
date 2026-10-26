@@ -33,6 +33,30 @@ class DispatchEngine {
 
     /** READY → SEARCHING with a new attempt, and the first offer if a driver is available. */
     void startSearch(OrderCore.LockedOrder order) {
+        search(order, properties.totalDeadline(), "OrderSearchStarted");
+    }
+
+    /**
+     * ASSIGNED → SEARCHING again after the driver was released before the start. The passenger's
+     * search time continues: only what is left of the total search time is used, but at least one
+     * personal phase, since the release was not the passenger's doing (REQ-CAN-05).
+     */
+    void resumeSearch(OrderCore.LockedOrder order) {
+        java.time.Duration searched = jdbc.sql("""
+                        select coalesce(sum(extract(epoch from coalesce(stopped_at, :now) - created_at)), 0)
+                        from dispatch_attempt where order_id = :id""")
+                .param("now", core.now())
+                .param("id", order.id())
+                .query((rs, i) -> java.time.Duration.ofMillis(Math.round(rs.getDouble(1) * 1000)))
+                .single();
+        java.time.Duration left = properties.totalDeadline().minus(searched);
+        if (left.compareTo(properties.personalPhaseMax()) < 0) {
+            left = properties.personalPhaseMax();
+        }
+        search(order, left, "OrderSearchResumed");
+    }
+
+    private void search(OrderCore.LockedOrder order, java.time.Duration budget, String eventType) {
         OffsetDateTime now = core.now();
         int generation = jdbc.sql("select coalesce(max(generation), 0) + 1 from dispatch_attempt where order_id = :id")
                 .param("id", order.id())
@@ -46,12 +70,13 @@ class DispatchEngine {
                 .param("id", attemptId)
                 .param("orderId", order.id())
                 .param("generation", generation)
-                .param("phaseDeadline", now.plus(properties.personalPhaseMax()))
-                .param("totalDeadline", now.plus(properties.totalDeadline()))
+                .param("phaseDeadline", now.plus(earliestOf(properties.personalPhaseMax(), budget)))
+                .param("totalDeadline", now.plus(budget))
                 .param("now", now)
                 .update();
-        core.changeStatus(order, "SEARCHING", null, "OrderSearchStarted", OrderCore.system(),
-                Map.of("attempt_id", attemptId.toString(), "generation", generation));
+        core.changeStatus(order, "SEARCHING", null, eventType, OrderCore.system(),
+                Map.of("attempt_id", attemptId.toString(), "generation", generation,
+                        "search_seconds", budget.toSeconds()));
         advance(liveAttempt(order.id()).orElseThrow());
     }
 
@@ -155,9 +180,11 @@ class DispatchEngine {
     /** Ends the live attempt of the order, if any; stale worker tasks then find nothing to do. */
     void stop(UUID orderId, String phase) {
         jdbc.sql("""
-                        update dispatch_attempt set phase = :phase, next_action_at = null, version = version + 1
+                        update dispatch_attempt set phase = :phase, next_action_at = null, stopped_at = :now,
+                                                    version = version + 1
                         where order_id = :orderId and phase in ('PERSONAL', 'BROADCAST')""")
                 .param("phase", phase)
+                .param("now", core.now())
                 .param("orderId", orderId)
                 .update();
     }
@@ -180,6 +207,10 @@ class DispatchEngine {
                         rs.getObject(3, OffsetDateTime.class)))
                 .list();
         return offers.stream().findFirst();
+    }
+
+    private static java.time.Duration earliestOf(java.time.Duration a, java.time.Duration b) {
+        return a.compareTo(b) <= 0 ? a : b;
     }
 
     private static OffsetDateTime earliest(OffsetDateTime a, OffsetDateTime b) {

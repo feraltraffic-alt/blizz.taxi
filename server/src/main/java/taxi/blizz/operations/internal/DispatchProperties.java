@@ -20,6 +20,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param lease                how long a worker owns a claimed attempt
  * @param arrivalRadiusMeters  arrival must be reported within this distance of the pickup (REQ-ASG-06)
  * @param reportedTimeTolerance completion time from the device further than this from server time is flagged
+ * @param noShowMinimumWait    a no-show can be reported only after waiting this long (REQ-CAN-06; value per Q-07)
  */
 @ConfigurationProperties("blizz.dispatch")
 public record DispatchProperties(
@@ -34,5 +35,6 @@ public record DispatchProperties(
         @DefaultValue("50") int batchSize,
         @DefaultValue("PT30S") Duration lease,
         @DefaultValue("150") int arrivalRadiusMeters,
-        @DefaultValue("PT5M") Duration reportedTimeTolerance) {
+        @DefaultValue("PT5M") Duration reportedTimeTolerance,
+        @DefaultValue("PT5M") Duration noShowMinimumWait) {
 }

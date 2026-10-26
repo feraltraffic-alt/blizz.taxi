@@ -160,6 +160,7 @@ class JdbcDispatch implements Dispatch {
                           and o.city_id = ws.city_id
                           and o.vehicle_class = any(v.class_approvals)
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
+                          and not exists (select 1 from assignment x where x.order_id = o.id and x.driver_id = :driver)
                         order by distance_m, o.created_at
                         limit 50""")
                 .param("driver", driver.id())
@@ -192,6 +193,13 @@ class JdbcDispatch implements Dispatch {
                         throw new DomainException(ErrorCode.DRIVER_BUSY, "The driver is not free");
                     }
                     DriverAvailability availability = requireEligible(driver, Set.of());
+                    int hadIt = jdbc.sql("select count(*) from assignment where order_id = :order and driver_id = :driver")
+                            .param("order", orderId)
+                            .param("driver", driver.id())
+                            .query(Integer.class).single();
+                    if (hadIt > 0) {
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "This driver already gave up the order");
+                    }
                     boolean matches = jdbc.sql("""
                                     select count(*) from vehicle v, ride_order o
                                     where v.id = :vehicle and o.id = :order and o.vehicle_class = any(v.class_approvals)
