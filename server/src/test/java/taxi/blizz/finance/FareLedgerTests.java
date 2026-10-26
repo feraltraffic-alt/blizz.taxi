@@ -207,10 +207,11 @@ class FareLedgerTests {
                 .param("id", UUID.randomUUID()).param("city", cityId).update();
 
         UUID command = UUID.randomUUID();
+        OffsetDateTime reportedAt = OffsetDateTime.now();
         TripView done = trips.complete(ride.driver(), command, ride.trip().id(), ride.trip().version(),
-                OffsetDateTime.now(), true);
+                reportedAt, true);
         TripView repeat = trips.complete(ride.driver(), command, ride.trip().id(), ride.trip().version(),
-                OffsetDateTime.now(), true);
+                reportedAt, true);
 
         assertThat(repeat).isEqualTo(done);
         OrderView order = orders.get(ride.order().id());
