@@ -49,7 +49,7 @@ class OtpServiceTests {
 
     @Test
     void firstSignInCreatesAnActiveClient() {
-        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, "device-1");
+        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, "device-1", null);
         assertThat(delivery.sent).hasSize(1);
         assertThat(issued.resendAvailableAt()).isAfter(OffsetDateTime.now().minusSeconds(1));
 
@@ -64,12 +64,12 @@ class OtpServiceTests {
 
     @Test
     void secondSignInReturnsTheSameAccount() {
-        ChallengeIssued firstChallenge = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued firstChallenge = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
         VerifiedSubject first = otp.verify(firstChallenge.challengeId(), lastCode());
         jdbc.sql("update otp_challenge set created_at = created_at - interval '2 minutes' where phone_normalized = :p")
                 .param("p", phone).update();
 
-        ChallengeIssued again = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued again = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
         VerifiedSubject second = otp.verify(again.challengeId(), lastCode());
 
         assertThat(second.id()).isEqualTo(first.id());
@@ -78,7 +78,7 @@ class OtpServiceTests {
 
     @Test
     void codeIsStoredOnlyAsHmac() {
-        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
 
         byte[] stored = jdbc.sql("select code_hmac from otp_challenge where id = :id").param("id", issued.challengeId())
                 .query((rs, i) -> rs.getBytes(1)).single();
@@ -89,7 +89,7 @@ class OtpServiceTests {
 
     @Test
     void usedCodeCannotBeReused() {
-        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
         String code = lastCode();
         otp.verify(issued.challengeId(), code);
 
@@ -98,7 +98,7 @@ class OtpServiceTests {
 
     @Test
     void wrongAttemptsAreCountedAndExhaustTheChallenge() {
-        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
         String code = lastCode();
         String wrong = code.equals("000000") ? "111111" : "000000";
 
@@ -113,7 +113,7 @@ class OtpServiceTests {
 
     @Test
     void expiredCodeIsRejected() {
-        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
         jdbc.sql("update otp_challenge set expires_at = now() - interval '1 second' where id = :id")
                 .param("id", issued.challengeId()).update();
 
@@ -127,9 +127,9 @@ class OtpServiceTests {
 
     @Test
     void resendTooSoonIsRateLimited() {
-        otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+        otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
 
-        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null))
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null, null))
                 .isInstanceOf(RateLimitedException.class)
                 .satisfies(e -> assertThat(((RateLimitedException) e).retryAfter()).isPositive());
         assertThat(delivery.sent).hasSize(1);
@@ -138,19 +138,42 @@ class OtpServiceTests {
     @Test
     void hourlyLimitPerPhoneApplies() {
         for (int i = 0; i < 5; i++) {
-            otp.requestChallenge(OtpAudience.CLIENT, phone, null);
+            otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
             jdbc.sql("update otp_challenge set created_at = created_at - interval '61 seconds' where phone_normalized = :p")
                     .param("p", phone).update();
         }
 
-        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null))
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null, null))
+                .isInstanceOf(RateLimitedException.class);
+    }
+
+    @Test
+    void perDeviceLimitApplies() {
+        String device = "device-" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            otp.requestChallenge(OtpAudience.CLIENT, "+4851" + String.format("%07d", i) , device, null);
+        }
+
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, device, null))
+                .isInstanceOf(RateLimitedException.class);
+    }
+
+    @Test
+    void perIpLimitApplies() {
+        String ip = "203.0.113." + Math.floorMod(UUID.randomUUID().hashCode(), 250);
+        jdbc.sql("delete from otp_challenge where client_ip = :ip").param("ip", ip).update();
+        for (int i = 0; i < 30; i++) {
+            otp.requestChallenge(OtpAudience.DRIVER, "+4852" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000)), null, ip);
+        }
+
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null, ip))
                 .isInstanceOf(RateLimitedException.class);
     }
 
     @Test
     void clientAndDriverWithTheSamePhoneAreSeparateAccounts() {
-        VerifiedSubject client = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null).challengeId(), lastCode());
-        VerifiedSubject driver = otp.verify(otp.requestChallenge(OtpAudience.DRIVER, phone, null).challengeId(), lastCode());
+        VerifiedSubject client = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId(), lastCode());
+        VerifiedSubject driver = otp.verify(otp.requestChallenge(OtpAudience.DRIVER, phone, null, null).challengeId(), lastCode());
 
         assertThat(client.actor().type()).isEqualTo(SubjectType.CLIENT);
         assertThat(driver.actor().type()).isEqualTo(SubjectType.DRIVER);
@@ -166,7 +189,7 @@ class OtpServiceTests {
                         values (:id, :p, 'UNVERIFIED', false, now(), now())""")
                 .param("id", existing).param("p", phone).update();
 
-        VerifiedSubject subject = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null).challengeId(), lastCode());
+        VerifiedSubject subject = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId(), lastCode());
 
         assertThat(subject.id()).isEqualTo(existing);
         assertThat(subject.accountState()).isEqualTo("ACTIVE");
@@ -182,14 +205,14 @@ class OtpServiceTests {
                         values (:id, :p, 'BLOCKED', true, now(), now())""")
                 .param("id", blocked).param("p", phone).update();
 
-        VerifiedSubject subject = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null).challengeId(), lastCode());
+        VerifiedSubject subject = otp.verify(otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId(), lastCode());
 
         assertThat(subject.accountState()).isEqualTo("BLOCKED");
     }
 
     @Test
     void codeIsNotSentWhenTheRequestFails() {
-        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, "12345", null))
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, "12345", null, null))
                 .isInstanceOf(DomainException.class);
         assertThat(delivery.sent).isEmpty();
     }

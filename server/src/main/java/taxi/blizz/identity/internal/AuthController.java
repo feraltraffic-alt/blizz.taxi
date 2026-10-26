@@ -1,0 +1,91 @@
+package taxi.blizz.identity.internal;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import taxi.blizz.identity.ChallengeIssued;
+import taxi.blizz.identity.IssuedSession;
+import taxi.blizz.identity.OtpAudience;
+import taxi.blizz.identity.OtpService;
+import taxi.blizz.identity.SessionService;
+import taxi.blizz.identity.VerifiedSubject;
+
+/** {@code /auth/v1} — packages/contracts/openapi/auth.v1.yaml. */
+@RestController
+@RequestMapping("/auth/v1")
+class AuthController {
+
+    private final OtpService otp;
+    private final SessionService sessions;
+
+    AuthController(OtpService otp, SessionService sessions) {
+        this.otp = otp;
+        this.sessions = sessions;
+    }
+
+    record ChallengeRequest(@NotNull OtpAudience audience, @NotBlank String phone, @Size(max = 128) String deviceRef) {
+    }
+
+    record ChallengeResponse(UUID challengeId, OffsetDateTime expiresAt, OffsetDateTime resendAvailableAt) {
+    }
+
+    record VerifyRequest(@NotNull UUID challengeId, @NotBlank @Pattern(regexp = "^[0-9]{4,8}$") String code,
+                         @Size(max = 128) String deviceRef) {
+    }
+
+    record RefreshRequest(@NotBlank String refreshToken) {
+    }
+
+    record Subject(String type, UUID id) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SessionResponse(UUID sessionId, Subject subject, String audience, String accessToken,
+                           OffsetDateTime accessExpiresAt, String refreshToken, OffsetDateTime refreshExpiresAt,
+                           Boolean accountCreated) {
+
+        static SessionResponse of(IssuedSession session, Boolean accountCreated) {
+            return new SessionResponse(session.sessionId(),
+                    new Subject(session.actor().type().name(), session.actor().id()),
+                    session.audience().value(), session.accessToken(), session.accessExpiresAt(),
+                    session.refreshToken(), session.refreshExpiresAt(), accountCreated);
+        }
+    }
+
+    @PostMapping("/otp/challenges")
+    @ResponseStatus(HttpStatus.CREATED)
+    ChallengeResponse requestChallenge(@Valid @RequestBody ChallengeRequest body, HttpServletRequest request) {
+        ChallengeIssued issued = otp.requestChallenge(body.audience(), body.phone(), body.deviceRef(),
+                request.getRemoteAddr());
+        return new ChallengeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt());
+    }
+
+    @PostMapping("/otp/verify")
+    SessionResponse verify(@Valid @RequestBody VerifyRequest body) {
+        VerifiedSubject subject = otp.verify(body.challengeId(), body.code());
+        return SessionResponse.of(sessions.open(subject, body.deviceRef()), subject.created());
+    }
+
+    @PostMapping("/token/refresh")
+    SessionResponse refresh(@Valid @RequestBody RefreshRequest body) {
+        return SessionResponse.of(sessions.refresh(body.refreshToken()), null);
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void logout(@Valid @RequestBody RefreshRequest body) {
+        sessions.logout(body.refreshToken());
+    }
+}

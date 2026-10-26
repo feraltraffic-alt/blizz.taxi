@@ -8,9 +8,12 @@ public interface OtpService {
     /**
      * Issues a code for the phone and audience and sends it after commit.
      *
+     * @param deviceRef app installation id, may be null
+     * @param clientIp  caller's address as seen by the server, may be null
+     *
      * @throws taxi.blizz.platform.RateLimitedException when resend delay, per-phone or global budget is exceeded
      */
-    ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef);
+    ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp);
 
     /**
      * Checks the code. A wrong code still counts as an attempt even though the call fails.
