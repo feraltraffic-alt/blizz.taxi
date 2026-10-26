@@ -32,9 +32,145 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/profile:
+    get:
+      operationId: getDriverProfile
+      summary: Own admission profile
+      description: Profile, vehicles and the current document of each type with its review decision.
+      tags: [Admission]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Current profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverProfile"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+    patch:
+      operationId: updateDriverProfile
+      summary: Change own name or language
+      description: Only the listed fields can be changed; admission status changes only through commands (REQ-API-03).
+      tags: [Admission]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/vehicles:
+    post:
+      operationId: addVehicle
+      summary: Add a vehicle for review
+      tags: [Admission]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Vehicle added as DRAFT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Created"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/documents:
+    post:
+      operationId: addDocument
+      summary: Add a document
+      description: |
+        A new document never overwrites an older one; the latest of each type becomes current
+        (REQ-DRV-02). VEHICLE_REGISTRATION and INSURANCE need vehicle_id, other types must not have it.
+        file_id refers to an uploaded file; upload sessions arrive with the files module.
+      tags: [Admission]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentInput"
+      responses:
+        "201":
+          description: Document added, pending review.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Created"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/verification/submit:
+    post:
+      operationId: submitForVerification
+      summary: Submit for review
+      description: |
+        NOT_SUBMITTED, CHANGES_REQUIRED or EXPIRED → IN_REVIEW. Needs a vehicle and every required,
+        non-rejected, currently valid document; otherwise VALIDATION_FAILED lists what is missing.
+      tags: [Admission]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitRequest"
+      responses:
+        "200":
+          description: Submitted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Account
     description: The signed-in driver
+  - name: Admission
+    description: Profile, vehicles, documents and review (section 6)
 
 components:
   securitySchemes:
@@ -55,3 +191,175 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           type: string
+
+    Created:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    ReviewStatus:
+      type: string
+      enum: [NOT_SUBMITTED, IN_REVIEW, CHANGES_REQUIRED, APPROVED, REJECTED, SUSPENDED, EXPIRED]
+
+    DocumentType:
+      type: string
+      enum: [DRIVER_LICENSE, IDENTITY, TAXI_PERMIT, VEHICLE_REGISTRATION, INSURANCE, OTHER]
+
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        language:
+          type: string
+          minLength: 2
+          maxLength: 8
+
+    VehicleInput:
+      type: object
+      additionalProperties: false
+      required: [command_id, registration_number, make, model, color, production_year]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        registration_number:
+          type: string
+          maxLength: 16
+        make:
+          type: string
+          maxLength: 60
+        model:
+          type: string
+          maxLength: 60
+        color:
+          type: string
+          maxLength: 40
+        production_year:
+          type: integer
+          minimum: 1950
+          maximum: 2100
+
+    DocumentInput:
+      type: object
+      additionalProperties: false
+      required: [command_id, type]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          $ref: "#/components/schemas/DocumentType"
+        vehicle_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        number:
+          type: string
+          maxLength: 64
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: string
+          format: date
+
+    SubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+
+    Vehicle:
+      type: object
+      additionalProperties: false
+      required: [id, registration_number, make, model, color, production_year, state, class_approvals]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        registration_number:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        color:
+          type: string
+        production_year:
+          type: integer
+        state:
+          type: string
+          enum: [DRAFT, IN_REVIEW, APPROVED, SUSPENDED, EXPIRED]
+        class_approvals:
+          type: array
+          items:
+            type: string
+
+    Document:
+      type: object
+      additionalProperties: false
+      required: [id, type, decision]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          $ref: "#/components/schemas/DocumentType"
+        vehicle_id:
+          type: [string, "null"]
+          format: uuid
+        file_id:
+          type: [string, "null"]
+          format: uuid
+        number:
+          type: [string, "null"]
+        valid_from:
+          type: [string, "null"]
+          format: date
+        valid_to:
+          type: [string, "null"]
+          format: date
+        decision:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED]
+        decision_reason:
+          type: [string, "null"]
+
+    DriverProfile:
+      type: object
+      additionalProperties: false
+      required: [id, review_status, version, vehicles, documents]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        language:
+          type: [string, "null"]
+        review_status:
+          $ref: "#/components/schemas/ReviewStatus"
+        version:
+          description: Pass as expected_version to commands.
+          type: integer
+          format: int64
+        vehicles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vehicle"
+        documents:
+          description: Current document of each type.
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
