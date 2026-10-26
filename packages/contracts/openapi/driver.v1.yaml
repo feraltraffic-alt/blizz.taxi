@@ -849,6 +849,27 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/driver/v1/balance:
+    get:
+      operationId: getDriverBalance
+      summary: Settlement balance with the service
+      description: |
+        Per currency, from the journal (REQ-LED-01). Positive — the service owes the driver; negative — the
+        driver owes the service, e.g. the commission of cash trips (REQ-PAY-16). This is the settlement
+        balance only; "available for payout" is a separate figure that arrives with payouts (REQ-LED-06).
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverBalance"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
   - name: Account
     description: The signed-in driver
@@ -860,6 +881,8 @@ tags:
     description: Going online and offline, presence (sections 6, 12)
   - name: Dispatch
     description: Offers, the ALL tab and assignments (sections 10, 11)
+  - name: Finance
+    description: Settlement with the service (section 17)
   - name: Trip
     description: Arrival, start, completion, withdrawal and no-show (sections 9, 10)
 
@@ -1327,6 +1350,26 @@ components:
           description: Confirms an arrival or start that failed the normal checks; flags the trip for review.
           type: string
           maxLength: 500
+
+    DriverBalance:
+      type: object
+      additionalProperties: false
+      required: [balances]
+      properties:
+        balances:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [currency, balance_minor]
+            properties:
+              currency:
+                type: string
+                pattern: "^[A-Z]{3}$"
+              balance_minor:
+                description: Positive — owed to the driver; negative — owed by the driver.
+                type: integer
+                format: int64
 
     WithdrawCommand:
       type: object

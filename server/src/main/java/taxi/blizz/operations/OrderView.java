@@ -4,7 +4,10 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import taxi.blizz.geo.GeoPoint;
 
-/** Canonical snapshot of an order (REQ-RID-* "GET /orders/active"). */
+/**
+ * Canonical snapshot of an order (REQ-RID-* "GET /orders/active"). {@code priceMinor} is the agreed
+ * price of the quote; {@code finalPriceMinor} is set when the trip is completed (REQ-PRC-10).
+ */
 public record OrderView(
         UUID id,
         long shortNumber,
@@ -22,6 +25,7 @@ public record OrderView(
         PaymentMethod paymentMethod,
         String paymentState,
         Long priceMinor,
+        Long finalPriceMinor,
         String currency,
         String searchPhase,
         AssignmentView assignment,
