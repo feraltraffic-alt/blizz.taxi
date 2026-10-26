@@ -80,7 +80,7 @@ class PricingTests {
     @AfterEach
     void cleanUp() {
         // Module-owned test data only. TRUNCATE bypasses the deliberate published-tariff DELETE guard.
-        jdbc.sql("truncate quote, tariff_version, vehicle_class").update();
+        jdbc.sql("truncate final_fare, quote, tariff_version, vehicle_class").update();
         for (UUID id : cities) {
             jdbc.sql("delete from city where id = :id").param("id", id).update();
         }

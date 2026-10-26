@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/trip-completed.v1.schema.json",
+  "title": "TripCompleted v1 payload",
+  "description": "Payload of TripCompleted (aggregate Order). Published in the same transaction as the fact of completion and the final fare; finance posts the ledger from it exactly once per final_fare_id (REQ-LED-05, AC-16). Amounts are minor units of currency. cash_received is the driver's statement for cash orders (REQ-PAY-15).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id", "trip_id", "driver_id", "payer_client_id", "payment_method", "reported_at", "needs_review",
+    "final_fare_id", "final_fare_version", "amount_minor", "commission_minor", "driver_share_minor", "currency"
+  ],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "trip_id": { "type": "string", "format": "uuid" },
+    "driver_id": { "type": "string", "format": "uuid" },
+    "payer_client_id": {
+      "description": "Null for a phone order without a client account.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "payment_method": { "type": "string", "enum": ["CASH", "CARD"] },
+    "cash_received": { "description": "Present for CASH only.", "type": "boolean" },
+    "reported_at": { "description": "Device time of completion.", "type": "string", "format": "date-time" },
+    "needs_review": { "type": "boolean" },
+    "final_fare_id": { "type": "string", "format": "uuid" },
+    "final_fare_version": { "type": "integer", "minimum": 1 },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "commission_minor": { "type": "integer", "minimum": 0 },
+    "driver_share_minor": { "type": "integer" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+  },
+  "examples": [
+    {
+      "order_id": "5f1e9a2c-4b7d-4c3e-8a19-2d6b7e0f1a34",
+      "trip_id": "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f",
+      "driver_id": "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "payer_client_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+      "payment_method": "CASH",
+      "cash_received": true,
+      "reported_at": "2026-10-26T12:30:00Z",
+      "needs_review": false,
+      "final_fare_id": "2b3c4d5e-6f70-4a81-9b2c-3d4e5f6a7b8c",
+      "final_fare_version": 1,
+      "amount_minor": 10000,
+      "commission_minor": 2000,
+      "driver_share_minor": 8000,
+      "currency": "UAH"
+    }
+  ]
+}

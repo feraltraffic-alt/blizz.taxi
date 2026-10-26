@@ -18,6 +18,7 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.pricing.FinalFares;
 
 /**
  * Trip phase commands. Each locks the order, then the driver's capacity, then the trip, checks that
@@ -31,11 +32,13 @@ class JdbcTrips implements Trips {
     private final IdempotentCommands commands;
     private final OrderCore core;
     private final DispatchEngine engine;
+    private final FinalFares fares;
     private final DispatchProperties properties;
     private final PresenceProperties presence;
 
     JdbcTrips(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
-              DispatchProperties properties, PresenceProperties presence) {
+              DispatchProperties properties, PresenceProperties presence, FinalFares fares) {
+        this.fares = fares;
         this.jdbc = jdbc;
         this.commands = commands;
         this.core = core;
@@ -188,8 +191,14 @@ class JdbcTrips implements Trips {
                     if (!"IN_PROGRESS".equals(trip.phase())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a started trip can be completed");
                     }
-                    PaymentMethod payment = PaymentMethod.valueOf(jdbc.sql("select payment_method from ride_order where id = :id")
-                            .param("id", trip.orderId()).query(String.class).single());
+                    record OrderFacts(PaymentMethod payment, UUID quoteId, UUID payerClientId) {
+                    }
+                    OrderFacts facts = jdbc.sql("select payment_method, quote_id, payer_client_id from ride_order where id = :id")
+                            .param("id", trip.orderId())
+                            .query((rs, i) -> new OrderFacts(PaymentMethod.valueOf(rs.getString(1)),
+                                    rs.getObject(2, UUID.class), rs.getObject(3, UUID.class)))
+                            .single();
+                    PaymentMethod payment = facts.payment();
                     if (payment == PaymentMethod.CASH && cashReceived == null) {
                         throw new DomainException(ErrorCode.VALIDATION_FAILED, "State whether the cash was received");
                     }
@@ -218,6 +227,18 @@ class JdbcTrips implements Trips {
                                 .param("id", trip.orderId())
                                 .update();
                     }
+                    // The fare is fixed together with the fact of completion; posting follows from the event (REQ-LED-05).
+                    long waited = jdbc.sql("""
+                                    select coalesce(extract(epoch from started_at - arrived_at), 0)::bigint
+                                    from trip where id = :id""")
+                            .param("id", tripId).query(Long.class).single();
+                    FinalFares.FinalFare fare = fares.finalizeFare(
+                            new FinalFares.Facts(trip.orderId(), facts.quoteId(), Math.max(0, waited)));
+                    jdbc.sql("update ride_order set final_fare_id = :fare, final_price_minor = :price where id = :id")
+                            .param("fare", fare.id())
+                            .param("price", fare.amountMinor())
+                            .param("id", trip.orderId())
+                            .update();
                     // Free in the same transaction as the fact of completion (REQ-ASG-04, REQ-PAY-04).
                     core.releaseDriver(driver.id());
                     Map<String, Object> payload = new LinkedHashMap<>();
@@ -228,6 +249,14 @@ class JdbcTrips implements Trips {
                     }
                     payload.put("reported_at", reportedAt.toString());
                     payload.put("needs_review", suspiciousTime);
+                    payload.put("driver_id", driver.id().toString());
+                    payload.put("payer_client_id", facts.payerClientId() == null ? null : facts.payerClientId().toString());
+                    payload.put("final_fare_id", fare.id().toString());
+                    payload.put("final_fare_version", fare.version());
+                    payload.put("amount_minor", fare.amountMinor());
+                    payload.put("commission_minor", fare.commissionMinor());
+                    payload.put("driver_share_minor", fare.driverShareMinor());
+                    payload.put("currency", fare.currency());
                     core.changeStatus(trip.order(), "FULFILLED", null, "TripCompleted", driver, payload);
                     return view(tripId);
                 });

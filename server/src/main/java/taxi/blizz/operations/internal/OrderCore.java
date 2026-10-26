@@ -218,7 +218,7 @@ class OrderCore {
                                o.payer_client_id, o.city_id, o.vehicle_class, ST_Y(o.pickup) as pickup_lat,
                                ST_X(o.pickup) as pickup_lon, o.pickup_label, ST_Y(o.dropoff) as dropoff_lat,
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
-                               o.currency, o.created_at,
+                               o.final_price_minor, o.currency, o.created_at,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
                         from ride_order o where o.id = :id""")
@@ -230,7 +230,8 @@ class OrderCore {
                         new GeoPoint(rs.getDouble("pickup_lat"), rs.getDouble("pickup_lon")), rs.getString("pickup_label"),
                         new GeoPoint(rs.getDouble("dropoff_lat"), rs.getDouble("dropoff_lon")),
                         rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),
-                        rs.getString("payment_state"), (Long) rs.getObject("price_minor"), rs.getString("currency"), rs.getString("search_phase"),
+                        rs.getString("payment_state"), (Long) rs.getObject("price_minor"),
+                        (Long) rs.getObject("final_price_minor"), rs.getString("currency"), rs.getString("search_phase"),
                         null, rs.getObject("created_at", OffsetDateTime.class)))
                 .optional()
                 .map(order -> withAssignment(order, assignmentOfOrder(order.id())))
@@ -240,7 +241,8 @@ class OrderCore {
     private static OrderView withAssignment(OrderView o, Optional<AssignmentView> assignment) {
         return new OrderView(o.id(), o.shortNumber(), o.status(), o.statusReason(), o.version(), o.channel(),
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
-                o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.currency(), o.searchPhase(),
+                o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
+                o.searchPhase(),
                 assignment.orElse(null), o.createdAt());
     }
 
