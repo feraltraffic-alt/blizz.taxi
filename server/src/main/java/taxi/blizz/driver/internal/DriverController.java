@@ -41,7 +41,7 @@ class DriverController {
                           @NotBlank @Size(max = 40) String color, @Min(1950) @Max(2100) int productionYear) {
     }
 
-    record DocumentRequest(@NotNull UUID commandId, @NotNull DocumentType type, UUID vehicleId, UUID fileId,
+    record DocumentRequest(@NotNull UUID commandId, @NotNull DocumentType type, UUID vehicleId, @NotNull UUID fileId,
                            @Size(max = 64) String number, LocalDate validFrom, LocalDate validTo) {
     }
 

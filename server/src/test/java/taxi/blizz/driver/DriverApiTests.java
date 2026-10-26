@@ -90,12 +90,21 @@ class DriverApiTests {
         Object vehicleId = body(vehicle).get("id");
 
         String validTo = LocalDate.now().plusYears(1).toString();
+        byte[] png = DriverAdmissionTests.PNG;
         for (Map<String, Object> document : List.<Map<String, Object>>of(
                 Map.of("type", "DRIVER_LICENSE", "valid_to", validTo),
                 Map.of("type", "VEHICLE_REGISTRATION", "vehicle_id", vehicleId),
                 Map.of("type", "INSURANCE", "vehicle_id", vehicleId, "valid_to", validTo))) {
+            Map<String, Object> session = body(call("POST", "/api/driver/v1/documents/upload-sessions", driver,
+                    Map.of("command_id", UUID.randomUUID(), "content_type", "image/png", "size_bytes", png.length)));
+            MvcResult uploaded = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .put((String) session.get("upload_path"))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + driver.accessToken())
+                    .contentType(MediaType.IMAGE_PNG).content(png)).andReturn();
+            assertThat(body(uploaded)).containsEntry("state", "SAFE");
             Map<String, Object> request = new java.util.HashMap<>(document);
             request.put("command_id", UUID.randomUUID());
+            request.put("file_id", session.get("file_id"));
             assertThat(call("POST", "/api/driver/v1/documents", driver, request).getResponse().getStatus())
                     .isEqualTo(201);
         }
@@ -108,6 +117,28 @@ class DriverApiTests {
                 Map.of("command_id", UUID.randomUUID(), "expected_version", profile.get("version")));
         assertThat(submitted.getResponse().getStatus()).isEqualTo(200);
         assertThat(body(submitted).get("review_status")).isEqualTo("IN_REVIEW");
+    }
+
+    @Test
+    void ownerDownloadsTheFileAndOthersCannotSeeIt() throws Exception {
+        IssuedSession driver = session(SubjectType.DRIVER);
+        IssuedSession other = session(SubjectType.DRIVER);
+        byte[] png = DriverAdmissionTests.PNG;
+        Map<String, Object> upload = body(call("POST", "/api/driver/v1/documents/upload-sessions", driver,
+                Map.of("command_id", UUID.randomUUID(), "content_type", "image/png", "size_bytes", png.length)));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put((String) upload.get("upload_path"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + driver.accessToken())
+                .contentType(MediaType.IMAGE_PNG).content(png)).andReturn();
+        String path = "/api/driver/v1/files/" + upload.get("file_id");
+
+        MvcResult own = call("GET", path, driver, null);
+        assertThat(own.getResponse().getStatus()).isEqualTo(200);
+        assertThat(own.getResponse().getContentAsByteArray()).isEqualTo(png);
+        assertThat(own.getResponse().getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
+        assertThat(own.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("attachment");
+
+        assertThat(call("GET", path, other, null).getResponse().getStatus()).isEqualTo(404);
     }
 
     @Test

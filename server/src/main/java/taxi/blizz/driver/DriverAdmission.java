@@ -29,6 +29,7 @@ public interface DriverAdmission {
                          LocalDate validFrom, LocalDate validTo) {
     }
 
+    /** The file must be a SAFE upload of this driver for {@code DRIVER_DOCUMENT} (REQ-SEC-06). */
     UUID addDocument(Actor driver, UUID commandId, DocumentInput document);
 
     /** NOT_SUBMITTED or CHANGES_REQUIRED → IN_REVIEW, once the required documents and a vehicle exist. */
