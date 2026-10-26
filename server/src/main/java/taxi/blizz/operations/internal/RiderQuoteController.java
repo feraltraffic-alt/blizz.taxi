@@ -1,4 +1,4 @@
-package taxi.blizz.pricing.internal;
+package taxi.blizz.operations.internal;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
