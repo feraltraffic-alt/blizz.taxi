@@ -32,9 +32,90 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/orders/active:
+    get:
+      operationId: getActiveOrder
+      summary: The canonical snapshot of the current order
+      description: After an app restart the rider sees the same order; 204 when there is none.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "204":
+          description: No active order.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/orders/{order_id}:
+    get:
+      operationId: getOrder
+      summary: One own order
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/rider/v1/orders/{order_id}/cancel:
+    post:
+      operationId: cancelOrder
+      summary: Cancel before the trip starts
+      description: No fee while the cancellation policy is not set (Q-07). A stale expected_version gets VERSION_CONFLICT.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrder"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Account
     description: The signed-in rider
+  - name: Orders
+    description: Orders of the rider (section 9); creation arrives with quotes
 
 components:
   securitySchemes:
@@ -55,3 +136,82 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           type: string
+
+    CancelOrder:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason_code:
+          type: string
+
+    Assignment:
+      type: object
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+        trip_phase:
+          type: [string, "null"]
+
+    Order:
+      type: object
+      required: [id, short_number, status, version, channel, city_id, vehicle_class, pickup, dropoff, payment_method]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        short_number:
+          description: For support conversations; not a secret (REQ-DATA-03).
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED, UNFULFILLED]
+        status_reason:
+          type: [string, "null"]
+        version:
+          type: integer
+          format: int64
+        channel:
+          type: string
+          enum: [APP, PHONE]
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff_label:
+          type: string
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+        search_phase:
+          type: [string, "null"]
+          enum: [PERSONAL, BROADCAST, STOPPED, EXHAUSTED, null]
+        assignment:
+          oneOf:
+            - $ref: "#/components/schemas/Assignment"
+            - type: "null"
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
