@@ -10,6 +10,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -40,6 +42,7 @@ class GeographyTests {
     void clearGeography() {
         jdbc.sql("delete from zone").update();
         jdbc.sql("delete from city").update();
+        permittedStaff(STAFF.id(), "ACTIVE", GeoConfiguration.MANAGE_PERMISSION);
     }
 
     @Test
@@ -218,6 +221,144 @@ class GeographyTests {
     void bothPolygonIndexesAreGist() {
         assertThat(jdbc.sql("select indexdef from pg_indexes where indexname in ('city_polygon_gist', 'zone_polygon_gist')")
                 .query(String.class).list()).hasSize(2).allSatisfy(index -> assertThat(index).contains("USING gist (polygon)"));
+    }
+
+
+    enum Command {
+        CREATE_CITY, PUBLISH_CITY, ARCHIVE_CITY, CREATE_ZONE, PUBLISH_ZONE, ARCHIVE_ZONE
+    }
+
+    @ParameterizedTest
+    @EnumSource(Command.class)
+    void eachCommandRequiresAnActivePermittedStaffMember(Command command) {
+        Revision city = draft(BOX, 0);
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0,
+                city.id(), "TEST_ZONE", BOX, 1, "test"));
+        Actor withoutPermission = permittedStaff(UUID.randomUUID(), "ACTIVE");
+        Actor suspended = permittedStaff(UUID.randomUUID(), "SUSPENDED", GeoConfiguration.MANAGE_PERMISSION);
+        Actor unknownStaff = new Actor(SubjectType.STAFF, UUID.randomUUID());
+        Actor client = new Actor(SubjectType.CLIENT, UUID.randomUUID());
+        long auditCount = jdbc.sql("select count(*) from audit_log").query(Long.class).single();
+
+        for (Actor denied : List.of(withoutPermission, suspended, unknownStaff, client, Actor.system())) {
+            UUID commandId = UUID.randomUUID();
+            reject(() -> execute(command, denied, commandId, city, zone), ErrorCode.ACCESS_DENIED);
+            assertThat(jdbc.sql("select count(*) from command_receipt where command_id = :id")
+                    .param("id", commandId).query(Long.class).single()).isZero();
+        }
+
+        assertThat(jdbc.sql("select count(*) from audit_log").query(Long.class).single()).isEqualTo(auditCount);
+        assertThat(execute(command, STAFF, UUID.randomUUID(), city, zone)).isNotNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(Command.class)
+    void cachedCommandResultsStillRequireCurrentPermissionAndActiveState(Command command) {
+        Revision city = draft(BOX, 0);
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0,
+                city.id(), "TEST_ZONE", BOX, 1, "test"));
+        UUID commandId = UUID.randomUUID();
+        Revision first = execute(command, STAFF, commandId, city, zone);
+
+        permittedStaff(STAFF.id(), "ACTIVE");
+        reject(() -> execute(command, STAFF, commandId, city, zone), ErrorCode.ACCESS_DENIED);
+        permittedStaff(STAFF.id(), "SUSPENDED", GeoConfiguration.MANAGE_PERMISSION);
+        reject(() -> execute(command, STAFF, commandId, city, zone), ErrorCode.ACCESS_DENIED);
+        permittedStaff(STAFF.id(), "ACTIVE", GeoConfiguration.MANAGE_PERMISSION);
+        assertThat(execute(command, STAFF, commandId, city, zone)).isEqualTo(first);
+    }
+
+    @Test
+    void cityArchiveRequiresPublishedZonesToBeArchivedFirst() {
+        Revision city = geo.publishCity(change(draft(BOX, 0)));
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0,
+                city.id(), "TEST_ZONE", BOX, 1, "test"));
+        Revision publishedZone = geo.publishZone(change(zone));
+        Change archive = change(city);
+
+        reject(() -> geo.archiveCity(archive), ErrorCode.STATE_CONFLICT);
+        assertThat(resolver.resolve(KYIV_POINT)).isPresent();
+        assertThat(audits(city, "city.archive")).isZero();
+        assertThat(jdbc.sql("select version from city where id = :id")
+                .param("id", city.id()).query(Long.class).single()).isEqualTo(city.version());
+        assertThat(jdbc.sql("select count(*) from command_receipt where command_id = :id")
+                .param("id", archive.commandId()).query(Long.class).single()).isZero();
+
+        geo.archiveZone(change(publishedZone));
+        assertThat(geo.archiveCity(archive).state()).isEqualTo("ARCHIVED");
+        assertThat(audits(city, "city.archive")).isEqualTo(1);
+        assertThat(resolver.resolve(KYIV_POINT)).isEmpty();
+    }
+
+    @Test
+    void zoneCannotBePublishedAfterItsCityIsArchived() {
+        Revision city = draft(BOX, 0);
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0,
+                city.id(), "TEST_ZONE", BOX, 1, "test"));
+        geo.archiveCity(change(city));
+
+        reject(() -> geo.publishZone(change(zone)), ErrorCode.STATE_CONFLICT);
+        assertThat(audits(zone, "zone.publish")).isZero();
+    }
+
+    @Test
+    void concurrentCityArchiveAndZonePublicationCannotBothCommit() throws Exception {
+        Revision city = geo.publishCity(change(draft(BOX, 0)));
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0,
+                city.id(), "TEST_ZONE", BOX, 1, "test"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Runnable> actions = List.of(() -> geo.archiveCity(change(city)), () -> geo.publishZone(change(zone)));
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var outcomes = actions.stream().map(action -> pool.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError("Start timeout");
+                }
+                try {
+                    action.run();
+                    return true;
+                } catch (DomainException conflict) {
+                    assertThat(conflict.code()).isEqualTo(ErrorCode.STATE_CONFLICT);
+                    return false;
+                }
+            })).toList();
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(List.of(outcomes.get(0).get(20, TimeUnit.SECONDS), outcomes.get(1).get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        } finally {
+            start.countDown();
+        }
+        assertThat(jdbc.sql("""
+                select count(*) from zone join city on city.id = zone.city_id
+                where city.state = 'ARCHIVED' and zone.state = 'PUBLISHED'
+                """).query(Long.class).single()).isZero();
+    }
+
+    private Revision execute(Command command, Actor actor, UUID commandId, Revision city, Revision zone) {
+        Change cityChange = new Change(commandId, actor, city.id(), city.version(), "Permission test");
+        Change zoneChange = new Change(commandId, actor, zone.id(), zone.version(), "Permission test");
+        return switch (command) {
+            case CREATE_CITY -> geo.createCityDraft(new CityDraft(commandId, actor, 0,
+                    "permission-" + commandId, "Synthetic", "UAH", "Europe/Kyiv", BOX, 0, "Permission test"));
+            case PUBLISH_CITY -> geo.publishCity(cityChange);
+            case ARCHIVE_CITY -> geo.archiveCity(cityChange);
+            case CREATE_ZONE -> geo.createZoneDraft(new ZoneDraft(commandId, actor, 0,
+                    city.id(), "TEST_ZONE", BOX, 0, "Permission test"));
+            case PUBLISH_ZONE -> geo.publishZone(zoneChange);
+            case ARCHIVE_ZONE -> geo.archiveZone(zoneChange);
+        };
+    }
+
+    private Actor permittedStaff(UUID id, String state, String... permissions) {
+        jdbc.sql("""
+                insert into staff_user(id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'Geography manager', 'ADMIN', :permissions, :state, now(), now())
+                on conflict (id) do update set permissions = excluded.permissions, state = excluded.state
+                """).param("id", id).param("login", "geo-staff-" + id)
+                .param("permissions", permissions).param("state", state).update();
+        return new Actor(SubjectType.STAFF, id);
     }
 
     private Revision draft(String polygon, int priority) { return geo.createCityDraft(cityDraft(polygon, priority)); }

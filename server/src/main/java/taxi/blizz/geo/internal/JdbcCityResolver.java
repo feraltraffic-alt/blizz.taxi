@@ -10,7 +10,10 @@ import taxi.blizz.geo.GeoPoint;
 @Service
 class JdbcCityResolver implements CityResolver {
     private final JdbcClient jdbc;
-    JdbcCityResolver(JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    JdbcCityResolver(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public Optional<City> resolve(GeoPoint point) {

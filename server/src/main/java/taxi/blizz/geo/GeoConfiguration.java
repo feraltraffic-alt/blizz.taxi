@@ -3,8 +3,10 @@ package taxi.blizz.geo;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
 
-/** Staff-only named commands. Polygons are EWKT MultiPolygons with SRID 4326; new drafts start at version 0. */
+/** Active staff with {@code MANAGE_PERMISSION} only. Named commands. Polygons are EWKT MultiPolygons with SRID 4326; new drafts start at version 0. */
 public interface GeoConfiguration {
+    String MANAGE_PERMISSION = "geo.manage";
+
     Revision createCityDraft(CityDraft command);
     Revision publishCity(Change command);
     Revision archiveCity(Change command);
