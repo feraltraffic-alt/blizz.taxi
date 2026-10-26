@@ -1,0 +1,34 @@
+package taxi.blizz.operations.internal;
+
+import java.time.Duration;
+import java.util.List;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+/**
+ * Dispatch parameters (REQ-DSP-03, section 30) — starting values to be calibrated in the pilot.
+ *
+ * @param personalOfferTtl     lifetime of a personal offer (server deadline)
+ * @param personalPhaseMax     how long personal offers are tried before the order goes to "ALL"
+ * @param totalDeadline        total search time before the order becomes UNFULFILLED
+ * @param radiiMeters          candidate search radii, tried in order
+ * @param candidateLimit       candidates considered per radius
+ * @param broadcastRadiusMeters distance within which a driver sees "ALL" orders
+ * @param workerEnabled        process deadlines in this process
+ * @param pollInterval         deadline worker delay
+ * @param batchSize            attempts processed per poll
+ * @param lease                how long a worker owns a claimed attempt
+ */
+@ConfigurationProperties("blizz.dispatch")
+public record DispatchProperties(
+        @DefaultValue("PT15S") Duration personalOfferTtl,
+        @DefaultValue("PT60S") Duration personalPhaseMax,
+        @DefaultValue("PT180S") Duration totalDeadline,
+        @DefaultValue({"2000", "5000"}) List<Integer> radiiMeters,
+        @DefaultValue("20") int candidateLimit,
+        @DefaultValue("5000") int broadcastRadiusMeters,
+        @DefaultValue("true") boolean workerEnabled,
+        @DefaultValue("PT1S") Duration pollInterval,
+        @DefaultValue("50") int batchSize,
+        @DefaultValue("PT30S") Duration lease) {
+}

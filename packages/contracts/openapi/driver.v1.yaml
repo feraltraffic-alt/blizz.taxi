@@ -485,6 +485,165 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/driver/v1/offers:
+    get:
+      operationId: listOffers
+      summary: Open personal offers
+      description: At most one in M1; expires_at is the server deadline (REQ-DRV-07).
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Offer"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/offers/{offer_id}/accept:
+    post:
+      operationId: acceptOffer
+      summary: Accept an offer
+      description: Before the server deadline only; a late or revoked offer gets OFFER_EXPIRED / OFFER_REVOKED. A repeated command returns the original assignment (T-10).
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: offer_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Command"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/offers/{offer_id}/reject:
+    post:
+      operationId: rejectOffer
+      summary: Decline an offer
+      description: The search continues with the next driver.
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: offer_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Command"
+      responses:
+        "204":
+          description: Declined.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/driver/v1/broadcast-orders:
+    get:
+      operationId: listBroadcastOrders
+      summary: Orders in the ALL tab
+      description: Only for an eligible driver, filtered by city, class and distance; no passenger contact (REQ-DRV-08).
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BroadcastOrder"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/orders/{order_id}/claim:
+    post:
+      operationId: claimOrder
+      summary: Take an order from the ALL tab
+      description: Exactly one of many simultaneous claims wins; the others get ORDER_ALREADY_ASSIGNED (T-05).
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Command"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/assignments/current:
+    get:
+      operationId: getCurrentAssignment
+      summary: The authoritative current assignment
+      description: 204 when there is none.
+      tags: [Dispatch]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "204":
+          description: No current assignment.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
   - name: Account
     description: The signed-in driver
@@ -494,6 +653,8 @@ tags:
     description: Private document uploads (REQ-SEC-06, REQ-SEC-07)
   - name: Work session
     description: Going online and offline, presence (sections 6, 12)
+  - name: Dispatch
+    description: Offers, the ALL tab and assignments (sections 10, 11)
 
 components:
   parameters:
@@ -852,3 +1013,93 @@ components:
           type: array
           items:
             type: string
+
+    Command:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    Assignment:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, driver_id, vehicle_id, source, state]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        source:
+          type: string
+          enum: [OFFER, BROADCAST]
+        state:
+          type: string
+          enum: [RESERVED, COMMITTED, RELEASED, REVOKED, COMPLETED]
+        trip_id:
+          type: [string, "null"]
+          format: uuid
+        trip_phase:
+          type: [string, "null"]
+          enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
+
+    Offer:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, expires_at, vehicle_class, pickup, pickup_label, dropoff_label, payment_method]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        vehicle_class:
+          type: string
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+        dropoff_label:
+          type: string
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+        distance_m:
+          type: [integer, "null"]
+
+    BroadcastOrder:
+      type: object
+      additionalProperties: false
+      required: [order_id, vehicle_class, pickup, pickup_label, dropoff_label, payment_method, distance_m]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+        dropoff_label:
+          type: string
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+        distance_m:
+          type: integer
