@@ -8,7 +8,7 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * PostgreSQL with PostGIS, the same major versions as production
- * (docs/decisions/0001-stack-versions.md).
+ * (docs/decisions/0001-stack-versions.md). One container is shared by every test context in the JVM.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -16,9 +16,11 @@ public class TestcontainersConfiguration {
     static final DockerImageName POSTGIS = DockerImageName.parse("postgis/postgis:18-3.6")
             .asCompatibleSubstituteFor("postgres");
 
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(POSTGIS);
+
     @Bean
     @ServiceConnection
     PostgreSQLContainer postgres() {
-        return new PostgreSQLContainer(POSTGIS);
+        return POSTGRES;
     }
 }
