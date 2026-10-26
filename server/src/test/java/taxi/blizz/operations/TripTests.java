@@ -20,12 +20,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import taxi.blizz.TestQuotes;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.SubjectType;
+import taxi.blizz.pricing.QuoteService;
 
 /**
  * Trip phases: REQ-ASG-03..07, REQ-ORD-04..05, REQ-PAY-15, REQ-DRV-09; T-01, T-08, T-18 (end), T-19.
@@ -49,6 +51,8 @@ class TripTests {
     WorkSessions sessions;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    QuoteService quoteService;
 
     UUID cityId;
 
@@ -132,7 +136,8 @@ class TripTests {
         Actor payer = client();
         Driver driver = driverAt(north(1000));
         OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP, "Entrance 1",
-                DROPOFF, "Office", payment, 18_000L, "UAH"));
+                DROPOFF, "Office", payment,
+                new TestQuotes(jdbc, quoteService).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF).id()));
         OfferView offer = dispatch.offers(driver.actor()).getFirst();
         dispatch.accept(driver.actor(), UUID.randomUUID(), offer.id());
         return new Ride(payer, driver, order, trips.current(driver.actor()).orElseThrow());

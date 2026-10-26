@@ -16,8 +16,10 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 4. Before opening the PR, run what CI runs:
    - `scripts/server-build.sh` (needs JDK 25, Maven, Docker)
    - `scripts/contracts-lint.sh` (needs Node 24)
-5. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
-6. Do not merge your own PR. Address review comments in new commits on the same branch.
+5. When you bring `main` into your branch, check afterwards that `git diff origin/main --stat` lists **only** the files of your issue. A merge that drops or rewrites other people's work is a blocker, even if your own tests pass.
+6. Open or update a PR only when the build is green; a PR with a compile error is not ready for review.
+7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
+8. Do not merge your own PR. Address review comments in new commits on the same branch.
 
 ## Rules that must not be broken
 

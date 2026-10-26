@@ -21,6 +21,8 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.SubjectType;
+import taxi.blizz.pricing.QuoteService;
+import taxi.blizz.pricing.VehicleClasses;
 
 /** Order creation and cancellation before the trip starts (sections 9, 13). */
 @Service
@@ -31,14 +33,18 @@ class JdbcOrders implements Orders {
     private final CityResolver cities;
     private final OrderCore core;
     private final DispatchEngine engine;
+    private final VehicleClasses classes;
+    private final QuoteService quotes;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
-               DispatchEngine engine) {
+               DispatchEngine engine, VehicleClasses classes, QuoteService quotes) {
         this.jdbc = jdbc;
         this.commands = commands;
         this.cities = cities;
         this.core = core;
         this.engine = engine;
+        this.classes = classes;
+        this.quotes = quotes;
     }
 
     @Override
@@ -49,28 +55,33 @@ class JdbcOrders implements Orders {
         if (order.paymentMethod() == PaymentMethod.CARD) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Card payment is not available yet");
         }
-        if ((order.priceMinor() == null) != (order.currency() == null)) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Price and currency go together");
+        if (order.quoteId() == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "An order needs a quote");
         }
+        VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), order.vehicleClass())
+                .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
+        String fingerprint = new QuoteService.Request(city.id(), vehicleClass.id(), order.pickup(), order.dropoff(),
+                actor).fingerprint();
         return commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
+            QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
             try {
                 jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
-                                                        source_ref, status, created_at, updated_at)
+                                                        quote_id, source_ref, status, created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
-                                        :payment, :paymentState, :price, :currency, :sourceRef, 'READY', :now, :now)""")
+                                        :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, 'READY', :now, :now)""")
                         .param("id", id)
                         .param("channel", channel)
                         .param("payer", order.payerClientId())
                         .param("createdByType", actor.type().name())
                         .param("createdById", actor.id())
                         .param("cityId", city.id())
-                        .param("class", order.vehicleClass())
+                        .param("class", vehicleClass.code())
                         .param("pickupLon", order.pickup().lon())
                         .param("pickupLat", order.pickup().lat())
                         .param("pickupLabel", label(order.pickupLabel()))
@@ -79,8 +90,9 @@ class JdbcOrders implements Orders {
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", order.paymentMethod().name())
                         .param("paymentState", order.paymentMethod() == PaymentMethod.CASH ? "CASH_EXPECTED" : null)
-                        .param("price", order.priceMinor())
-                        .param("currency", order.currency())
+                        .param("price", quote.amountMinor())
+                        .param("currency", quote.currency())
+                        .param("quoteId", quote.id())
                         .param("sourceRef", order.sourceRef())
                         .param("now", core.now())
                         .update();
@@ -88,7 +100,8 @@ class JdbcOrders implements Orders {
                 throw new DomainException(ErrorCode.ORDER_ALREADY_ACTIVE, "The payer already has an active order");
             }
             core.recordEvent(id, 0, "OrderCreated", actor, null, Map.of("channel", channel,
-                    "city_id", city.id().toString(), "payment_method", order.paymentMethod().name()));
+                    "city_id", city.id().toString(), "payment_method", order.paymentMethod().name(),
+                    "quote_id", quote.id().toString(), "price_minor", quote.amountMinor()));
             engine.startSearch(core.lockOrder(id));
             return core.view(id);
         });
