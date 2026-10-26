@@ -11,6 +11,7 @@ import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.platform.Actor;
 
 public interface QuoteService {
+    /** Call without an active transaction; route estimation precedes idempotent quote persistence. */
     Quote create(UUID commandId, Request request);
 
     /**

@@ -5,14 +5,12 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import taxi.blizz.audit.AuditEntry;
-import taxi.blizz.audit.AuditLog;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
@@ -28,34 +26,33 @@ import tools.jackson.databind.json.JsonMapper;
 class JdbcQuoteService implements QuoteService {
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
-    private final AuditLog audit;
     private final JsonMapper json;
     private final Clock clock;
     private final ObjectProvider<RouteEstimator> estimators;
 
-    JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, JsonMapper json,
+    JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators) {
         this.jdbc = jdbc;
         this.commands = commands;
-        this.audit = audit;
         this.json = json;
         this.clock = clock;
         this.estimators = estimators;
     }
 
     @Override
+    @Transactional(propagation = Propagation.NEVER)
     public Quote create(UUID commandId, Request request) {
         payer(request.payer());
         if (commandId == null || request.cityId() == null || request.classId() == null
                 || request.pickup() == null || request.dropOff() == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "Incomplete quote request");
         }
+        RouteEstimator estimator = estimators.getIfAvailable();
+        if (estimator == null) {
+            throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
+        }
+        RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
         return commands.execute(new CommandKey(request.payer(), "quote.create", commandId), request, Quote.class, () -> {
-            RouteEstimator estimator = estimators.getIfAvailable();
-            if (estimator == null) {
-                throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
-            }
-            RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
             record Tariff(UUID id, String currency, Terms terms) {
             }
@@ -87,9 +84,6 @@ class JdbcQuoteService implements QuoteService {
                     .param("amount", quote.amountMinor()).param("currency", quote.currency())
                     .param("fingerprint", quote.fingerprint()).param("snapshot", json.writeValueAsString(quote))
                     .param("now", at(now)).param("expires", at(quote.expiresAt())).update();
-            audit.record(new AuditEntry(request.payer(), "quote.create", "quote", quote.id().toString(), null,
-                    null, Map.of("tariff_version_id", tariff.id(), "amount_minor", quote.amountMinor(),
-                            "currency", quote.currency())));
             return quote;
         });
     }
@@ -114,8 +108,6 @@ class JdbcQuoteService implements QuoteService {
         }
         jdbc.sql("update quote set consumed_at = :now where id = :id")
                 .param("id", quoteId).param("now", at(now)).update();
-        audit.record(new AuditEntry(payer, "quote.consume", "quote", quoteId.toString(), null,
-                Map.of("consumed", false), Map.of("consumed", true)));
         return quote;
     }
 
