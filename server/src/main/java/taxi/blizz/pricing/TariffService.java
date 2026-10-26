@@ -1,0 +1,36 @@
+package taxi.blizz.pricing;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+import taxi.blizz.platform.Actor;
+
+/** Staff commands require ACTIVE staff with pricing.manage, including idempotent replays. */
+public interface TariffService {
+    String MANAGE_PERMISSION = "pricing.manage";
+
+    Revision createVehicleClass(VehicleClassDraft command);
+    Revision createDraft(Draft command);
+    Revision publish(Change command);
+    Revision archive(Change command);
+
+    record Revision(UUID id, String state, long version) {
+    }
+
+    /** Rates are minor units per km/minute; commissionRate is an exact fraction from 0 to 1. */
+    record Terms(long pickupMinor, BigDecimal perKmMinor, BigDecimal perMinuteMinor, long minimumMinor,
+                 int freeWaitingMinutes, BigDecimal waitingPerMinuteMinor, long cancellationFeeMinor,
+                 BigDecimal commissionRate) {
+    }
+
+    record VehicleClassDraft(UUID commandId, Actor actor, long expectedVersion, UUID cityId,
+                             String code, String name, String reason) {
+    }
+
+    record Draft(UUID commandId, Actor actor, long expectedVersion, UUID cityId, UUID classId, String currency,
+                 Instant effectiveFrom, Instant effectiveTo, Terms terms, String reason) {
+    }
+
+    record Change(UUID commandId, Actor actor, UUID id, long expectedVersion, String reason) {
+    }
+}
