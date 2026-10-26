@@ -14,21 +14,23 @@ import org.springframework.stereotype.Service;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.geo.GeoConfiguration;
+import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
-import taxi.blizz.platform.SubjectType;
 
 @Service
 class JdbcGeoConfiguration implements GeoConfiguration {
     private final JdbcClient jdbc;
+    private final StaffAccess staff;
     private final IdempotentCommands commands;
     private final AuditLog audit;
     private final Clock clock;
 
-    JdbcGeoConfiguration(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock) {
+    JdbcGeoConfiguration(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock, StaffAccess staff) {
+        this.staff = staff;
         this.jdbc = jdbc;
         this.commands = commands;
         this.audit = audit;
@@ -175,17 +177,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
     }
 
     private CommandKey key(Actor actor, String operation, UUID commandId) {
-        if (actor == null || actor.type() != SubjectType.STAFF) {
-            throw error(ErrorCode.ACCESS_DENIED, "Staff actor required");
-        }
-        int allowed = jdbc.sql("""
-                select count(*) from staff_user
-                where id = :id and state = 'ACTIVE' and :permission = any(permissions)
-                """).param("id", actor.id()).param("permission", MANAGE_PERMISSION)
-                .query(Integer.class).single();
-        if (allowed == 0) {
-            throw error(ErrorCode.ACCESS_DENIED, "Missing permission " + MANAGE_PERMISSION);
-        }
+        staff.require(actor, MANAGE_PERMISSION);
         if (commandId == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }

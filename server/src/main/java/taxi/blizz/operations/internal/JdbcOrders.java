@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
+import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.OrderChannel;
@@ -29,6 +30,7 @@ import taxi.blizz.pricing.VehicleClasses;
 class JdbcOrders implements Orders {
 
     private final JdbcClient jdbc;
+    private final StaffAccess staff;
     private final IdempotentCommands commands;
     private final CityResolver cities;
     private final OrderCore core;
@@ -37,7 +39,8 @@ class JdbcOrders implements Orders {
     private final QuoteService quotes;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
-               DispatchEngine engine, VehicleClasses classes, QuoteService quotes) {
+               DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff) {
+        this.staff = staff;
         this.jdbc = jdbc;
         this.commands = commands;
         this.cities = cities;
@@ -235,18 +238,7 @@ class JdbcOrders implements Orders {
     }
 
     private void requireStaff(Actor actor, String permission, UUID cityId) {
-        int allowed = jdbc.sql("""
-                        select count(*) from staff_user
-                        where id = :id and state = 'ACTIVE' and :permission = any(permissions)
-                          and :city = any(city_scope)""")
-                .param("id", actor.id())
-                .param("permission", permission)
-                .param("city", cityId)
-                .query(Integer.class)
-                .single();
-        if (allowed == 0) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing " + permission + " for this city");
-        }
+        staff.require(actor, permission, cityId);
     }
 
     private static String label(String value) {

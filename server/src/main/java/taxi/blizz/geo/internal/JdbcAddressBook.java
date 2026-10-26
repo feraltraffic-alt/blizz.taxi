@@ -15,12 +15,12 @@ import taxi.blizz.audit.AuditLog;
 import taxi.blizz.geo.AddressBook;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.geo.HouseNumber;
+import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
-import taxi.blizz.platform.SubjectType;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
@@ -34,12 +34,14 @@ class JdbcAddressBook implements AddressBook {
             from address a left join address_override o on o.own_address_id = a.id
             """;
     private final JdbcClient jdbc;
+    private final StaffAccess staff;
     private final IdempotentCommands commands;
     private final AuditLog audit;
     private final JsonMapper json;
     private final Clock clock;
 
-    JdbcAddressBook(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, JsonMapper json, Clock clock) {
+    JdbcAddressBook(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, JsonMapper json, Clock clock, StaffAccess staff) {
+        this.staff = staff;
         this.jdbc = jdbc;
         this.commands = commands;
         this.audit = audit;
@@ -307,18 +309,7 @@ class JdbcAddressBook implements AddressBook {
      * update that moves it needs both the current and the new city.
      */
     private CommandKey key(Actor actor, String action, UUID commandId, UUID... cityIds) {
-        if (actor == null || actor.type() != SubjectType.STAFF) {
-            throw error(ErrorCode.ACCESS_DENIED, "Staff permission required");
-        }
-        UUID[] cities = Arrays.stream(cityIds).filter(java.util.Objects::nonNull).distinct().toArray(UUID[]::new);
-        boolean allowed = jdbc.sql("""
-                select exists(select 1 from staff_user where id = :id
-                    and state = 'ACTIVE' and :permission = any(permissions) and cast(:cities as uuid[]) <@ city_scope)
-                """).param("id", actor.id()).param("permission", MANAGE_PERMISSION).param("cities", cities)
-                .query(Boolean.class).single();
-        if (!allowed) {
-            throw error(ErrorCode.ACCESS_DENIED, "Missing permission " + MANAGE_PERMISSION);
-        }
+        staff.require(actor, MANAGE_PERMISSION, cityIds);
         if (commandId == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }

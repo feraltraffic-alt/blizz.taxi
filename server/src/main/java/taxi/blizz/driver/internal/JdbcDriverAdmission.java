@@ -26,6 +26,7 @@ import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
 import taxi.blizz.files.FilePurpose;
 import taxi.blizz.files.FileService;
+import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
@@ -50,6 +51,7 @@ class JdbcDriverAdmission implements DriverAdmission {
             EnumSet.of(ReviewStatus.NOT_SUBMITTED, ReviewStatus.CHANGES_REQUIRED, ReviewStatus.EXPIRED);
 
     private final JdbcClient jdbc;
+    private final StaffAccess staff;
     private final TransactionTemplate tx;
     private final IdempotentCommands commands;
     private final Outbox outbox;
@@ -59,7 +61,8 @@ class JdbcDriverAdmission implements DriverAdmission {
     private final Clock clock;
 
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
-                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock) {
+                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock, StaffAccess staff) {
+        this.staff = staff;
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
@@ -496,18 +499,7 @@ class JdbcDriverAdmission implements DriverAdmission {
     }
 
     private void requireReviewer(Actor actor) {
-        if (actor == null || actor.type() != SubjectType.STAFF) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can review drivers");
-        }
-        int allowed = jdbc.sql("""
-                        select count(*) from staff_user
-                        where id = :id and state = 'ACTIVE' and :permission = any(permissions)""")
-                .param("id", actor.id())
-                .param("permission", REVIEW_PERMISSION)
-                .query(Integer.class).single();
-        if (allowed == 0) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + REVIEW_PERMISSION);
-        }
+        staff.require(actor, REVIEW_PERMISSION);
     }
 
     private static void requireReason(String reason) {
