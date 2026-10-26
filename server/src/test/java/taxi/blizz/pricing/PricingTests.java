@@ -29,6 +29,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
@@ -68,6 +70,7 @@ class PricingTests {
     void setUp() {
         clock.current = NOW;
         routes.calls.set(0);
+        routes.next = new RouteEstimator.Estimate(7500, 900);
         manager = staff("ACTIVE", TariffService.MANAGE_PERMISSION);
         city = city("UAH");
         classId = vehicleClass(city);
@@ -99,8 +102,9 @@ class PricingTests {
         assertThat(quote.route()).isEqualTo(new RouteEstimator.Estimate(7500, 900));
         assertThat(quote.expiresAt()).isEqualTo(NOW.plusSeconds(300));
         assertThat(quote.fingerprint()).hasSize(64).isEqualTo(request.fingerprint());
+        routes.next = new RouteEstimator.Estimate(9000, 1200);
         assertThat(quotes.create(commandId, request)).isEqualTo(quote);
-        assertThat(routes.calls).hasValue(1);
+        assertThat(routes.calls).hasValue(2);
     }
 
     @Test
@@ -152,7 +156,7 @@ class PricingTests {
         reject(() -> quotes.consume(UUID.randomUUID(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_MISMATCH);
         assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint())).isEqualTo(quote);
         reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_EXPIRED);
-        assertThat(audits(quote.id(), "quote.consume")).isEqualTo(1);
+        assertThat(audits(quote.id(), "quote.consume")).isZero();
     }
 
     @Test
@@ -177,6 +181,8 @@ class PricingTests {
             throw new IllegalStateException("Synthetic order failure");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(audits(quote.id(), "quote.consume")).isZero();
+        assertThat(jdbc.sql("select consumed_at is null from quote where id = :id")
+                .param("id", quote.id()).query(Boolean.class).single()).isTrue();
         CommandKey key = new CommandKey(PAYER, "synthetic.order.create", UUID.randomUUID());
         UUID order = commands.execute(key, quote.id(), UUID.class, () -> {
             quotes.consume(quote.id(), PAYER, quote.fingerprint());
@@ -185,7 +191,7 @@ class PricingTests {
         assertThat(commands.execute(key, quote.id(), UUID.class, () -> {
             throw new AssertionError("Order command must replay without consuming again");
         })).isEqualTo(order);
-        assertThat(audits(quote.id(), "quote.consume")).isEqualTo(1);
+        assertThat(audits(quote.id(), "quote.consume")).isZero();
     }
 
     @Test
@@ -196,7 +202,7 @@ class PricingTests {
                 () -> quotes.consume(quote.id(), PAYER, quote.fingerprint()),
                 () -> quotes.consume(quote.id(), PAYER, quote.fingerprint())), ErrorCode.QUOTE_EXPIRED);
         assertThat(outcomes).containsExactlyInAnyOrder(true, false);
-        assertThat(audits(quote.id(), "quote.consume")).isEqualTo(1);
+        assertThat(audits(quote.id(), "quote.consume")).isZero();
     }
 
     @Test
@@ -224,6 +230,7 @@ class PricingTests {
         assertThat(tariffs.publish(publish)).isEqualTo(first);
         reject(() -> tariffs.archive(change(draft)), ErrorCode.VERSION_CONFLICT);
         tariffs.archive(change(first));
+        assertThat(audits(classId, "vehicleClass.create")).isEqualTo(1);
         assertThat(audits(draft.id(), "tariff.createDraft")).isEqualTo(1);
         assertThat(audits(draft.id(), "tariff.publish")).isEqualTo(1);
         assertThat(audits(draft.id(), "tariff.archive")).isEqualTo(1);
@@ -304,6 +311,40 @@ class PricingTests {
         quotes.create(commandId, request);
         QuoteService.Request changed = new QuoteService.Request(city, classId, request.dropOff(), request.pickup(), PAYER);
         reject(() -> quotes.create(commandId, changed), ErrorCode.IDEMPOTENCY_CONFLICT);
+    }
+
+
+    @Test
+    void quoteLifecycleUsesTheQuoteRowWithoutWritingAuditRecords() {
+        published(TERMS);
+        QuoteService.Quote quote = quotes.create(UUID.randomUUID(), request(PAYER));
+        assertThat(quoteAuditCount(quote.id())).isZero();
+        assertThat(jdbc.sql("select consumed_at is null from quote where id = :id")
+                .param("id", quote.id()).query(Boolean.class).single()).isTrue();
+
+        assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint())).isEqualTo(quote);
+
+        assertThat(quoteAuditCount(quote.id())).isZero();
+        assertThat(jdbc.sql("select consumed_at is not null from quote where id = :id")
+                .param("id", quote.id()).query(Boolean.class).single()).isTrue();
+    }
+
+    @Test
+    void quoteCreationRefusesAnExistingTransactionBeforeCallingTheEstimator() {
+        published(TERMS);
+        UUID commandId = UUID.randomUUID();
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            quotes.create(commandId, request(PAYER));
+        })).isInstanceOf(IllegalTransactionStateException.class);
+        assertThat(routes.calls).hasValue(0);
+        assertThat(jdbc.sql("select count(*) from command_receipt where command_id = :id")
+                .param("id", commandId).query(Long.class).single()).isZero();
+    }
+
+    private long quoteAuditCount(UUID id) {
+        return jdbc.sql("select count(*) from audit_log where resource_type = 'quote' and resource_id = :id")
+                .param("id", id.toString()).query(Long.class).single();
     }
 
     private Revision staffCommand(StaffCommand operation, Actor actor, UUID commandId, Revision target) {
@@ -438,11 +479,13 @@ class PricingTests {
 
     static class FakeRoutes implements RouteEstimator {
         final AtomicInteger calls = new AtomicInteger();
+        volatile Estimate next = new Estimate(7500, 900);
 
         @Override
         public Estimate estimate(GeoPoint pickup, GeoPoint dropOff) {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             calls.incrementAndGet();
-            return new Estimate(7500, 900);
+            return next;
         }
     }
 }
