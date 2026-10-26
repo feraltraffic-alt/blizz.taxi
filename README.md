@@ -66,3 +66,9 @@ Implementation slices S-01 … S-15 are listed in section 29 of the specificatio
 ## Building
 
 Build logic lives in Maven, npm and `scripts/`, so every step can be run locally with the same commands CI uses. Commands are added with each application (REQ-ENG-12).
+
+## Decisions and working rules
+
+- Architecture decisions: [`docs/decisions/`](docs/decisions/) — stack versions (0001), outbox and idempotency (0002), pending payments (0003), module data ownership (0004).
+- Rules for contributors, human or AI: [`AGENTS.md`](AGENTS.md); review checklist: [`CLAUDE.md`](CLAUDE.md).
+- API contracts: [`packages/contracts/openapi/`](packages/contracts/openapi/) — `auth`, `rider` and `driver` v1; the server implements exactly these paths.
