@@ -1,0 +1,237 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — sign-in and sessions
+  version: 1.0.0
+  description: |
+    Phone sign-in by one-time code for clients (rider app) and drivers (driver app), and session
+    management (section 22.2, REQ-AUTH-03 – REQ-AUTH-07, section 36).
+
+    - A code request returns the same response whether or not an account exists.
+    - A challenge is bound to its audience; a client code never opens a driver account and vice versa.
+    - Access tokens live at most 15 minutes. Refresh tokens rotate on every use; presenting a used
+      refresh token again revokes the whole session.
+    - Clients keep both tokens in the platform's secure storage (REQ-AUTH-09).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security: []
+
+paths:
+  /auth/v1/otp/challenges:
+    post:
+      operationId: requestOtpChallenge
+      summary: Request a one-time code
+      description: Sends a code by SMS. Limited by resend delay, per-phone and global budgets.
+      tags: [OTP]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpChallengeRequest"
+      responses:
+        "201":
+          description: Code requested. The body is identical for known and unknown phones.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpChallenge"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+        "503":
+          $ref: "./common.yaml#/components/responses/ServiceUnavailable"
+
+  /auth/v1/otp/verify:
+    post:
+      operationId: verifyOtp
+      summary: Verify the code and open a session
+      description: |
+        A wrong code still uses one of the challenge's attempts. Wrong, expired, used and exhausted
+        codes all return OTP_INVALID. A first sign-in creates the account.
+      tags: [OTP]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerifyRequest"
+      responses:
+        "200":
+          description: Session opened.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+  /auth/v1/token/refresh:
+    post:
+      operationId: refreshSession
+      summary: Rotate the refresh token
+      tags: [Session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New token pair for the same session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+  /auth/v1/logout:
+    post:
+      operationId: logout
+      summary: End the session
+      description: Revokes the session of the given refresh token. Always succeeds, also for unknown tokens.
+      tags: [Session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Session ended.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+
+tags:
+  - name: OTP
+    description: Phone sign-in by one-time code
+  - name: Session
+    description: Token refresh and sign-out
+
+components:
+  schemas:
+    OtpAudience:
+      description: CLIENT for the rider app, DRIVER for the driver app.
+      type: string
+      enum: [CLIENT, DRIVER]
+
+    OtpChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [audience, phone]
+      properties:
+        audience:
+          $ref: "#/components/schemas/OtpAudience"
+        phone:
+          description: International format; normalized to E.164 by the server.
+          type: string
+          examples: ["+380671234567"]
+        device_ref:
+          description: Stable installation id of the app; used for limits and the session record.
+          type: string
+          maxLength: 128
+
+    OtpChallenge:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_at, resend_available_at]
+      properties:
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resend_available_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    OtpVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, code]
+      properties:
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        code:
+          type: string
+          pattern: "^[0-9]{4,8}$"
+        device_ref:
+          type: string
+          maxLength: 128
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          minLength: 1
+
+    Subject:
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [CLIENT, DRIVER]
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    Session:
+      type: object
+      additionalProperties: false
+      required:
+        - session_id
+        - subject
+        - audience
+        - access_token
+        - access_expires_at
+        - refresh_token
+        - refresh_expires_at
+      properties:
+        session_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        subject:
+          $ref: "#/components/schemas/Subject"
+        audience:
+          description: API audience the access token is valid for (/api/{audience}/v1).
+          type: string
+          enum: [rider, driver]
+        access_token:
+          description: Bearer token for the audience API.
+          type: string
+        access_expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        refresh_token:
+          description: Single-use; replaced on every refresh.
+          type: string
+        refresh_expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        account_created:
+          description: True on the first sign-in, when the account was just created.
+          type: boolean

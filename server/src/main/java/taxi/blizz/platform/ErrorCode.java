@@ -23,6 +23,8 @@ public enum ErrorCode {
     OUTSIDE_SERVICE_AREA(422),
     LOCATION_NOT_FRESH(422),
     RATE_LIMITED(429),
+    /** Missing, expired, revoked or reused credentials. */
+    UNAUTHENTICATED(401),
     ACCESS_DENIED(403),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),
