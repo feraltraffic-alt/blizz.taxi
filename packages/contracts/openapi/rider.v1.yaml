@@ -32,6 +32,115 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/addresses:
+    get:
+      operationId: searchRiderAddresses
+      summary: Search the service's own addresses near a point
+      description: |
+        Resolves the service city from lat/lon, searches visible service-owned addresses only and uses
+        the point to break ranking ties by distance (REQ-GEO-13, REQ-GEO-15, REQ-GEO-16). Provider
+        geocoding is intentionally not part of this endpoint (Q-08).
+      tags: [Addresses]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 256
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 16
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+      responses:
+        "200":
+          description: Visible service-owned addresses matching the query.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 20
+                items:
+                  $ref: "#/components/schemas/RiderAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "429":
+          description: Per-rider address search rate limit exceeded.
+          headers:
+            Retry-After:
+              $ref: "./common.yaml#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/Problem"
+
+  /api/rider/v1/addresses/nearest:
+    get:
+      operationId: getNearestRiderAddress
+      summary: Closest visible service-owned address within 100 metres
+      tags: [Addresses]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: Closest visible address.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderAddress"
+        "204":
+          description: No visible address within 100 metres.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/rider/v1/vehicle-classes:
     get:
       operationId: listVehicleClasses
@@ -223,6 +332,8 @@ paths:
 tags:
   - name: Account
     description: The signed-in rider
+  - name: Addresses
+    description: Service-owned pickup and drop-off addresses
   - name: Pricing
     description: Vehicle classes and quotes (section 15)
   - name: Orders
@@ -247,6 +358,28 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           type: string
+
+    RiderAddress:
+      type: object
+      additionalProperties: false
+      required: [id, kind, label, street, house, pickup]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [HOUSE, PLACE, ENTRANCE]
+        label:
+          type: string
+        street:
+          type: string
+        house:
+          description: Display form of the house number, including suffix/building when present.
+          type: string
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        instructions:
+          type: [string, "null"]
 
     VehicleClassOption:
       type: object
