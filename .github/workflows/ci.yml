@@ -37,3 +37,15 @@ jobs:
         with:
           name: surefire-reports
           path: server/target/surefire-reports
+
+  contracts:
+    name: Contracts (OpenAPI, event schemas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/contracts/package-lock.json
+      - run: scripts/contracts-lint.sh

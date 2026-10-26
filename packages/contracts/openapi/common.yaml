@@ -1,0 +1,284 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — shared contract components
+  version: 1.0.0
+  description: |
+    Building blocks referenced by every audience API (rider, driver, operator, admin, auth, partner).
+    This document defines no endpoints of its own.
+
+    Conventions (section 22 of the specification):
+    - Paths: `/api/{audience}/v1/...`, `/auth/v1/...`, `/partner-api/v1/...`, `/webhooks/{provider}/{merchantRef}` (REQ-API-02).
+    - State changes are named commands carrying `command_id` and `expected_version`; no generic PATCH of `status` (REQ-API-03).
+    - Field names are snake_case. Timestamps are RFC 3339 in UTC. Money is integer minor units plus an ISO 4217 currency (REQ-DATA-01).
+    - Errors are `application/problem+json` (REQ-API-07).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security: []
+paths: {}
+
+components:
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+
+    Timestamp:
+      description: Moment in UTC, RFC 3339.
+      type: string
+      format: date-time
+      examples: ["2026-10-26T12:00:00Z"]
+
+    Money:
+      description: Amount in the currency's minor units; precision comes from the currency reference, not a fixed two decimals (REQ-DATA-01, REQ-PRC-02).
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency]
+      properties:
+        amount_minor:
+          type: integer
+          format: int64
+          examples: [11000]
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          examples: ["UAH"]
+
+    GeoPoint:
+      description: WGS84 coordinates (REQ-GEO-01).
+      type: object
+      additionalProperties: false
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    Command:
+      description: |
+        Base of every state-changing command (REQ-API-03, REQ-API-04).
+        `command_id` is the idempotency key: a repeat with the same body returns the original outcome;
+        a repeat with a different body fails with IDEMPOTENCY_CONFLICT. Clients never generate a new
+        `command_id` to retry automatically (REQ-API-08).
+      type: object
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "#/components/schemas/Uuid"
+        expected_version:
+          description: Version of the aggregate the client acted on; required for commands on an existing object.
+          type: integer
+          format: int64
+          minimum: 0
+
+    AcceptedOperation:
+      description: Result of an asynchronous command. 202 means the work is queued, not that it happened (REQ-API-11).
+      type: object
+      additionalProperties: false
+      required: [operation_id, status_url]
+      properties:
+        operation_id:
+          $ref: "#/components/schemas/Uuid"
+        status_url:
+          type: string
+          format: uri-reference
+
+    PageInfo:
+      description: Cursor pagination with a stable created_at + id order (REQ-API-09).
+      type: object
+      additionalProperties: false
+      required: [has_more]
+      properties:
+        next_cursor:
+          type: [string, "null"]
+        has_more:
+          type: boolean
+
+    ErrorCode:
+      description: Domain error codes (section 22.4). VALIDATION_FAILED and INTERNAL_ERROR are generic additions.
+      type: string
+      enum:
+        - VALIDATION_FAILED
+        - QUOTE_EXPIRED
+        - QUOTE_MISMATCH
+        - ORDER_ALREADY_ACTIVE
+        - OFFER_EXPIRED
+        - OFFER_REVOKED
+        - ORDER_ALREADY_ASSIGNED
+        - DRIVER_BUSY
+        - DRIVER_NOT_ELIGIBLE
+        - STATE_CONFLICT
+        - VERSION_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - PAYMENT_PENDING
+        - PAYMENT_UNKNOWN
+        - PAYMENT_DECLINED
+        - OUTSIDE_SERVICE_AREA
+        - LOCATION_NOT_FRESH
+        - RATE_LIMITED
+        - ACCESS_DENIED
+        - NOT_FOUND
+        - PROVIDER_UNAVAILABLE
+        - INTERNAL_ERROR
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, code]
+      properties:
+        field:
+          description: JSON pointer or dotted path of the offending field.
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+
+    Problem:
+      description: RFC 9457 Problem Details with platform extensions (REQ-API-07, REQ-API-08). Never reveals whether someone else's object exists.
+      type: object
+      required: [type, title, status, code, correlation_id]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        correlation_id:
+          $ref: "#/components/schemas/Uuid"
+        field_errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+        current_version:
+          description: Present on VERSION_CONFLICT / STATE_CONFLICT so the client can fetch a fresh snapshot.
+          type: integer
+          format: int64
+        retryable:
+          type: boolean
+        retry_after_seconds:
+          type: integer
+          minimum: 0
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+
+  headers:
+    CorrelationId:
+      description: Correlation id of the request.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+
+  responses:
+    BadRequest:
+      description: Malformed request or failed validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing, expired or revoked session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Access denied. 404 may be returned instead to avoid revealing the object (REQ-API-07).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Object not found or not visible to the caller.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: State, version, idempotency or domain conflict; fetch a snapshot instead of retrying blindly.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableEntity:
+      description: Business rule rejected the request (e.g. OUTSIDE_SERVICE_AREA, PAYMENT_DECLINED).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ServiceUnavailable:
+      description: A required provider or dependency is unavailable; safe retry guidance is in the body.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Accepted:
+      description: Command queued; poll status_url for the outcome.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AcceptedOperation"
+
+  securitySchemes:
+    SubjectBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token carrying subject_type, subject_id, instance_id, audience and session_id (REQ-USR-08). A token for one audience is rejected by the others.
