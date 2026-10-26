@@ -26,6 +26,8 @@ public enum ErrorCode {
     ACCESS_DENIED(403),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),
+    /** Wrong, expired, used or exhausted one-time code; deliberately not more specific. */
+    OTP_INVALID(422),
     INTERNAL_ERROR(500);
 
     private final int httpStatus;
