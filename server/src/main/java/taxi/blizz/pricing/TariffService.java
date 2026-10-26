@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
 
-/** Staff commands require ACTIVE staff with pricing.manage, including idempotent replays. */
+/**
+ * Staff commands require ACTIVE staff with pricing.manage for the city of the class or tariff
+ * (city_scope), checked again on idempotent replays.
+ */
 public interface TariffService {
     String MANAGE_PERMISSION = "pricing.manage";
 
