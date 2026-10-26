@@ -27,7 +27,10 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.SubjectType;
 
-/** Trip phases: REQ-ASG-03..07, REQ-ORD-04..05, REQ-PAY-15, REQ-DRV-09; T-01, T-08, T-18 (end), T-19. */
+/**
+ * Trip phases: REQ-ASG-03..07, REQ-ORD-04..05, REQ-PAY-15, REQ-DRV-09; T-01, T-08, T-18 (end), T-19.
+ * Exceptions before the start: REQ-ASG-04, REQ-CAN-05..06, REQ-OPS-05; T-20.
+ */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class TripTests {
@@ -332,6 +335,128 @@ class TripTests {
 
         assertCode(() -> orders.cancel(ride.payer(), UUID.randomUUID(), ride.order().id(),
                 orders.get(ride.order().id()).version(), "CHANGED_MIND"), ErrorCode.STATE_CONFLICT);
+    }
+
+    // ------------------------------------------------------------ exceptions before the start (REQ-ASG-04, REQ-CAN-05)
+
+    private Actor staff(String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, city_scope, state, created_at, updated_at)
+                        values (:id, :login, 'Dispatcher', 'ADMIN', :permissions, :scope, 'ACTIVE', now(), now())""")
+                .param("id", id)
+                .param("login", "staff-" + id)
+                .param("permissions", permissions)
+                .param("scope", new UUID[] {cityId})
+                .update();
+        return new Actor(SubjectType.STAFF, id);
+    }
+
+    private long searchSeconds(UUID orderId, String type) {
+        return jdbc.sql("""
+                        select (payload ->> 'search_seconds')::bigint from order_event
+                        where order_id = :id and type = :type order by sequence desc limit 1""")
+                .param("id", orderId).param("type", type).query(Long.class).single();
+    }
+
+    @Test
+    void driverWithdrawalSendsTheOrderToAnotherDriver() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        Driver other = driverAt(north(1500));
+
+        assertCode(() -> trips.withdraw(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
+                " "), ErrorCode.VALIDATION_FAILED);
+        TripView withdrawn = trips.withdraw(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                ride.trip().version(), "Flat tyre");
+
+        assertThat(withdrawn.phase()).isEqualTo("ABORTED");
+        OrderView order = orders.get(ride.order().id());
+        assertThat(order.status()).isEqualTo("SEARCHING");
+        assertThat(occupancy(ride.driver())).isEqualTo("FREE");
+        assertThat(trips.current(ride.driver().actor())).isEmpty();
+        assertThat(dispatch.offers(ride.driver().actor())).isEmpty();
+        assertThat(dispatch.offers(other.actor())).extracting(OfferView::orderId).containsExactly(ride.order().id());
+        assertThat(searchSeconds(ride.order().id(), "OrderSearchResumed"))
+                .isLessThan(searchSeconds(ride.order().id(), "OrderSearchStarted"));
+        assertThat(jdbc.sql("select close_reason from assignment where order_id = :id")
+                .param("id", ride.order().id()).query(String.class).single()).contains("Flat tyre");
+
+        jdbc.sql("update dispatch_attempt set phase = 'BROADCAST' where order_id = :id and phase = 'PERSONAL'")
+                .param("id", ride.order().id()).update();
+        assertCode(() -> dispatch.claim(ride.driver().actor(), UUID.randomUUID(), ride.order().id()),
+                ErrorCode.DRIVER_NOT_ELIGIBLE);
+        assertThat(dispatch.broadcast(ride.driver().actor()))
+                .noneMatch(b -> b.orderId().equals(ride.order().id()));
+    }
+
+    @Test
+    void withdrawalAfterTheStartIsRefused() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        TripView waiting = arrived(ride);
+        TripView started = trips.start(ride.driver().actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
+
+        assertCode(() -> trips.withdraw(ride.driver().actor(), UUID.randomUUID(), started.id(), started.version(),
+                "Changed my mind"), ErrorCode.STATE_CONFLICT);
+        assertThat(occupancy(ride.driver())).isEqualTo("ON_TRIP");
+    }
+
+    @Test
+    void dispatcherTakesTheDriverOffOnlyWithThePermission() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        long version = orders.get(ride.order().id()).version();
+        Actor without = staff(Orders.CANCEL_PERMISSION);
+        Actor with = staff(Orders.REASSIGN_PERMISSION);
+
+        assertCode(() -> orders.revokeAssignment(without, UUID.randomUUID(), ride.order().id(), version,
+                "Driver does not answer"), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), version, ""),
+                ErrorCode.VALIDATION_FAILED);
+        UUID command = UUID.randomUUID();
+        OrderView revoked = orders.revokeAssignment(with, command, ride.order().id(), version, "Driver does not answer");
+        OrderView repeat = orders.revokeAssignment(with, command, ride.order().id(), version, "Driver does not answer");
+
+        assertThat(repeat).isEqualTo(revoked);
+        assertThat(revoked.status()).isEqualTo("SEARCHING");
+        assertThat(jdbc.sql("select state from assignment where order_id = :id")
+                .param("id", ride.order().id()).query(String.class).single()).isEqualTo("REVOKED");
+        assertThat(occupancy(ride.driver())).isEqualTo("FREE");
+        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), revoked.version(),
+                "again"), ErrorCode.STATE_CONFLICT);
+    }
+
+    // ------------------------------------------------------------ the passenger did not come out (REQ-CAN-06, T-20)
+
+    @Test
+    void noShowOnlyAfterTheMinimumWait() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        assertCode(() -> trips.reportNoShow(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                ride.trip().version()), ErrorCode.STATE_CONFLICT);
+
+        TripView waiting = arrived(ride);
+        assertCode(() -> trips.reportNoShow(ride.driver().actor(), UUID.randomUUID(), waiting.id(), waiting.version()),
+                ErrorCode.STATE_CONFLICT);
+
+        jdbc.sql("update trip set arrived_at = arrived_at - interval '6 minutes' where id = :id")
+                .param("id", waiting.id()).update();
+        TripView aborted = trips.reportNoShow(ride.driver().actor(), UUID.randomUUID(), waiting.id(), waiting.version());
+
+        assertThat(aborted.phase()).isEqualTo("ABORTED");
+        OrderView order = orders.get(ride.order().id());
+        assertThat(order.status()).isEqualTo("CANCELLED");
+        assertThat(order.statusReason()).isEqualTo("NO_SHOW");
+        assertThat(occupancy(ride.driver())).isEqualTo("FREE");
+    }
+
+    @Test
+    void passengerMayCancelWhileTheDriverWaits() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        arrived(ride);
+
+        OrderView cancelled = orders.cancel(ride.payer(), UUID.randomUUID(), ride.order().id(),
+                orders.get(ride.order().id()).version(), "CHANGED_MIND");
+
+        assertThat(cancelled.status()).isEqualTo("CANCELLED");
+        assertThat(occupancy(ride.driver())).isEqualTo("FREE");
     }
 
     private static void runTogether(List<Callable<Object>> calls) throws Exception {

@@ -164,22 +164,43 @@ class JdbcOrders implements Orders {
         AssignmentView assignment = core.assignmentOfOrder(orderId)
                 .filter(a -> "COMMITTED".equals(a.state()))
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No active assignment"));
-        if (!"TO_PICKUP".equals(assignment.tripPhase()) && !"WAITING".equals(assignment.tripPhase())) {
-            throw new DomainException(ErrorCode.STATE_CONFLICT, "The trip has already started");
+        core.endAssignmentBeforeStart(assignment, "RELEASED", reason);
+    }
+
+    record RevokeRequest(UUID orderId, long expectedVersion, String reason) {
+    }
+
+    @Override
+    public OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason) {
+        if (staff.type() != SubjectType.STAFF) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can take a driver off an order");
         }
-        core.lockCapacity(assignment.driverId());
-        jdbc.sql("""
-                        update assignment set state = 'RELEASED', closed_at = :now, close_reason = :reason,
-                                              version = version + 1
-                        where id = :id""")
-                .param("now", core.now())
-                .param("reason", reason)
-                .param("id", assignment.id())
-                .update();
-        jdbc.sql("update trip set phase = 'ABORTED', version = version + 1 where id = :id")
-                .param("id", assignment.tripId())
-                .update();
-        core.releaseDriver(assignment.driverId());
+        if (reason == null || reason.isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+        }
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        requireStaff(staff, REASSIGN_PERMISSION, cityId);
+        return commands.execute(new CommandKey(staff, "order.assignment.revoke", commandId),
+                new RevokeRequest(orderId, expectedVersion, reason), OrderView.class, () -> {
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (order.version() != expectedVersion) {
+                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                    }
+                    if (!"ASSIGNED".equals(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only an assigned order before the start");
+                    }
+                    AssignmentView assignment = core.assignmentOfOrder(orderId)
+                            .filter(a -> "COMMITTED".equals(a.state()))
+                            .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No active assignment"));
+                    core.endAssignmentBeforeStart(assignment, "REVOKED", reason);
+                    core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staff, reason,
+                            Map.<String, Object>of("assignment_id", assignment.id().toString(),
+                                    "driver_id", assignment.driverId().toString()));
+                    engine.resumeSearch(core.lockOrder(orderId));
+                    return core.view(orderId);
+                });
     }
 
     @Override

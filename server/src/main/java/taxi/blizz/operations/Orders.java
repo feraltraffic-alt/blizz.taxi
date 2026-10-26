@@ -9,6 +9,7 @@ public interface Orders {
 
     String CREATE_PERMISSION = "orders.create";
     String CANCEL_PERMISSION = "orders.cancel";
+    String REASSIGN_PERMISSION = "orders.reassign";
 
     /**
      * Creates the order and starts the search. A client creates orders it pays for; staff need
@@ -21,6 +22,12 @@ public interface Orders {
      * Releases an assignment and the driver; no fee until the cancellation policy exists (Q-07).
      */
     OrderView cancel(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reasonCode);
+
+    /**
+     * Takes the driver off an assigned order before the start, with a reason, and searches again
+     * (REQ-OPS-05). Staff with {@link #REASSIGN_PERMISSION} for the order's city.
+     */
+    OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason);
 
     OrderView get(UUID orderId);
 

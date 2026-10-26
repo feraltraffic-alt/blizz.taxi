@@ -31,6 +31,20 @@ public interface Trips {
      * device time of completion; the server time is recorded too and a large difference is flagged.
      * For cash, {@code cashReceived} is the driver's statement, not proof (REQ-PAY-15).
      */
+    /**
+     * The driver gives up the order before the start (REQ-ASG-04, REQ-CAN-05): the assignment is
+     * released, the driver is free and never offered this order again, and the search resumes with
+     * what is left of the passenger's search time. A reason is required.
+     */
+    TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reason);
+
+    /**
+     * The passenger did not come out (REQ-CAN-06): allowed only after the minimum waiting time since
+     * the server-side arrival; the order is cancelled with reason NO_SHOW and the driver is free.
+     * No fee until the cancellation policy exists (Q-07).
+     */
+    TripView reportNoShow(Actor driver, UUID commandId, UUID tripId, long expectedVersion);
+
     TripView complete(Actor driver, UUID commandId, UUID tripId, long expectedVersion, OffsetDateTime reportedAt,
                       Boolean cashReceived);
 }
