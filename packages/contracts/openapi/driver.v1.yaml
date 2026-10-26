@@ -276,6 +276,215 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/driver/v1/work-sessions:
+    post:
+      operationId: openWorkSession
+      summary: Go online
+      description: |
+        Requires an active account, admission, an approved own vehicle and a fresh location inside a
+        published city (REQ-DRV-04). The device of the access token becomes the controlling device;
+        another device gets STATE_CONFLICT and must use handover (REQ-DRV-03).
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenWorkSession"
+      responses:
+        "201":
+          description: Online.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/work-sessions/current:
+    get:
+      operationId: getDriverAvailability
+      summary: Current state on every axis
+      description: Session, intent, connection, location freshness, occupancy, account and admission, with eligibility reasons (section 12.1).
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Snapshot; the app shows it after restart instead of local state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/work-sessions/{id}/handover:
+    post:
+      operationId: handoverWorkSession
+      summary: Take control from another device
+      description: Moves control of the open session to the device of this token; the session and any trip continue (T-16).
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/WorkSessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCommand"
+      responses:
+        "200":
+          description: State after the command.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/work-sessions/{id}/pause:
+    post:
+      operationId: pauseWorkSession
+      summary: Stop receiving orders
+      description: FREE → NOT_ACCEPTING; on a trip → PAUSE_AFTER_CURRENT (REQ-DRV-13).
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/WorkSessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCommand"
+      responses:
+        "200":
+          description: State after the command.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/work-sessions/{id}/resume:
+    post:
+      operationId: resumeWorkSession
+      summary: Receive orders again
+      description: Re-checks admission and vehicle; DRIVER_NOT_ELIGIBLE otherwise.
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/WorkSessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCommand"
+      responses:
+        "200":
+          description: State after the command.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/work-sessions/{id}/close:
+    post:
+      operationId: closeWorkSession
+      summary: Go offline
+      description: FREE → CLOSED; on a trip → CLOSING, closed when the trip ends (REQ-DRV-13).
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/WorkSessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCommand"
+      responses:
+        "200":
+          description: State after the command.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/work-sessions/{id}/heartbeat:
+    post:
+      operationId: workSessionHeartbeat
+      summary: Keep the connection and send the current location
+      description: |
+        Safe to repeat. A point whose sequence is not newer than the stored one does not move the
+        current position (REQ-GEO-02). Without a location the connection is restored but location
+        freshness is not (REQ-DS-04). Batched track upload comes with the location module.
+      tags: [Work session]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/WorkSessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Heartbeat"
+      responses:
+        "200":
+          description: State after the heartbeat.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAvailability"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Account
     description: The signed-in driver
@@ -283,8 +492,17 @@ tags:
     description: Profile, vehicles, documents and review (section 6)
   - name: Files
     description: Private document uploads (REQ-SEC-06, REQ-SEC-07)
+  - name: Work session
+    description: Going online and offline, presence (sections 6, 12)
 
 components:
+  parameters:
+    WorkSessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
   securitySchemes:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
@@ -524,3 +742,113 @@ components:
           format: int64
         reject_reason:
           type: [string, "null"]
+
+    Location:
+      type: object
+      additionalProperties: false
+      required: [lat, lon, recorded_at, sequence]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+        accuracy_m:
+          type: number
+          minimum: 0
+        recorded_at:
+          description: Device time; not used to order points.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        sequence:
+          description: Grows with every point of this app session.
+          type: integer
+          format: int64
+          minimum: 0
+
+    OpenWorkSession:
+      type: object
+      additionalProperties: false
+      required: [command_id, vehicle_id, location]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        location:
+          $ref: "#/components/schemas/Location"
+
+    SessionCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: session_version from the last snapshot.
+          type: integer
+          format: int64
+          minimum: 0
+
+    Heartbeat:
+      type: object
+      additionalProperties: false
+      properties:
+        location:
+          $ref: "#/components/schemas/Location"
+
+    DriverAvailability:
+      type: object
+      additionalProperties: false
+      required: [driver_id, session_version, session_state, connection, geolocation, occupancy, account_state,
+                 review_status, eligible, ineligible_reasons]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        session_id:
+          type: [string, "null"]
+          format: uuid
+        session_version:
+          type: integer
+          format: int64
+        session_state:
+          type: string
+          enum: [OPEN, CLOSING, CLOSED]
+        intent:
+          type: [string, "null"]
+          enum: [ACCEPTING, PAUSE_AFTER_CURRENT, NOT_ACCEPTING, null]
+        connection:
+          type: string
+          enum: [CONNECTED, STALE, DISCONNECTED]
+        geolocation:
+          type: string
+          enum: [FRESH, STALE, UNAVAILABLE]
+        occupancy:
+          type: string
+          enum: [FREE, OFFERED, RESERVED, TO_PICKUP, WAITING, ON_TRIP]
+        account_state:
+          type: string
+        review_status:
+          $ref: "#/components/schemas/ReviewStatus"
+        city_id:
+          type: [string, "null"]
+          format: uuid
+        vehicle_id:
+          type: [string, "null"]
+          format: uuid
+        last_heartbeat_at:
+          type: [string, "null"]
+          format: date-time
+        last_location_at:
+          type: [string, "null"]
+          format: date-time
+        eligible:
+          description: May receive a new order right now.
+          type: boolean
+        ineligible_reasons:
+          type: array
+          items:
+            type: string

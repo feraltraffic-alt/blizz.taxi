@@ -18,6 +18,21 @@ public interface DriverAdmission {
 
     DriverProfile profile(UUID driverId);
 
+    /** Admission facts other modules need to decide whether a driver may work (section 12.1). */
+    record AdmissionSnapshot(ReviewStatus reviewStatus, java.util.Map<UUID, List<String>> approvedVehicleClasses) {
+
+        public boolean admitted() {
+            return reviewStatus == ReviewStatus.APPROVED;
+        }
+
+        public boolean vehicleApproved(UUID vehicleId) {
+            return approvedVehicleClasses.containsKey(vehicleId);
+        }
+    }
+
+    /** Lightweight read for eligibility checks; NOT_FOUND for an unknown driver. */
+    AdmissionSnapshot admissionOf(UUID driverId);
+
     DriverProfile updateProfile(Actor driver, UUID commandId, String name, String language);
 
     record VehicleInput(String registrationNumber, String make, String model, String color, int productionYear) {

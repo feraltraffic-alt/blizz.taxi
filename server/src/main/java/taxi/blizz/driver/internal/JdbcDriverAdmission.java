@@ -110,6 +110,23 @@ class JdbcDriverAdmission implements DriverAdmission {
                 row.version(), vehicles, documents);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public AdmissionSnapshot admissionOf(UUID driverId) {
+        ReviewStatus status = jdbc.sql("select review_status from driver where id = :id")
+                .param("id", driverId)
+                .query((rs, i) -> ReviewStatus.valueOf(rs.getString(1)))
+                .optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Driver not found"));
+        Map<UUID, List<String>> vehicles = new LinkedHashMap<>();
+        jdbc.sql("select id, class_approvals from vehicle where driver_id = :id and state = 'APPROVED'")
+                .param("id", driverId)
+                .query((rs, i) -> Map.entry(rs.getObject("id", UUID.class), textArray(rs.getArray("class_approvals"))))
+                .list()
+                .forEach(e -> vehicles.put(e.getKey(), e.getValue()));
+        return new AdmissionSnapshot(status, Map.copyOf(vehicles));
+    }
+
     // ---------------------------------------------------------------- driver commands
 
     record ProfileRequest(String name, String language) {
