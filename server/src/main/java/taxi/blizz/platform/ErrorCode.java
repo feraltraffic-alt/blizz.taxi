@@ -17,12 +17,19 @@ public enum ErrorCode {
     STATE_CONFLICT(409),
     VERSION_CONFLICT(409),
     IDEMPOTENCY_CONFLICT(409),
-    PAYMENT_PENDING(202),
-    PAYMENT_UNKNOWN(202),
+    /**
+     * As an error: the action conflicts with a payment that is still in progress. A command whose
+     * own payment is pending returns 202 with an AcceptedOperation instead (section 22.4, 22.1).
+     */
+    PAYMENT_PENDING(409),
+    /** As an error: the action conflicts with a payment whose outcome is not yet known; never pay again. */
+    PAYMENT_UNKNOWN(409),
     PAYMENT_DECLINED(422),
     OUTSIDE_SERVICE_AREA(422),
     LOCATION_NOT_FRESH(422),
     RATE_LIMITED(429),
+    /** Missing, expired, revoked or reused credentials. */
+    UNAUTHENTICATED(401),
     ACCESS_DENIED(403),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),

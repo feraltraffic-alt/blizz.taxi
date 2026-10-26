@@ -77,8 +77,7 @@ class ApiExceptionHandlerTests {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ErrorCode.class, names = {"PAYMENT_PENDING", "PAYMENT_UNKNOWN"},
-            mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(ErrorCode.class)
     void domainCodesKeepTheirContractStatus(ErrorCode code) throws Exception {
         check(mvc.perform(get("/__errors/domain").param("code", code.name())).andReturn(),
                 code.httpStatus(), code);

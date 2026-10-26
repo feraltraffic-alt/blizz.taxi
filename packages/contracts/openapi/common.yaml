@@ -103,7 +103,12 @@ components:
           type: boolean
 
     ErrorCode:
-      description: Domain error codes (section 22.4). VALIDATION_FAILED, OTP_INVALID and INTERNAL_ERROR are additions to the list in 22.4.
+      description: |
+        Domain error codes (section 22.4). VALIDATION_FAILED, UNAUTHENTICATED, OTP_INVALID and INTERNAL_ERROR
+        are additions to the list in 22.4.
+        PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
+        payment still in progress. A command whose own payment is pending answers 202 with AcceptedOperation,
+        never with a Problem (docs/decisions/0003).
       type: string
       enum:
         - VALIDATION_FAILED
@@ -124,6 +129,7 @@ components:
         - OUTSIDE_SERVICE_AREA
         - LOCATION_NOT_FRESH
         - RATE_LIMITED
+        - UNAUTHENTICATED
         - ACCESS_DENIED
         - NOT_FOUND
         - PROVIDER_UNAVAILABLE
