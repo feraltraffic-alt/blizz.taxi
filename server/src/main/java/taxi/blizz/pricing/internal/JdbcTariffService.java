@@ -38,7 +38,7 @@ class JdbcTariffService implements TariffService {
 
     @Override
     public Revision createVehicleClass(VehicleClassDraft c) {
-        return commands.execute(key(c.actor(), "vehicleClass.create", c.commandId()), c, Revision.class, () -> {
+        return commands.execute(key(c.actor(), "vehicleClass.create", c.commandId(), c.cityId()), c, Revision.class, () -> {
             initial(c.expectedVersion());
             text(c.code());
             text(c.name());
@@ -65,7 +65,7 @@ class JdbcTariffService implements TariffService {
 
     @Override
     public Revision createDraft(Draft c) {
-        return commands.execute(key(c.actor(), "tariff.createDraft", c.commandId()), c, Revision.class, () -> {
+        return commands.execute(key(c.actor(), "tariff.createDraft", c.commandId(), c.cityId()), c, Revision.class, () -> {
             initial(c.expectedVersion());
             validate(c);
             String currency = lockClass(c.classId(), c.cityId());
@@ -105,7 +105,7 @@ class JdbcTariffService implements TariffService {
 
     private Revision transition(Change c, boolean publish) {
         String action = publish ? "tariff.publish" : "tariff.archive";
-        return commands.execute(key(c.actor(), action, c.commandId()), c, Revision.class, () -> {
+        return commands.execute(key(c.actor(), action, c.commandId(), tariffCity(c.id())), c, Revision.class, () -> {
             record ClassRef(UUID id, UUID cityId) {
             }
             ClassRef ref = jdbc.sql("select class_id, city_id from tariff_version where id = :id")
@@ -143,6 +143,11 @@ class JdbcTariffService implements TariffService {
         });
     }
 
+    private UUID tariffCity(UUID tariffId) {
+        return tariffId == null ? null : jdbc.sql("select city_id from tariff_version where id = :id")
+                .param("id", tariffId).query(UUID.class).optional().orElse(null);
+    }
+
     private String lockClass(UUID classId, UUID cityId) {
         return jdbc.sql("""
                 select city.currency from vehicle_class join city on city.id = vehicle_class.city_id
@@ -152,8 +157,9 @@ class JdbcTariffService implements TariffService {
                 .orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Active vehicle class not found in city"));
     }
 
-    private CommandKey key(Actor actor, String action, UUID commandId) {
-        staff.require(actor, MANAGE_PERMISSION);
+    /** pricing.manage for the city the class or tariff belongs to, before idempotency. */
+    private CommandKey key(Actor actor, String action, UUID commandId, UUID cityId) {
+        staff.require(actor, MANAGE_PERMISSION, cityId);
         if (commandId == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }

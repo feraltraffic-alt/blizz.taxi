@@ -65,6 +65,7 @@ class PricingTests {
     UUID city;
     UUID classId;
     List<UUID> cities = new ArrayList<>();
+    List<UUID> staffIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -387,6 +388,29 @@ class PricingTests {
         }
     }
 
+    @Test
+    void pricingManagersActOnlyInTheirCities() {
+        Revision draft = draft(TERMS, NOW.minusSeconds(3600), null);
+        UUID other = city("UAH");
+        UUID outsiderId = UUID.randomUUID();
+        jdbc.sql("""
+                insert into staff_user(id, login, name, role, permissions, city_scope, state, created_at, updated_at)
+                values (:id, :login, 'Other city pricing', 'ADMIN', :permissions, :scope, 'ACTIVE', now(), now())
+                """).param("id", outsiderId).param("login", "pricing-" + outsiderId)
+                .param("permissions", new String[]{TariffService.MANAGE_PERMISSION})
+                .param("scope", new UUID[]{other}).update();
+        Actor outsider = new Actor(SubjectType.STAFF, outsiderId);
+
+        reject(() -> tariffs.createVehicleClass(new VehicleClassDraft(UUID.randomUUID(), outsider, 0, city,
+                "COMFORT", "Synthetic comfort", "not my city")), ErrorCode.ACCESS_DENIED);
+        reject(() -> tariffs.createDraft(new Draft(UUID.randomUUID(), outsider, 0, city, classId, "UAH",
+                NOW, null, TERMS, "not my city")), ErrorCode.ACCESS_DENIED);
+        reject(() -> tariffs.publish(new Change(UUID.randomUUID(), outsider, draft.id(), draft.version(),
+                "not my city")), ErrorCode.ACCESS_DENIED);
+        assertThat(tariffs.createVehicleClass(new VehicleClassDraft(UUID.randomUUID(), outsider, 0, other,
+                "STANDARD", "Synthetic standard", "my city")).state()).isEqualTo("ACTIVE");
+    }
+
     private Actor staff(String state, String... permissions) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -394,6 +418,9 @@ class PricingTests {
                 values (:id, :login, 'Pricing manager', 'ADMIN', :permissions, :state, now(), now())
                 """).param("id", id).param("login", "pricing-" + id)
                 .param("permissions", permissions).param("state", state).update();
+        jdbc.sql("update staff_user set city_scope = :cities where id = :id")
+                .param("cities", cities.toArray(UUID[]::new)).param("id", id).update();
+        staffIds.add(id);
         return new Actor(SubjectType.STAFF, id);
     }
 
@@ -406,6 +433,9 @@ class PricingTests {
                     0, 'PUBLISHED', now(), now())
                 """).param("id", id).param("code", "pricing-" + id).param("currency", currency).update();
         cities.add(id);
+        // Every fixture staff member manages every fixture city; the scope itself is tested separately.
+        jdbc.sql("update staff_user set city_scope = array_append(city_scope, :city) where id = any(:ids)")
+                .param("city", id).param("ids", staffIds.toArray(UUID[]::new)).update();
         return id;
     }
 
