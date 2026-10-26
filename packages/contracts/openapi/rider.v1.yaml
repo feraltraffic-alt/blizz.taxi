@@ -184,8 +184,9 @@ components:
           type: integer
           format: int64
         channel:
+          description: Where the order came from.
           type: string
-          enum: [APP, PHONE]
+          enum: [APP, WEB, PHONE, PARTNER]
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_class:
@@ -201,6 +202,9 @@ components:
         payment_method:
           type: string
           enum: [CASH, CARD]
+        payment_state:
+          type: [string, "null"]
+          enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, null]
         price_minor:
           type: [integer, "null"]
           format: int64

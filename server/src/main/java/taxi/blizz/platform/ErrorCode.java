@@ -27,6 +27,8 @@ public enum ErrorCode {
     PAYMENT_DECLINED(422),
     OUTSIDE_SERVICE_AREA(422),
     LOCATION_NOT_FRESH(422),
+    /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */
+    PICKUP_TOO_FAR(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

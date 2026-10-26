@@ -18,6 +18,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param pollInterval         deadline worker delay
  * @param batchSize            attempts processed per poll
  * @param lease                how long a worker owns a claimed attempt
+ * @param arrivalRadiusMeters  arrival must be reported within this distance of the pickup (REQ-ASG-06)
+ * @param reportedTimeTolerance completion time from the device further than this from server time is flagged
  */
 @ConfigurationProperties("blizz.dispatch")
 public record DispatchProperties(
@@ -30,5 +32,7 @@ public record DispatchProperties(
         @DefaultValue("true") boolean workerEnabled,
         @DefaultValue("PT1S") Duration pollInterval,
         @DefaultValue("50") int batchSize,
-        @DefaultValue("PT30S") Duration lease) {
+        @DefaultValue("PT30S") Duration lease,
+        @DefaultValue("150") int arrivalRadiusMeters,
+        @DefaultValue("PT5M") Duration reportedTimeTolerance) {
 }
