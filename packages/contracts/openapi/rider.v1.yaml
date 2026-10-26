@@ -32,6 +32,115 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/vehicle-classes:
+    get:
+      operationId: listVehicleClasses
+      summary: Classes that can be ordered at a point
+      description: The city comes from the point; only active classes with a tariff in force now.
+      tags: [Pricing]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VehicleClassOption"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/rider/v1/quotes:
+    post:
+      operationId: createQuote
+      summary: Price for a class and two points
+      description: |
+        The server computes the price from the tariff in force (REQ-PRC-05); the quote belongs to the
+        rider, lives 5 minutes and serves one order (REQ-PRC-06). Pickup outside every city → 422
+        OUTSIDE_SERVICE_AREA; no tariff in force → 404.
+      tags: [Pricing]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuote"
+      responses:
+        "201":
+          description: The quote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "./common.yaml#/components/responses/ServiceUnavailable"
+
+  /api/rider/v1/orders:
+    post:
+      operationId: createOrder
+      summary: Order from a quote
+      description: |
+        Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
+        the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED. The
+        price is the quote's, never the client's. A repeat of the same command returns the same order. Card
+        payment is not available yet (S-09). One active order per payer → 409 ORDER_ALREADY_ACTIVE.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrder"
+      responses:
+        "201":
+          description: The order, already searching for a driver.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/rider/v1/orders/active:
     get:
       operationId: getActiveOrder
@@ -114,8 +223,10 @@ paths:
 tags:
   - name: Account
     description: The signed-in rider
+  - name: Pricing
+    description: Vehicle classes and quotes (section 15)
   - name: Orders
-    description: Orders of the rider (section 9); creation arrives with quotes
+    description: Orders of the rider (section 9)
 
 components:
   securitySchemes:
@@ -136,6 +247,91 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           type: string
+
+    VehicleClassOption:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          examples: [STANDARD]
+        name:
+          type: string
+
+    CreateQuote:
+      type: object
+      additionalProperties: false
+      required: [command_id, vehicle_class, pickup, dropoff]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          description: Class code from listVehicleClasses.
+          type: string
+          maxLength: 64
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+
+    Quote:
+      type: object
+      additionalProperties: false
+      required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        distance_m:
+          description: Estimated route length.
+          type: integer
+          format: int64
+        duration_s:
+          description: Estimated travel time.
+          type: integer
+          format: int64
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    CreateOrder:
+      type: object
+      additionalProperties: false
+      required: [command_id, quote_id, vehicle_class, pickup, dropoff, payment_method]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        quote_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+          maxLength: 64
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+          maxLength: 300
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff_label:
+          type: string
+          maxLength: 300
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+        channel:
+          description: APP (default) or WEB; where the rider ordered from.
+          type: string
+          enum: [APP, WEB]
 
     CancelOrder:
       type: object

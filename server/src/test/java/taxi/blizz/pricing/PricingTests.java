@@ -453,6 +453,7 @@ class PricingTests {
         }
 
         @Bean
+        @Primary
         FakeRoutes pricingRoutes() {
             return new FakeRoutes();
         }

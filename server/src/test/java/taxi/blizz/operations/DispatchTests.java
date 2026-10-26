@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import taxi.blizz.TestQuotes;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.operations.internal.DispatchWorker;
@@ -28,6 +29,7 @@ import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.SubjectType;
+import taxi.blizz.pricing.QuoteService;
 
 /**
  * Sections 9-11: AC-08, AC-09, AC-10, T-04, T-05, T-06, T-07, T-09, T-10, T-11.
@@ -51,6 +53,8 @@ class DispatchTests {
     DispatchWorker worker;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    QuoteService quoteService;
 
     UUID cityId;
 
@@ -131,9 +135,13 @@ class DispatchTests {
         return new GeoPoint(PICKUP.lat() + metres / 111_000.0, PICKUP.lon());
     }
 
+    private UUID quote(Actor payer) {
+        return new TestQuotes(jdbc, quoteService).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF).id();
+    }
+
     private OrderView order(Actor payer) {
         return orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP, "Pickup 1",
-                DROPOFF, "Dropoff 2", PaymentMethod.CASH, 18_000L, "UAH"));
+                DROPOFF, "Dropoff 2", PaymentMethod.CASH, quote(payer)));
     }
 
     private OfferView onlyOffer(Driver driver) {
@@ -183,7 +191,7 @@ class DispatchTests {
         assertThat(order.searchPhase()).isEqualTo("PERSONAL");
         OfferView offer = onlyOffer(near);
         assertThat(offer.orderId()).isEqualTo(order.id());
-        assertThat(offer.priceMinor()).isEqualTo(18_000L);
+        assertThat(offer.priceMinor()).isPositive().isEqualTo(order.priceMinor());
         assertThat(offer.expiresAt()).isAfter(OffsetDateTime.now());
         assertThat(occupancy(near)).isEqualTo("OFFERED");
         assertThat(dispatch.offers(far.actor())).isEmpty();
@@ -461,11 +469,11 @@ class DispatchTests {
         Actor other = client();
 
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD",
-                new GeoPoint(10, 10), "x", DROPOFF, "y", PaymentMethod.CASH, null, null)), ErrorCode.OUTSIDE_SERVICE_AREA);
+                new GeoPoint(10, 10), "x", DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID())), ErrorCode.OUTSIDE_SERVICE_AREA);
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CARD, null, null)), ErrorCode.VALIDATION_FAILED);
+                DROPOFF, "y", PaymentMethod.CARD, UUID.randomUUID())), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(other.id(), "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CASH, null, null)), ErrorCode.ACCESS_DENIED);
+                DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID())), ErrorCode.ACCESS_DENIED);
         assertCode(() -> orders.cancel(other, UUID.randomUUID(), order(payer).id(), 0, "x"), ErrorCode.NOT_FOUND);
     }
 
@@ -473,13 +481,13 @@ class DispatchTests {
     void orderSourcesFollowWhoIsAsking() {
         Actor web = client();
         OrderView fromWeb = orders.create(web, UUID.randomUUID(), new CreateOrder(web.id(), "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.WEB, null));
+                DROPOFF, "y", PaymentMethod.CASH, quote(web), OrderChannel.WEB, null));
         assertThat(fromWeb.channel()).isEqualTo("WEB");
         assertThat(order(client()).channel()).as("app by default").isEqualTo("APP");
 
         Actor rider = client();
         assertCode(() -> orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PHONE, null)), ErrorCode.VALIDATION_FAILED);
+                DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID(), OrderChannel.PHONE, null)), ErrorCode.VALIDATION_FAILED);
 
         UUID staffId = UUID.randomUUID();
         jdbc.sql("""
@@ -488,13 +496,13 @@ class DispatchTests {
                 .param("id", staffId).param("login", "op-" + staffId).param("cities", new UUID[] {cityId}).update();
         Actor operator = new Actor(SubjectType.STAFF, staffId);
         OrderView phone = orders.create(operator, UUID.randomUUID(), new CreateOrder(null, "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PHONE, "call-123"));
+                DROPOFF, "y", PaymentMethod.CASH, quote(operator), OrderChannel.PHONE, "call-123"));
         assertThat(phone.channel()).isEqualTo("PHONE");
         assertThat(phone.payerClientId()).isNull();
 
         Actor partner = new Actor(SubjectType.PARTNER, UUID.randomUUID());
         assertCode(() -> orders.create(partner, UUID.randomUUID(), new CreateOrder(null, "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CASH, null, null, OrderChannel.PARTNER, "partner-order-1")),
+                DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID(), OrderChannel.PARTNER, "partner-order-1")),
                 ErrorCode.ACCESS_DENIED);
     }
 
