@@ -24,6 +24,8 @@ import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.driver.DriverProfile;
 import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
+import taxi.blizz.files.FilePurpose;
+import taxi.blizz.files.FileService;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
@@ -52,16 +54,18 @@ class JdbcDriverAdmission implements DriverAdmission {
     private final IdempotentCommands commands;
     private final Outbox outbox;
     private final AuditLog auditLog;
+    private final FileService files;
     private final DriverProperties properties;
     private final Clock clock;
 
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
-                        AuditLog auditLog, DriverProperties properties, Clock clock) {
+                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
         this.outbox = outbox;
         this.auditLog = auditLog;
+        this.files = files;
         this.properties = properties;
         this.clock = clock;
     }
@@ -161,8 +165,8 @@ class JdbcDriverAdmission implements DriverAdmission {
     @Override
     public UUID addDocument(Actor driver, UUID commandId, DocumentInput document) {
         requireDriver(driver);
-        if (document.type() == null) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Document type is required");
+        if (document.type() == null || document.fileId() == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Document type and file are required");
         }
         if (document.type().belongsToVehicle() != (document.vehicleId() != null)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED,
@@ -173,6 +177,7 @@ class JdbcDriverAdmission implements DriverAdmission {
         }
         return commands.execute(new CommandKey(driver, "driver.document.add", commandId), document, UUID.class, () -> {
             requireEditable(lock(driver.id()));
+            files.requireAttachable(driver, document.fileId(), FilePurpose.DRIVER_DOCUMENT);
             if (document.vehicleId() != null) {
                 int owned = jdbc.sql("select count(*) from vehicle where id = :id and driver_id = :driverId")
                         .param("id", document.vehicleId())

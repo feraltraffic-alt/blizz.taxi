@@ -110,7 +110,8 @@ paths:
       description: |
         A new document never overwrites an older one; the latest of each type becomes current
         (REQ-DRV-02). VEHICLE_REGISTRATION and INSURANCE need vehicle_id, other types must not have it.
-        file_id refers to an uploaded file; upload sessions arrive with the files module.
+        file_id is a file of this driver that passed the checks (state SAFE), uploaded through
+        /documents/upload-sessions and /uploads/{file_id}.
       tags: [Admission]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -166,11 +167,122 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/driver/v1/documents/upload-sessions:
+    post:
+      operationId: openDocumentUpload
+      summary: Open an upload session for one document file
+      description: |
+        Declares the type and size of one file. The session is short-lived and single-use
+        (REQ-SEC-06). Accepted types: image/jpeg, image/png, application/pdf; at most 10 MB by default.
+      tags: [Files]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenUploadRequest"
+      responses:
+        "201":
+          description: Upload the bytes to upload_path before expires_at.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSession"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/uploads/{file_id}:
+    put:
+      operationId: uploadFile
+      summary: Upload the file bytes
+      description: |
+        The raw body with the declared Content-Type. The server checks the real type by content,
+        the size, removes photo metadata and scans the file. The result is SAFE or REJECTED with a
+        reason; a rejected file is deleted and needs a new session.
+      tags: [Files]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              contentMediaType: image/jpeg
+          image/png:
+            schema:
+              type: string
+              contentMediaType: image/png
+          application/pdf:
+            schema:
+              type: string
+              contentMediaType: application/pdf
+      responses:
+        "200":
+          description: Outcome of the checks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredFile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/files/{file_id}:
+    get:
+      operationId: downloadFile
+      summary: Download an own file
+      description: Only the owner, only SAFE files; anyone else gets 404 (REQ-SEC-07).
+      tags: [Files]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The file, as an attachment, not cached.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+            image/png:
+              schema:
+                type: string
+                contentMediaType: image/png
+            application/pdf:
+              schema:
+                type: string
+                contentMediaType: application/pdf
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 tags:
   - name: Account
     description: The signed-in driver
   - name: Admission
     description: Profile, vehicles, documents and review (section 6)
+  - name: Files
+    description: Private document uploads (REQ-SEC-06, REQ-SEC-07)
 
 components:
   securitySchemes:
@@ -251,7 +363,7 @@ components:
     DocumentInput:
       type: object
       additionalProperties: false
-      required: [command_id, type]
+      required: [command_id, type, file_id]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -363,3 +475,52 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Document"
+
+    OpenUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, content_type, size_bytes]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, application/pdf]
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+
+    UploadSession:
+      type: object
+      additionalProperties: false
+      required: [file_id, upload_path, expires_at, max_bytes]
+      properties:
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        upload_path:
+          description: Relative path for the PUT with the file bytes.
+          type: string
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        max_bytes:
+          type: integer
+          format: int64
+
+    StoredFile:
+      type: object
+      additionalProperties: false
+      required: [file_id, state, size_bytes]
+      properties:
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [SAFE, REJECTED]
+        content_type:
+          type: [string, "null"]
+        size_bytes:
+          type: integer
+          format: int64
+        reject_reason:
+          type: [string, "null"]

@@ -19,6 +19,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestcontainersConfiguration;
+import taxi.blizz.files.FilePurpose;
+import taxi.blizz.files.FileService;
+import taxi.blizz.files.FileState;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
@@ -35,6 +38,10 @@ class DriverAdmissionTests {
     DriverAdmission admission;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    FileService files;
+
+    static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
 
     // ------------------------------------------------------------ fixtures
 
@@ -71,9 +78,17 @@ class DriverAdmissionTests {
                 new DriverAdmission.VehicleInput("aa 4821 kt", "Škoda", "Octavia", "white", 2021));
     }
 
+    private UUID safeFile(Actor driver) {
+        UUID fileId = files.openUpload(driver, UUID.randomUUID(), FilePurpose.DRIVER_DOCUMENT, "image/png", PNG.length)
+                .fileId();
+        assertThat(files.upload(driver, fileId, "image/png", PNG.length, new java.io.ByteArrayInputStream(PNG)).state())
+                .isEqualTo(FileState.SAFE);
+        return fileId;
+    }
+
     private UUID document(Actor driver, DocumentType type, UUID vehicleId, LocalDate validTo) {
         return admission.addDocument(driver, UUID.randomUUID(),
-                new DriverAdmission.DocumentInput(type, vehicleId, null, "N-1", TODAY.minusYears(1), validTo));
+                new DriverAdmission.DocumentInput(type, vehicleId, safeFile(driver), "N-1", TODAY.minusYears(1), validTo));
     }
 
     /** A driver with a vehicle and every required document, ready to submit. */
@@ -211,6 +226,21 @@ class DriverAdmissionTests {
         assertCode(() -> document(driver, DocumentType.INSURANCE, null, null), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> document(driver, DocumentType.DRIVER_LICENSE, othersVehicle, null), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> document(driver, DocumentType.INSURANCE, othersVehicle, null), ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void documentNeedsASafeFileOfTheSameDriver() {
+        Actor driver = newDriver();
+        Actor other = newDriver();
+        UUID othersFile = safeFile(other);
+        UUID pending = files.openUpload(driver, UUID.randomUUID(), FilePurpose.DRIVER_DOCUMENT, "image/png", 100).fileId();
+
+        assertCode(() -> admission.addDocument(driver, UUID.randomUUID(), new DriverAdmission.DocumentInput(
+                DocumentType.DRIVER_LICENSE, null, null, null, null, null)), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> admission.addDocument(driver, UUID.randomUUID(), new DriverAdmission.DocumentInput(
+                DocumentType.DRIVER_LICENSE, null, othersFile, null, null, null)), ErrorCode.NOT_FOUND);
+        assertCode(() -> admission.addDocument(driver, UUID.randomUUID(), new DriverAdmission.DocumentInput(
+                DocumentType.DRIVER_LICENSE, null, pending, null, null, null)), ErrorCode.STATE_CONFLICT);
     }
 
     // ------------------------------------------------------------ reviewer rules
