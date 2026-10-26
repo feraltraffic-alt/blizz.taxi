@@ -152,7 +152,7 @@ class RiderAddressApiTests {
                   house_number, house_suffix, building_normalized, house_normalized, pickup_point, source,
                   visibility, search_text, created_at, updated_at)
                 values(:id,:city,'HOUSE',:label,'uk',:street,lower(:street),:house,:house,'','',:house,
-                  ST_SetSRID(ST_MakePoint(:lon,:lat),4326),'OWN',:visibility,lower(:label),now(),now())
+                  ST_SetSRID(ST_MakePoint(:lon,:lat),4326),'OWN',:visibility,lower(:label || ' ' || :street || ' ' || :house),now(),now())
                 """).param("id", id).param("city", cityId).param("label", label).param("street", street)
                 .param("house", house).param("lon", lon).param("lat", lat).param("visibility", visibility).update();
     }
