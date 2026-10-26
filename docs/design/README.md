@@ -40,4 +40,8 @@ All screens: loading, empty, offline, stale data, retrying, error states (REQ-UX
 
 - **Theme:** chosen in settings with "Light / Dark / System"; the floating theme button in the mockups is a demo control only.
 - **Branding:** colours, logo and app name are design tokens per service, never hard-coded (REQ-TEN-07). Mockup values are the default theme.
-- **Rider–driver contact:** phone numbers are never shown to the other party (REQ-SEC-04). Chat goes through the platform; calls go through a masked number once a SIP provider is chosen (Q-18). Until then "Call" connects to the service's dispatcher. Implemented behind an interface so the channel can change without UI rework.
+- **Chat ("Написать"):** in-app chat between client and driver, tied to the order. The full conversation is stored and shown in the admin panel in the order details. Access in the admin follows the order's scope and is audited; retention follows the data retention matrix (Q-19).
+- **Calls ("Позвонить"):** the mode is a service setting in the admin panel (product owner decision, 26.10.2026):
+  - `DIRECT` — the app dials the other party's real number;
+  - `VIA_SERVICE_NUMBERS` — the call goes through the service's numbers, the real numbers stay hidden (depends on the SIP provider, Q-18).
+  The setting is versioned and audited like other service settings (REQ-TEN-06). In `DIRECT` mode the number stays in the phone's call log, so REQ-SEC-04 ("no lasting access to the passenger's phone after the trip") holds only with `VIA_SERVICE_NUMBERS`; the admin shows this when the mode is changed.
