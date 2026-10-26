@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.platform.Actor;
@@ -55,7 +54,7 @@ class AuditLogTests {
         UUID id = record();
 
         assertThatThrownBy(() -> jdbc.sql("update audit_log set reason = 'edited' where id = :id").param("id", id).update())
-                .isInstanceOf(DataAccessException.class)
+                .rootCause()
                 .hasMessageContaining("append-only");
     }
 
@@ -64,7 +63,7 @@ class AuditLogTests {
         UUID id = record();
 
         assertThatThrownBy(() -> jdbc.sql("delete from audit_log where id = :id").param("id", id).update())
-                .isInstanceOf(DataAccessException.class)
+                .rootCause()
                 .hasMessageContaining("append-only");
     }
 
