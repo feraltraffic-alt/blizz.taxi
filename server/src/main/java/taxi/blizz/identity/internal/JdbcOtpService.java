@@ -59,19 +59,21 @@ class JdbcOtpService implements OtpService {
     }
 
     @Override
-    public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef) {
+    public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef,
+                                            String clientIp) {
         PhoneNumber phone = PhoneNumber.parse(rawPhone);
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            enforceLimits(audience, phone, now);
+            enforceLimits(audience, phone, deviceRef, clientIp, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
             OffsetDateTime expiresAt = now.plus(properties.ttl());
             jdbc.sql("""
                             insert into otp_challenge (id, audience, phone_normalized, code_hmac, expires_at,
-                                                       max_attempts, device_ref, created_at)
-                            values (:id, :audience, :phone, :hmac, :expiresAt, :maxAttempts, :deviceRef, :now)
+                                                       max_attempts, device_ref, client_ip, created_at)
+                            values (:id, :audience, :phone, :hmac, :expiresAt, :maxAttempts, :deviceRef, :clientIp,
+                                    :now)
                             """)
                     .param("id", challengeId)
                     .param("audience", audience.name())
@@ -80,6 +82,7 @@ class JdbcOtpService implements OtpService {
                     .param("expiresAt", expiresAt)
                     .param("maxAttempts", properties.maxAttempts())
                     .param("deviceRef", deviceRef)
+                    .param("clientIp", clientIp)
                     .param("now", now)
                     .update();
 
@@ -93,7 +96,8 @@ class JdbcOtpService implements OtpService {
         });
     }
 
-    private void enforceLimits(OtpAudience audience, PhoneNumber phone, OffsetDateTime now) {
+    private void enforceLimits(OtpAudience audience, PhoneNumber phone, String deviceRef, String clientIp,
+                               OffsetDateTime now) {
         // Serializes concurrent requests for the same phone and audience within this transaction.
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
                 .param("key", "otp:" + audience + ":" + phone.e164())
@@ -129,12 +133,27 @@ class JdbcOtpService implements OtpService {
             throw new RateLimitedException("Too many codes for this phone", Duration.ofHours(1));
         }
 
+        if (clientIp != null && countSince("client_ip", clientIp, hourAgo) >= properties.maxPerIpPerHour()) {
+            throw new RateLimitedException("Too many codes from this address", Duration.ofHours(1));
+        }
+        if (deviceRef != null && countSince("device_ref", deviceRef, hourAgo) >= properties.maxPerDevicePerHour()) {
+            throw new RateLimitedException("Too many codes from this device", Duration.ofHours(1));
+        }
+
         int global = jdbc.sql("select count(*) from otp_challenge where created_at > :since")
                 .param("since", hourAgo)
                 .query(Integer.class).single();
         if (global >= properties.maxGlobalPerHour()) {
             throw new RateLimitedException("Code sending budget exhausted", Duration.ofMinutes(5));
         }
+    }
+
+    private int countSince(String column, String value, OffsetDateTime since) {
+        // column is one of two fixed names chosen above, never user input
+        return jdbc.sql("select count(*) from otp_challenge where " + column + " = :value and created_at > :since")
+                .param("value", value)
+                .param("since", since)
+                .query(Integer.class).single();
     }
 
     @Override

@@ -15,6 +15,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param codeLength        digits in a code
  * @param maxPerPhonePerHour codes per phone and audience per hour
  * @param maxGlobalPerHour  overall sending budget per hour for the instance (SMS pumping protection)
+ * @param maxPerIpPerHour   codes per client IP per hour; generous because a fleet may share one NAT address
+ * @param maxPerDevicePerHour codes per app installation per hour
  */
 @ConfigurationProperties("blizz.otp")
 public record OtpProperties(
@@ -24,7 +26,9 @@ public record OtpProperties(
         @DefaultValue("PT60S") Duration resendAfter,
         @DefaultValue("6") int codeLength,
         @DefaultValue("5") int maxPerPhonePerHour,
-        @DefaultValue("2000") int maxGlobalPerHour) {
+        @DefaultValue("2000") int maxGlobalPerHour,
+        @DefaultValue("30") int maxPerIpPerHour,
+        @DefaultValue("10") int maxPerDevicePerHour) {
 
     public OtpProperties {
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {

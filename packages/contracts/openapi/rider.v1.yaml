@@ -1,0 +1,57 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — Rider app API
+  version: 1.0.0
+  description: |
+    API for the rider app (/api/rider/v1, REQ-API-02). Every operation needs an access token issued
+    for the `rider` audience; tokens of other audiences are rejected (REQ-USR-08).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security:
+  - SubjectBearer: []
+
+paths:
+  /api/rider/v1/me:
+    get:
+      operationId: getRiderMe
+      summary: Who the access token belongs to
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Current subject and session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+tags:
+  - name: Account
+    description: The signed-in rider
+
+components:
+  securitySchemes:
+    SubjectBearer:
+      $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
+  schemas:
+    Me:
+      type: object
+      additionalProperties: false
+      required: [subject_type, subject_id, session_id, account_state]
+      properties:
+        subject_type:
+          type: string
+          const: CLIENT
+        subject_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        session_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          type: string

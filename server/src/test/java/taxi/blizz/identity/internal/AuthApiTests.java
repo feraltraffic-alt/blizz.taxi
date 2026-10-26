@@ -1,0 +1,233 @@
+package taxi.blizz.identity.internal;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+
+import jakarta.servlet.Filter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import taxi.blizz.TestcontainersConfiguration;
+import taxi.blizz.identity.OtpAudience;
+import taxi.blizz.identity.OtpDelivery;
+import taxi.blizz.identity.PhoneNumber;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * Sign-in over HTTP end to end: auth.v1.yaml, rider.v1.yaml, driver.v1.yaml
+ * (REQ-AUTH-03 – REQ-AUTH-07, REQ-USR-08, AC-03, AC-27).
+ */
+@SpringBootTest
+@Import({TestcontainersConfiguration.class, AuthApiTests.Capture.class})
+class AuthApiTests {
+
+    @Autowired
+    WebApplicationContext context;
+    @Autowired
+    JsonMapper json;
+    @Autowired
+    CapturingDelivery delivery;
+    @Autowired
+    JdbcClient jdbc;
+
+    MockMvc mvc;
+    String phone;
+
+    @BeforeEach
+    void setUp() {
+        List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
+        AnnotationAwareOrderComparator.sort(filters);
+        mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
+        phone = "+38050" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        delivery.codes.clear();
+    }
+
+    private MvcResult postJson(String path, Object body) throws Exception {
+        return mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body))
+                .with(request -> {
+                    request.setRemoteAddr("198.51.100." + Math.floorMod(UUID.randomUUID().hashCode(), 250));
+                    return request;
+                })).andReturn();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> body(MvcResult result) throws Exception {
+        return json.readValue(result.getResponse().getContentAsString(), Map.class);
+    }
+
+    private Map<String, Object> signIn(String audience) throws Exception {
+        MvcResult challenge = postJson("/auth/v1/otp/challenges",
+                Map.of("audience", audience, "phone", phone, "device_ref", "test-device"));
+        assertThat(challenge.getResponse().getStatus()).isEqualTo(201);
+        Map<String, Object> issued = body(challenge);
+        assertThat(issued).containsOnlyKeys("challenge_id", "expires_at", "resend_available_at");
+
+        MvcResult verify = postJson("/auth/v1/otp/verify",
+                Map.of("challenge_id", issued.get("challenge_id"), "code", delivery.codes.getLast()));
+        assertThat(verify.getResponse().getStatus()).isEqualTo(200);
+        return body(verify);
+    }
+
+    private MvcResult getWithToken(String path, Object token) throws Exception {
+        return mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn();
+    }
+
+    @Test
+    void clientSignsInAndCallsTheRiderApi() throws Exception {
+        Map<String, Object> session = signIn("CLIENT");
+
+        assertThat(session).containsKeys("session_id", "subject", "audience", "access_token", "access_expires_at",
+                "refresh_token", "refresh_expires_at", "account_created");
+        assertThat(session.get("audience")).isEqualTo("rider");
+        assertThat(session.get("account_created")).isEqualTo(true);
+
+        MvcResult me = getWithToken("/api/rider/v1/me", session.get("access_token"));
+        assertThat(me.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(me)).containsEntry("subject_type", "CLIENT")
+                .containsEntry("account_state", "ACTIVE")
+                .containsEntry("session_id", session.get("session_id"));
+    }
+
+    @Test
+    void riderTokenIsRefusedByTheDriverApiAndViceVersa() throws Exception {
+        Map<String, Object> rider = signIn("CLIENT");
+        Map<String, Object> driver = signIn("DRIVER");
+
+        assertUnauthenticated(getWithToken("/api/driver/v1/me", rider.get("access_token")));
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", driver.get("access_token")));
+        assertThat(getWithToken("/api/driver/v1/me", driver.get("access_token")).getResponse().getStatus())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void missingOrBrokenTokenIsUnauthenticated() throws Exception {
+        MvcResult none = mvc.perform(get("/api/rider/v1/me")).andReturn();
+        assertUnauthenticated(none);
+        assertThat(none.getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE)).isEqualTo("Bearer");
+
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", "not-a-jwt"));
+    }
+
+    @Test
+    void refreshRotatesAndReuseLogsTheDeviceOut() throws Exception {
+        Map<String, Object> first = signIn("CLIENT");
+
+        MvcResult refreshed = postJson("/auth/v1/token/refresh", Map.of("refresh_token", first.get("refresh_token")));
+        assertThat(refreshed.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> second = body(refreshed);
+        assertThat(second).doesNotContainKey("account_created");
+
+        assertUnauthenticated(postJson("/auth/v1/token/refresh", Map.of("refresh_token", first.get("refresh_token"))));
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", second.get("access_token")));
+    }
+
+    @Test
+    void logoutEndsTheSessionImmediately() throws Exception {
+        Map<String, Object> session = signIn("CLIENT");
+
+        MvcResult logout = postJson("/auth/v1/logout", Map.of("refresh_token", session.get("refresh_token")));
+
+        assertThat(logout.getResponse().getStatus()).isEqualTo(204);
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", session.get("access_token")));
+    }
+
+    @Test
+    void blockingTheAccountStopsRequestsOnceSessionsAreRevoked() throws Exception {
+        Map<String, Object> session = signIn("CLIENT");
+        @SuppressWarnings("unchecked")
+        UUID clientId = UUID.fromString((String) ((Map<String, Object>) session.get("subject")).get("id"));
+        jdbc.sql("update client set account_state = 'BLOCKED' where id = :id").param("id", clientId).update();
+        jdbc.sql("update device_session set revoked_at = now() where subject_id = :id").param("id", clientId).update();
+
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", session.get("access_token")));
+    }
+
+    @Test
+    void wrongCodeIsAProblemWithOtpInvalid() throws Exception {
+        Map<String, Object> issued = body(postJson("/auth/v1/otp/challenges", Map.of("audience", "CLIENT", "phone", phone)));
+        String wrong = delivery.codes.getLast().equals("000000") ? "111111" : "000000";
+
+        MvcResult result = postJson("/auth/v1/otp/verify", Map.of("challenge_id", issued.get("challenge_id"), "code", wrong));
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(422);
+        assertThat(result.getResponse().getContentType()).startsWith("application/problem+json");
+        assertThat(body(result)).containsEntry("code", "OTP_INVALID");
+    }
+
+    @Test
+    void resendTooSoonIs429WithRetryAfter() throws Exception {
+        postJson("/auth/v1/otp/challenges", Map.of("audience", "CLIENT", "phone", phone));
+
+        MvcResult again = postJson("/auth/v1/otp/challenges", Map.of("audience", "CLIENT", "phone", phone));
+
+        assertThat(again.getResponse().getStatus()).isEqualTo(429);
+        assertThat(again.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        assertThat(body(again)).containsEntry("code", "RATE_LIMITED");
+    }
+
+    @Test
+    void malformedPhoneAndUnknownAudienceAreValidationErrors() throws Exception {
+        MvcResult phoneResult = postJson("/auth/v1/otp/challenges", Map.of("audience", "CLIENT", "phone", "0501234567"));
+        MvcResult audienceResult = postJson("/auth/v1/otp/challenges", Map.of("audience", "STAFF", "phone", phone));
+
+        assertThat(phoneResult.getResponse().getStatus()).isEqualTo(400);
+        assertThat(audienceResult.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    void blockedAccountCannotSignIn() throws Exception {
+        jdbc.sql("""
+                        insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
+                        values (:id, :phone, 'BLOCKED', true, now(), now())""")
+                .param("id", UUID.randomUUID()).param("phone", phone).update();
+        Map<String, Object> issued = body(postJson("/auth/v1/otp/challenges", Map.of("audience", "CLIENT", "phone", phone)));
+
+        MvcResult result = postJson("/auth/v1/otp/verify",
+                Map.of("challenge_id", issued.get("challenge_id"), "code", delivery.codes.getLast()));
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(403);
+        assertThat(body(result)).containsEntry("code", "ACCESS_DENIED");
+    }
+
+    private void assertUnauthenticated(MvcResult result) throws Exception {
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(body(result)).containsEntry("code", "UNAUTHENTICATED");
+    }
+
+    static class CapturingDelivery implements OtpDelivery {
+        final List<String> codes = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void send(PhoneNumber phone, String code, OtpAudience audience) {
+            codes.add(code);
+        }
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class Capture {
+        @Bean
+        @Primary
+        CapturingDelivery authApiCapturingDelivery() {
+            return new CapturingDelivery();
+        }
+    }
+}
