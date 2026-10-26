@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: blizz-taxi-server
+  profiles:
+    default: dev
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/blizz}
+    username: ${DB_USER:blizz}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Schema is owned by Flyway; ddl-auto=update is forbidden (REQ-DATA-12).
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
