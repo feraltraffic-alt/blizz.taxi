@@ -46,7 +46,6 @@ class JdbcDriverAdmission implements DriverAdmission {
                     ReviewStatus.SUSPENDED, ReviewStatus.EXPIRED);
     private static final Set<ReviewStatus> SUBMITTABLE =
             EnumSet.of(ReviewStatus.NOT_SUBMITTED, ReviewStatus.CHANGES_REQUIRED, ReviewStatus.EXPIRED);
-    private static final UUID NO_VEHICLE = new UUID(0, 0);
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -91,12 +90,11 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .list();
 
         List<DriverProfile.Document> documents = jdbc.sql("""
-                        select distinct on (coalesce(vehicle_id, :none), type)
+                        select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
                                id, type, vehicle_id, file_id, number, valid_from, valid_to, decision, decision_reason
                         from driver_document where driver_id = :id
-                        order by coalesce(vehicle_id, :none), type, created_at desc""")
+                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc""")
                 .param("id", driverId)
-                .param("none", NO_VEHICLE)
                 .query((rs, i) -> new DriverProfile.Document(rs.getObject("id", UUID.class),
                         DocumentType.valueOf(rs.getString("type")), rs.getObject("vehicle_id", UUID.class),
                         rs.getObject("file_id", UUID.class), rs.getString("number"),
@@ -273,14 +271,13 @@ class JdbcDriverAdmission implements DriverAdmission {
                                         update driver_document
                                         set decision = 'ACCEPTED', reviewer_staff_id = :reviewer, decided_at = :now
                                         where id in (
-                                            select distinct on (coalesce(vehicle_id, :none), type) id
+                                            select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type) id
                                             from driver_document where driver_id = :id
-                                            order by coalesce(vehicle_id, :none), type, created_at desc)
+                                            order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc)
                                           and decision = 'PENDING'""")
                                 .param("reviewer", reviewer.id())
                                 .param("now", now)
                                 .param("id", driverId)
-                                .param("none", NO_VEHICLE)
                                 .update();
                     } else {
                         jdbc.sql("""
@@ -338,11 +335,11 @@ class JdbcDriverAdmission implements DriverAdmission {
         properties.requiredVehicleDocuments().forEach(t -> required.add(t.name()));
         List<UUID> candidates = jdbc.sql("""
                         with accepted as (
-                            select distinct on (driver_id, coalesce(vehicle_id, :none), type)
+                            select distinct on (driver_id, coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
                                    driver_id, vehicle_id, type, valid_to
                             from driver_document
                             where decision = 'ACCEPTED'
-                            order by driver_id, coalesce(vehicle_id, :none), type, created_at desc)
+                            order by driver_id, coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc)
                         select distinct a.driver_id
                         from accepted a
                         join driver d on d.id = a.driver_id
@@ -351,7 +348,6 @@ class JdbcDriverAdmission implements DriverAdmission {
                           and a.type = any(:types)
                           and a.valid_to < :today
                           and (a.vehicle_id is null or v.state = 'APPROVED')""")
-                .param("none", NO_VEHICLE)
                 .param("types", required.toArray(String[]::new))
                 .param("today", today)
                 .query(UUID.class)
@@ -434,11 +430,10 @@ class JdbcDriverAdmission implements DriverAdmission {
         List<String> missing = new ArrayList<>();
         Map<String, CurrentDocument> current = new LinkedHashMap<>();
         jdbc.sql("""
-                        select distinct on (coalesce(vehicle_id, :none), type) vehicle_id, type, decision, valid_to
+                        select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type) vehicle_id, type, decision, valid_to
                         from driver_document where driver_id = :id
-                        order by coalesce(vehicle_id, :none), type, created_at desc""")
+                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc""")
                 .param("id", driverId)
-                .param("none", NO_VEHICLE)
                 .query((rs, i) -> new CurrentDocument(rs.getObject("vehicle_id", UUID.class), rs.getString("type"),
                         rs.getString("decision"), rs.getObject("valid_to", LocalDate.class)))
                 .list()
