@@ -55,10 +55,13 @@ class SupportFilesController {
 
     @PostMapping({"/api/admin/v1/support/uploads", "/api/operator/v1/support/uploads"})
     @ResponseStatus(HttpStatus.CREATED)
-    UploadSession openStaff(AccessClaims claims, @Valid @RequestBody OpenUpload body) {
+    UploadSession openStaff(AccessClaims claims, @Valid @RequestBody OpenUpload body, HttpServletRequest request) {
         staff.require(claims.actor(), SupportCases.MANAGE_PERMISSION);
-        return files.openUpload(claims.actor(), body.commandId(), FilePurpose.SUPPORT_ATTACHMENT, body.contentType(),
-                body.sizeBytes());
+        UploadSession session = files.openUpload(claims.actor(), body.commandId(), FilePurpose.SUPPORT_ATTACHMENT,
+                body.contentType(), body.sizeBytes());
+        String audience = request.getRequestURI().startsWith("/api/admin/") ? "admin" : "operator";
+        return new UploadSession(session.fileId(), "/api/" + audience + "/v1/uploads/" + session.fileId(),
+                session.expiresAt(), session.maxBytes());
     }
 
     @PutMapping(path = "/api/rider/v1/uploads/{fileId}", consumes = MediaType.ALL_VALUE)
