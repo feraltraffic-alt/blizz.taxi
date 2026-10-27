@@ -11,4 +11,7 @@ public interface AccountDirectory {
 
     /** Normalized E.164 phone for a client or driver; empty for other subject types or anonymized accounts. */
     Optional<String> phone(Actor subject);
+
+    /** The language a client or driver chose (uk, pl, ru, en); empty when not set. */
+    Optional<String> language(Actor subject);
 }

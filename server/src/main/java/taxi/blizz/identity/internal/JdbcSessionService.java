@@ -276,4 +276,13 @@ class JdbcSessionService implements SessionService {
             return new Refreshed(null);
         }
     }
+
+    @Override
+    public boolean isOpen(java.util.UUID sessionId) {
+        return jdbc.sql("""
+                        select count(*) from device_session
+                        where id = :id and revoked_at is null and expires_at > :now""")
+                .param("id", sessionId).param("now", java.time.OffsetDateTime.now(clock))
+                .query(Long.class).single() > 0;
+    }
 }

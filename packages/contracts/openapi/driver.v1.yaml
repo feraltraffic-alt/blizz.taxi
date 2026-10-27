@@ -1376,7 +1376,80 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/driver/v1/push-devices:
+    get:
+      operationId: listDriverPushDevices
+      summary: The phones that receive pushes
+      tags: [Push]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Active devices, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "./push.yaml#/components/schemas/PushDeviceList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+    post:
+      operationId: registerDriverPushDevice
+      summary: Register the app's push token
+      description: >-
+        Tied to the session of the access token: after a logout or a revoked session nothing more is sent to the
+        phone (REQ-AUTH-07). A push is never a confirmation by itself — the app reads the order over REST
+        (REQ-NTF-01). The push data carries `type` (the template), `event_type`, `event_id`, `order_id` and
+        `order_version`; nothing personal.
+      tags: [Push]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./push.yaml#/components/schemas/PushDeviceRegistration"
+      responses:
+        "201":
+          description: Registered (or refreshed, for the same token).
+          content:
+            application/json:
+              schema:
+                $ref: "./push.yaml#/components/schemas/PushDevice"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/push-devices/{device_id}/remove:
+    post:
+      operationId: removeDriverPushDevice
+      summary: Stop pushes to a phone
+      tags: [Push]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./push.yaml#/components/schemas/PushDeviceCommand"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 tags:
+  - name: Push
+    description: Push notifications to the app (section 20)
   - name: Live
     description: Live updates over WebSocket (section 20)
   - name: Support

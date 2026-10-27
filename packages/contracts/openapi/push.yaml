@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — push notification components
+  version: 1.0.0
+  description: >-
+    Shared schemas of the phones that receive pushes (section 20, REQ-NTF-02). Referenced by the rider and driver
+    APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    PushDeviceRegistration:
+      type: object
+      additionalProperties: false
+      required: [command_id, platform, token]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        platform:
+          type: string
+          description: Case does not matter.
+          enum: [ANDROID, IOS, WEB, android, ios, web]
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: >-
+            The Firebase Cloud Messaging registration token of the app. Registered again whenever it changes and
+            after every sign-in; the same token for another person moves to them.
+        locale:
+          type: [string, "null"]
+          maxLength: 35
+          description: The phone's locale, e.g. uk-UA. The text of pushes follows the language of the profile.
+
+    PushDevice:
+      type: object
+      required: [id, platform, state, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        platform:
+          type: string
+          enum: [ANDROID, IOS, WEB]
+        locale:
+          type: [string, "null"]
+        state:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        created_at:
+          type: string
+          format: date-time
+
+    PushDeviceList:
+      type: object
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PushDevice"
+
+    PushDeviceCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"

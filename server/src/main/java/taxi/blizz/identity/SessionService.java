@@ -34,4 +34,7 @@ public interface SessionService {
 
     /** Checks signature, expiry, audience and that the session is still open. */
     Optional<AccessClaims> verifyAccess(String accessToken, ApiAudience expectedAudience);
+
+    /** Whether the session is still open (not logged out, revoked or expired); e.g. before a push to its device. */
+    boolean isOpen(java.util.UUID sessionId);
 }

@@ -259,6 +259,7 @@ class JdbcOrders implements Orders {
                     String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
                     CancelReasons.Reason reason = reasons.require(actor.type() == SubjectType.STAFF
                             ? CancelReasons.Audience.STAFF : CancelReasons.Audience.RIDER, reasonCode);
+                    Map<String, Object> details = new java.util.LinkedHashMap<>();
                     switch (order.status()) {
                         case "SCHEDULED", "AWAITING_PAYMENT", "READY", "SEARCHING" -> {
                             // A driver holding the pre-order loses it with the order.
@@ -270,11 +271,16 @@ class JdbcOrders implements Orders {
                             engine.stop(orderId, "STOPPED");
                             core.closeOpenOffers(orderId, "REVOKED");
                         }
-                        case "ASSIGNED" -> releaseAssignment(orderId, by + "_CANCELLED: " + reason.code());
+                        case "ASSIGNED" -> {
+                            // The driver on the way learns of it (live channel, push).
+                            core.assignmentOfOrder(orderId).ifPresent(a -> details.put("driver_id",
+                                    a.driverId().toString()));
+                            releaseAssignment(orderId, by + "_CANCELLED: " + reason.code());
+                        }
                         default -> throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "An order in " + order.status() + " cannot be cancelled this way");
                     }
-                    core.cancel(order, by, reason, "OrderCancelled", actor, Map.of());
+                    core.cancel(order, by, reason, "OrderCancelled", actor, details);
                     if (actor.type() == SubjectType.STAFF) {
                         audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reason.code(),
                                 Map.of("status", order.status()), Map.of("status", "CANCELLED")));
