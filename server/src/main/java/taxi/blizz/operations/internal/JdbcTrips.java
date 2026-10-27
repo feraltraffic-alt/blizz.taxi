@@ -3,6 +3,7 @@ package taxi.blizz.operations.internal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +60,33 @@ class JdbcTrips implements Trips {
                 .query(UUID.class)
                 .optional()
                 .map(this::view);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit) {
+        requireDriver(driver);
+        int size = Math.max(1, Math.min(limit, 50));
+        String cursor = before == null ? "" : " and t.created_at < :before";
+        JdbcClient.StatementSpec query = jdbc.sql("""
+                        select t.id, t.order_id, o.short_number, t.created_at, o.pickup_label, o.dropoff_label,
+                               o.final_price_minor, o.currency, o.payment_method, t.phase
+                        from trip t
+                        join assignment a on a.id = t.assignment_id
+                        join ride_order o on o.id = t.order_id
+                        where a.driver_id = :driver and t.phase in ('COMPLETED', 'ABORTED')
+                        """ + cursor + " order by t.created_at desc, t.id desc limit :limit")
+                .param("driver", driver.id()).param("limit", size);
+        if (before != null) {
+            query = query.param("before", before);
+        }
+        return query.query((rs, i) -> new HistoryItem(rs.getObject("id", UUID.class),
+                        rs.getObject("order_id", UUID.class), rs.getLong("short_number"),
+                        rs.getObject("created_at", OffsetDateTime.class), rs.getString("pickup_label"),
+                        rs.getString("dropoff_label"), (Long) rs.getObject("final_price_minor"),
+                        rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")),
+                        rs.getString("phase")))
+                .list();
     }
 
     record PhaseRequest(UUID tripId, long expectedVersion, String exceptionReason) {
@@ -227,9 +255,6 @@ class JdbcTrips implements Trips {
                                 .param("id", trip.orderId())
                                 .update();
                     }
-                    // The fare is fixed together with the fact of completion; posting follows from the event (REQ-LED-05).
-                    // Waiting is charged only after an arrival that passed the normal check; an arrival or start
-                    // confirmed with an exception goes to review instead of an automatic surcharge (REQ-PRC-08).
                     long waited = jdbc.sql("""
                                     select case when arrival_exception is null and start_exception is null
                                                 then coalesce(floor(extract(epoch from started_at - arrived_at)), 0)
@@ -243,7 +268,6 @@ class JdbcTrips implements Trips {
                             .param("price", fare.amountMinor())
                             .param("id", trip.orderId())
                             .update();
-                    // Free in the same transaction as the fact of completion (REQ-ASG-04, REQ-PAY-04).
                     core.releaseDriver(driver.id());
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("trip_id", tripId.toString());
@@ -266,12 +290,9 @@ class JdbcTrips implements Trips {
                 });
     }
 
-    // ---------------------------------------------------------------- helpers
-
     private record Locked(UUID id, UUID orderId, UUID assignmentId, String phase, OrderCore.LockedOrder order) {
     }
 
-    /** order → capacity → trip, and only the driver of the active assignment (REQ-DRV-09). */
     private Locked lock(Actor driver, UUID tripId, long expectedVersion) {
         UUID orderId = jdbc.sql("""
                         select t.order_id from trip t join assignment a on a.id = t.assignment_id
@@ -304,7 +325,6 @@ class JdbcTrips implements Trips {
     private record Arrival(Integer distanceM, ErrorCode problem) {
     }
 
-    /** Distance from the driver's last server-side position to the pickup, and whether it is acceptable. */
     private Arrival arrivalCheck(Actor driver, UUID orderId) {
         record Row(Integer distance, OffsetDateTime locationAt) {
         }
