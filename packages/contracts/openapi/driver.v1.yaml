@@ -890,6 +890,37 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/trips/{trip_id}/call:
+    get:
+      operationId: getDriverTripCallTarget
+      summary: Phone target for the active rider or phone caller
+      description: |
+        Available only to the driver of the COMMITTED assignment while the order is ASSIGNED or IN_SERVICE.
+        DIRECT returns the rider account phone or the caller phone stored on a staff PHONE order.
+        VIA_SERVICE_NUMBERS returns only the configured service phone. A released or revoked assignment is hidden
+        as 404; outside the active call window → 409 STATE_CONFLICT.
+      tags: [Trip]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: Number the driver app should dial.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallTarget"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/driver/v1/trips/{trip_id}/arrive:
     post:
       operationId: arriveAtPickup
@@ -1796,6 +1827,18 @@ components:
         trip_phase:
           type: [string, "null"]
           enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
+
+    CallTarget:
+      type: object
+      additionalProperties: false
+      required: [mode, phone]
+      properties:
+        mode:
+          type: string
+          enum: [DIRECT, VIA_SERVICE_NUMBERS]
+        phone:
+          type: string
+          pattern: "^\\+[1-9][0-9]{7,14}$"
 
     Preorder:
       type: object
