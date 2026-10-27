@@ -25,5 +25,15 @@ public record TripView(
         /** Paid by the rider's bonuses (ADR 0009): the driver collects the fare minus this. */
         long walletMinor,
         /** The rider's promotions' discount (ADR 0009): collect the fare minus this and the bonuses. */
-        long discountMinor) {
+        long discountMinor,
+        /**
+         * Whom to pick up when it is not the payer: the recipient a rider named, or the caller of a phone order
+         * (ADR 0012, REQ-OPS-02). Only on a trip, so never before assignment (REQ-DRV-08), and only until the trip
+         * ends; the phone only when calls are DIRECT (otherwise calls go through the service's numbers). Null when
+         * the order has no such contact.
+         */
+        Recipient recipient) {
+
+    public record Recipient(String name, String phone) {
+    }
 }

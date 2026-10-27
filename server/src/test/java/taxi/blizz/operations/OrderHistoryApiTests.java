@@ -1,7 +1,6 @@
 package taxi.blizz.operations;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import jakarta.servlet.Filter;
@@ -29,8 +28,6 @@ import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.SessionService;
 import taxi.blizz.identity.VerifiedSubject;
 import taxi.blizz.platform.Actor;
-import taxi.blizz.platform.DomainException;
-import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.pricing.QuoteService;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -163,18 +160,18 @@ class OrderHistoryApiTests {
     }
 
     @Test
-    void nonStaffCallerContactIsRejectedBeforeAReceipt() {
+    void aRidersContactIsTheRecipientOfTheOrder() {
+        // ADR 0012 Q-03: a rider may name the person the taxi is for; it is kept like a phone order's caller.
         Actor payer = rides.client();
         UUID quote = new TestQuotes(jdbc, quoteService).quote(payer, city, "STANDARD", PICKUP, DROPOFF).id();
-        UUID command = UUID.randomUUID();
         CreateOrder request = new CreateOrder(payer.id(), "STANDARD", PICKUP, "Home", DROPOFF, "Work",
                 PaymentMethod.CASH, quote, OrderChannel.APP, null, new CallerContact("Caller", "+48512345678"));
 
-        assertThatThrownBy(() -> orders.create(payer, command, request))
-                .isInstanceOfSatisfying(DomainException.class,
-                        ex -> assertThat(ex.code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
-        assertThat(jdbc.sql("select count(*) from command_receipt where command_id = :id")
-                .param("id", command).query(Long.class).single()).isZero();
+        OrderView order = orders.create(payer, UUID.randomUUID(), request);
+        assertThat(order.payerClientId()).isEqualTo(payer.id());
+        assertThat(jdbc.sql("select phone from order_contact where order_id = :id").param("id", order.id())
+                .query(String.class).single()).isEqualTo("+48512345678");
+        orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
     }
 
     private Assigned assign(Actor payer, TestRides.Driver driver, GeoPoint pickup, GeoPoint dropoff) {

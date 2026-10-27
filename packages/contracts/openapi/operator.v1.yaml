@@ -242,7 +242,9 @@ paths:
         contact data for this order only and is not linked to or turned into a client account (REQ-OPS-02,
         REQ-OPS-03, REQ-PRC-06). When the caller's phone belongs to a rider account that is BLOCKED or has a
         pending deletion request, the order is refused with 403 ACCOUNT_NOT_ACTIVE, so the operator can tell the
-        caller why; a caller without an account is not affected.
+        caller why; a caller without an account is not affected. The caller's phone counts toward the order limit
+        (active_orders_per_payer, ADR 0012): together with that rider's app orders when the phone has an account,
+        by the number alone otherwise → 409 ACTIVE_ORDER_LIMIT.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

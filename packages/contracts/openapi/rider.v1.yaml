@@ -280,7 +280,8 @@ paths:
         Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
         the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED. The
         price is the quote's, never the client's. A repeat of the same command returns the same order. Card
-        payment is not available yet (S-09). One active order per payer → 409 ORDER_ALREADY_ACTIVE. A rider whose
+        payment is not available yet (S-09). At most active_orders_per_payer orders not in a final state, pre-orders
+        included, together with phone orders from my phone (ADR 0012) → 409 ACTIVE_ORDER_LIMIT. A rider whose
         account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE.
       tags: [Orders]
       parameters:
@@ -309,11 +310,42 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/rider/v1/orders/current:
+    get:
+      operationId: listCurrentOrders
+      summary: Every order not yet finished
+      description: >-
+        All my orders not in a final state, pre-orders included, newest first (ADR 0012 Q-03: up to
+        active_orders_per_payer at once).
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/rider/v1/orders/active:
     get:
       operationId: getActiveOrder
-      summary: The canonical snapshot of the current order
-      description: After an app restart the rider sees the same order; 204 when there is none.
+      summary: The most recent active order
+      description: >-
+        After an app restart the rider sees the same order; 204 when there is none. A rider may now hold several
+        orders (ADR 0012): this one is the most recently created order for now (an order for later only when there
+        is none, and pre-orders still SCHEDULED are not included). Kept for existing clients; the whole list is
+        GET /api/rider/v1/orders/current.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1544,6 +1576,20 @@ components:
           type: [integer, "null"]
           format: int64
           minimum: 0
+        recipient:
+          description: >-
+            The person the taxi is for, when it is not me (ADR 0012 Q-03, REQ-OPS-02). The driver sees the name and
+            calls this phone once the order is assigned, never before; I stay the payer.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [phone]
+          properties:
+            name:
+              type: [string, "null"]
+              maxLength: 120
+            phone:
+              description: International format (E.164); separators are ignored.
+              type: string
 
     ChatMessage:
       type: object

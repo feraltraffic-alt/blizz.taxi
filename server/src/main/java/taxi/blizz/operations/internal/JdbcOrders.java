@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,8 +89,10 @@ class JdbcOrders implements Orders {
     public OrderView create(Actor actor, UUID commandId, CreateOrder order) {
         City city = cities.resolve(order.pickup())
                 .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Pickup is outside every service area"));
-        if (order.caller() != null && actor.type() != SubjectType.STAFF) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Caller contact is only valid for a staff phone order");
+        // The contact is the caller of a phone order, or the person a rider orders for (ADR 0012 Q-03).
+        if (order.caller() != null && actor.type() != SubjectType.STAFF && actor.type() != SubjectType.CLIENT) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                    "A contact is the caller of a phone order or the recipient of a rider's order");
         }
         String channel = authorizeCreate(actor, order, city);
         if (order.paymentMethod() == PaymentMethod.SERVICE) {
@@ -129,6 +130,7 @@ class JdbcOrders implements Orders {
         OrderView result = commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class,
                 () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
+            requireBelowLimit(order);
             UUID id = UUID.randomUUID();
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
@@ -158,8 +160,7 @@ class JdbcOrders implements Orders {
                         settings.current().settings().preorders().releaseMinutesBefore());
                 releaseAt = release.isBefore(now) ? now : release;
             }
-            try {
-                jdbc.sql("""
+            jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
@@ -200,9 +201,6 @@ class JdbcOrders implements Orders {
                         .param("sourceRef", order.sourceRef())
                         .param("now", now)
                         .update();
-            } catch (DuplicateKeyException e) {
-                throw new DomainException(ErrorCode.ORDER_ALREADY_ACTIVE, "The payer already has an active order");
-            }
             if (order.caller() != null) {
                 jdbc.sql("""
                                 insert into order_contact (order_id, name, phone, created_by, created_at)
@@ -247,6 +245,54 @@ class JdbcOrders implements Orders {
             cardPayments.processNow(result.id());
         }
         return result;
+    }
+
+    /**
+     * At most {@code active_orders_per_payer} orders not in a final state, pre-orders included (ADR 0012 Q-03). The
+     * limit is per person: a rider's app orders and the phone orders whose caller has the rider's phone count
+     * together; a caller without an account is limited by the phone. App and phone orders of the same person take
+     * the same lock to the end of the transaction, so two creations at the limit never both pass.
+     */
+    private void requireBelowLimit(CreateOrder order) {
+        UUID account;
+        String phone;
+        if (order.payerClientId() != null) {
+            account = order.payerClientId();
+            phone = accounts.phone(new Actor(SubjectType.CLIENT, account)).orElse(null);
+        } else if (order.caller() != null) {
+            PhoneNumber caller = PhoneNumber.parse(order.caller().phone());
+            phone = caller.e164();
+            account = accounts.clientByPhone(caller).orElse(null);
+        } else {
+            return;
+        }
+        jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
+                .param("key", account != null ? "order-account:" + account : "order-phone:" + phone)
+                .query().singleRow();
+        List<String> who = new java.util.ArrayList<>();
+        if (account != null) {
+            who.add("o.payer_client_id = :account");
+        }
+        if (phone != null) {
+            // Phone orders have no payer; their caller is the contact.
+            who.add("""
+                    (o.payer_client_id is null
+                     and exists (select 1 from order_contact c where c.order_id = o.id and c.phone = :phone))""");
+        }
+        var count = jdbc.sql("select count(*) from ride_order o where o.status not in "
+                + "('FULFILLED', 'CANCELLED', 'UNFULFILLED') and (" + String.join(" or ", who) + ")");
+        if (account != null) {
+            count = count.param("account", account);
+        }
+        if (phone != null) {
+            count = count.param("phone", phone);
+        }
+        long open = count.query(Long.class).single();
+        int limit = settings.current().settings().orders().activePerPayer();
+        if (open >= limit) {
+            throw new DomainException(ErrorCode.ACTIVE_ORDER_LIMIT,
+                    "At most " + limit + " active orders at a time, orders for later included");
+        }
     }
 
     /** Decides the channel from who is asking; the requested channel is accepted only where it fits. */
@@ -701,11 +747,22 @@ class JdbcOrders implements Orders {
         return jdbc.sql("""
                         select id from ride_order where payer_client_id = :payer
                           and status in ('AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')
-                        order by preorder, coalesce(pickup_at, created_at) limit 1""")
+                        order by preorder, created_at desc, id limit 1""")
                 .param("payer", payerClientId)
                 .query(UUID.class)
                 .optional()
                 .map(core::view);
+    }
+
+    @Override
+    public List<OrderView> current(UUID payerClientId) {
+        return jdbc.sql("""
+                        select id from ride_order where payer_client_id = :payer
+                          and status not in ('FULFILLED', 'CANCELLED', 'UNFULFILLED')
+                        order by created_at desc, id""")
+                .param("payer", payerClientId)
+                .query(UUID.class)
+                .list().stream().map(core::view).toList();
     }
 
     private void requireStaff(Actor actor, String permission, UUID cityId) {
