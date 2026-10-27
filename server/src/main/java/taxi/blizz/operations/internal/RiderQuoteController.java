@@ -47,8 +47,12 @@ class RiderQuoteController {
                         @NotNull GeoPoint pickup, @NotNull GeoPoint dropoff) {
     }
 
+    /** What waiting at the pickup will cost, from the quote's tariff (REQ-PRC-05, REQ-PRC-09). */
+    record WaitingTerms(int freeMinutes, java.math.BigDecimal perMinuteMinor, int stepSeconds, String rounding) {
+    }
+
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
-                     long distanceM, long durationS, Instant expiresAt) {
+                     long distanceM, long durationS, Instant expiresAt, WaitingTerms waiting) {
     }
 
     @GetMapping("/api/rider/v1/vehicle-classes")
@@ -66,7 +70,9 @@ class RiderQuoteController {
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
                 vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor()));
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
-                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt());
+                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
+                new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
+                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()));
     }
 
     private City city(GeoPoint point) {

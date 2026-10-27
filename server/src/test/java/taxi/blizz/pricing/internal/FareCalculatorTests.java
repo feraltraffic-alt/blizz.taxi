@@ -10,12 +10,13 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.pricing.RouteEstimator.Estimate;
+import taxi.blizz.pricing.TariffService;
 import taxi.blizz.pricing.TariffService.Terms;
 
 class FareCalculatorTests {
     private Terms terms(long pickup, String km, String minute, long minimum) {
         return new Terms(pickup, new BigDecimal(km), new BigDecimal(minute), minimum, 3,
-                new BigDecimal("100"), 500, new BigDecimal("0.15"));
+                new BigDecimal("100"), 500, new BigDecimal("0.15"), 60, TariffService.WaitingRounding.UP);
     }
 
     @Test

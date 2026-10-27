@@ -77,15 +77,17 @@ class JdbcTariffService implements TariffService {
             jdbc.sql("""
                     insert into tariff_version(id, city_id, class_id, currency, effective_from, effective_to,
                         state, pickup_minor, per_km_minor, per_minute_minor, minimum_minor, free_waiting_minutes,
-                        waiting_per_minute_minor, cancellation_fee_minor, commission_rate, created_at, updated_at)
+                        waiting_per_minute_minor, cancellation_fee_minor, commission_rate, waiting_step_seconds,
+                        waiting_rounding, created_at, updated_at)
                     values (:id, :city, :class, :currency, :from, :to, 'DRAFT', :pickup, :km, :minute, :minimum,
-                        :free, :waiting, :cancellation, :commission, :now, :now)
+                        :free, :waiting, :cancellation, :commission, :step, :rounding, :now, :now)
                     """).param("id", id).param("city", c.cityId()).param("class", c.classId())
                     .param("currency", c.currency()).param("from", at(c.effectiveFrom()))
                     .param("to", at(c.effectiveTo())).param("pickup", t.pickupMinor()).param("km", t.perKmMinor())
                     .param("minute", t.perMinuteMinor()).param("minimum", t.minimumMinor())
                     .param("free", t.freeWaitingMinutes()).param("waiting", t.waitingPerMinuteMinor())
                     .param("cancellation", t.cancellationFeeMinor()).param("commission", t.commissionRate())
+                    .param("step", t.waitingStepSeconds()).param("rounding", t.waitingRounding().name())
                     .param("now", now()).update();
             audit.record(new AuditEntry(c.actor(), "tariff.createDraft", "tariff_version", id.toString(),
                     c.reason(), null, c));
@@ -173,7 +175,8 @@ class JdbcTariffService implements TariffService {
                 || t == null || t.pickupMinor() < 0 || t.minimumMinor() < 0 || t.freeWaitingMinutes() < 0
                 || t.cancellationFeeMinor() < 0 || negative(t.perKmMinor()) || negative(t.perMinuteMinor())
                 || negative(t.waitingPerMinuteMinor()) || negative(t.commissionRate())
-                || t.commissionRate().compareTo(BigDecimal.ONE) > 0) {
+                || t.commissionRate().compareTo(BigDecimal.ONE) > 0
+                || t.waitingStepSeconds() < 1 || t.waitingStepSeconds() > 3600 || t.waitingRounding() == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "Invalid tariff terms or effective range");
         }
         try {

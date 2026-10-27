@@ -42,9 +42,10 @@ public final class TestQuotes {
                             insert into tariff_version (id, city_id, class_id, currency, effective_from, state,
                                                         pickup_minor, per_km_minor, per_minute_minor, minimum_minor,
                                                         free_waiting_minutes, waiting_per_minute_minor,
-                                                        cancellation_fee_minor, commission_rate, created_at, updated_at)
+                                                        cancellation_fee_minor, commission_rate, waiting_step_seconds,
+                                                        waiting_rounding, created_at, updated_at)
                             select :id, :city, :class, currency, now() - interval '1 day', 'PUBLISHED',
-                                   3000, 1200, 200, 6000, 3, 200, 0, 0.15, now(), now()
+                                   3000, 1200, 200, 6000, 3, 200, 0, 0.15, 60, 'UP', now(), now()
                             from city where id = :city""")
                     .param("id", UUID.randomUUID()).param("city", cityId).param("class", classId).update();
         }

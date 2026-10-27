@@ -200,9 +200,10 @@ class FareLedgerTests {
                         insert into tariff_version (id, city_id, class_id, currency, effective_from, state,
                                                     pickup_minor, per_km_minor, per_minute_minor, minimum_minor,
                                                     free_waiting_minutes, waiting_per_minute_minor,
-                                                    cancellation_fee_minor, commission_rate, created_at, updated_at)
+                                                    cancellation_fee_minor, commission_rate, waiting_step_seconds,
+                                                        waiting_rounding, created_at, updated_at)
                         select :id, city_id, id, 'UAH', now(), 'PUBLISHED', 9000, 9000, 900, 90000, 1, 900, 0, 0.5,
-                               now(), now()
+                               60, 'UP', now(), now()
                         from vehicle_class where city_id = :city and code = 'STANDARD'""")
                 .param("id", UUID.randomUUID()).param("city", cityId).update();
 
@@ -223,6 +224,60 @@ class FareLedgerTests {
         assertThat(fare.commission() + fare.share()).isEqualTo(fare.amount());
         assertThatThrownBy(() -> jdbc.sql("update final_fare set amount_minor = 1 where order_id = :id")
                 .param("id", order.id()).update()).rootCause().hasMessageContaining("immutable");
+    }
+
+    record WaitingRule(long freeMinutes, BigDecimal perMinute, long step, String rounding) {
+    }
+
+    private WaitingRule rule(UUID orderId) {
+        return jdbc.sql("""
+                        select (q.snapshot -> 'terms' ->> 'free_waiting_minutes')::bigint,
+                               (q.snapshot -> 'terms' ->> 'waiting_per_minute_minor')::numeric,
+                               (q.snapshot -> 'terms' ->> 'waiting_step_seconds')::bigint,
+                               q.snapshot -> 'terms' ->> 'waiting_rounding'
+                        from ride_order o join quote q on q.id = o.quote_id where o.id = :id""")
+                .param("id", orderId)
+                .query((rs, i) -> new WaitingRule(rs.getLong(1), rs.getBigDecimal(2), rs.getLong(3), rs.getString(4)))
+                .single();
+    }
+
+    private void waitedMinutes(Ride ride, int minutes) {
+        jdbc.sql("update trip set arrived_at = started_at - make_interval(mins => :m) where id = :id")
+                .param("m", minutes).param("id", ride.trip().id()).update();
+    }
+
+    @Test
+    void paidWaitingFollowsTheTariffRuleAndCarriesCommission() {
+        Ride ride = started();
+        waitedMinutes(ride, 10);
+        complete(ride, true);
+
+        OrderView order = orders.get(ride.order().id());
+        WaitingRule rule = rule(order.id());
+        assertThat(rule.rounding()).isEqualTo("UP");
+        long billable = Math.max(0, 600 - rule.freeMinutes() * 60);
+        long charged = Math.ceilDiv(billable, rule.step()) * rule.step();
+        long waiting = rule.perMinute().multiply(BigDecimal.valueOf(charged))
+                .divide(BigDecimal.valueOf(60), 0, RoundingMode.HALF_UP).longValueExact();
+        Fare fare = fare(order.id());
+        assertThat(waiting).isPositive();
+        assertThat(fare.amount()).isEqualTo(order.priceMinor() + waiting).isEqualTo(order.finalPriceMinor());
+        assertThat(fare.commission()).isEqualTo(BigDecimal.valueOf(fare.amount()).multiply(fare.rate())
+                .setScale(0, RoundingMode.HALF_UP).longValueExact());
+        assertThat(jdbc.sql("select policy from final_fare where order_id = :id").param("id", order.id())
+                .query(String.class).single()).isEqualTo("M1_AGREED_PLUS_WAITING");
+    }
+
+    @Test
+    void noAutomaticWaitingChargeAfterAnArrivalConfirmedWithAnException() {
+        Ride ride = started();
+        waitedMinutes(ride, 10);
+        jdbc.sql("update trip set arrival_exception = 'Passenger asked to wait around the corner' where id = :id")
+                .param("id", ride.trip().id()).update();
+        complete(ride, true);
+
+        OrderView order = orders.get(ride.order().id());
+        assertThat(order.finalPriceMinor()).isEqualTo(order.priceMinor());
     }
 
     // ------------------------------------------------------------ journal (AC-16)

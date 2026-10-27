@@ -20,6 +20,7 @@ import taxi.blizz.platform.SubjectType;
 import taxi.blizz.pricing.QuoteService;
 import taxi.blizz.pricing.RouteEstimator;
 import taxi.blizz.pricing.TariffService.Terms;
+import taxi.blizz.pricing.TariffService.WaitingRounding;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
@@ -67,7 +68,9 @@ class JdbcQuoteService implements QuoteService {
                             new Terms(rs.getLong("pickup_minor"), rs.getBigDecimal("per_km_minor"),
                                     rs.getBigDecimal("per_minute_minor"), rs.getLong("minimum_minor"),
                                     rs.getInt("free_waiting_minutes"), rs.getBigDecimal("waiting_per_minute_minor"),
-                                    rs.getLong("cancellation_fee_minor"), rs.getBigDecimal("commission_rate"))))
+                                    rs.getLong("cancellation_fee_minor"), rs.getBigDecimal("commission_rate"),
+                                    rs.getInt("waiting_step_seconds"),
+                                    WaitingRounding.valueOf(rs.getString("waiting_rounding")))))
                     .optional().orElseThrow(() -> error(ErrorCode.NOT_FOUND, "No effective published tariff"));
             FareCalculator.Result fare = FareCalculator.calculate(tariff.terms(), route);
             Quote quote = new Quote(UUID.randomUUID(), request, tariff.id(), 1, tariff.terms(), route,

@@ -228,8 +228,12 @@ class JdbcTrips implements Trips {
                                 .update();
                     }
                     // The fare is fixed together with the fact of completion; posting follows from the event (REQ-LED-05).
+                    // Waiting is charged only after an arrival that passed the normal check; an arrival or start
+                    // confirmed with an exception goes to review instead of an automatic surcharge (REQ-PRC-08).
                     long waited = jdbc.sql("""
-                                    select coalesce(extract(epoch from started_at - arrived_at), 0)::bigint
+                                    select case when arrival_exception is null and start_exception is null
+                                                then coalesce(floor(extract(epoch from started_at - arrived_at)), 0)
+                                                else 0 end::bigint
                                     from trip where id = :id""")
                             .param("id", tripId).query(Long.class).single();
                     FinalFares.FinalFare fare = fares.finalizeFare(

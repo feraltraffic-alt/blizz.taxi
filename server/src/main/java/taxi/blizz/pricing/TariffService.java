@@ -21,9 +21,20 @@ public interface TariffService {
     }
 
     /** Rates are minor units per km/minute; commissionRate is an exact fraction from 0 to 1. */
+    /**
+     * Paid waiting (REQ-PRC-09, Q-07) is set per tariff by the admin: after {@code freeWaitingMinutes},
+     * waiting is counted in steps of {@code waitingStepSeconds} (1 = per second, 60 = per minute), the
+     * number of steps is rounded by {@code waitingRounding}, and each charged minute costs
+     * {@code waitingPerMinuteMinor}.
+     */
     record Terms(long pickupMinor, BigDecimal perKmMinor, BigDecimal perMinuteMinor, long minimumMinor,
                  int freeWaitingMinutes, BigDecimal waitingPerMinuteMinor, long cancellationFeeMinor,
-                 BigDecimal commissionRate) {
+                 BigDecimal commissionRate, int waitingStepSeconds, WaitingRounding waitingRounding) {
+    }
+
+    /** How a started step of waiting is counted: every started step, only full steps, or the nearer one. */
+    enum WaitingRounding {
+        UP, DOWN, HALF_UP
     }
 
     record VehicleClassDraft(UUID commandId, Actor actor, long expectedVersion, UUID cityId,

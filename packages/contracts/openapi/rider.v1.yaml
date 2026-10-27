@@ -411,7 +411,7 @@ components:
     Quote:
       type: object
       additionalProperties: false
-      required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at]
+      required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at, waiting]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -435,6 +435,34 @@ components:
           format: int64
         expires_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        waiting:
+          $ref: "#/components/schemas/WaitingTerms"
+
+    WaitingTerms:
+      description: |
+        Paid waiting at the pickup, set per tariff by the admin (REQ-PRC-09, Q-07). After free_minutes from
+        the driver's confirmed arrival, waiting is counted in steps of step_seconds (1 = per second,
+        60 = per minute); the number of steps is rounded — UP every started step, DOWN only full steps,
+        HALF_UP the nearer one; each charged minute costs per_minute_minor. The charge is added to the final
+        fare (final_price_minor).
+      type: object
+      additionalProperties: false
+      required: [free_minutes, per_minute_minor, step_seconds, rounding]
+      properties:
+        free_minutes:
+          type: integer
+          minimum: 0
+        per_minute_minor:
+          description: Minor units per minute; may be fractional.
+          type: number
+          minimum: 0
+        step_seconds:
+          type: integer
+          minimum: 1
+          maximum: 3600
+        rounding:
+          type: string
+          enum: [UP, DOWN, HALF_UP]
 
     CreateOrder:
       type: object

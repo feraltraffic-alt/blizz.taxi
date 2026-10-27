@@ -44,12 +44,14 @@ class JdbcFinalFares implements FinalFares {
                 .query((rs, i) -> json.readValue(rs.getString(1), Quote.class))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The order has no consumed quote"));
-        long amount = quote.amountMinor();
+        WaitingCharge.Result waiting = WaitingCharge.of(quote.terms(), facts.waitedSeconds());
+        long amount = Math.addExact(quote.amountMinor(), waiting.amountMinor());
         BigDecimal rate = quote.terms().commissionRate();
         long commission = BigDecimal.valueOf(amount).multiply(rate).setScale(0, RoundingMode.HALF_UP).longValueExact();
-        Breakdown breakdown = new Breakdown(amount, facts.waitedSeconds(),
-                quote.terms().freeWaitingMinutes() * 60L, 0);
-        FinalFare fare = new FinalFare(UUID.randomUUID(), facts.orderId(), 1, quote.id(), POLICY_AGREED_PRICE, amount,
+        Breakdown breakdown = new Breakdown(quote.amountMinor(), facts.waitedSeconds(), waiting.freeSeconds(),
+                waiting.chargedSeconds(), waiting.amountMinor());
+        String policy = WaitingCharge.configured(quote.terms()) ? POLICY_AGREED_PLUS_WAITING : POLICY_AGREED_PRICE;
+        FinalFare fare = new FinalFare(UUID.randomUUID(), facts.orderId(), 1, quote.id(), policy, amount,
                 quote.currency(), rate, commission, amount - commission, breakdown);
         jdbc.sql("""
                         insert into final_fare (id, order_id, version, quote_id, policy, amount_minor, currency,

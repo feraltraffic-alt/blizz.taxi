@@ -10,7 +10,10 @@ import java.util.UUID;
  */
 public interface FinalFares {
 
-    /** Pricing policy of version 1: the agreed price; waiting is recorded but not charged until Q-07. */
+    /** Version 1 policy: the agreed price plus paid waiting by the rule of the quote's tariff. */
+    String POLICY_AGREED_PLUS_WAITING = "M1_AGREED_PLUS_WAITING";
+
+    /** For a quote made before the waiting rule existed: the agreed price only. */
     String POLICY_AGREED_PRICE = "M1_AGREED_PRICE";
 
     /**
@@ -21,17 +24,20 @@ public interface FinalFares {
     }
 
     /**
-     * @param agreedMinor        the price of the quote
-     * @param waitingSeconds     waiting beyond nothing, as measured
-     * @param freeWaitingSeconds free waiting of the tariff snapshot
-     * @param waitingMinor       charged waiting; 0 under {@link #POLICY_AGREED_PRICE}
+     * @param agreedMinor           the price of the quote
+     * @param waitingSeconds        measured waiting, arrival to start
+     * @param freeWaitingSeconds    free waiting of the tariff snapshot
+     * @param chargedWaitingSeconds waiting charged after free time, steps and rounding
+     * @param waitingMinor          charge for the waiting; 0 under {@link #POLICY_AGREED_PRICE}
      */
-    record Breakdown(long agreedMinor, long waitingSeconds, long freeWaitingSeconds, long waitingMinor) {
+    record Breakdown(long agreedMinor, long waitingSeconds, long freeWaitingSeconds, long chargedWaitingSeconds,
+                     long waitingMinor) {
     }
 
     /**
-     * {@code commissionRate} is the snapshot from the quote's tariff terms (REQ-PRC-12);
-     * {@code commissionMinor} = round_half_up(amount × rate); {@code driverShareMinor} = amount − commission.
+     * {@code amountMinor} = agreed + waiting. {@code commissionRate} is the snapshot from the quote's tariff
+     * terms (REQ-PRC-12); {@code commissionMinor} = round_half_up(amount × rate), so waiting carries
+     * commission too; {@code driverShareMinor} = amount − commission.
      */
     record FinalFare(UUID id, UUID orderId, int version, UUID quoteId, String policy, long amountMinor,
                      String currency, BigDecimal commissionRate, long commissionMinor, long driverShareMinor,

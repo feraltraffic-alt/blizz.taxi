@@ -192,6 +192,8 @@ class OrderPricingTests {
         assertThat(quoted.getResponse().getStatus()).isEqualTo(201);
         Map<String, Object> quote = json.readValue(quoted.getResponse().getContentAsString(), Map.class);
         assertThat(quote).containsEntry("currency", "PLN").containsKeys("id", "amount_minor", "expires_at");
+        assertThat((Map<String, Object>) quote.get("waiting")).containsEntry("free_minutes", 3)
+                .containsEntry("step_seconds", 60).containsEntry("rounding", "UP");
 
         MvcResult created = mvc.perform(MockMvcRequestBuilders.post("/api/rider/v1/orders")
                 .header(HttpHeaders.AUTHORIZATION, bearer).contentType(MediaType.APPLICATION_JSON)

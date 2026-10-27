@@ -43,6 +43,7 @@ import taxi.blizz.platform.SubjectType;
 import taxi.blizz.pricing.TariffService.Change;
 import taxi.blizz.pricing.TariffService.Draft;
 import taxi.blizz.pricing.TariffService.Revision;
+import taxi.blizz.pricing.TariffService;
 import taxi.blizz.pricing.TariffService.Terms;
 import taxi.blizz.pricing.TariffService.VehicleClassDraft;
 
@@ -51,7 +52,7 @@ import taxi.blizz.pricing.TariffService.VehicleClassDraft;
 class PricingTests {
     private static final Instant NOW = Instant.parse("2026-10-26T12:00:00Z");
     private static final Terms TERMS = new Terms(2000, new BigDecimal("1000"), new BigDecimal("100"), 5000,
-            3, new BigDecimal("100"), 500, new BigDecimal("0.15"));
+            3, new BigDecimal("100"), 500, new BigDecimal("0.15"), 60, TariffService.WaitingRounding.UP);
     private static final Actor PAYER = new Actor(SubjectType.CLIENT, UUID.randomUUID());
 
     @Autowired TariffService tariffs;
@@ -114,7 +115,7 @@ class PricingTests {
         QuoteService.Quote old = quotes.create(UUID.randomUUID(), request(PAYER));
         tariffs.archive(change(original));
         Terms nextTerms = new Terms(4000, new BigDecimal("2000"), new BigDecimal("200"), 5000,
-                0, BigDecimal.ZERO, 0, new BigDecimal("0.30"));
+                0, BigDecimal.ZERO, 0, new BigDecimal("0.30"), 60, TariffService.WaitingRounding.UP);
         Revision next = published(nextTerms);
         QuoteService.Quote latest = quotes.create(UUID.randomUUID(), request(PAYER));
         assertThat(latest.tariffVersionId()).isEqualTo(next.id());
@@ -288,8 +289,15 @@ class PricingTests {
 
     @Test
     void badTermsRangesCurrencyAndCrossCityClassAreRejected() {
-        Terms negative = new Terms(-1, BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO);
+        Terms negative = new Terms(-1, BigDecimal.ZERO, BigDecimal.ZERO, 0, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO, 60,
+                TariffService.WaitingRounding.UP);
         reject(() -> draft(negative, NOW, null), ErrorCode.VALIDATION_FAILED);
+        for (Terms badWaiting : List.of(
+                new Terms(2000, BigDecimal.ONE, BigDecimal.ONE, 0, 3, BigDecimal.ONE, 0, BigDecimal.ZERO, 0,
+                        TariffService.WaitingRounding.UP),
+                new Terms(2000, BigDecimal.ONE, BigDecimal.ONE, 0, 3, BigDecimal.ONE, 0, BigDecimal.ZERO, 60, null))) {
+            reject(() -> draft(badWaiting, NOW, null), ErrorCode.VALIDATION_FAILED);
+        }
         reject(() -> draft(TERMS, NOW, NOW), ErrorCode.VALIDATION_FAILED);
         reject(() -> tariffs.createDraft(new Draft(UUID.randomUUID(), manager, 0, city, classId, "USD",
                 NOW, null, TERMS, "Wrong city currency")), ErrorCode.VALIDATION_FAILED);
