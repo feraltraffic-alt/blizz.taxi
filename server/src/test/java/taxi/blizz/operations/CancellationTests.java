@@ -95,6 +95,7 @@ class CancellationTests {
     }
 
     private Ride ride(String driverName) {
+        rides.city("test-cancellation", "UAH", -60); // earlier drivers go offline, so the new one gets the offer
         TestRides.Driver driver = rides.driverNear(PICKUP);
         jdbc.sql("update driver set name = :name where id = :id").param("name", driverName)
                 .param("id", driver.actor().id()).update();
@@ -229,7 +230,7 @@ class CancellationTests {
         assertThat(created.code()).isEqualTo(code);
         assertThat(reasons.active(Audience.DRIVER)).extracting(CancelReasons.Reason::code).contains(code);
         assertCode(() -> reasons.create(admin, UUID.randomUUID(), new CancelReasons.Draft(Audience.DRIVER, code,
-                Map.of("ru", "Ещё раз"), DriverOutcome.RETURN_TO_SEARCH, true, 50), "x"), ErrorCode.STATE_CONFLICT);
+                Map.of("ru", "Ещё раз", "uk", "Ще раз"), DriverOutcome.RETURN_TO_SEARCH, true, 50), "x"), ErrorCode.STATE_CONFLICT);
 
         assertCode(() -> reasons.update(admin, UUID.randomUUID(), created.id(), created.version() + 1,
                 new CancelReasons.Draft(null, null, Map.of("ru", "Пробка"), DriverOutcome.RETURN_TO_SEARCH, false, 50),
