@@ -108,4 +108,5 @@ TIP=$(api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(u
 admin_token >/dev/null
 OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR" >/dev/null; expect 200
+api GET "/api/operator/v1/drivers/live?city_id=5a000000-0000-4000-8000-000000000001" "$OPERATOR" >/dev/null; expect 200
 note "Done: order $ORDER."
