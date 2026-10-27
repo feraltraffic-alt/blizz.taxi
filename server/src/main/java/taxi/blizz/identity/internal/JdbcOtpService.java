@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.identity.ChallengeIssued;
 import taxi.blizz.identity.OtpAudience;
+import taxi.blizz.identity.OtpChannel;
 import taxi.blizz.identity.OtpDelivery;
 import taxi.blizz.identity.OtpPurpose;
 import taxi.blizz.identity.OtpService;
@@ -68,7 +69,13 @@ class JdbcOtpService implements OtpService {
     @Override
     public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef,
                                             String clientIp) {
-        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp);
+        return requestChallenge(audience, rawPhone, deviceRef, clientIp, null);
+    }
+
+    @Override
+    public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp,
+                                            OtpChannel preferred) {
+        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp, preferred);
     }
 
     @Override
@@ -80,12 +87,12 @@ class JdbcOtpService implements OtpService {
         OtpAudience audience = audienceOf(subject);
         PhoneNumber phone = currentPhone(subject)
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The account has no phone"));
-        return issue(audience, phone, purpose, deviceRef, clientIp);
+        return issue(audience, phone, purpose, deviceRef, clientIp, null);
     }
 
     /** A new challenge of the purpose; the code is sent after commit. Budgets are shared by all purposes. */
     private ChallengeIssued issue(OtpAudience audience, PhoneNumber phone, OtpPurpose purpose, String deviceRef,
-                                  String clientIp) {
+                                  String clientIp, OtpChannel preferred) {
         return tx.execute(status -> {
             OffsetDateTime now = now();
             enforceLimits(audience, phone, deviceRef, clientIp, now);
@@ -114,7 +121,7 @@ class JdbcOtpService implements OtpService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    delivery.send(phone, code, audience);
+                    delivery.send(challengeId, phone, code, audience, preferred);
                 }
             });
             return new ChallengeIssued(challengeId, expiresAt, now.plus(properties.resendAfter()));

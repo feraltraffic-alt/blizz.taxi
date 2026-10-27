@@ -17,6 +17,13 @@ public interface OtpService {
     ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp);
 
     /**
+     * As {@link #requestChallenge(OtpAudience, String, String, String)}, by the channel the person asked for
+     * ("call me instead", ADR 0012 Q-18); null for the configured one. Same resend delay and limits.
+     */
+    ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp,
+                                     OtpChannel preferred);
+
+    /**
      * Checks the code. A wrong code still counts as an attempt even though the call fails.
      *
      * @throws taxi.blizz.platform.DomainException with {@code OTP_INVALID} for a wrong, expired,
