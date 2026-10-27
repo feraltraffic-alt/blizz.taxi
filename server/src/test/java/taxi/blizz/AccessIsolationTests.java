@@ -167,7 +167,9 @@ class AccessIsolationTests {
             }
             checked += check(call, ids, driverToken, strangerDriver, problems);
         }
-        assertThat(problems).as("calls with another person's ids").isEmpty();
+        // On one line: CI shows the first line of a failure only.
+        assertThat(problems).as("calls with another person's ids: " + String.join(" | ", problems)
+                .replace('\n', ' ')).isEmpty();
         assertThat(checked).as("paths checked").isGreaterThan(40);
     }
 
@@ -287,6 +289,7 @@ class AccessIsolationTests {
     }
 
     private static String abbreviate(String text) {
-        return text.length() > 200 ? text.substring(0, 200) + "…" : text;
+        String flat = text.replace('\n', ' ');
+        return flat.length() > 160 ? flat.substring(0, 160) + "…" : flat;
     }
 }
