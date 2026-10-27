@@ -101,7 +101,8 @@ class JdbcOrders implements Orders {
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         String fingerprint = new QuoteService.Request(city.id(), vehicleClass.id(), order.pickup(), order.dropoff(),
                 actor, order.pickupAt()).fingerprint();
-        OrderView created = commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
+        OrderView result = commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class,
+                () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
             OffsetDateTime now = core.now();
@@ -198,9 +199,9 @@ class JdbcOrders implements Orders {
         });
         if (card) {
             // The hold is asked for outside the transaction; the worker retries if this attempt fails.
-            cardPayments.processNow(created.id());
+            cardPayments.processNow(result.id());
         }
-        return created;
+        return result;
     }
 
     /** Decides the channel from who is asking; the requested channel is accepted only where it fits. */
