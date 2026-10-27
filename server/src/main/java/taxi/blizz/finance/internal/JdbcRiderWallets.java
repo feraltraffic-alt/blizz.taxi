@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
+import taxi.blizz.finance.DriverDebts;
 import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.finance.Ledger.Line;
@@ -39,10 +40,11 @@ class JdbcRiderWallets implements RiderWallets {
     private final AccountDirectory accounts;
     private final CityCatalog cities;
     private final AuditLog audit;
+    private final DriverDebts debts;
     private final Clock clock;
 
     JdbcRiderWallets(JdbcClient jdbc, Ledger ledger, IdempotentCommands commands, StaffAccess staff,
-                     AccountDirectory accounts, CityCatalog cities, AuditLog audit, Clock clock) {
+                     AccountDirectory accounts, CityCatalog cities, AuditLog audit, DriverDebts debts, Clock clock) {
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.commands = commands;
@@ -50,6 +52,7 @@ class JdbcRiderWallets implements RiderWallets {
         this.accounts = accounts;
         this.cities = cities;
         this.audit = audit;
+        this.debts = debts;
         this.clock = clock;
     }
 
@@ -146,6 +149,35 @@ class JdbcRiderWallets implements RiderWallets {
                         values (:order, :client, :currency, :amount, 'RESERVED', :now)""")
                 .param("order", orderId).param("client", clientId).param("currency", currency)
                 .param("amount", amountMinor).param("now", now).update();
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void payTip(UUID clientId, UUID driverId, UUID orderId, UUID tipId, String currency, long amountMinor) {
+        if (amountMinor <= 0) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The tip must be positive");
+        }
+        ensureAccount(clientId, currency, now());
+        jdbc.sql("select 1 from rider_wallet where client_id = :client and currency = :currency for update")
+                .param("client", clientId).param("currency", currency).query(Integer.class).single();
+        long available = available(clientId, currency);
+        if (amountMinor > available) {
+            throw new DomainException(ErrorCode.WALLET_INSUFFICIENT,
+                    "Not enough on the balance (" + available + " available); choose another way to pay");
+        }
+        if (ledger.post(new Ledger.Posting("tip:" + tipId, "TIP", orderId, currency, "Tip for the driver",
+                List.of(Line.debit(Account.RIDER_WALLET, clientId, amountMinor),
+                        Line.credit(Account.DRIVER_PAYABLE, driverId, amountMinor))))) {
+            debts.refresh(driverId, currency);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long available(UUID clientId, String currency) {
+        long balance = ledger.balances(Account.RIDER_WALLET, clientId).stream()
+                .filter(b -> b.currency().equals(currency)).mapToLong(b -> b.creditMinor() - b.debitMinor()).sum();
+        return Math.max(0, balance - reserved(clientId, currency));
     }
 
     @Override

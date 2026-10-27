@@ -1,0 +1,107 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — tip components
+  version: 1.0.0
+  description: >-
+    Tips after a fulfilled trip (ADR 0012, Q-04): 10, 15, 20 or 25 % of the trip's cost rounded up to a whole unit,
+    or an own amount from one unit to the cost rounded up; within the window of the service settings; once per order;
+    paid the way the order was; all of it goes to the driver.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    TipMethod:
+      description: >-
+        CARD — a separate charge of the order's card; WALLET — from the bonus account (an order paid wholly with
+        bonuses, when it has enough); CASH and TERMINAL — handed to the driver, only recorded.
+      type: string
+      enum: [CARD, WALLET, CASH, TERMINAL]
+
+    Tip:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, amount_minor, currency, method, state, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        method:
+          $ref: "#/components/schemas/TipMethod"
+        state:
+          description: >-
+            PENDING — the card charge is on its way; PAID; FAILED — the card declined, another tip may be left;
+            RECORDED — cash or terminal.
+          type: string
+          enum: [PENDING, PAID, FAILED, RECORDED]
+        failure_reason:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    TipOptions:
+      type: object
+      additionalProperties: false
+      required: [order_id, currency, trip_cost_minor, presets, min_minor, max_minor, method, available_until, open]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        trip_cost_minor:
+          description: The final fare less the service's discount.
+          type: integer
+          format: int64
+        presets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [percent, amount_minor]
+            properties:
+              percent:
+                type: integer
+                enum: [10, 15, 20, 25]
+              amount_minor:
+                description: The percent of the cost, rounded up to a whole unit.
+                type: integer
+                format: int64
+        min_minor:
+          type: integer
+          format: int64
+        max_minor:
+          type: integer
+          format: int64
+        method:
+          $ref: "#/components/schemas/TipMethod"
+        available_until:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        open:
+          description: A tip can be left now.
+          type: boolean
+        tip:
+          description: The tip already left, if any.
+          oneOf:
+            - $ref: "#/components/schemas/Tip"
+            - type: "null"
+
+    LeaveTip:
+      type: object
+      additionalProperties: false
+      required: [command_id, amount_minor]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          description: A preset's amount or an own one from min_minor to max_minor.
+          type: integer
+          format: int64

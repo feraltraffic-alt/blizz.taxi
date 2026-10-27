@@ -49,6 +49,15 @@ public interface RiderWallets {
     void reserve(UUID clientId, UUID orderId, String currency, long amountMinor);
 
     /**
+     * A tip paid with bonuses (ADR 0012), in the caller's transaction: the rider's available bonuses go to the
+     * driver's balance at once. Fails with {@code WALLET_INSUFFICIENT} when fewer are available; once per tip.
+     */
+    void payTip(UUID clientId, UUID driverId, UUID orderId, UUID tipId, String currency, long amountMinor);
+
+    /** What the rider may spend now in {@code currency}: the balance less what orders set aside. */
+    long available(UUID clientId, String currency);
+
+    /**
      * Bonuses of a promotion for a trip (ADR 0009), in the caller's transaction; the service's expense. Once per order
      * and promotion: returns {@code false} when already credited.
      */

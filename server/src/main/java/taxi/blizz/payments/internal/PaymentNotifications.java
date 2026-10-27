@@ -86,7 +86,7 @@ class PaymentNotifications {
     private String apply(Merchant merchant, PaymentProvider.Notification n) {
         Optional<UUID> operation = jdbc.sql("""
                         select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
-                        where o.reference = :reference and i.merchant_id = :merchant and o.type in ('AUTH', 'CHARGE')""")
+                        where o.reference = :reference and i.merchant_id = :merchant and o.type in ('AUTH', 'CHARGE', 'TIP')""")
                 .param("reference", n.reference()).param("merchant", merchant.id()).query(UUID.class).optional();
         if (operation.isPresent()) {
             payments.apply(operation.get(), n.outcome(), n.status(), n.reasonCode(), n.reason());

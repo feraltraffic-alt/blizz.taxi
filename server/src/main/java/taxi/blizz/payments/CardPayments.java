@@ -16,6 +16,11 @@ public interface CardPayments {
     String HOLD_DECLINED = "CardHoldDeclined";
     /** After the trip: {@code paid_minor} of {@code due_minor} was taken from the card (ADR 0008, part C). */
     String PAYMENT_SETTLED = "CardPaymentSettled";
+    /**
+     * A tip charged to the order's saved card (ADR 0012): {@code tip_id}, {@code order_id} and {@code paid} (false —
+     * declined, with {@code reason}).
+     */
+    String TIP_SETTLED = "CardTipSettled";
 
     record Intent(UUID id, UUID orderId, String state, long holdMinor, String currency, String maskedPan) {
     }
@@ -33,6 +38,13 @@ public interface CardPayments {
      * asked for is released as soon as it succeeds (T-23). Nothing happens when there is no hold.
      */
     void releaseHold(UUID orderId, String reason);
+
+    /**
+     * Within the caller's transaction: a separate charge of {@code amountMinor} for a tip to the card the order was
+     * paid with (ADR 0012); the result comes as {@link #TIP_SETTLED}. VALIDATION_FAILED when the order has no card
+     * payment or the currency differs.
+     */
+    void requestTip(UUID orderId, UUID tipId, long amountMinor, String currency);
 
     /** Sends what is due for the order now rather than at the worker's next round; outside any transaction. */
     void processNow(UUID orderId);

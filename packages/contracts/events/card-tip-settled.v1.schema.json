@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/card-tip-settled.v1.schema.json",
+  "title": "CardTipSettled v1",
+  "description": "The bank's final answer to a tip charged to the order's card (ADR 0012). Published by payments; consumed by operations, which marks the tip PAID or FAILED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tip_id", "order_id", "intent_id", "paid"],
+  "properties": {
+    "tip_id": { "type": "string", "format": "uuid" },
+    "order_id": { "type": "string", "format": "uuid" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "paid": { "type": "boolean" },
+    "reason": { "type": "string" }
+  },
+  "examples": [
+    { "tip_id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f",
+      "intent_id": "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b", "paid": true }
+  ]
+}

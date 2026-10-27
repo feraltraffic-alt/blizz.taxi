@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/tip-paid.v1.schema.json",
+  "title": "TipPaid v1",
+  "description": "A tip is paid (CARD, WALLET) or recorded (CASH, TERMINAL) — ADR 0012. Published by operations once per tip; finance credits the driver's balance for CARD (WALLET is posted when the tip is left; cash and terminal tips never pass through the service).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tip_id", "order_id", "driver_id", "payer_client_id", "amount_minor", "currency", "method"],
+  "properties": {
+    "tip_id": { "type": "string", "format": "uuid" },
+    "order_id": { "type": "string", "format": "uuid" },
+    "driver_id": { "type": "string", "format": "uuid" },
+    "payer_client_id": { "type": "string", "format": "uuid" },
+    "amount_minor": { "type": "integer", "minimum": 1 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "method": { "type": "string", "enum": ["CARD", "WALLET", "CASH", "TERMINAL"] }
+  },
+  "examples": [
+    { "tip_id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f",
+      "driver_id": "2c3d4e5f-6071-4829-9a0b-1c2d3e4f5a6b", "payer_client_id": "3d4e5f60-7182-493a-8b1c-2d3e4f5a6b7c",
+      "amount_minor": 1600, "currency": "UAH", "method": "CARD" }
+  ]
+}

@@ -95,6 +95,12 @@ api GET /api/rider/v1/orders "$RIDER" >/dev/null; expect 200
 api GET /api/driver/v1/trips "$DRIVER" >/dev/null; expect 200
 sleep 3 # the ledger posts the fare from the TripCompleted event
 api GET /api/driver/v1/balance "$DRIVER" >/dev/null; expect 200
+
+say "The rider leaves a 10 % tip in cash: it is only recorded"
+TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
+TIP=$(api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(uuid)\",
+  \"amount_minor\":$(jq '.presets[0].amount_minor' <<<"$TIPS")}"); expect 201
+[[ "$(jq -r .state <<<"$TIP")" == "RECORDED" && "$(jq -r .method <<<"$TIP")" == "CASH" ]]
 admin_token >/dev/null
 OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR" >/dev/null; expect 200

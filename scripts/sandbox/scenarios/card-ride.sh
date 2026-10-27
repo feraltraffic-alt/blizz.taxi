@@ -70,4 +70,17 @@ expect 200
 say "The bank takes the money after the trip"
 wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state PAID
 api GET /api/driver/v1/balance "$ANDRII" >/dev/null; expect 200
+
+say "The rider tips 15 % on the same card; all of it goes to Andrii"
+BEFORE=$(api GET /api/driver/v1/balance/history "$ANDRII" | jq '[.balances[] | select(.currency == "UAH") | .balance_minor] | add // 0')
+TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
+[[ "$(jq -r .method <<<"$TIPS")" == "CARD" ]]
+TIP_AMOUNT=$(jq '.presets[] | select(.percent == 15) | .amount_minor' <<<"$TIPS")
+api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(uuid)\",\"amount_minor\":$TIP_AMOUNT}" \
+  >/dev/null
+expect 201
+wait_for "$RIDER" "/api/rider/v1/orders/$ORDER/tip" .tip.state PAID
+wait_for "$ANDRII" /api/driver/v1/balance/history \
+  "([.balances[] | select(.currency == \"UAH\") | .balance_minor] | add // 0) - $BEFORE" "$TIP_AMOUNT"
+go_offline "$ANDRII"
 note "Done: card order $ORDER."

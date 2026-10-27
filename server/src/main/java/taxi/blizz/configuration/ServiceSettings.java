@@ -67,10 +67,19 @@ public interface ServiceSettings {
     record Ratings(int editWindowHours) {
     }
 
-    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
+    /** Hours after trip completion during which the rider may leave a tip (ADR 0012, Q-04). */
+    record Tips(int windowHours) {
+    }
+
+    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips) {
         /** Source compatibility for callers written before ratings became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
-            this(brand, languages, calls, preorders, null);
+            this(brand, languages, calls, preorders, null, null);
+        }
+
+        /** Source compatibility for callers written before tips became configurable. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
+            this(brand, languages, calls, preorders, ratings, null);
         }
     }
 

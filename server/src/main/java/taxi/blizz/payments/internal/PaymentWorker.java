@@ -138,6 +138,8 @@ public class PaymentWorker {
                     "Taxi ride", holdSeconds(c.holdUntil()), serviceUrl);
             case "CHARGE" -> provider.charge(c.merchant(), op.reference(), c.token(), op.amount(), customer,
                     "Taxi ride, the rest of the fare", serviceUrl);
+            case "TIP" -> provider.charge(c.merchant(), op.reference(), c.token(), op.amount(), customer,
+                    "Tip for the driver", serviceUrl);
             case "SETTLE" -> provider.settle(c.merchant(), op.target(), op.amount());
             case "REFUND" -> provider.refund(c.merchant(), op.target(), op.amount(), "Hold released");
             default -> throw new IllegalStateException("Unknown operation " + op.type());
@@ -150,7 +152,7 @@ public class PaymentWorker {
         PaymentProvider.Result status = providers.of(c.merchant()).checkStatus(c.merchant(), op.target());
         if (status.providerStatus() == null) {
             return status.outcome() == PaymentProvider.Outcome.DECLINED && !"AUTH".equals(op.type())
-                    && !"CHARGE".equals(op.type())
+                    && !"CHARGE".equals(op.type()) && !"TIP".equals(op.type())
                     ? PaymentProvider.Result.unknown("The provider does not know the transaction") : status;
         }
         String s = status.providerStatus().toLowerCase(java.util.Locale.ROOT);
@@ -161,7 +163,7 @@ public class PaymentWorker {
                 case "inprocessing", "pending", "created" -> PaymentProvider.Outcome.PENDING;
                 default -> PaymentProvider.Outcome.UNKNOWN;
             };
-            case "CHARGE", "SETTLE" -> switch (s) {
+            case "CHARGE", "SETTLE", "TIP" -> switch (s) {
                 case "approved", "refunded", "voided" -> PaymentProvider.Outcome.SUCCEEDED;
                 case "declined", "expired" -> PaymentProvider.Outcome.DECLINED;
                 default -> PaymentProvider.Outcome.PENDING;

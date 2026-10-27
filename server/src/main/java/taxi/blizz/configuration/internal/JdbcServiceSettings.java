@@ -36,7 +36,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Languages("ru", SUPPORTED_LANGUAGES),
             new Calls(CallMode.DIRECT, null),
             new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60),
-            new Ratings(24));
+            new Ratings(24),
+            new Tips(24));
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -163,14 +164,19 @@ class JdbcServiceSettings implements ServiceSettings {
         if (ratings.editWindowHours() < 1 || ratings.editWindowHours() > 720) {
             throw invalid("Ratings: edit_window_hours must be between 1 and 720");
         }
-        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings);
+        Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
+        if (tips.windowHours() < 1 || tips.windowHours() > 720) {
+            throw invalid("Tips: window_hours must be between 1 and 720");
+        }
+        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips);
     }
 
     /** Versions saved before a section existed get its defaults. */
     private static Settings complete(Settings s) {
         Preorders preorders = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
         Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings);
+        Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips);
     }
 
     private static String color(String value, boolean required) {

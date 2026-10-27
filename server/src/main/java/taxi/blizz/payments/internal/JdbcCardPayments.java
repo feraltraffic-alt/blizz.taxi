@@ -122,6 +122,24 @@ class JdbcCardPayments implements CardPayments {
                 .optional();
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requestTip(UUID orderId, UUID tipId, long amountMinor, String currency) {
+        record Found(UUID id, String currency) {
+        }
+        Found intent = jdbc.sql("select id, currency from payment_intent where order_id = :order")
+                .param("order", orderId)
+                .query((rs, i) -> new Found(rs.getObject(1, UUID.class), rs.getString(2)))
+                .optional().orElseThrow(() -> invalid("The order was not paid by card"));
+        if (!intent.currency().equals(currency)) {
+            throw invalid("The tip is in " + currency + ", the card payment in " + intent.currency());
+        }
+        UUID id = UUID.randomUUID();
+        createOperation(id, intent.id(), "TIP", "tip-" + id, null, amountMinor);
+        jdbc.sql("update payment_operation set tip_id = :tip where id = :id")
+                .param("tip", tipId).param("id", id).update();
+    }
+
     // ---------------------------------------------------------------- shared with the worker and notifications
 
     void createOperation(UUID id, UUID intentId, String type, String reference, String target, long amountMinor) {
@@ -293,6 +311,19 @@ class JdbcCardPayments implements CardPayments {
             case "SETTLE", "CHARGE" -> {
                 if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
                     continueCapture(intent.id(), op.type(), state, 0);
+                }
+            }
+            case "TIP" -> {
+                if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
+                    UUID tipId = jdbc.sql("select tip_id from payment_operation where id = :id")
+                            .param("id", operationId).query(UUID.class).single();
+                    Map<String, Object> extra = new java.util.LinkedHashMap<>();
+                    extra.put("tip_id", tipId.toString());
+                    extra.put("paid", "SUCCEEDED".equals(state));
+                    if ("DECLINED".equals(state)) {
+                        extra.put("reason", reason == null ? "Declined" : reason);
+                    }
+                    publish(TIP_SETTLED, intent.orderId(), intent.id(), extra);
                 }
             }
             default -> {

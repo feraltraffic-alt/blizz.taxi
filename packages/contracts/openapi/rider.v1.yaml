@@ -967,6 +967,63 @@ paths:
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
         "409": {$ref: "./common.yaml#/components/responses/Conflict"}
 
+  /api/rider/v1/orders/{order_id}/tip:
+    parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+    get:
+      operationId: getTipOptions
+      summary: The tip screen of a fulfilled trip
+      description: Presets, the bounds of an own amount, how the tip would be paid, until when; the tip already left.
+      tags: [Tips]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./tips.yaml#/components/schemas/TipOptions"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      operationId: leaveTip
+      summary: Leave a tip for the driver
+      description: >-
+        Once per order (a declined card tip may be left again), within the window after the trip. By card the
+        answer is PENDING until the bank answers — read the tip screen again. Without enough bonuses the order's own
+        method is used.
+      tags: [Tips]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./tips.yaml#/components/schemas/LeaveTip"
+      responses:
+        "201":
+          description: Left.
+          content:
+            application/json:
+              schema:
+                $ref: "./tips.yaml#/components/schemas/Tip"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/rider/v1/safety-contacts:
     get:
       operationId: getRiderSafetyContacts
@@ -1077,6 +1134,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
 
 tags:
+  - name: Tips
+    description: Tips for the driver after the trip (ADR 0012)
   - name: Safety
     description: The safety button — support and emergency contacts (REQ-RID-09)
   - name: Wallet
