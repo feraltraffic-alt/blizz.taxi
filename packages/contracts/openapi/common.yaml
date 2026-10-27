@@ -106,6 +106,8 @@ components:
       description: |
         Domain error codes (section 22.4). VALIDATION_FAILED, UNAUTHENTICATED, OTP_INVALID, PICKUP_TOO_FAR and
         INTERNAL_ERROR are additions to the list in 22.4.
+        ACTIVE_ORDER_LIMIT (409): the payer already has active_orders_per_payer orders not in a final state, pre-orders
+        included (ADR 0012); it replaces ORDER_ALREADY_ACTIVE, which is no longer returned.
         ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
         pending), from the app or by an operator; a caller without an account is not affected.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
@@ -117,6 +119,7 @@ components:
         - QUOTE_EXPIRED
         - QUOTE_MISMATCH
         - ORDER_ALREADY_ACTIVE
+        - ACTIVE_ORDER_LIMIT
         - OFFER_EXPIRED
         - OFFER_REVOKED
         - ORDER_ALREADY_ASSIGNED
