@@ -111,7 +111,11 @@ class SupportAttachments {
         }
         List<StoredFile> result = new ArrayList<>(ids.size());
         for (UUID id : ids) {
-            result.add(files.requireAttachable(owner, id, FilePurpose.SUPPORT_ATTACHMENT));
+            try {
+                result.add(files.requireAttachable(owner, id, FilePurpose.SUPPORT_ATTACHMENT));
+            } catch (DomainException e) {
+                throw invalid("Attachment is not available for this message");
+            }
         }
         return List.copyOf(result);
     }
