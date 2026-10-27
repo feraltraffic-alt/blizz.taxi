@@ -72,7 +72,7 @@ components:
     Reason:
       type: object
       additionalProperties: false
-      required: [id, audience, code, labels, driver_outcome, active, sort_order, version]
+      required: [id, audience, code, labels, driver_outcome, operator_fault, active, sort_order, version]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -87,6 +87,9 @@ components:
           $ref: "#/components/schemas/Labels"
         driver_outcome:
           $ref: "#/components/schemas/DriverOutcome"
+        operator_fault:
+          description: STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account.
+          type: boolean
         active:
           description: Inactive reasons are hidden from the apps; reasons are never deleted.
           type: boolean
@@ -110,7 +113,7 @@ components:
     CreateReason:
       type: object
       additionalProperties: false
-      required: [command_id, audience, code, labels, active, sort_order, reason]
+      required: [command_id, audience, code, labels, operator_fault, active, sort_order, reason]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -124,6 +127,9 @@ components:
           $ref: "#/components/schemas/Labels"
         driver_outcome:
           $ref: "#/components/schemas/DriverOutcome"
+        operator_fault:
+          type: boolean
+          default: false
         active:
           type: boolean
         sort_order:
@@ -138,7 +144,7 @@ components:
     UpdateReason:
       type: object
       additionalProperties: false
-      required: [command_id, expected_version, labels, active, sort_order, reason]
+      required: [command_id, expected_version, labels, operator_fault, active, sort_order, reason]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -150,6 +156,8 @@ components:
           $ref: "#/components/schemas/Labels"
         driver_outcome:
           $ref: "#/components/schemas/DriverOutcome"
+        operator_fault:
+          type: boolean
         active:
           type: boolean
         sort_order:
