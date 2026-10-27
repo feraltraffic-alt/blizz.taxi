@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
@@ -267,11 +266,11 @@ class CallRecordingTests {
         UUID callId = call(silent).id();
         fetchUntilSettled();
         Map<String, Object> pending = jdbc.sql("""
-                        select state, attempts, next_attempt_at from call_recording where call_id = :c""")
+                        select state, attempts, next_attempt_at > now() + interval '20 seconds' as later
+                        from call_recording where call_id = :c""")
                 .param("c", callId).query().singleRow();
-        assertThat(pending).containsEntry("state", "PENDING").containsEntry("attempts", 1);
-        assertThat(((OffsetDateTime) pending.get("next_attempt_at"))).as("tried again later")
-                .isAfter(OffsetDateTime.now().plusSeconds(20));
+        assertThat(pending).containsEntry("state", "PENDING").containsEntry("attempts", 1)
+                .as("tried again later").containsEntry("later", true);
 
         // Still no file an hour later: there is none.
         jdbc.sql("""
