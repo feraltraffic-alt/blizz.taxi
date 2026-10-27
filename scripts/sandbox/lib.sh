@@ -132,3 +132,14 @@ go_online() {
 move() {
     api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
 }
+
+# go_offline TOKEN — closes the driver's open work session, so the next scenario starts without him online.
+go_offline() {
+    local current id
+    current=$(api GET /api/driver/v1/work-sessions/current "$1")
+    id=$(jq -r '.session_id // empty' <<<"$current" 2>/dev/null || true)
+    [[ -n "$id" ]] || return 0
+    api POST "/api/driver/v1/work-sessions/$id/close" "$1" \
+        "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
+    expect 200
+}
