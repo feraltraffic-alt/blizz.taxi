@@ -130,4 +130,26 @@ class FareCalculatorTests {
         assertThat(FareCalculator.calculate(t, new Estimate(100, 10),
                 facts(false, 1, 0, java.util.Set.of(STATION), java.util.Set.of())).amountMinor()).isEqualTo(7500);
     }
+
+    @Test
+    void aPreorderSurchargeIsAFixedAmountOrACoefficient() {
+        Estimate route = new Estimate(5000, 600); // 8000 in the city
+        Terms fixed = new Terms(2000, new BigDecimal("1000"), new BigDecimal("100"), 5000, 3, new BigDecimal("100"),
+                500, new BigDecimal("0.15"), 60, TariffService.WaitingRounding.UP, 3000, new BigDecimal("1500"),
+                java.util.List.of(), new TariffService.PreorderSurcharge(TariffService.SurchargeMode.FIXED, 2500, null));
+        Terms coefficient = new Terms(2000, new BigDecimal("1000"), new BigDecimal("100"), 5000, 3,
+                new BigDecimal("100"), 500, new BigDecimal("0.15"), 60, TariffService.WaitingRounding.UP, 3000,
+                new BigDecimal("1500"), java.util.List.of(),
+                new TariffService.PreorderSurcharge(TariffService.SurchargeMode.COEFFICIENT, 0, new BigDecimal("1.25")));
+        FareCalculator.Facts later = new FareCalculator.Facts(false, 1, 0, java.util.Set.of(), java.util.Set.of(), true);
+        FareCalculator.Facts now = new FareCalculator.Facts(false, 1, 0, java.util.Set.of(), java.util.Set.of(), false);
+
+        assertThat(FareCalculator.calculate(fixed, route, now).amountMinor()).isEqualTo(8000);
+        var pre = FareCalculator.calculate(fixed, route, later);
+        assertThat(pre.amountMinor()).isEqualTo(10_500);
+        assertThat(pre.breakdown().preorder()).isTrue();
+        assertThat(pre.breakdown().zoneFees()).singleElement()
+                .satisfies(f -> assertThat(f.mode()).isEqualTo("PREORDER_FIXED"));
+        assertThat(FareCalculator.calculate(coefficient, route, later).amountMinor()).isEqualTo(10_000);
+    }
 }

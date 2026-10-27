@@ -35,10 +35,21 @@ public interface TariffService {
     record Terms(long pickupMinor, BigDecimal perKmMinor, BigDecimal perMinuteMinor, long minimumMinor,
                  int freeWaitingMinutes, BigDecimal waitingPerMinuteMinor, long cancellationFeeMinor,
                  BigDecimal commissionRate, int waitingStepSeconds, WaitingRounding waitingRounding,
-                 long pickupOutsideMinor, BigDecimal perKmOutsideMinor, List<ZoneSurcharge> zoneSurcharges) {
+                 long pickupOutsideMinor, BigDecimal perKmOutsideMinor, List<ZoneSurcharge> zoneSurcharges,
+                 PreorderSurcharge preorderSurcharge) {
 
         public Terms {
             zoneSurcharges = zoneSurcharges == null ? List.of() : List.copyOf(zoneSurcharges);
+        }
+
+        /** Terms without a pre-order surcharge. */
+        public Terms(long pickupMinor, BigDecimal perKmMinor, BigDecimal perMinuteMinor, long minimumMinor,
+                     int freeWaitingMinutes, BigDecimal waitingPerMinuteMinor, long cancellationFeeMinor,
+                     BigDecimal commissionRate, int waitingStepSeconds, WaitingRounding waitingRounding,
+                     long pickupOutsideMinor, BigDecimal perKmOutsideMinor, List<ZoneSurcharge> zoneSurcharges) {
+            this(pickupMinor, perKmMinor, perMinuteMinor, minimumMinor, freeWaitingMinutes, waitingPerMinuteMinor,
+                    cancellationFeeMinor, commissionRate, waitingStepSeconds, waitingRounding, pickupOutsideMinor,
+                    perKmOutsideMinor, zoneSurcharges, null);
         }
 
         /** Terms with the same rates in and out of the city and no zone surcharges. */
@@ -47,7 +58,7 @@ public interface TariffService {
                      BigDecimal commissionRate, int waitingStepSeconds, WaitingRounding waitingRounding) {
             this(pickupMinor, perKmMinor, perMinuteMinor, minimumMinor, freeWaitingMinutes, waitingPerMinuteMinor,
                     cancellationFeeMinor, commissionRate, waitingStepSeconds, waitingRounding, pickupMinor, perKmMinor,
-                    List.of());
+                    List.of(), null);
         }
     }
 
@@ -59,6 +70,10 @@ public interface TariffService {
      */
     record ZoneSurcharge(UUID zoneId, SurchargeMode mode, long amountMinor, BigDecimal coefficient,
                          boolean onPickup, boolean onDropoff) {
+    }
+
+    /** The surcharge of a pre-order (ADR 0006): a fixed amount or a coefficient; null in the terms = none. */
+    record PreorderSurcharge(SurchargeMode mode, long amountMinor, BigDecimal coefficient) {
     }
 
     enum SurchargeMode {

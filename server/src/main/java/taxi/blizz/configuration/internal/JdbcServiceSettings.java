@@ -34,7 +34,8 @@ class JdbcServiceSettings implements ServiceSettings {
     static final Settings DEFAULTS = new Settings(
             new Brand("Blizz Taxi", "#111111", "#FFFFFF", null, null, null, null, null, null, null),
             new Languages("ru", SUPPORTED_LANGUAGES),
-            new Calls(CallMode.DIRECT, null));
+            new Calls(CallMode.DIRECT, null),
+            new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60));
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -59,7 +60,7 @@ class JdbcServiceSettings implements ServiceSettings {
         return jdbc.sql("""
                         select version, settings::text, changed_by, reason, changed_at
                         from service_settings order by version desc limit 1""")
-                .query((rs, i) -> new Version(rs.getLong(1), json.readValue(rs.getString(2), Settings.class),
+                .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
                 .optional()
                 .orElse(new Version(0, DEFAULTS, null, null, null));
@@ -103,7 +104,7 @@ class JdbcServiceSettings implements ServiceSettings {
                         select version, settings::text, changed_by, reason, changed_at
                         from service_settings order by version desc limit :limit""")
                 .param("limit", Math.max(1, Math.min(limit, 100)))
-                .query((rs, i) -> new Version(rs.getLong(1), json.readValue(rs.getString(2), Settings.class),
+                .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
                 .list();
     }
@@ -145,7 +146,25 @@ class JdbcServiceSettings implements ServiceSettings {
         if (c.mode() == CallMode.VIA_SERVICE_NUMBERS && servicePhone == null) {
             throw invalid("Calls through the service need the service phone number");
         }
-        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone));
+        Preorders p = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
+        if (p.dispatch() == null || p.thresholdMinutes() < 15 || p.thresholdMinutes() > 1440
+                || p.maxDaysAhead() < 1 || p.maxDaysAhead() > 30
+                || p.releaseMinutesBefore() < 5 || p.releaseMinutesBefore() > p.thresholdMinutes()
+                || p.confirmMinutesBefore() < 5 || p.confirmMinutesBefore() > p.thresholdMinutes()
+                || p.confirmWindowMinutes() < 1 || p.confirmWindowMinutes() >= p.confirmMinutesBefore()
+                || p.driverCancelUntilMinutesBefore() < p.confirmMinutesBefore()
+                || p.driverCancelUntilMinutesBefore() > 10_080) {
+            throw invalid("Pre-orders: threshold 15..1440 min, up to 30 days ahead; release and confirmation within the"
+                    + " threshold; the confirmation window shorter than the confirmation time; drivers may drop a"
+                    + " reservation no later than the confirmation");
+        }
+        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p);
+    }
+
+    /** Versions saved before a section existed get its defaults. */
+    private static Settings complete(Settings s) {
+        return s.preorders() != null ? s
+                : new Settings(s.brand(), s.languages(), s.calls(), DEFAULTS.preorders());
     }
 
     private static String color(String value, boolean required) {

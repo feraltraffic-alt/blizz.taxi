@@ -21,11 +21,20 @@ public interface QuoteService {
      */
     Quote consume(UUID quoteId, Actor payer, String fingerprint);
 
-    record Request(UUID cityId, UUID classId, GeoPoint pickup, GeoPoint dropOff, Actor payer) {
+    /**
+     * {@code pickupAt}: the requested pickup time of an order for later, or null for now. Far enough ahead it is
+     * a pre-order (ADR 0006); it is part of the fingerprint, so the order must ask for the same time.
+     */
+    record Request(UUID cityId, UUID classId, GeoPoint pickup, GeoPoint dropOff, Actor payer, Instant pickupAt) {
+
+        public Request(UUID cityId, UUID classId, GeoPoint pickup, GeoPoint dropOff, Actor payer) {
+            this(cityId, classId, pickup, dropOff, payer, null);
+        }
+
         /** Versioned canonical request identity; command_id is deliberately excluded. */
         public String fingerprint() {
             String canonical = "pricing-quote-v1\n" + cityId + "\n" + classId + "\n"
-                    + pickup + "\n" + dropOff + "\n" + payer;
+                    + pickup + "\n" + dropOff + "\n" + payer + (pickupAt == null ? "" : "\n" + pickupAt);
             try {
                 return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                         .digest(canonical.getBytes(StandardCharsets.UTF_8)));
@@ -46,14 +55,17 @@ public interface QuoteService {
      */
     record Breakdown(long pickupMinor, Component distance, Component duration, long minimumMinor,
                      BigDecimal demandFactor, long approvedFeesMinor, Component distanceOutside, boolean pickupOutside,
-                     List<ZoneFee> zoneFees) {
+                     List<ZoneFee> zoneFees, boolean preorder) {
 
         public Breakdown {
             zoneFees = zoneFees == null ? List.of() : List.copyOf(zoneFees);
         }
     }
 
-    /** One applied zone surcharge: a fixed amount or a coefficient. */
+    /**
+     * One applied surcharge: a fixed amount or a coefficient. {@code mode} is FIXED / COEFFICIENT for a zone;
+     * PREORDER_FIXED / PREORDER_COEFFICIENT (with a null zone) for a pre-order.
+     */
     record ZoneFee(UUID zoneId, String mode, long amountMinor, BigDecimal coefficient) {
     }
 
