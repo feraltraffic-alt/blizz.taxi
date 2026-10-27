@@ -3,7 +3,6 @@ package taxi.blizz.telephony;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import taxi.blizz.backoffice.SupportCases;
 import taxi.blizz.platform.Actor;
 
 /**
@@ -13,7 +12,11 @@ import taxi.blizz.platform.Actor;
  */
 public interface OtpDeliveries {
 
-    String VIEW_PERMISSION = SupportCases.MANAGE_PERMISSION;
+    /**
+     * The support permission ({@code backoffice.SupportCases.MANAGE_PERMISSION}); written out, because operations links
+     * phone orders to calls here and backoffice depends on operations.
+     */
+    String VIEW_PERMISSION = "support.manage";
 
     /**
      * @param state SENT — the provider took it; FAILED — it refused or is not configured; UNKNOWN — no answer
