@@ -23,7 +23,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, state, caller_phone, called_number, city_id, answered_by, order_ids, started_at, answered_at,
-                 ended_at]
+                 ended_at, recording]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -57,6 +57,36 @@ components:
           type: [string, "null"]
           format: date-time
         ended_at:
+          type: [string, "null"]
+          format: date-time
+        recording:
+          description: The recording of a call that was taken; null for a call that is not over or was missed.
+          oneOf:
+            - $ref: "#/components/schemas/CallRecording"
+            - type: "null"
+
+    CallRecordingState:
+      description: >-
+        PENDING — the call is over and the server is fetching its recording from Asterisk; STORED — it is kept
+        encrypted and can be listened to (calls.listen); NONE — Asterisk had no recording of this call.
+      type: string
+      enum: [PENDING, STORED, NONE]
+
+    CallRecording:
+      description: >-
+        A call's recording (ADR 0012 Q-18 p. 5). It has no public link: GET /api/operator/v1/calls/{call_id}/recording
+        with calls.listen, and every listening is audited. Not deleted automatically until Q-19 sets a retention.
+      type: object
+      additionalProperties: false
+      required: [state, duration_seconds, stored_at]
+      properties:
+        state:
+          $ref: "#/components/schemas/CallRecordingState"
+        duration_seconds:
+          description: Length of the stored recording; null unless STORED.
+          type: [integer, "null"]
+          minimum: 0
+        stored_at:
           type: [string, "null"]
           format: date-time
 

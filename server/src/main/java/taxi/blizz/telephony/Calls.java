@@ -17,19 +17,36 @@ public interface Calls {
     /** See the calls of a city as they ring, take them, link phone orders to them. */
     String ANSWER_PERMISSION = "calls.answer";
 
+    /** Listen to the recordings of a city's calls; every listening is audited (issue #60). */
+    String LISTEN_PERMISSION = "calls.listen";
+
     enum State {
         RINGING, ANSWERED, ENDED, MISSED
     }
 
+    /** PENDING — being fetched from Asterisk; STORED — kept encrypted; NONE — Asterisk had no recording. */
+    enum RecordingState {
+        PENDING, STORED, NONE
+    }
+
+    /** A taken call's recording; {@code durationSeconds} and {@code storedAt} only when STORED. */
+    record Recording(RecordingState state, Integer durationSeconds, OffsetDateTime storedAt) {
+    }
+
+    /** {@code recording} is null for a call that is not over or was missed. */
     record Call(UUID id, State state, String callerPhone, String calledNumber, UUID cityId, UUID answeredBy,
-                List<UUID> orderIds, OffsetDateTime startedAt, OffsetDateTime answeredAt, OffsetDateTime endedAt) {
+                List<UUID> orderIds, OffsetDateTime startedAt, OffsetDateTime answeredAt, OffsetDateTime endedAt,
+                Recording recording) {
         public Call {
             orderIds = orderIds == null ? List.of() : List.copyOf(orderIds);
         }
     }
 
-    /** Newest first, at most 100, in the cities where the staff member has {@link #ANSWER_PERMISSION}. */
-    List<Call> recent(Actor staff, State state, int limit);
+    /**
+     * Newest first, at most 100, in the cities where the staff member has {@link #ANSWER_PERMISSION} or
+     * {@link #LISTEN_PERMISSION}; with {@code orderId}, only the calls that order was made during.
+     */
+    List<Call> recent(Actor staff, State state, UUID orderId, int limit);
 
     /** "I took this call": records who answered; a call another operator took, or one that is over, is a conflict. */
     Call answer(Actor staff, UUID commandId, UUID callId);

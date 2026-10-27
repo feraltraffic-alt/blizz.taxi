@@ -3,7 +3,6 @@ package taxi.blizz.telephony.internal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -103,19 +102,12 @@ class AriEventStream implements SmartLifecycle {
 
     /** ws(s)://…/ari/events?app=blizz-calls&subscribeAll=true, or empty when not configured. No key in the address. */
     Optional<URI> address() {
-        return integrations.value(Integrations.OTP_ASTERISK_ARI_URL).map(url -> URI.create(
-                url.replaceAll("/+$", "").replaceFirst("^http", "ws") + "/ari/events?app=" + APP
-                        + "&subscribeAll=true"));
+        return AriAccess.baseUrl(integrations).map(url -> URI.create(
+                url.replaceFirst("^http", "ws") + "/ari/events?app=" + APP + "&subscribeAll=true"));
     }
 
     private Optional<String> authorization() {
-        String user = integrations.value(Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
-        String password = integrations.value(Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
-        if (user == null || password == null) {
-            return Optional.empty();
-        }
-        return Optional.of("Basic " + java.util.Base64.getEncoder()
-                .encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8)));
+        return AriAccess.authorization(integrations);
     }
 
     /** Until Asterisk closes the stream or the server stops. */

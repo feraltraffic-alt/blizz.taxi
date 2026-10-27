@@ -6,9 +6,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +43,18 @@ class JdbcCalls implements Calls {
             select c.id, c.state, c.caller_phone, c.called_number, c.city_id, c.answered_by, c.started_at,
                    c.answered_at, c.ended_at,
                    coalesce((select array_agg(o.order_id order by o.linked_at, o.order_id) from call_order o
-                             where o.call_id = c.id), '{}') as order_ids
-            from call c""";
+                             where o.call_id = c.id), '{}') as order_ids,
+                   r.state as recording_state, r.duration_seconds, r.stored_at
+            from call c left join call_recording r on r.call_id = c.id""";
+
+    /** Ends a statement that starts "with closed as (update call … returning id, state": the taken calls get a recording. */
+    private static final String RECORD_TAKEN = """
+            ), recording as (
+                insert into call_recording (call_id, state, next_attempt_at, created_at)
+                select id, 'PENDING', :now, :now from closed where state = 'ENDED'
+                on conflict (call_id) do nothing
+            )
+            select count(*) from closed""";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -111,13 +123,18 @@ class JdbcCalls implements Calls {
                 .param("channel", channelId).param("at", at(at)).update();
     }
 
-    /** The channel is gone: ANSWERED → ENDED, RINGING → MISSED; a call already over stays. */
+    /**
+     * The channel is gone: ANSWERED → ENDED, RINGING → MISSED; a call already over stays. A call that was taken gets
+     * its recording fetched from Asterisk (PENDING, {@link CallRecordings}).
+     */
     void ended(String channelId, OffsetDateTime at, String reason) {
-        jdbc.sql("""
+        jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :at, ended_reason = :reason, version = version + 1
-                        where channel_id = :channel and state in ('RINGING', 'ANSWERED')""")
-                .param("channel", channelId).param("at", at(at)).param("reason", reason).update();
+                        where channel_id = :channel and state in ('RINGING', 'ANSWERED')
+                        returning id, state""" + RECORD_TAKEN)
+                .param("channel", channelId).param("at", at(at)).param("reason", reason).param("now", now())
+                .query(Long.class).single();
     }
 
     /**
@@ -126,33 +143,44 @@ class JdbcCalls implements Calls {
      */
     int closeStale(Duration staleAfter) {
         OffsetDateTime now = now();
-        int closed = jdbc.sql("""
+        long closed = jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :now, ended_reason = 'LOST', version = version + 1
-                        where state in ('RINGING', 'ANSWERED') and started_at < :before""")
-                .param("now", now).param("before", now.minus(staleAfter)).update();
+                        where state in ('RINGING', 'ANSWERED') and started_at < :before
+                        returning id, state""" + RECORD_TAKEN)
+                .param("now", now).param("before", now.minus(staleAfter)).query(Long.class).single();
         if (closed > 0) {
             log.info("Closed {} calls whose end Asterisk did not report", closed);
         }
-        return closed;
+        return (int) closed;
     }
 
     // ---------------------------------------------------------------- the operators
 
     @Override
     @Transactional(readOnly = true)
-    public List<Call> recent(Actor actor, State state, int limit) {
-        StaffAccess.Scope scope = staff.scope(actor, ANSWER_PERMISSION);
-        if (!scope.allCities() && scope.cityIds().isEmpty()) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + ANSWER_PERMISSION);
+    public List<Call> recent(Actor actor, State state, UUID orderId, int limit) {
+        StaffAccess.Scope answer = staff.scope(actor, ANSWER_PERMISSION);
+        StaffAccess.Scope listen = staff.scope(actor, LISTEN_PERMISSION);
+        boolean all = answer.allCities() || listen.allCities();
+        Set<UUID> cities = new HashSet<>(answer.cityIds());
+        cities.addAll(listen.cityIds());
+        if (!all && cities.isEmpty()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED,
+                    "Missing permission " + ANSWER_PERMISSION + " or " + LISTEN_PERMISSION);
         }
         var query = jdbc.sql(SELECT + " where (:all or c.city_id = any(cast(:cities as uuid[])))"
                         + (state == null ? "" : " and c.state = :state")
+                        + (orderId == null ? "" : " and exists (select 1 from call_order o"
+                                + " where o.call_id = c.id and o.order_id = :order)")
                         + " order by c.started_at desc, c.id limit :limit")
-                .param("all", scope.allCities()).param("cities", scope.cityIds().toArray(UUID[]::new))
+                .param("all", all).param("cities", cities.toArray(UUID[]::new))
                 .param("limit", Math.max(1, Math.min(limit, 100)));
         if (state != null) {
             query = query.param("state", state.name());
+        }
+        if (orderId != null) {
+            query = query.param("order", orderId);
         }
         return query.query((rs, i) -> map(rs)).list();
     }
@@ -217,7 +245,16 @@ class JdbcCalls implements Calls {
                 rs.getString("caller_phone"), rs.getString("called_number"), rs.getObject("city_id", UUID.class),
                 rs.getObject("answered_by", UUID.class), List.of(orders),
                 rs.getObject("started_at", OffsetDateTime.class), rs.getObject("answered_at", OffsetDateTime.class),
-                rs.getObject("ended_at", OffsetDateTime.class));
+                rs.getObject("ended_at", OffsetDateTime.class), recording(rs));
+    }
+
+    private static Recording recording(ResultSet rs) throws SQLException {
+        String state = rs.getString("recording_state");
+        if (state == null) {
+            return null;
+        }
+        return new Recording(RecordingState.valueOf(state), (Integer) rs.getObject("duration_seconds"),
+                rs.getObject("stored_at", OffsetDateTime.class));
     }
 
     /**

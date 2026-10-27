@@ -13,6 +13,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                        with the FAKE provider the events come from {@code FakeCallEvents} instead
  * @param callStaleAfter  a call whose end Asterisk never reported (the connection was down) is closed after this
  * @param callSweepEnabled run the closing of such calls on a timer in this process
+ * @param recordingSweepEnabled fetch the recordings of finished calls from Asterisk on a timer in this process
+ * @param recordingGiveUpAfter  Asterisk still has no recording of a call this long after it ended: there is none (NONE)
+ * @param recordingMaxBytes     largest recording accepted (WAV at 8 kHz: about 58 MB an hour)
  */
 @ConfigurationProperties("blizz.telephony")
 record TelephonyProperties(
@@ -21,7 +24,10 @@ record TelephonyProperties(
         @DefaultValue("PT30S") Duration callTimeout,
         @DefaultValue("true") boolean callsEnabled,
         @DefaultValue("PT4H") Duration callStaleAfter,
-        @DefaultValue("true") boolean callSweepEnabled) {
+        @DefaultValue("true") boolean callSweepEnabled,
+        @DefaultValue("true") boolean recordingSweepEnabled,
+        @DefaultValue("PT1H") Duration recordingGiveUpAfter,
+        @DefaultValue("268435456") long recordingMaxBytes) {
 
     boolean fake() {
         return "FAKE".equalsIgnoreCase(otpProvider);

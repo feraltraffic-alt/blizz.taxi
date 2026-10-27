@@ -59,4 +59,23 @@ class TelephonyConfiguration {
             calls.closeStale(properties.callStaleAfter());
         }
     }
+
+    /** Brings the recordings of finished calls from Asterisk (issue #60); safe on several instances. */
+    @Configuration(proxyBeanMethods = false)
+    @EnableScheduling
+    @ConditionalOnProperty(prefix = "blizz.telephony", name = "recording-sweep-enabled", havingValue = "true",
+            matchIfMissing = true)
+    static class RecordingSweep {
+
+        private final CallRecordings recordings;
+
+        RecordingSweep(CallRecordings recordings) {
+            this.recordings = recordings;
+        }
+
+        @Scheduled(fixedDelayString = "PT10S", initialDelayString = "PT10S")
+        void run() {
+            recordings.fetchDue();
+        }
+    }
 }

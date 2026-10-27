@@ -19,6 +19,22 @@ Keep the master key with the database backups but not in them: a restored databa
 keys (they are entered again), and a stolen dump without it reveals none. Without a master key the panel cannot
 store keys.
 
+## Call recordings
+
+Every call the call centre takes through the service's Asterisk is recorded (issue #60). The dialplan records it
+with `MixMonitor(/var/spool/asterisk/recording/${UNIQUEID}.wav)` after `Answer()` — the stored-recordings directory
+of ARI, named after the call's first channel (example: `deploy/dev/asterisk/extensions.conf`, context
+`blizz-incoming`). After the call the server downloads the file through ARI (the address, user and password of the
+panel, Integrations → otp), keeps it encrypted (AES-256-GCM with a key derived from `SECRETS_MASTER_KEY`) and then
+removes Asterisk's copy; without a master key recordings wait on Asterisk. They are kept below the files directory
+(`call_recording/…`), or in `CALL_RECORDINGS_DIR` — a disk with its own backup and access rights. A
+recording is listened to in the panel with the permission `calls.listen`, each time in the audit; nothing deletes
+recordings until their retention is decided (Q-19), so plan the disk: WAV at 8 kHz takes about 58 MB an hour of
+talk.
+
+The recordings' key is derived from `SECRETS_MASTER_KEY`: changing or losing the master key makes every stored
+recording unreadable. Never rotate it without re-encrypting the recordings first (there is no tool for that yet).
+
 ## Push notifications
 
 Each service sends pushes from its own Firebase project (REQ-TEN-08), so the apps of one service never receive

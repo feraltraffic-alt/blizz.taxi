@@ -49,16 +49,18 @@ class JdbcFileService implements FileService {
     private final FileStorage storage;
     private final FileScanner scanner;
     private final FilesProperties properties;
+    private final FileEncryption encryption;
     private final Clock clock;
 
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
-                    FileScanner scanner, FilesProperties properties, Clock clock) {
+                    FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
         this.storage = storage;
         this.scanner = scanner;
         this.properties = properties;
+        this.encryption = encryption;
         this.clock = clock;
     }
 
@@ -199,6 +201,73 @@ class JdbcFileService implements FileService {
     }
 
     @Override
+    public StoredFile storeSystemFile(FilePurpose purpose, String contentType, InputStream body, long maxBytes) {
+        if (purpose != FilePurpose.CALL_RECORDING) {
+            throw new IllegalArgumentException("Only call recordings are stored by the server itself");
+        }
+        FileCipher cipher = encryption.cipher().orElseThrow(() -> new IllegalStateException(
+                "No master key (SECRETS_MASTER_KEY): a call recording cannot be stored encrypted"));
+        String type = normalize(contentType);
+        UUID fileId = UUID.randomUUID();
+        Path staged = null;
+        Path sealed = null;
+        try {
+            try {
+                staged = storage.stage(body, maxBytes);
+            } catch (FileStorage.TooLargeException e) {
+                return systemRejected(fileId, purpose, type, "The file is larger than allowed");
+            }
+            Optional<String> detected = ContentSniffer.detect(staged);
+            if (detected.isEmpty() || !detected.get().equals(type)) {
+                return systemRejected(fileId, purpose, type, "The content does not match the declared type");
+            }
+            long size = Files.size(staged);
+            byte[] hash = sha256(staged);
+            String key = purpose.name().toLowerCase(Locale.ROOT) + "/" + MONTH.format(now()) + "/" + fileId;
+            sealed = Files.createTempFile(staged.getParent(), "sealed-", ".bin");
+            cipher.encrypt(staged, sealed, key);
+            storage.store(sealed, key);
+            sealed = null;
+            OffsetDateTime now = now();
+            try {
+                jdbc.sql("""
+                                insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
+                                                         declared_size_bytes, detected_content_type, size_bytes,
+                                                         sha256, storage_key, state, scan_engine, encryption,
+                                                         upload_expires_at, created_at, uploaded_at, scanned_at)
+                                values (:id, 'SYSTEM', null, :purpose, :type, :declared, :type, :size, :hash, :key,
+                                        'SAFE', 'content-type', :encryption, :now, :now, :now, :now)""")
+                        .param("id", fileId).param("purpose", purpose.name()).param("type", type)
+                        .param("declared", Math.max(size, 1)).param("size", size).param("hash", hash)
+                        .param("key", key).param("encryption", FileCipher.SCHEME).param("now", now).update();
+            } catch (RuntimeException e) {
+                storage.delete(key);
+                throw e;
+            }
+            return new StoredFile(fileId, FileState.SAFE, type, size, null);
+        } catch (IOException e) {
+            throw new UncheckedIOException(new IOException("A " + purpose + " file could not be stored", e));
+        } finally {
+            deleteQuietly(staged);
+            deleteQuietly(sealed);
+        }
+    }
+
+    /** A system file that failed a check: recorded REJECTED without bytes, so the reason can be looked up. */
+    private StoredFile systemRejected(UUID fileId, FilePurpose purpose, String type, String reason) {
+        OffsetDateTime now = now();
+        jdbc.sql("""
+                        insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
+                                                 declared_size_bytes, state, reject_reason, scan_engine,
+                                                 upload_expires_at, created_at, scanned_at)
+                        values (:id, 'SYSTEM', null, :purpose, :type, 1, 'REJECTED', :reason, 'content-type',
+                                :now, :now, :now)""")
+                .param("id", fileId).param("purpose", purpose.name()).param("type", type.isEmpty() ? "-" : type)
+                .param("reason", reason).param("now", now).update();
+        return new StoredFile(fileId, FileState.REJECTED, null, 0, reason);
+    }
+
+    @Override
     public StoredFile requireAttachable(Actor owner, UUID fileId, FilePurpose purpose) {
         record Row(String ownerType, UUID ownerId, String purpose, String state, String type, Long size) {
         }
@@ -222,38 +291,47 @@ class JdbcFileService implements FileService {
 
     @Override
     public FileContent open(Actor requester, UUID fileId) {
-        record Row(String ownerType, UUID ownerId, String type, long size, String key) {
+        record Row(String ownerType, UUID ownerId, String type, long size, String key, String encryption) {
         }
         Row row = jdbc.sql("""
-                        select owner_type, owner_id, detected_content_type, size_bytes, storage_key
+                        select owner_type, owner_id, detected_content_type, size_bytes, storage_key, encryption
                         from file_object where id = :id and state = 'SAFE'""")
                 .param("id", fileId)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
-                        rs.getLong(4), rs.getString(5)))
+                        rs.getLong(4), rs.getString(5), rs.getString(6)))
                 .optional()
-                .filter(r -> r.ownerType().equals(requester.type().name()) && r.ownerId().equals(requester.id()))
+                .filter(r -> r.ownerType().equals(requester.type().name()) && requester.id().equals(r.ownerId()))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
-        return content(fileId, row.type(), row.size(), row.key());
+        return content(fileId, row.type(), row.size(), row.key(), row.encryption());
     }
 
     @Override
     public FileContent openAttached(UUID fileId, FilePurpose purpose) {
-        record Row(String type, long size, String key) {
+        record Row(String type, long size, String key, String encryption) {
         }
         Row row = jdbc.sql("""
-                        select detected_content_type, size_bytes, storage_key
+                        select detected_content_type, size_bytes, storage_key, encryption
                         from file_object where id = :id and purpose = :purpose and state = 'SAFE'""")
                 .param("id", fileId)
                 .param("purpose", purpose.name())
-                .query((rs, i) -> new Row(rs.getString(1), rs.getLong(2), rs.getString(3)))
+                .query((rs, i) -> new Row(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
-        return content(fileId, row.type(), row.size(), row.key());
+        return content(fileId, row.type(), row.size(), row.key(), row.encryption());
     }
 
-    private FileContent content(UUID fileId, String type, long size, String key) {
+    /** The plain bytes; an encrypted file is decrypted while it is read. */
+    private FileContent content(UUID fileId, String type, long size, String key, String scheme) {
         try {
-            return new FileContent(fileId, type, size, storage.open(key));
+            if (scheme == null) {
+                return new FileContent(fileId, type, size, storage.open(key));
+            }
+            if (!FileCipher.SCHEME.equals(scheme)) {
+                throw new IllegalStateException("Unknown file encryption " + scheme);
+            }
+            FileCipher cipher = encryption.cipher().orElseThrow(() -> new IllegalStateException(
+                    "No master key (SECRETS_MASTER_KEY): an encrypted file cannot be opened"));
+            return new FileContent(fileId, type, size, cipher.decrypt(storage.open(key), key));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
