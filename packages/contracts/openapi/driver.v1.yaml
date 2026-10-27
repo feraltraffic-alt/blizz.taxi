@@ -1240,6 +1240,9 @@ components:
           description: May receive a new order right now.
           type: boolean
         ineligible_reasons:
+          description: |
+            Why no new order is offered, e.g. ACCOUNT_BLOCKED, ADMISSION_EXPIRED, LOCATION_STALE, OCCUPANCY_ON_TRIP,
+            DEBT_LIMIT (the debt to the service is above the admin's limit, REQ-PAY-16).
           type: array
           items:
             type: string
@@ -1361,7 +1364,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [currency, balance_minor]
+            required: [currency, balance_minor, debt_limit_minor, blocked]
             properties:
               currency:
                 type: string
@@ -1370,6 +1373,13 @@ components:
                 description: Positive — owed to the driver; negative — owed by the driver.
                 type: integer
                 format: int64
+              debt_limit_minor:
+                description: The admin's debt limit for the currency; null when there is none.
+                type: [integer, "null"]
+                format: int64
+              blocked:
+                description: The debt is above the limit; no new orders until it is paid in (REQ-PAY-16).
+                type: boolean
 
     WithdrawCommand:
       type: object

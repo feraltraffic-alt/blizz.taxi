@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-debt-status-changed.v1.schema.json",
+  "title": "DriverDebtStatusChanged v1 payload",
+  "description": "Published by finance when a driver's debt in a currency crosses the admin's limit in either direction (REQ-PAY-16). Operations stops or resumes new orders for the driver; a trip in progress is not affected. status_version grows per driver and currency; a lower one is stale.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["driver_id", "currency", "blocked", "owed_minor", "limit_minor", "status_version"],
+  "properties": {
+    "driver_id": { "type": "string", "format": "uuid" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "blocked": { "type": "boolean" },
+    "owed_minor": { "description": "What the driver owes the service; negative when the service owes him.", "type": "integer" },
+    "limit_minor": { "type": ["integer", "null"], "minimum": 0 },
+    "status_version": { "type": "integer", "minimum": 1 }
+  },
+  "examples": [
+    {
+      "driver_id": "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "currency": "UAH",
+      "blocked": true,
+      "owed_minor": 52000,
+      "limit_minor": 50000,
+      "status_version": 7
+    }
+  ]
+}

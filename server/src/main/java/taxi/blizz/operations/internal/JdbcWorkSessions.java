@@ -259,6 +259,10 @@ class JdbcWorkSessions implements WorkSessions {
         if (!admitted.admitted()) {
             reasons.add("ADMISSION_" + admitted.reviewStatus());
         }
+        // Over the debt limit: no new orders (REQ-PAY-16); the session itself stays open.
+        jdbc.sql("select distinct kind from driver_restriction where driver_id = :id and active order by kind")
+                .param("id", driverId).query(String.class).list()
+                .forEach(reasons::add);
         if (current.isEmpty()) {
             reasons.add("NO_OPEN_SESSION");
             return new DriverAvailability(driverId, null, 0, "CLOSED", null, "DISCONNECTED", "UNAVAILABLE",
