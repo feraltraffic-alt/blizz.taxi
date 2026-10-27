@@ -61,6 +61,9 @@ class JdbcOrders implements Orders {
     public OrderView create(Actor actor, UUID commandId, CreateOrder order) {
         City city = cities.resolve(order.pickup())
                 .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Pickup is outside every service area"));
+        if (order.caller() != null && actor.type() != SubjectType.STAFF) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Caller contact is only valid for a staff phone order");
+        }
         String channel = authorizeCreate(actor, order, city);
         if (order.paymentMethod() == PaymentMethod.CARD) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Card payment is not available yet");
@@ -271,6 +274,51 @@ class JdbcOrders implements Orders {
             query = query.param("before", before);
         }
         return query.query(UUID.class).list().stream().map(core::view).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HistoryItem> history(Actor payer, OffsetDateTime before, int limit) {
+        if (payer.type() != SubjectType.CLIENT) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a rider can read rider order history");
+        }
+        int size = Math.max(1, Math.min(limit, 50));
+        String cursor = before == null ? "" : " and o.created_at < :before";
+        JdbcClient.StatementSpec query = jdbc.sql("""
+                        select o.id, o.short_number, o.status, o.created_at, o.pickup_label, o.dropoff_label,
+                               o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
+                               a.id as assignment_id, a.state as assignment_state, a.close_reason,
+                               d.name as driver_name, v.make, v.model, v.color, v.registration_number
+                        from ride_order o
+                        left join lateral (
+                            select id, driver_id, vehicle_id, state, close_reason
+                            from assignment where order_id = o.id
+                            order by created_at desc, id desc limit 1
+                        ) a on true
+                        left join driver d on d.id = a.driver_id
+                        left join vehicle v on v.id = a.vehicle_id
+                        where o.payer_client_id = :payer
+                        """ + cursor + " order by o.created_at desc, o.id desc limit :limit")
+                .param("payer", payer.id()).param("limit", size);
+        if (before != null) {
+            query = query.param("before", before);
+        }
+        return query.query((rs, i) -> {
+            UUID assignmentId = rs.getObject("assignment_id", UUID.class);
+            String state = rs.getString("assignment_state");
+            String closeReason = rs.getString("close_reason");
+            boolean driverLeft = "REVOKED".equals(state)
+                    || (closeReason != null && closeReason.startsWith("DRIVER_WITHDREW"));
+            HistoryDriver driver = assignmentId == null ? null : new HistoryDriver(rs.getString("driver_name"),
+                    new HistoryVehicle(rs.getString("make"), rs.getString("model"), rs.getString("color"),
+                            rs.getString("registration_number")));
+            return new HistoryItem(rs.getObject("id", UUID.class), rs.getLong("short_number"), rs.getString("status"),
+                    rs.getObject("created_at", OffsetDateTime.class), rs.getString("pickup_label"),
+                    rs.getString("dropoff_label"), rs.getString("vehicle_class"),
+                    (Long) rs.getObject("price_minor"), (Long) rs.getObject("final_price_minor"),
+                    rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")), driver,
+                    assignmentId != null && !driverLeft);
+        }).list();
     }
 
     @Override
