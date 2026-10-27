@@ -123,8 +123,14 @@ class RiderPromotionTests {
         return new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF);
     }
 
+    /** One driver per test: after a ride the driver is the nearest free one again. */
+    TestRides.Driver driver;
+
     private OrderView rideToTheEnd(Actor rider, QuoteService.Quote quote) {
-        TestRides.Driver driver = rides.driverNear(PICKUP);
+        if (driver == null) {
+            driver = rides.driverNear(PICKUP);
+        }
+        rides.moveTo(driver, TestRides.north(PICKUP, 1000));
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
                 "Home", DROPOFF, "Work", PaymentMethod.CASH, quote.id()));
         dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
