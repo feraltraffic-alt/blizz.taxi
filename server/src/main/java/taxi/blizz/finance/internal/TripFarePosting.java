@@ -42,7 +42,7 @@ class TripFarePosting implements OutboxHandler {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record TripCompleted(UUID orderId, UUID driverId, UUID payerClientId, String paymentMethod, Boolean cashReceived,
                          UUID finalFareId, Integer finalFareVersion, Long amountMinor, Long commissionMinor,
-                         Long driverShareMinor, String currency, Long walletMinor) {
+                         Long driverShareMinor, String currency, Long walletMinor, Long discountMinor) {
     }
 
     @Override
@@ -77,8 +77,16 @@ class TripFarePosting implements OutboxHandler {
         // Cash, or a card at the driver's own terminal: the money is with the driver, who owes the service its
         // commission from the balance (owner decision 27.10.2026).
         boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
-        // Bonuses paid part of the fare (ADR 0009): the driver collected only the rest.
-        long collected = trip.amountMinor() - (trip.walletMinor() == null ? 0 : trip.walletMinor());
+        // A promotion's discount is the service's expense; the driver's share stays as of the full fare (ADR 0009).
+        long discount = trip.discountMinor() == null ? 0 : trip.discountMinor();
+        if (discount > 0 && !"SERVICE".equals(trip.paymentMethod())) {
+            ledger.post(new Ledger.Posting("trip-discount:" + trip.orderId(), "PROMOTION_DISCOUNT", trip.orderId(),
+                    trip.currency(), "Discount of promotions",
+                    List.of(Line.debit(Account.PROMO_EXPENSE, null, discount),
+                            Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), discount))));
+        }
+        // Bonuses and the discount paid part of the fare (ADR 0009): the driver collected only the rest.
+        long collected = trip.amountMinor() - (trip.walletMinor() == null ? 0 : trip.walletMinor()) - discount;
         if (collectedByDriver && Boolean.TRUE.equals(trip.cashReceived()) && collected > 0) {
             boolean cash = "CASH".equals(trip.paymentMethod());
             ledger.post(new Ledger.Posting("trip-cash:" + trip.orderId(), cash ? "CASH_COLLECTED" : "TERMINAL_COLLECTED",

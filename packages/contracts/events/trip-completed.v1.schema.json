@@ -19,6 +19,8 @@
       "format": "uuid"
     },
     "payment_method": { "description": "SERVICE: a follow-up the service pays for (T-22). TERMINAL: a card at the driver's own terminal; the money is with the driver like cash.", "type": "string", "enum": ["CASH", "CARD", "SERVICE", "TERMINAL"] },
+    "discount_minor": { "description": "Taken off by the rider's promotions (ADR 0009), paid by the service.", "type": "integer", "minimum": 0 },
+    "quote_id": { "description": "The quote the order consumed.", "type": ["string", "null"], "format": "uuid" },
     "wallet_minor": { "description": "Paid by the rider's bonuses (ADR 0009), at most amount_minor; the driver or the card took the rest.", "type": "integer", "minimum": 0 },
     "cash_received": { "description": "Present for CASH and TERMINAL: the money (cash, or the card payment at the terminal) came.", "type": "boolean" },
     "reported_at": { "description": "Device time of completion.", "type": "string", "format": "date-time" },

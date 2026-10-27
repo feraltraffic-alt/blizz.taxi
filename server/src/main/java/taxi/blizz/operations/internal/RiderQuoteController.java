@@ -52,9 +52,17 @@ class RiderQuoteController {
     record WaitingTerms(int freeMinutes, java.math.BigDecimal perMinuteMinor, int stepSeconds, String rounding) {
     }
 
+    /** One promotion that applied (ADR 0009): a DISCOUNT with what it takes off, or a BONUS credited after the trip. */
+    record PromotionView(UUID id, String name, String kind, String valueType, long value, long discountMinor) {
+    }
+
+    /**
+     * {@code amountMinor}: the full price; {@code discountMinor}: what promotions take off it; {@code toPayMinor}:
+     * what the rider pays (before bonuses of the account).
+     */
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
                      long distanceM, long durationS, Instant expiresAt, WaitingTerms waiting, Instant pickupAt,
-                     boolean preorder) {
+                     boolean preorder, long discountMinor, long toPayMinor, List<PromotionView> promotions) {
     }
 
     @GetMapping("/api/rider/v1/vehicle-classes")
@@ -74,7 +82,10 @@ class RiderQuoteController {
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
                 quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
-                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(), quote.breakdown().preorder());
+                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(),
+                quote.breakdown().preorder(), quote.discountMinor(), quote.toPayMinor(),
+                quote.promotions().stream().map(p -> new PromotionView(p.promotionId(), p.name(), p.kind().name(),
+                        p.valueType().name(), p.value(), p.discountMinor())).toList());
     }
 
     private City city(GeoPoint point) {

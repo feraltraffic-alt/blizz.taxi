@@ -126,8 +126,10 @@ class JdbcOrders implements Orders {
             UUID id = UUID.randomUUID();
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
-            long wallet = Math.min(walletAsked, quote.amountMinor());
-            PaymentMethod method = order.paymentMethod() == PaymentMethod.CARD && wallet == quote.amountMinor()
+            // The discount of promotions comes first (ADR 0009); bonuses pay at most what is left.
+            long toPay = quote.toPayMinor();
+            long wallet = Math.min(walletAsked, toPay);
+            PaymentMethod method = order.paymentMethod() == PaymentMethod.CARD && wallet == toPay
                     ? PaymentMethod.CASH : order.paymentMethod();
             boolean cardHold = method == PaymentMethod.CARD;
             OffsetDateTime now = core.now();
@@ -156,12 +158,13 @@ class JdbcOrders implements Orders {
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
-                                                        terminal_fallback_cash, wallet_minor, created_at, updated_at)
+                                                        terminal_fallback_cash, wallet_minor, discount_minor, created_at,
+                                                        updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
                                         :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
-                                        :releaseAt, :fallback, :wallet, :now, :now)""")
+                                        :releaseAt, :fallback, :wallet, :discount, :now, :now)""")
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
                         .param("status", cardHold ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
                         .param("pickupAt", pickupAt)
@@ -183,6 +186,7 @@ class JdbcOrders implements Orders {
                         .param("payment", method.name())
                         .param("paymentState", cardHold ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
                         .param("wallet", wallet)
+                        .param("discount", quote.discountMinor())
                         .param("fallback", order.terminalFallbackToCash())
                         .param("price", quote.amountMinor())
                         .param("currency", quote.currency())
@@ -215,13 +219,16 @@ class JdbcOrders implements Orders {
                 created.put("pickup_at", pickupAt.toString());
                 created.put("preorder", preorder);
             }
+            if (quote.discountMinor() > 0) {
+                created.put("discount_minor", quote.discountMinor());
+            }
             if (wallet > 0) {
                 created.put("wallet_minor", wallet);
                 wallets.reserve(order.payerClientId(), id, quote.currency(), wallet);
             }
             core.recordEvent(id, 0, preorder ? "OrderScheduled" : "OrderCreated", actor, null, created);
             if (cardHold) {
-                cardPayments.requestHold(id, order.payerClientId(), city.id(), quote.amountMinor() - wallet,
+                cardPayments.requestHold(id, order.payerClientId(), city.id(), toPay - wallet,
                         quote.currency(),
                         preorder ? pickupAt.plusDays(1) : null);
             } else if (!preorder) {

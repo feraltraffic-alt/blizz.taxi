@@ -37,9 +37,12 @@ class JdbcQuoteService implements QuoteService {
     private final ObjectProvider<RouteEstimator> estimators;
     private final GeoZones zones;
     private final ServiceSettings settings;
+    private final taxi.blizz.promotions.RiderPromotions promotions;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
-                     Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings) {
+                     Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
+                     taxi.blizz.promotions.RiderPromotions promotions) {
+        this.promotions = promotions;
         this.zones = zones;
         this.settings = settings;
         this.jdbc = jdbc;
@@ -70,10 +73,12 @@ class JdbcQuoteService implements QuoteService {
                 Set.copyOf(zones.zonesAt(request.cityId(), request.dropOff())), preorder(request));
         return commands.execute(new CommandKey(request.payer(), "quote.create", commandId), request, Quote.class, () -> {
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-            record Tariff(UUID id, String currency, Terms terms) {
+            record Tariff(UUID id, String currency, Terms terms, String classCode, String timezone) {
             }
             Tariff tariff = jdbc.sql("""
-                    select t.*, t.zone_surcharges::text as zone_surcharges, t.preorder_surcharge::text as preorder_surcharge from tariff_version t join city on city.id = t.city_id
+                    select t.*, t.zone_surcharges::text as zone_surcharges, t.preorder_surcharge::text as preorder_surcharge,
+                           vc.code as class_code, city.timezone as city_timezone
+                    from tariff_version t join city on city.id = t.city_id
                     join vehicle_class vc on vc.id = t.class_id and vc.city_id = t.city_id
                     where t.city_id = :city and t.class_id = :class and t.state = 'PUBLISHED'
                     and city.state = 'PUBLISHED' and vc.active and t.currency = city.currency
@@ -91,12 +96,26 @@ class JdbcQuoteService implements QuoteService {
                                             TariffService.ZoneSurcharge[].class)),
                                     rs.getString("preorder_surcharge") == null ? null
                                             : json.readValue(rs.getString("preorder_surcharge"),
-                                                    TariffService.PreorderSurcharge.class))))
+                                                    TariffService.PreorderSurcharge.class)),
+                            rs.getString("class_code"), rs.getString("city_timezone")))
                     .optional().orElseThrow(() -> error(ErrorCode.NOT_FOUND, "No effective published tariff"));
             FareCalculator.Result fare = FareCalculator.calculate(tariff.terms(), route, facts);
-            Quote quote = new Quote(UUID.randomUUID(), request, tariff.id(), 1, tariff.terms(), route,
+            UUID quoteId = UUID.randomUUID();
+            // Promotions of the rider (ADR 0009), with the price the rider sees; the rider's local pickup time.
+            List<taxi.blizz.promotions.RiderPromotions.Applied> applied = List.of();
+            if (request.payer().type() == taxi.blizz.platform.SubjectType.CLIENT) {
+                java.time.ZoneId zone = java.time.ZoneId.of(tariff.timezone());
+                java.time.LocalDateTime local = java.time.LocalDateTime.ofInstant(
+                        request.pickupAt() == null ? now : request.pickupAt(), zone);
+                applied = promotions.applyToQuote(quoteId, new taxi.blizz.promotions.RiderPromotions.Context(
+                        request.payer().id(), request.cityId(), tariff.classCode(), tariff.currency(),
+                        fare.amountMinor(), facts.pickupZones(), facts.dropoffZones(), local));
+            }
+            long discount = applied.stream().mapToLong(taxi.blizz.promotions.RiderPromotions.Applied::discountMinor)
+                    .sum();
+            Quote quote = new Quote(quoteId, request, tariff.id(), 1, tariff.terms(), route,
                     fare.breakdown(), fare.amountMinor(), tariff.currency(), now, now.plusSeconds(300),
-                    request.fingerprint());
+                    request.fingerprint(), applied, discount);
             jdbc.sql("""
                     insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
                         pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at)

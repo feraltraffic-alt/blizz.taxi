@@ -38,7 +38,9 @@ public record OrderView(
         boolean preorder,
         UUID relatedOrderId,
         /** Bonuses of the rider's account paying part of the price (ADR 0009); the rest in cash or by card. */
-        long walletMinor) {
+        long walletMinor,
+        /** Taken off the price by the rider's promotions (ADR 0009); the service pays it. */
+        long discountMinor) {
 
     /**
      * Who cancelled the order (RIDER, STAFF, DRIVER) and why: the reason's code and its labels as they were at the

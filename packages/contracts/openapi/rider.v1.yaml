@@ -1093,7 +1093,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at, waiting,
-                 pickup_at, preorder]
+                 pickup_at, preorder, discount_minor, to_pay_minor, promotions]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -1126,6 +1126,19 @@ components:
         preorder:
           description: True when the order will be a pre-order; the price includes the pre-order surcharge.
           type: boolean
+        discount_minor:
+          description: What the rider's promotions take off amount_minor (ADR 0009); the service pays it.
+          type: integer
+          format: int64
+        to_pay_minor:
+          description: What the rider pays (before bonuses of the account) — amount_minor minus discount_minor.
+          type: integer
+          format: int64
+        promotions:
+          description: Promotions that applied; a BONUS is credited to the account after the trip.
+          type: array
+          items:
+            $ref: "./promotions.yaml#/components/schemas/AppliedPromotion"
 
     WaitingTerms:
       description: |
@@ -1515,6 +1528,10 @@ components:
             - type: "null"
         wallet_minor:
           description: Bonuses paying part of the price (ADR 0009); after the trip at most the final fare is taken.
+          type: integer
+          format: int64
+        discount_minor:
+          description: Taken off the price by the rider's promotions (ADR 0009); the service pays it.
           type: integer
           format: int64
         preorder:

@@ -47,4 +47,11 @@ public interface RiderWallets {
      * and lets the rest go; a cancelled or unfulfilled order lets everything go.
      */
     void reserve(UUID clientId, UUID orderId, String currency, long amountMinor);
+
+    /**
+     * Bonuses of a promotion for a trip (ADR 0009), in the caller's transaction; the service's expense. Once per order
+     * and promotion: returns {@code false} when already credited.
+     */
+    boolean creditPromotion(UUID clientId, UUID orderId, UUID promotionId, String currency, long amountMinor,
+                            String promotionName);
 }

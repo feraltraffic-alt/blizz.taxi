@@ -69,8 +69,22 @@ public interface QuoteService {
     record ZoneFee(UUID zoneId, String mode, long amountMinor, BigDecimal coefficient) {
     }
 
+    /**
+     * {@code amountMinor} is the full price — the driver's share and the commission come from it; {@code discountMinor}
+     * is what the rider's promotions take off it (the service pays it, ADR 0009) and {@code promotions} what applied.
+     */
     record Quote(UUID id, Request request, UUID tariffVersionId, int pricingPolicyVersion,
                  TariffService.Terms terms, RouteEstimator.Estimate route, Breakdown breakdown,
-                 long amountMinor, String currency, Instant createdAt, Instant expiresAt, String fingerprint) {
+                 long amountMinor, String currency, Instant createdAt, Instant expiresAt, String fingerprint,
+                 List<taxi.blizz.promotions.RiderPromotions.Applied> promotions, long discountMinor) {
+
+        public Quote {
+            promotions = promotions == null ? List.of() : List.copyOf(promotions);
+        }
+
+        /** What the rider pays before bonuses. */
+        public long toPayMinor() {
+            return amountMinor - discountMinor;
+        }
     }
 }

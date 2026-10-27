@@ -244,7 +244,7 @@ class OrderCore {
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
                                o.final_price_minor, o.currency, o.created_at, o.cancelled_by, o.cancel_reason_code,
                                o.cancel_reason_labels::text as cancel_reason_labels, o.pickup_at, o.preorder, o.related_order_id,
-                               o.wallet_minor,
+                               o.wallet_minor, o.discount_minor,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
                         from ride_order o where o.id = :id""")
@@ -260,7 +260,8 @@ class OrderCore {
                         (Long) rs.getObject("final_price_minor"), rs.getString("currency"), rs.getString("search_phase"),
                         null, rs.getObject("created_at", OffsetDateTime.class), cancellation(rs),
                         rs.getObject("pickup_at", OffsetDateTime.class), rs.getBoolean("preorder"),
-                        rs.getObject("related_order_id", UUID.class), rs.getLong("wallet_minor")))
+                        rs.getObject("related_order_id", UUID.class), rs.getLong("wallet_minor"),
+                        rs.getLong("discount_minor")))
                 .optional()
                 .map(order -> withAssignment(order, assignmentOfOrder(order.id())))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
@@ -272,7 +273,7 @@ class OrderCore {
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
                 o.searchPhase(),
                 assignment.orElse(null), o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder(),
-                o.relatedOrderId(), o.walletMinor());
+                o.relatedOrderId(), o.walletMinor(), o.discountMinor());
     }
 
     @SuppressWarnings("unchecked")

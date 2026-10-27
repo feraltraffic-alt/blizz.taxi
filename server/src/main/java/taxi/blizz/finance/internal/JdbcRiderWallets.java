@@ -148,6 +148,19 @@ class JdbcRiderWallets implements RiderWallets {
                 .param("amount", amountMinor).param("now", now).update();
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public boolean creditPromotion(UUID clientId, UUID orderId, UUID promotionId, String currency, long amountMinor,
+                                   String promotionName) {
+        if (amountMinor <= 0) {
+            return false;
+        }
+        ensureAccount(clientId, currency, now());
+        return ledger.post(new Ledger.Posting("promotion:" + orderId + ":" + promotionId, "PROMOTION", orderId,
+                currency, promotionName, List.of(Line.debit(Account.PROMO_EXPENSE, null, amountMinor),
+                        Line.credit(Account.RIDER_WALLET, clientId, amountMinor))));
+    }
+
     private long reserved(UUID clientId, String currency) {
         return jdbc.sql("""
                         select coalesce(sum(amount_minor), 0) from rider_wallet_hold
