@@ -28,7 +28,7 @@ api GET /api/config/v1/bootstrap >/dev/null; expect 200
 
 say "Driver signs in and goes online 200 m from the pickup"
 DRIVER=$(sign_in DRIVER "$DRIVER_PHONE")
-SESSION=$(go_online "$DRIVER" "$DRIVER_VEHICLE" 50.4520 "$PICKUP_LON")
+SESSION=$(go_online "$DRIVER" "$DRIVER_VEHICLE" 50.4505 "$PICKUP_LON")
 
 say "Rider signs in, sees the classes and gets a price"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")

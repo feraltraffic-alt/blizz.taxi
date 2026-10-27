@@ -18,6 +18,8 @@ public interface CancelReasons {
 
     /** The driver's reason the no-show check (minimum waiting time) applies to. */
     String NO_SHOW = "NO_SHOW";
+    /** Staff cancellation reason that marks an operator-created order as the operator's fault (ADR 0011). */
+    String OPERATOR_ERROR = "OPERATOR_ERROR";
 
     enum Audience {
         RIDER, DRIVER, STAFF
@@ -32,15 +34,24 @@ public interface CancelReasons {
     }
 
     record Reason(UUID id, Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                  boolean active, int sortOrder, long version) {
+                  boolean operatorFault, boolean active, int sortOrder, long version) {
         public Reason {
             labels = labels == null ? Map.of() : Map.copyOf(labels);
         }
+
+        public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
+                      DriverOutcome driverOutcome, boolean active, int sortOrder, long version) {
+            this(id, audience, code, labels, driverOutcome, false, active, sortOrder, version);
+        }
     }
 
-    /** {@code driverOutcome} is required for DRIVER and must be null otherwise. */
+    /** {@code driverOutcome} is required for DRIVER and must be null otherwise; operatorFault is STAFF-only. */
     record Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                 boolean active, int sortOrder) {
+                 boolean operatorFault, boolean active, int sortOrder) {
+        public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
+                     boolean active, int sortOrder) {
+            this(audience, code, labels, driverOutcome, false, active, sortOrder);
+        }
     }
 
     /** Active reasons of one side in display order; public, for the apps. */
@@ -51,7 +62,7 @@ public interface CancelReasons {
 
     Reason create(Actor staff, UUID commandId, Draft draft, String reason);
 
-    /** Labels, driver outcome, activity and order; audience and code stay as they were. */
+    /** Labels, driver outcome, operator-fault flag, activity and order; audience and code stay as they were. */
     Reason update(Actor staff, UUID commandId, UUID reasonId, long expectedVersion, Draft draft, String reason);
 
     /** An active reason of the side, or {@code VALIDATION_FAILED}. */

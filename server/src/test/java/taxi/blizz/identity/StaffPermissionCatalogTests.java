@@ -13,6 +13,7 @@ import taxi.blizz.finance.RiderWallets;
 import taxi.blizz.geo.GeoConfiguration;
 import taxi.blizz.operations.OrderChat;
 import taxi.blizz.operations.Orders;
+import taxi.blizz.operatorbonus.OperatorBonuses;
 import taxi.blizz.pricing.TariffService;
 import taxi.blizz.promotions.RiderPromotions;
 
@@ -26,6 +27,6 @@ class StaffPermissionCatalogTests {
                 OrderChat.VIEW_PERMISSION, DriverAdmission.REVIEW_PERMISSION, GeoConfiguration.MANAGE_PERMISSION,
                 TariffService.MANAGE_PERMISSION, DriverDebts.MANAGE_PERMISSION, StaffPermissions.AUDIT_VIEW,
                 ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION,
-                RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION));
+                RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION, OperatorBonuses.MANAGE_PERMISSION));
     }
 }

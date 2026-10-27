@@ -93,8 +93,18 @@ admin_token() {
     echo "$token"
 }
 
+# The runner's wall clock can step back (NTP); the last sequence is kept in a file so it only grows.
+SEQUENCE_FILE="${SEQUENCE_FILE:-/tmp/sandbox-sequence}"
+next_sequence() {
+    local now last
+    now=$(date +%s%3N)
+    last=$(cat "$SEQUENCE_FILE" 2>/dev/null || echo 0)
+    (( now > last )) || now=$(( last + 1 ))
+    echo "$now" > "$SEQUENCE_FILE"
+    echo "$now"
+}
 location() { # LAT LON — the sequence grows across scenarios, so a later point is never taken as an old one (T-14)
-    echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$(date +%s%3N)}"
+    echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$(next_sequence)}"
 }
 
 # go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id. When the driver still has an open
@@ -129,6 +139,8 @@ go_offline() {
 }
 
 # move TOKEN SESSION_ID LAT LON — a heartbeat with a new position.
+# A hop faster than location.jump-kph (250 km/h) since the previous point is flagged JUMP and not used for
+# arrive: keep a driver's points within a few metres of each other when they follow within seconds.
 move() {
     api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
 }

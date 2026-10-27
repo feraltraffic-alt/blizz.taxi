@@ -1474,6 +1474,135 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/settings/operator-bonuses:
+    get:
+      operationId: getOperatorBonusSettings
+      summary: Current operator bonus rules
+      description: Requires operator-bonuses.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/OperatorBonusSettingsVersion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: changeOperatorBonusSettings
+      summary: Replace the operator bonus rules
+      description: >-
+        Creates a new version; entries already earned keep the version they were counted with. Requires
+        operator-bonuses.manage. Audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./operator-bonuses.yaml#/components/schemas/ChangeSettings"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/OperatorBonusSettingsVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/operator-bonuses:
+    get:
+      operationId: listOperatorBonusAccounts
+      summary: Bonus accounts of every staff member who earned points
+      description: Requires operator-bonuses.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/Accounts"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/operator-bonuses/{staff_id}/history:
+    get:
+      operationId: listOperatorBonusEntries
+      summary: Bonus entries of one staff member, newest first
+      description: Requires operator-bonuses.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/Entries"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/operator-bonuses/periods:
+    get:
+      operationId: listOperatorBonusPeriods
+      summary: Closed periods, newest first
+      description: Totals of every account at each reset. Requires operator-bonuses.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/Periods"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity
