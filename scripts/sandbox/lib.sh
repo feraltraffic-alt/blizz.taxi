@@ -117,6 +117,8 @@ go_online() {
 }
 
 # move TOKEN SESSION_ID LAT LON — a heartbeat with a new position.
+# A hop faster than location.jump-kph (250 km/h) since the previous point is flagged JUMP and not used for
+# arrive: keep a driver's points within a few metres of each other when they follow within seconds.
 move() {
     api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
 }

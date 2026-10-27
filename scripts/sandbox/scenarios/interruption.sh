@@ -32,7 +32,7 @@ expect 200
 say "The car breaks down halfway; Oleh is free nearby"
 move "$IVAN" "$IVAN_SESSION" 50.4100 30.5250 3
 OLEH=$(sign_in DRIVER "+380500000002")
-go_online "$OLEH" 5a000000-0000-4000-8000-000000000502 50.4150 30.5250 >/dev/null
+go_online "$OLEH" 5a000000-0000-4000-8000-000000000502 50.4105 30.5250 >/dev/null
 
 say "The operator interrupts: «Поломка автомобиля в пути», follow-up on the service"
 admin_token >/dev/null
