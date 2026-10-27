@@ -42,7 +42,7 @@ class TripFarePosting implements OutboxHandler {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record TripCompleted(UUID orderId, UUID driverId, UUID payerClientId, String paymentMethod, Boolean cashReceived,
                          UUID finalFareId, Integer finalFareVersion, Long amountMinor, Long commissionMinor,
-                         Long driverShareMinor, String currency) {
+                         Long driverShareMinor, String currency, Long walletMinor, Long discountMinor) {
     }
 
     @Override
@@ -77,13 +77,23 @@ class TripFarePosting implements OutboxHandler {
         // Cash, or a card at the driver's own terminal: the money is with the driver, who owes the service its
         // commission from the balance (owner decision 27.10.2026).
         boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
-        if (collectedByDriver && Boolean.TRUE.equals(trip.cashReceived())) {
+        // A promotion's discount is the service's expense; the driver's share stays as of the full fare (ADR 0009).
+        long discount = trip.discountMinor() == null ? 0 : trip.discountMinor();
+        if (discount > 0 && !"SERVICE".equals(trip.paymentMethod())) {
+            ledger.post(new Ledger.Posting("trip-discount:" + trip.orderId(), "PROMOTION_DISCOUNT", trip.orderId(),
+                    trip.currency(), "Discount of promotions",
+                    List.of(Line.debit(Account.PROMO_EXPENSE, null, discount),
+                            Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), discount))));
+        }
+        // Bonuses and the discount paid part of the fare (ADR 0009): the driver collected only the rest.
+        long collected = trip.amountMinor() - (trip.walletMinor() == null ? 0 : trip.walletMinor()) - discount;
+        if (collectedByDriver && Boolean.TRUE.equals(trip.cashReceived()) && collected > 0) {
             boolean cash = "CASH".equals(trip.paymentMethod());
             ledger.post(new Ledger.Posting("trip-cash:" + trip.orderId(), cash ? "CASH_COLLECTED" : "TERMINAL_COLLECTED",
                     trip.orderId(), trip.currency(), cash ? "Cash the driver reported as received"
                             : "Card payment at the driver's own terminal, as the driver reported",
-                    List.of(Line.debit(Account.DRIVER_PAYABLE, trip.driverId(), trip.amountMinor()),
-                            Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()))));
+                    List.of(Line.debit(Account.DRIVER_PAYABLE, trip.driverId(), collected),
+                            Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), collected))));
         }
         // The driver's debt may have crossed the limit (REQ-PAY-16).
         debts.refresh(trip.driverId(), trip.currency());

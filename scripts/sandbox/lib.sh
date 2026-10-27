@@ -126,20 +126,21 @@ go_online() {
     expect 201
 }
 
+# go_offline TOKEN — closes the driver's work session, so the next scenario starts without this driver online.
+go_offline() {
+    local current id
+    current=$(api GET /api/driver/v1/work-sessions/current "$1")
+    id=$(jq -r '.session_id // empty' <<<"$current" 2>/dev/null || true)
+    if [[ -n "$id" ]]; then
+        api POST "/api/driver/v1/work-sessions/$id/close" "$1" \
+            "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
+        expect 200
+    fi
+}
+
 # move TOKEN SESSION_ID LAT LON — a heartbeat with a new position.
 # A hop faster than location.jump-kph (250 km/h) since the previous point is flagged JUMP and not used for
 # arrive: keep a driver's points within a few metres of each other when they follow within seconds.
 move() {
     api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
-}
-
-# go_offline TOKEN — closes the driver's open work session, so the next scenario starts without him online.
-go_offline() {
-    local current id
-    current=$(api GET /api/driver/v1/work-sessions/current "$1")
-    id=$(jq -r '.session_id // empty' <<<"$current" 2>/dev/null || true)
-    [[ -n "$id" ]] || return 0
-    api POST "/api/driver/v1/work-sessions/$id/close" "$1" \
-        "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
-    expect 200
 }

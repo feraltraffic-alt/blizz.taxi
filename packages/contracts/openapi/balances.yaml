@@ -1,0 +1,117 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — driver balance components
+  version: 1.0.0
+  description: >-
+    The driver's balance with the service (ADR 0010): history, top-ups by staff and transfers between drivers within
+    the limits set in the admin panel. Positive — the service owes the driver.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    DriverStatement:
+      type: object
+      required: [driver_id, balances, entries]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        balances:
+          type: array
+          items:
+            type: object
+            required: [currency, balance_minor]
+            properties:
+              currency:
+                type: string
+              balance_minor:
+                type: integer
+                format: int64
+        entries:
+          description: Newest first.
+          type: array
+          items:
+            type: object
+            required: [id, at, kind, currency, amount_minor, reason]
+            properties:
+              id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              at:
+                type: string
+                format: date-time
+              kind:
+                type: string
+                description: >-
+                  TRIP_FARE, CASH_COLLECTED, TERMINAL_COLLECTED, DEPOSIT, BONUS, TRANSFER_IN, TRANSFER_OUT, PROMOTION,
+                  … (new kinds may appear).
+              currency:
+                type: string
+              amount_minor:
+                type: integer
+                format: int64
+                description: Positive — in, negative — out.
+              reason:
+                type: string
+              order_id:
+                oneOf:
+                  - $ref: "./common.yaml#/components/schemas/Uuid"
+                  - type: "null"
+              counterpart_id:
+                description: The other driver of a transfer.
+                oneOf:
+                  - $ref: "./common.yaml#/components/schemas/Uuid"
+                  - type: "null"
+
+    TransferRule:
+      type: object
+      required: [currency, enabled, max_per_transfer_minor, max_per_day_minor, min_balance_after_minor, version]
+      properties:
+        currency:
+          type: string
+        enabled:
+          type: boolean
+        max_per_transfer_minor:
+          type: integer
+          format: int64
+        max_per_day_minor:
+          description: Sum of one driver's transfers in a day (UTC).
+          type: integer
+          format: int64
+        min_balance_after_minor:
+          description: The sender's balance must stay at least this after the transfer.
+          type: integer
+          format: int64
+        version:
+          type: integer
+          format: int64
+
+    TransferRuleList:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransferRule"
+
+    Transfer:
+      type: object
+      required: [id, from_driver_id, to_driver_id, currency, amount_minor, at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        from_driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        to_driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+        comment:
+          type: [string, "null"]
+        at:
+          type: string
+          format: date-time

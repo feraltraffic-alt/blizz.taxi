@@ -995,9 +995,36 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/wallet:
+    get:
+      operationId: getRiderWallet
+      summary: My bonus account
+      description: Balances per currency and the latest movements with who and why (ADR 0009).
+      tags: [Wallet]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/Wallet"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
   - name: Safety
     description: The safety button — support and emergency contacts (REQ-RID-09)
+  - name: Wallet
+    description: The bonus account (ADR 0009)
   - name: Push
     description: Push notifications to the app (section 20)
   - name: Live
@@ -1096,7 +1123,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at, waiting,
-                 pickup_at, preorder]
+                 pickup_at, preorder, discount_minor, to_pay_minor, promotions]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -1129,6 +1156,19 @@ components:
         preorder:
           description: True when the order will be a pre-order; the price includes the pre-order surcharge.
           type: boolean
+        discount_minor:
+          description: What the rider's promotions take off amount_minor (ADR 0009); the service pays it.
+          type: integer
+          format: int64
+        to_pay_minor:
+          description: What the rider pays (before bonuses of the account) — amount_minor minus discount_minor.
+          type: integer
+          format: int64
+        promotions:
+          description: Promotions that applied; a BONUS is credited to the account after the trip.
+          type: array
+          items:
+            $ref: "./promotions.yaml#/components/schemas/AppliedPromotion"
 
     WaitingTerms:
       description: |
@@ -1192,6 +1232,14 @@ components:
         pickup_at:
           description: The quote's pickup time; must be the same as in CreateQuote, otherwise QUOTE_MISMATCH.
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        wallet_minor:
+          description: >-
+            Bonuses of my account to pay part of the price (ADR 0009); at most the price is used, the rest is paid in
+            CASH or by CARD. More than available → 422 WALLET_INSUFFICIENT ("not enough on the balance, choose another
+            way to pay"). A CARD order the bonuses pay in full becomes CASH for anything the trip adds.
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
 
     ChatMessage:
       type: object
@@ -1508,6 +1556,14 @@ components:
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
+        wallet_minor:
+          description: Bonuses paying part of the price (ADR 0009); after the trip at most the final fare is taken.
+          type: integer
+          format: int64
+        discount_minor:
+          description: Taken off the price by the rider's promotions (ADR 0009); the service pays it.
+          type: integer
+          format: int64
         preorder:
           description: >-
             A pre-order (ADR 0006): SCHEDULED until it is released into the search before pickup_at. It does not

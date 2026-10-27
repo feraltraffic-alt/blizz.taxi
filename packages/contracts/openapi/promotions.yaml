@@ -1,0 +1,237 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — promotion components
+  version: 1.0.0
+  description: >-
+    Promotions for riders (ADR 0009): a DISCOUNT lowers the price of the quote, a BONUS credits the rider's account
+    after the trip. Every condition set must hold; all promotions that apply are applied. Referenced by the rider and
+    admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    PromotionConditions:
+      description: Null means "any". Days and hours in the city's time zone at the pickup time.
+      type: object
+      properties:
+        city_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        vehicle_class:
+          type: [string, "null"]
+        every_nth_trip:
+          description: The rider's N-th, 2N-th … completed trip (2…1000); null — every trip.
+          type: [integer, "null"]
+          minimum: 2
+          maximum: 1000
+        days_of_week:
+          type: [array, "null"]
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        time_from:
+          description: HH:mm, inclusive; with time_to. A window past midnight (22:00–06:00) wraps.
+          type: [string, "null"]
+          examples: ["08:00"]
+        time_to:
+          description: HH:mm, exclusive.
+          type: [string, "null"]
+        pickup_zone_id:
+          description: A zone of city_id (city required).
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        dropoff_zone_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        starts_at:
+          type: [string, "null"]
+          format: date-time
+        ends_at:
+          type: [string, "null"]
+          format: date-time
+
+    PromotionDraft:
+      type: object
+      required: [name, kind, value_type, value, conditions]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Shown to the rider in the quote and in the account history.
+        kind:
+          type: string
+          enum: [DISCOUNT, BONUS]
+        value_type:
+          type: string
+          enum: [PERCENT, FIXED]
+        value:
+          description: PERCENT — basis points (1000 = 10 %, at most 10000); FIXED — minor units of currency.
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          description: Required for FIXED; ignored for PERCENT.
+          type: [string, "null"]
+          pattern: "^[A-Z]{3}$"
+        conditions:
+          $ref: "#/components/schemas/PromotionConditions"
+
+    Promotion:
+      allOf:
+        - $ref: "#/components/schemas/PromotionDraft"
+        - type: object
+          required: [id, state, version, created_by, created_at, updated_at]
+          properties:
+            id:
+              $ref: "./common.yaml#/components/schemas/Uuid"
+            state:
+              type: string
+              enum: [ACTIVE, ARCHIVED]
+            version:
+              type: integer
+              format: int64
+            created_by:
+              $ref: "./common.yaml#/components/schemas/Uuid"
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+
+    AppliedPromotion:
+      type: object
+      required: [id, name, kind, value_type, value, discount_minor]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [DISCOUNT, BONUS]
+        value_type:
+          type: string
+          enum: [PERCENT, FIXED]
+        value:
+          type: integer
+          format: int64
+        discount_minor:
+          description: What a DISCOUNT takes off the price; 0 for a BONUS (credited after the trip).
+          type: integer
+          format: int64
+
+    DriverPromotionDraft:
+      description: >-
+        Complete orders_required orders within period_days days (periods run from starts_at) — optionally only on
+        days_of_week, between time_from and time_to (city time, when the driver took the order) and with
+        payment_method — and get reward_minor on the balance; once, or in every period (ADR 0010).
+      type: object
+      required: [name, reward_minor, currency, period_days, orders_required, repeat, starts_at]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        reward_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        city_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        period_days:
+          type: integer
+          minimum: 1
+          maximum: 366
+        orders_required:
+          type: integer
+          minimum: 1
+        days_of_week:
+          type: [array, "null"]
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        time_from:
+          type: [string, "null"]
+          examples: ["08:00"]
+        time_to:
+          type: [string, "null"]
+          examples: ["09:00"]
+        payment_method:
+          type: [string, "null"]
+          enum: [CASH, CARD, TERMINAL, null]
+        repeat:
+          type: string
+          enum: [ONCE, EVERY_PERIOD]
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: [string, "null"]
+          format: date-time
+
+    DriverPromotion:
+      type: object
+      required: [id, terms, state, version, created_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        terms:
+          $ref: "#/components/schemas/DriverPromotionDraft"
+        state:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        created_by:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DriverPromotionProgress:
+      type: object
+      required: [promotion_id, name, reward_minor, currency, orders_required, orders_done, period_start, period_end,
+                 rewarded, repeat]
+      properties:
+        promotion_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: string
+        reward_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        orders_required:
+          type: integer
+        orders_done:
+          type: integer
+          format: int64
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        rewarded:
+          description: Already paid in this period (or, for ONCE, ever).
+          type: boolean
+        repeat:
+          type: string
+          enum: [ONCE, EVERY_PERIOD]

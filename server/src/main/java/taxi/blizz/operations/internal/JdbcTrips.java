@@ -345,9 +345,25 @@ class JdbcTrips implements Trips {
                     payload.put("final_fare_id", fare.id().toString());
                     payload.put("final_fare_version", fare.version());
                     payload.put("amount_minor", fare.amountMinor());
+                    // The discount of promotions and the bonuses pay their part of the final fare; the driver or the
+                    // card take the rest (ADR 0009).
+                    record Reductions(long discount, long wallet) {
+                    }
+                    Reductions cut = jdbc.sql("select discount_minor, wallet_minor from ride_order where id = :id")
+                            .param("id", trip.orderId())
+                            .query((rs, i) -> new Reductions(rs.getLong(1), rs.getLong(2))).single();
+                    long discount = Math.min(cut.discount(), fare.amountMinor());
+                    payload.put("discount_minor", discount);
+                    payload.put("wallet_minor", Math.min(cut.wallet(), fare.amountMinor() - discount));
+                    payload.put("quote_id", facts.quoteId() == null ? null : facts.quoteId().toString());
                     payload.put("commission_minor", fare.commissionMinor());
                     payload.put("driver_share_minor", fare.driverShareMinor());
                     payload.put("currency", fare.currency());
+                    // For promotions of drivers (ADR 0010): the city and when the driver took the order.
+                    payload.put("city_id", jdbc.sql("select city_id from ride_order where id = :id")
+                            .param("id", trip.orderId()).query(UUID.class).single().toString());
+                    payload.put("accepted_at", jdbc.sql("select created_at from assignment where id = :id")
+                            .param("id", trip.assignmentId()).query(OffsetDateTime.class).single().toString());
                     core.changeStatus(trip.order(), "FULFILLED", null, "TripCompleted", driver, payload);
                     return view(tripId);
                 });
@@ -426,7 +442,7 @@ class JdbcTrips implements Trips {
                         select t.id, t.order_id, t.assignment_id, t.phase, t.version, ST_Y(o.pickup) as plat,
                                ST_X(o.pickup) as plon, o.pickup_label, ST_Y(o.dropoff) as dlat, ST_X(o.dropoff) as dlon,
                                o.dropoff_label, o.payment_method, o.price_minor, o.currency, t.arrived_at, t.started_at,
-                               t.completed_at, t.needs_review
+                               t.completed_at, t.needs_review, o.wallet_minor, o.discount_minor
                         from trip t join ride_order o on o.id = t.order_id where t.id = :id""")
                 .param("id", tripId)
                 .query((rs, i) -> new TripView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
@@ -436,7 +452,8 @@ class JdbcTrips implements Trips {
                         PaymentMethod.valueOf(rs.getString("payment_method")), (Long) rs.getObject("price_minor"),
                         rs.getString("currency"), rs.getObject("arrived_at", OffsetDateTime.class),
                         rs.getObject("started_at", OffsetDateTime.class),
-                        rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review")))
+                        rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review"),
+                        rs.getLong("wallet_minor"), rs.getLong("discount_minor")))
                 .single();
     }
 

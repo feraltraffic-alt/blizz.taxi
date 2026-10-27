@@ -14,7 +14,8 @@ import taxi.blizz.geo.GeoPoint;
  * consumes {@code quoteId}, a quote issued to the same caller for the same city, class and points
  * (REQ-PRC-05, REQ-PRC-06). {@code pickupAt} asks for a pickup time; it must be the time the quote was made for,
  * and far enough ahead it makes a pre-order (ADR 0006). {@code terminalFallbackToCash}: with TERMINAL, the caller
- * agreed to pay cash if no car with a terminal takes the order (owner decision 27.10.2026).
+ * agreed to pay cash if no car with a terminal takes the order (owner decision 27.10.2026). {@code walletMinor}: how
+ * many bonuses of the rider's account pay part of the price (ADR 0009); the rest is paid in cash or by card.
  */
 public record CreateOrder(
         UUID payerClientId,
@@ -29,13 +30,21 @@ public record CreateOrder(
         String sourceRef,
         CallerContact caller,
         Instant pickupAt,
-        boolean terminalFallbackToCash) {
+        boolean terminalFallbackToCash,
+        Long walletMinor) {
+
+    public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
+                       String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
+                       String sourceRef, CallerContact caller, Instant pickupAt, boolean terminalFallbackToCash) {
+        this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
+                channel, sourceRef, caller, pickupAt, terminalFallbackToCash, null);
+    }
 
     public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
                        String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
                        String sourceRef, CallerContact caller, Instant pickupAt) {
         this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
-                channel, sourceRef, caller, pickupAt, false);
+                channel, sourceRef, caller, pickupAt, false, null);
     }
 
     /** An order for now; {@code pickupAt} is null. */
