@@ -63,7 +63,11 @@ public interface ServiceSettings {
                      int confirmMinutesBefore, int confirmWindowMinutes, int driverCancelUntilMinutesBefore) {
     }
 
-    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
+    /** Hours after trip completion during which either participant may submit or replace a rating. */
+    record Ratings(int editWindowHours) {
+    }
+
+    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
     }
 
     record Version(long version, Settings settings, UUID changedBy, String reason, java.time.OffsetDateTime changedAt) {
