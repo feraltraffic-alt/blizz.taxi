@@ -22,19 +22,23 @@ public final class StaffPermissions {
     /** The owner's reports of orders and money per city and day; checked by operations and finance. */
     public static final String REPORTS_VIEW = "reports.view";
 
+    /** Support cases and problem queues (backoffice), and how sign-in codes went out (telephony). */
+    public static final String SUPPORT_MANAGE = "support.manage";
+
     public static final List<Permission> CATALOG = List.of(
             new Permission("orders.create", "Orders", "Create orders (phone orders)"),
             new Permission("orders.cancel", "Orders", "Cancel orders"),
             new Permission("orders.reassign", "Orders", "Take a driver off an order"),
             new Permission("orders.interrupt", "Orders", "Interrupt a trip in progress and send a follow-up"),
             new Permission("orders.view", "Orders", "Order details and the rider–driver chat"),
+            new Permission("calls.answer", "Calls", "Incoming calls: see them as they ring and take them"),
             new Permission("driver.review", "Drivers", "Review drivers, vehicles and documents"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
             new Permission("wallets.manage", "Finance", "Riders' bonus accounts: view and top up"),
             new Permission("promotions.manage", "Finance", "Promotions for riders: discounts and bonuses"),
-            new Permission("support.manage", "Support", "Support cases and problem queues"),
+            new Permission(StaffPermissions.SUPPORT_MANAGE, "Support", "Support cases and problem queues"),
             new Permission("clients.manage", "Support", "Riders: find, see the card, block and unblock"),
             new Permission("clients.delete", "Clients", "Riders' deletion requests: check, complete or reject"),
             new Permission("operator-bonuses.manage", "Operators", "Operator bonus settings, balances and history"),

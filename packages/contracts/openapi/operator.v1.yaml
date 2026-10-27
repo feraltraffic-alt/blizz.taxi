@@ -1142,7 +1142,108 @@ paths:
         "403": {$ref: "./common.yaml#/components/responses/Forbidden"}
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
 
+  /ws/v1/operator:
+    get:
+      operationId: openOperatorLiveChannel
+      summary: Live channel of the operator workstation (WebSocket)
+      description: >-
+        Upgrade to a WebSocket with an operator access token — the `Authorization: Bearer` header, or `access_token`
+        in the query where a browser cannot set headers. The server pushes `{"type": "CallRinging", "call_id", …,
+        "payload": CallRinging}` (calls.yaml) to the staff with calls.answer for the called number's city as a call
+        rings (card-pop, REQ-OPS-01/08). The first message is `{"type": "Connected"}`; the client may send `ping`
+        (answer `{"type": "Pong"}`). Closed with code 4401 when the access token expires — reconnect with a fresh
+        one. The call log is GET /api/operator/v1/calls; commands stay REST.
+      tags: [Calls]
+      parameters:
+        - name: access_token
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching to WebSocket.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/operator/v1/calls:
+    get:
+      operationId: listCalls
+      summary: Recent incoming calls of my cities
+      description: >-
+        The call log, newest first, at most 100, for the cities where I have calls.answer (a number without a city
+        line only for staff with all cities). Calls are logged only while the service's Asterisk is reachable; phone
+        orders work without it (REQ-OPS-07, T-36).
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: "./calls.yaml#/components/schemas/CallState"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/CallList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/operator/v1/calls/{call_id}/answer:
+    post:
+      operationId: answerCall
+      summary: I took this call
+      description: >-
+        Records who took the call (Asterisk knows the phone, not the staff member). A repeat returns the first
+        result; a call another operator already took → 409 STATE_CONFLICT; an ended or missed call → 409.
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: call_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./calls.yaml#/components/schemas/AnswerCall"
+      responses:
+        "200":
+          description: Taken.
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/Call"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
+  - name: Calls
+    description: Incoming calls of the call centre — card-pop and the call log (REQ-OPS-01/08)
   - name: Support
     description: Support cases (REQ-ADM-09)
   - name: Me
@@ -1233,6 +1334,17 @@ components:
           description: Optional telephony/call reference stored as the order source_ref; no telephony integration is implied.
           type: string
           maxLength: 200
+        call_id:
+          description: >-
+            The incoming call this order is made during (GET /api/operator/v1/calls): the order is linked to it, and
+            ending the call does not cancel the order (REQ-OPS-10). A call already linked to another order → 409
+            STATE_CONFLICT unless link_again is true; the first link stays.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        link_again:
+          description: Link a call that already has an order to this one too (e.g. the caller orders a second car).
+          type: [boolean, "null"]
         caller:
           $ref: "#/components/schemas/Caller"
         pickup_at:

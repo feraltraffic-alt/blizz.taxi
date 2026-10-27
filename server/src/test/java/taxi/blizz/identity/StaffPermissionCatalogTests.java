@@ -16,6 +16,7 @@ import taxi.blizz.operations.OrderChat;
 import taxi.blizz.operations.Orders;
 import taxi.blizz.operatorbonus.OperatorBonuses;
 import taxi.blizz.pricing.TariffService;
+import taxi.blizz.telephony.Calls;
 import taxi.blizz.promotions.RiderPromotions;
 
 /** Every permission a module checks can be ticked in the admin panel, and nothing else can. */
@@ -30,6 +31,7 @@ class StaffPermissionCatalogTests {
                 StaffPermissions.REPORTS_VIEW,
                 ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION,
                 RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION, OperatorBonuses.MANAGE_PERMISSION,
-                ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION));
+                ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION,
+                Calls.ANSWER_PERMISSION));
     }
 }

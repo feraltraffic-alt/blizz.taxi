@@ -34,6 +34,14 @@ public interface Orders {
     OrderView create(Actor actor, UUID commandId, CreateOrder order);
 
     /**
+     * A phone order made during an incoming call (issue #64): created as {@link #create} and linked to the call in the
+     * same transaction. Ending the call never cancels the order (REQ-OPS-10). The staff member also needs
+     * {@code telephony.Calls.ANSWER_PERMISSION} for the call's city; a call that already has an order takes another
+     * one only with {@code linkAgain} (the first link stays), otherwise {@code STATE_CONFLICT}.
+     */
+    OrderView createDuringCall(Actor staff, UUID commandId, CreateOrder order, UUID callId, boolean linkAgain);
+
+    /**
      * Cancels before the trip starts: by the paying client or by staff with {@link #CANCEL_PERMISSION}.
      * Releases an assignment and the driver; no fee until the cancellation policy exists (Q-07).
      */

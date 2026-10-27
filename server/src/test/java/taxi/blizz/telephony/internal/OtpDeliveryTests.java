@@ -133,7 +133,8 @@ class OtpDeliveryTests {
     }
 
     private TelephonyProperties live() {
-        return new TelephonyProperties("LIVE", "https://turbosms.test", Duration.ofSeconds(25));
+        return new TelephonyProperties("LIVE", "https://turbosms.test", Duration.ofSeconds(25), false,
+                Duration.ofHours(4), false);
     }
 
     // ------------------------------------------------------------ the channel order

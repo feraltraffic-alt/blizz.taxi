@@ -44,4 +44,33 @@ class JdbcStaffAccess implements StaffAccess {
                     : "Missing permission " + permission + " for this city");
         }
     }
+
+    @Override
+    public Scope scope(Actor actor, String permission) {
+        if (actor == null || actor.type() != SubjectType.STAFF) {
+            return Scope.none();
+        }
+        return jdbc.sql("""
+                        select role = 'SUPER_ADMIN' or all_cities as all_cities, city_scope from staff_user
+                        where id = :id and state = 'ACTIVE' and not must_change_password
+                          and (role = 'SUPER_ADMIN' or :permission = any(permissions))""")
+                .param("id", actor.id()).param("permission", permission)
+                .query((rs, i) -> new Scope(rs.getBoolean("all_cities"),
+                        new java.util.HashSet<>(Arrays.asList((UUID[]) rs.getArray("city_scope").getArray()))))
+                .optional().orElse(Scope.none());
+    }
+
+    @Override
+    public java.util.Set<UUID> holders(String permission, UUID cityId) {
+        return new java.util.LinkedHashSet<>(jdbc.sql("""
+                        select id from staff_user
+                        where state = 'ACTIVE' and not must_change_password
+                          and (role = 'SUPER_ADMIN'
+                               or (:permission = any(permissions)
+                                   and (all_cities or (cast(:city as uuid) is not null
+                                                       and cast(:city as uuid) = any(city_scope)))))
+                        order by id""")
+                .param("permission", permission).param("city", cityId)
+                .query(UUID.class).list());
+    }
 }

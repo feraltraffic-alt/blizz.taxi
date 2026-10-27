@@ -85,7 +85,7 @@ class OperatorOrderController {
                             @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                             @NotNull PaymentMethod paymentMethod, @Size(max = 200) String callRef,
                             @NotNull @Valid CallerInput caller, java.time.Instant pickupAt,
-                            Boolean terminalFallbackToCash) {
+                            Boolean terminalFallbackToCash, UUID callId, Boolean linkAgain) {
     }
 
     record CancelRequest(@NotNull UUID commandId, @NotNull Long expectedVersion,
@@ -139,10 +139,15 @@ class OperatorOrderController {
         }
         PhoneNumber phone = PhoneNumber.parse(body.caller().phone());
         CallerContact caller = new CallerContact(body.caller().name(), phone.e164());
-        OrderView order = orders.create(claims.actor(), body.commandId(), new CreateOrder(null,
+        CreateOrder request = new CreateOrder(null,
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
                 body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller, body.pickupAt(),
-                Boolean.TRUE.equals(body.terminalFallbackToCash())));
+                Boolean.TRUE.equals(body.terminalFallbackToCash()));
+        // Made during an incoming call: linked to it (issue #64); a phone order without a call works as before.
+        OrderView order = body.callId() == null
+                ? orders.create(claims.actor(), body.commandId(), request)
+                : orders.createDuringCall(claims.actor(), body.commandId(), request, body.callId(),
+                        Boolean.TRUE.equals(body.linkAgain()));
         return view(order);
     }
 

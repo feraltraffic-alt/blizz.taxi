@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — incoming calls components
+  version: 1.0.0
+  description: >-
+    Shared schemas of the call centre's incoming calls through the service's Asterisk (REQ-OPS-01/07/08/10, ADR 0012
+    Q-18): the call log, the card-pop to operators, and the service numbers of each city. A call and an order made
+    during it are linked but have their own lifecycles. Referenced by the operator and admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    CallState:
+      description: >-
+        RINGING — the call came in; ANSWERED — it was taken; ENDED — it ended after being taken; MISSED — it ended
+        without being taken.
+      type: string
+      enum: [RINGING, ANSWERED, ENDED, MISSED]
+
+    Call:
+      type: object
+      additionalProperties: false
+      required: [id, state, caller_phone, called_number, city_id, answered_by, order_ids, started_at, answered_at,
+                 ended_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          $ref: "#/components/schemas/CallState"
+        caller_phone:
+          description: The caller's number in E.164; null when the network gave none or it could not be read.
+          type: [string, "null"]
+        called_number:
+          description: The service number that was called.
+          type: string
+        city_id:
+          description: The city of the called number (call lines); null for a number without a line.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        answered_by:
+          description: The staff member who took the call in the panel.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        order_ids:
+          description: Orders made during the call, the first first; ending the call does not cancel them.
+          type: array
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        started_at:
+          type: string
+          format: date-time
+        answered_at:
+          type: [string, "null"]
+          format: date-time
+        ended_at:
+          type: [string, "null"]
+          format: date-time
+
+    CallList:
+      type: object
+      additionalProperties: false
+      required: [calls]
+      properties:
+        calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/Call"
+
+    AnswerCall:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    CallRinging:
+      description: >-
+        The card-pop, pushed on /ws/v1/operator to the operators of the called number's city as the call rings:
+        `{"type": "CallRinging", "payload": CallRinging}`. Only what the operator needs to start: the caller's number
+        and, when it belongs to a rider, the rider's id, name and open orders — nothing else.
+      type: object
+      additionalProperties: false
+      required: [call_id, city_id, caller_phone, client_id, client_name, open_order_ids]
+      properties:
+        call_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        caller_phone:
+          type: [string, "null"]
+        client_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        client_name:
+          type: [string, "null"]
+        open_order_ids:
+          type: array
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+
+    CallLine:
+      description: A service number the call centre answers, and its city.
+      type: object
+      additionalProperties: false
+      required: [number, city_id, label, version]
+      properties:
+        number:
+          type: string
+          pattern: "^\\+[1-9][0-9]{7,14}$"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        label:
+          type: [string, "null"]
+          maxLength: 80
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    CallLineList:
+      type: object
+      additionalProperties: false
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallLine"
+
+    ChangeCallLine:
+      description: >-
+        Sets the city of a service number, or removes the number with city_id null. A command: expected_version is
+        0 for a new number; audited with the reason.
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, city_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        city_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        label:
+          type: [string, "null"]
+          maxLength: 80
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
