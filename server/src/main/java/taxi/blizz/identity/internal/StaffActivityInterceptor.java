@@ -41,7 +41,19 @@ class StaffActivityInterceptor implements HandlerInterceptor {
         Map<String, String> ids = (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         Object started = request.getAttribute(STARTED);
         long durationMs = started instanceof Long s ? (System.nanoTime() - s) / 1_000_000 : 0;
-        log.request(staffId, audience, request.getMethod(), template == null ? path : template.toString(), ids,
-                response.getStatus(), durationMs, request.getRemoteAddr());
+        // Path variables are named as in the contract (snake_case), e.g. {staff_id}.
+        Map<String, String> named = new java.util.LinkedHashMap<>();
+        if (ids != null) {
+            ids.forEach((name, value) -> named.put(snake(name), value));
+        }
+        String shown = template == null ? path
+                : java.util.regex.Pattern.compile("\\{(\\w+)}").matcher(template.toString())
+                        .replaceAll(m -> "{" + snake(m.group(1)) + "}");
+        log.request(staffId, audience, request.getMethod(), shown, named, response.getStatus(), durationMs,
+                request.getRemoteAddr());
+    }
+
+    private static String snake(String name) {
+        return name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(java.util.Locale.ROOT);
     }
 }
