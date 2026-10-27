@@ -1,5 +1,7 @@
 package taxi.blizz.operations.internal;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,6 +75,7 @@ class JdbcOrders implements Orders {
         return commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
+            OffsetDateTime now = core.now();
             try {
                 jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
@@ -102,10 +105,21 @@ class JdbcOrders implements Orders {
                         .param("currency", quote.currency())
                         .param("quoteId", quote.id())
                         .param("sourceRef", order.sourceRef())
-                        .param("now", core.now())
+                        .param("now", now)
                         .update();
             } catch (DuplicateKeyException e) {
                 throw new DomainException(ErrorCode.ORDER_ALREADY_ACTIVE, "The payer already has an active order");
+            }
+            if (order.caller() != null) {
+                jdbc.sql("""
+                                insert into order_contact (order_id, name, phone, created_by, created_at)
+                                values (:order, :name, :phone, :createdBy, :now)""")
+                        .param("order", id)
+                        .param("name", order.caller().name())
+                        .param("phone", order.caller().phone())
+                        .param("createdBy", actor.id())
+                        .param("now", now)
+                        .update();
             }
             if (actor.type() == SubjectType.STAFF) {
                 audit.record(new AuditEntry(actor, "order.create", "ride_order", id.toString(), "Phone order",
@@ -200,8 +214,8 @@ class JdbcOrders implements Orders {
     }
 
     @Override
-    public OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason) {
-        if (staff.type() != SubjectType.STAFF) {
+    public OrderView revokeAssignment(Actor staffActor, UUID commandId, UUID orderId, long expectedVersion, String reason) {
+        if (staffActor.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can take a driver off an order");
         }
         if (reason == null || reason.isBlank()) {
@@ -210,8 +224,8 @@ class JdbcOrders implements Orders {
         UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
                 .query(UUID.class).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
-        requireStaff(staff, REASSIGN_PERMISSION, cityId);
-        return commands.execute(new CommandKey(staff, "order.assignment.revoke", commandId),
+        requireStaff(staffActor, REASSIGN_PERMISSION, cityId);
+        return commands.execute(new CommandKey(staffActor, "order.assignment.revoke", commandId),
                 new RevokeRequest(orderId, expectedVersion, reason), OrderView.class, () -> {
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     if (order.version() != expectedVersion) {
@@ -224,9 +238,9 @@ class JdbcOrders implements Orders {
                             .filter(a -> "COMMITTED".equals(a.state()))
                             .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No active assignment"));
                     core.endAssignmentBeforeStart(assignment, "REVOKED", reason);
-                    audit.record(new AuditEntry(staff, "order.revokeAssignment", "ride_order", orderId.toString(),
+                    audit.record(new AuditEntry(staffActor, "order.revokeAssignment", "ride_order", orderId.toString(),
                             reason, Map.of("driver_id", assignment.driverId().toString()), null));
-                    core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staff, reason,
+                    core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staffActor, reason,
                             Map.<String, Object>of("assignment_id", assignment.id().toString(),
                                     "driver_id", assignment.driverId().toString()));
                     engine.resumeSearch(core.lockOrder(orderId));
@@ -238,6 +252,25 @@ class JdbcOrders implements Orders {
     @Transactional(readOnly = true)
     public OrderView get(UUID orderId) {
         return core.view(orderId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderView> inCity(Actor staffActor, UUID cityId, boolean activeOnly, OffsetDateTime before, int limit) {
+        requireStaff(staffActor, VIEW_PERMISSION, cityId);
+        int size = Math.max(1, Math.min(limit, 100));
+        String active = activeOnly
+                ? " and status in ('AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')"
+                : "";
+        String cursor = before == null ? "" : " and created_at < :before";
+        JdbcClient.StatementSpec query = jdbc.sql("select id from ride_order where city_id = :city" + active + cursor
+                        + " order by created_at desc, id desc limit :limit")
+                .param("city", cityId)
+                .param("limit", size);
+        if (before != null) {
+            query = query.param("before", before);
+        }
+        return query.query(UUID.class).list().stream().map(core::view).toList();
     }
 
     @Override
