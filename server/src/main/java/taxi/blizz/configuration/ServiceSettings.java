@@ -71,15 +71,29 @@ public interface ServiceSettings {
     record Tips(int windowHours) {
     }
 
-    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips) {
+    /**
+     * Orders not in a final state, pre-orders included, one paying rider may have at once (active_orders_per_payer,
+     * ADR 0012 Q-03): 1..10, 3 by default.
+     */
+    record Orders(int activePerPayer) {
+    }
+
+    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                    Orders orders) {
         /** Source compatibility for callers written before ratings became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
-            this(brand, languages, calls, preorders, null, null);
+            this(brand, languages, calls, preorders, null, null, null);
         }
 
         /** Source compatibility for callers written before tips became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
-            this(brand, languages, calls, preorders, ratings, null);
+            this(brand, languages, calls, preorders, ratings, null, null);
+        }
+
+        /** Source compatibility for callers written before the order limit became configurable. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings,
+                        Tips tips) {
+            this(brand, languages, calls, preorders, ratings, tips, null);
         }
     }
 
