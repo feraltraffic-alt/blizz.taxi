@@ -41,29 +41,25 @@ create table operator_bonus_entry (
 create index operator_bonus_entry_staff_time_idx on operator_bonus_entry(staff_id, occurred_at desc);
 
 create table operator_bonus_account (
-    staff_id        uuid primary key,
-    balance         int         not null default 0,
-    fulfilled_count int        not null default 0,
-    cancelled_count int        not null default 0,
+    staff_id          uuid primary key,
+    balance           int         not null default 0,
+    fulfilled_count   int         not null default 0,
+    cancelled_count   int         not null default 0,
     period_started_at timestamptz not null,
-    updated_at      timestamptz not null
+    timezone           text        not null,
+    updated_at         timestamptz not null
 );
 
 create table operator_bonus_period (
-    id              uuid primary key,
-    staff_id        uuid        not null,
-    period_key      date        not null,
+    id                uuid primary key,
+    staff_id          uuid        not null,
+    period_key        date        not null,
     period_started_at timestamptz not null,
-    period_ended_at timestamptz not null,
-    points          int         not null,
-    fulfilled_count int        not null,
-    cancelled_count int        not null,
-    closed_at       timestamptz not null,
+    period_ended_at   timestamptz not null,
+    points            int         not null,
+    fulfilled_count   int         not null,
+    cancelled_count   int         not null,
+    closed_at         timestamptz not null,
     unique (staff_id, period_key)
 );
 create index operator_bonus_period_key_idx on operator_bonus_period(period_key desc, staff_id);
-
-create table operator_bonus_reset (
-    period_key date primary key,
-    closed_at  timestamptz not null
-);
