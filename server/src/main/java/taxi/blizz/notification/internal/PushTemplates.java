@@ -65,7 +65,30 @@ final class PushTemplates {
                     "Заказ отменён", "Заказ больше не нужно выполнять",
                     "Замовлення скасовано", "Замовлення більше не потрібно виконувати",
                     "Zlecenie anulowane", "Zlecenie nie jest już aktualne",
-                    "Order cancelled", "You no longer need to take this order")));
+                    "Order cancelled", "You no longer need to take this order")),
+            // {type} and {date}: see document(...) below.
+            Map.entry("driver.document-expiring", texts(
+                    "Документ скоро закончится", "{type} действует до {date}. Загрузите новый в приложении",
+                    "Документ скоро закінчується", "{type} діє до {date}. Завантажте новий у застосунку",
+                    "Dokument wkrótce wygaśnie", "{type}: ważność do {date}. Prześlij nowy w aplikacji",
+                    "Document expires soon", "{type} is valid until {date}. Upload a new one in the app")));
+
+    /** Names of driver document types in the push texts ({@code driver.DocumentType}). */
+    private static final Map<String, Map<String, String>> DOCUMENT_TYPES = Map.of(
+            "DRIVER_LICENSE", Map.of("ru", "Водительское удостоверение", "uk", "Посвідчення водія",
+                    "pl", "Prawo jazdy", "en", "Driving licence"),
+            "IDENTITY", Map.of("ru", "Удостоверение личности", "uk", "Посвідчення особи",
+                    "pl", "Dokument tożsamości", "en", "Identity document"),
+            "TAXI_PERMIT", Map.of("ru", "Разрешение на такси", "uk", "Дозвіл на таксі",
+                    "pl", "Licencja taxi", "en", "Taxi permit"),
+            "VEHICLE_REGISTRATION", Map.of("ru", "Техпаспорт", "uk", "Техпаспорт",
+                    "pl", "Dowód rejestracyjny", "en", "Vehicle registration"),
+            "INSURANCE", Map.of("ru", "Страховка", "uk", "Страховка",
+                    "pl", "Ubezpieczenie", "en", "Insurance"),
+            "OTHER", Map.of("ru", "Документ", "uk", "Документ", "pl", "Dokument", "en", "Document"));
+
+    private static final java.time.format.DateTimeFormatter DAY_MONTH_YEAR =
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     private PushTemplates() {
     }
@@ -85,6 +108,18 @@ final class PushTemplates {
             text = byLanguage.getOrDefault(fallback, byLanguage.get("en"));
         }
         return Optional.of(text);
+    }
+
+    /**
+     * The text of {@code driver.document-expiring} with the document type and its last day filled in, in the
+     * language of {@code text} (dates as dd.MM.yyyy, in English as yyyy-MM-dd).
+     */
+    static Text document(Text text, String language, String documentType, java.time.LocalDate validTo) {
+        Map<String, String> names = DOCUMENT_TYPES.getOrDefault(documentType, DOCUMENT_TYPES.get("OTHER"));
+        String type = names.getOrDefault(language, names.get("en"));
+        String date = "en".equals(language) ? validTo.toString() : DAY_MONTH_YEAR.format(validTo);
+        return new Text(text.title().replace("{type}", type).replace("{date}", date),
+                text.body().replace("{type}", type).replace("{date}", date));
     }
 
     static boolean supports(String language) {
