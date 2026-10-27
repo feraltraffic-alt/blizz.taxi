@@ -323,6 +323,228 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/drivers:
+    get:
+      operationId: listDriversForReview
+      summary: Review queue
+      description: Drivers in a review status (default IN_REVIEW — the queue), oldest first. Needs driver.review.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_SUBMITTED, IN_REVIEW, CHANGES_REQUIRED, APPROVED, REJECTED, SUSPENDED, EXPIRED]
+            default: IN_REVIEW
+        - name: after
+          in: query
+          description: Next page — since of the last driver of the previous page.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewQueue"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/drivers/{driver_id}:
+    get:
+      operationId: getDriverReviewCase
+      summary: A driver with documents, vehicles and the history of decisions
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewCase"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/drivers/{driver_id}/documents/{document_id}/file:
+    get:
+      operationId: getDriverDocumentFile
+      summary: The scan of a driver's document
+      description: Private, not cached; every opening is audited (REQ-SEC-07). Needs driver.review.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The file.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/drivers/{driver_id}/decision:
+    post:
+      operationId: decideDriverReview
+      summary: Approve, request changes or reject
+      description: IN_REVIEW only, reason required. On APPROVE the given vehicle classes are granted; otherwise rejected_documents tell the driver what to replace.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewDecisionCommand"
+      responses:
+        "200":
+          description: The driver after the decision.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/drivers/{driver_id}/suspend:
+    post:
+      operationId: suspendDriver
+      summary: Suspend an approved driver
+      description: No new orders; a trip in progress is not interrupted (REQ-DS-01). Reason required.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewChange"
+      responses:
+        "200":
+          description: The driver after the decision.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/drivers/{driver_id}/reinstate:
+    post:
+      operationId: reinstateDriver
+      summary: Reinstate a suspended driver
+      description: SUSPENDED → APPROVED, reason required.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewChange"
+      responses:
+        "200":
+          description: The driver after the decision.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity
@@ -449,6 +671,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
 
 tags:
+  - name: Drivers
+    description: Driver review (section 6), driver.review
   - name: Logs
     description: Logs of all staff actions, by role
   - name: Me
@@ -461,6 +685,110 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    ReviewItem:
+      type: object
+      additionalProperties: false
+      required: [driver_id, status, since, version]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        phone:
+          type: [string, "null"]
+        status:
+          type: string
+        since:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        version:
+          type: integer
+          format: int64
+
+    ReviewQueue:
+      type: object
+      additionalProperties: false
+      required: [drivers]
+      properties:
+        drivers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewItem"
+
+    ReviewEvent:
+      type: object
+      additionalProperties: false
+      required: [from, to, actor_type, reason, at]
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        actor_type:
+          type: string
+        actor_id:
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: string
+        at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    ReviewCase:
+      type: object
+      additionalProperties: false
+      required: [profile, history]
+      properties:
+        profile:
+          $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        phone:
+          type: [string, "null"]
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewEvent"
+
+    ReviewDecisionCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, decision, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        decision:
+          type: string
+          enum: [APPROVE, REQUEST_CHANGES, REJECT]
+        reason:
+          type: string
+          maxLength: 1000
+        vehicle_classes:
+          description: Classes granted to the submitted vehicles on APPROVE, e.g. STANDARD.
+          type: array
+          items:
+            type: string
+        rejected_documents:
+          type: array
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+
+    ReviewChange:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          maxLength: 1000
+
     ActivityEntry:
       type: object
       additionalProperties: false

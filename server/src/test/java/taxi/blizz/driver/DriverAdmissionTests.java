@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -18,6 +19,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import taxi.blizz.identity.ApiAudience;
+import taxi.blizz.identity.SessionService;
+import taxi.blizz.identity.VerifiedSubject;
+import tools.jackson.databind.json.JsonMapper;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.files.FilePurpose;
 import taxi.blizz.files.FileService;
@@ -394,5 +406,93 @@ class DriverAdmissionTests {
         assertThat(expired.reviewStatus()).isEqualTo(ReviewStatus.EXPIRED);
         DriverProfile again = admission.submit(driver, UUID.randomUUID(), expired.version());
         assertThat(again.reviewStatus()).isEqualTo(ReviewStatus.IN_REVIEW);
+    }
+
+    // ------------------------------------------------------------ the reviewer in the admin panel
+
+    @Autowired
+    WebApplicationContext context;
+    @Autowired
+    SessionService sessions;
+    @Autowired
+    JsonMapper json;
+
+    @Test
+    void theReviewerSeesTheQueueTheCaseAndTheScansAndEveryScanOpeningIsAudited() throws Exception {
+        Actor driver = newDriver();
+        DriverProfile inReview = submitted(driver);
+        Actor reviewer = reviewer();
+
+        assertThat(admission.reviewQueue(reviewer, null, null, 100))
+                .anySatisfy(item -> {
+                    assertThat(item.driverId()).isEqualTo(driver.id());
+                    assertThat(item.status()).isEqualTo(ReviewStatus.IN_REVIEW);
+                    assertThat(item.version()).isEqualTo(inReview.version());
+                });
+        DriverAdmission.ReviewCase reviewCase = admission.reviewCase(reviewer, driver.id());
+        assertThat(reviewCase.history()).extracting(DriverAdmission.ReviewEvent::to).containsExactly(ReviewStatus.IN_REVIEW);
+        assertThat(reviewCase.phone()).startsWith("+38097");
+
+        UUID documentId = reviewCase.profile().documents().getFirst().id();
+        try (var file = admission.documentFile(reviewer, driver.id(), documentId).stream()) {
+            assertThat(file.readAllBytes()).isEqualTo(PNG);
+        }
+        assertThat(count("select count(*) from audit_log where action = 'driver.document.view' and resource_id = cast(:id as text)",
+                documentId)).isEqualTo(1);
+        assertCode(() -> admission.documentFile(reviewer, newDriver().id(), documentId), ErrorCode.NOT_FOUND);
+        Actor withoutRight = newStaff("ACTIVE", "orders.view");
+        assertCode(() -> admission.reviewQueue(withoutRight, null, null, 10), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> admission.reviewCase(withoutRight, driver.id()), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> admission.documentFile(withoutRight, driver.id(), documentId), ErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    void aSuspendedDriverIsReinstatedWithAReason() {
+        Actor driver = newDriver();
+        DriverProfile approved = approved(driver);
+        DriverProfile suspended = admission.suspend(reviewer(), UUID.randomUUID(), driver.id(), approved.version(),
+                "Complaint under investigation");
+        assertCode(() -> admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), suspended.version(), " "),
+                ErrorCode.VALIDATION_FAILED);
+        DriverProfile back = admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), suspended.version(),
+                "Complaint not confirmed");
+        assertThat(back.reviewStatus()).isEqualTo(ReviewStatus.APPROVED);
+        assertCode(() -> admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), back.version(), "again"),
+                ErrorCode.STATE_CONFLICT);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void overTheAdminApiTheReviewerApprovesADriver() throws Exception {
+        java.util.List<jakarta.servlet.Filter> filters = new ArrayList<>(context.getBeansOfType(jakarta.servlet.Filter.class).values());
+        AnnotationAwareOrderComparator.sort(filters);
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(jakarta.servlet.Filter[]::new)).build();
+        Actor driver = newDriver();
+        DriverProfile inReview = submitted(driver);
+        String token = sessions.openStaff(new VerifiedSubject(reviewer(), "ACTIVE", false), ApiAudience.ADMIN, null)
+                .accessToken();
+
+        MvcResult queue = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/admin/v1/drivers").param("limit", "100")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn();
+        assertThat(queue.getResponse().getStatus()).isEqualTo(200);
+        assertThat((java.util.List<Map<String, Object>>) json.readValue(queue.getResponse().getContentAsString(), Map.class)
+                .get("drivers")).anySatisfy(d -> assertThat(d).containsEntry("driver_id", driver.id().toString()));
+
+        UUID documentId = inReview.documents().getFirst().id();
+        MvcResult file = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/admin/v1/drivers/" + driver.id() + "/documents/" + documentId + "/file")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn();
+        assertThat(file.getResponse().getStatus()).isEqualTo(200);
+        assertThat(file.getResponse().getHeader(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+
+        MvcResult decided = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/admin/v1/drivers/" + driver.id() + "/decision")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("command_id", UUID.randomUUID(),
+                        "expected_version", inReview.version(), "decision", "APPROVE",
+                        "reason", "Documents checked", "vehicle_classes", java.util.List.of("STANDARD"))))).andReturn();
+        assertThat(decided.getResponse().getStatus()).isEqualTo(200);
+        assertThat(admission.profile(driver.id()).reviewStatus()).isEqualTo(ReviewStatus.APPROVED);
     }
 }

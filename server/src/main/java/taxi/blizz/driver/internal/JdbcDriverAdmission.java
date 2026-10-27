@@ -25,6 +25,7 @@ import taxi.blizz.driver.DriverProfile;
 import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
 import taxi.blizz.files.FilePurpose;
+import taxi.blizz.files.FileContent;
 import taxi.blizz.files.FileService;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
@@ -349,6 +350,78 @@ class JdbcDriverAdmission implements DriverAdmission {
                     transition(driverId, ReviewStatus.APPROVED, ReviewStatus.SUSPENDED, reviewer, reason);
                     return profile(driverId);
                 });
+    }
+
+    @Override
+    public DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason) {
+        requireReviewer(reviewer);
+        requireReason(reason);
+        return commands.execute(new CommandKey(reviewer, "driver.review.reinstate", commandId),
+                new SuspendRequest(driverId, expectedVersion, reason), DriverProfile.class, () -> {
+                    Locked locked = lockVersion(driverId, expectedVersion);
+                    if (locked.status() != ReviewStatus.SUSPENDED) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a suspended driver can be reinstated");
+                    }
+                    transition(driverId, ReviewStatus.SUSPENDED, ReviewStatus.APPROVED, reviewer, reason);
+                    return profile(driverId);
+                });
+    }
+
+    // ---------------------------------------------------------------- reviewer views
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, OffsetDateTime after, int limit) {
+        requireReviewer(reviewer);
+        ReviewStatus wanted = status == null ? ReviewStatus.IN_REVIEW : status;
+        return jdbc.sql("""
+                        select * from (
+                            select d.id, d.name, d.phone_normalized, d.review_status, d.version,
+                                   coalesce((select max(e.occurred_at) from driver_review_event e
+                                             where e.driver_id = d.id and e.to_status = d.review_status),
+                                            d.created_at) as since
+                            from driver d where d.review_status = :status) q
+                        where cast(:after as timestamptz) is null or q.since > :after
+                        order by q.since, q.id limit :limit""")
+                .param("status", wanted.name())
+                .param("after", after)
+                .param("limit", Math.max(1, Math.min(limit, 100)))
+                .query((rs, i) -> new ReviewItem(rs.getObject("id", UUID.class), rs.getString("name"),
+                        rs.getString("phone_normalized"), ReviewStatus.valueOf(rs.getString("review_status")),
+                        rs.getObject("since", OffsetDateTime.class), rs.getLong("version")))
+                .list();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewCase reviewCase(Actor reviewer, UUID driverId) {
+        requireReviewer(reviewer);
+        DriverProfile profile = profile(driverId);
+        String phone = jdbc.sql("select phone_normalized from driver where id = :id").param("id", driverId)
+                .query(String.class).single();
+        List<ReviewEvent> history = jdbc.sql("""
+                        select from_status, to_status, actor_type, actor_id, reason, occurred_at
+                        from driver_review_event where driver_id = :id order by occurred_at, id""")
+                .param("id", driverId)
+                .query((rs, i) -> new ReviewEvent(ReviewStatus.valueOf(rs.getString(1)),
+                        ReviewStatus.valueOf(rs.getString(2)), rs.getString(3), rs.getObject(4, UUID.class),
+                        rs.getString(5), rs.getObject(6, OffsetDateTime.class)))
+                .list();
+        return new ReviewCase(profile, phone, history);
+    }
+
+    @Override
+    @Transactional
+    public FileContent documentFile(Actor reviewer, UUID driverId, UUID documentId) {
+        requireReviewer(reviewer);
+        UUID fileId = jdbc.sql("select file_id from driver_document where id = :doc and driver_id = :driver")
+                .param("doc", documentId).param("driver", driverId)
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Document not found"));
+        auditLog.record(new AuditEntry(reviewer, "driver.document.view", "driver_document", documentId.toString(),
+                "Document review", null, Map.of("driver_id", driverId.toString())));
+        // The file belongs to the driver; the reviewer's right was checked above.
+        return files.open(new Actor(SubjectType.DRIVER, driverId), fileId);
     }
 
     // ---------------------------------------------------------------- system

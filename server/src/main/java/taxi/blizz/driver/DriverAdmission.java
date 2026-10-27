@@ -62,6 +62,32 @@ public interface DriverAdmission {
     /** APPROVED → SUSPENDED with a reason; stops new orders, never an ongoing trip (REQ-DS-01). */
     DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
 
+    /** SUSPENDED → APPROVED with a reason, when the cause of the suspension is gone. */
+    DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
+
+    // ---------------------------------------------------------------- the reviewer's views (admin panel)
+
+    /** One line of the review queue; {@code since} is when the driver entered the status. */
+    record ReviewItem(UUID driverId, String name, String phone, ReviewStatus status, java.time.OffsetDateTime since,
+                      long version) {
+    }
+
+    /** Drivers in {@code status} (IN_REVIEW: the queue), oldest first, after {@code after}; at most 100. */
+    List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, java.time.OffsetDateTime after, int limit);
+
+    /** Full profile with the history of review decisions, for the reviewer. */
+    record ReviewEvent(ReviewStatus from, ReviewStatus to, String actorType, UUID actorId, String reason,
+                       java.time.OffsetDateTime at) {
+    }
+
+    record ReviewCase(DriverProfile profile, String phone, List<ReviewEvent> history) {
+    }
+
+    ReviewCase reviewCase(Actor reviewer, UUID driverId);
+
+    /** The file of a driver's document, for the reviewer; every opening is audited (REQ-SEC-07). */
+    taxi.blizz.files.FileContent documentFile(Actor reviewer, UUID driverId, UUID documentId);
+
     /**
      * APPROVED → EXPIRED for drivers whose required accepted document ended before {@code today}
      * (date in the market's time zone). Returns the number of drivers moved.
