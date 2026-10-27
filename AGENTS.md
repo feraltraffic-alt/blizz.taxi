@@ -25,7 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
 - Schema changes only as new Flyway migrations; never edit an applied migration; Hibernate stays `ddl-auto=validate`.
-- Name new migrations by UTC date and time, `V<yyyyMMdd>_<HHmm>__<what>.sql` (e.g. `V20261026_1640__order_core.sql`), so parallel branches never take the same number. Before opening the PR, check that your migration sorts **after** every migration already on `main`; if not, rename it to the current UTC time (Flyway refuses an older migration on a database that already has newer ones).
+- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for Claude and `2` for Codex (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, check that your migration sorts **after** every migration already on `main`; if not, rename it to the current UTC time (Flyway refuses an older migration on a database that already has newer ones).
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.
