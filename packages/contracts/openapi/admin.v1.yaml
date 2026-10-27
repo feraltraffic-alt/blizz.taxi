@@ -1064,6 +1064,85 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/settings:
+    get:
+      operationId: getServiceSettings
+      summary: Service settings in force
+      description: Version 0 with the defaults until the first change. Needs settings.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsVersion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: changeServiceSettings
+      summary: Change the brand, languages or the call mode
+      description: |
+        A new version with author and reason (REQ-TEN-06). Colours are checked for contrast (4.5:1). Calls
+        VIA_SERVICE_NUMBERS need the service phone; note that DIRECT leaves the other party's number in the
+        phone's call log (REQ-SEC-04), which the admin panel shows when switching.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeSettings"
+      responses:
+        "200":
+          description: The new version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/settings/history:
+    get:
+      operationId: listServiceSettingsHistory
+      summary: Earlier versions of the settings
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsHistory"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity
@@ -1190,6 +1269,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
 
 tags:
+  - name: Settings
+    description: Brand, languages and how calls work (REQ-TEN-06/07), settings.manage
   - name: Geography
     description: Cities, zones and own addresses (section 14), geo.manage
   - name: Drivers
@@ -1206,6 +1287,71 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    Settings:
+      type: object
+      additionalProperties: false
+      required: [brand, languages, calls]
+      properties:
+        brand:
+          $ref: "./config.v1.yaml#/components/schemas/Brand"
+        languages:
+          $ref: "./config.v1.yaml#/components/schemas/Languages"
+        calls:
+          type: object
+          additionalProperties: false
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [DIRECT, VIA_SERVICE_NUMBERS]
+            service_phone:
+              type: [string, "null"]
+
+    SettingsVersion:
+      type: object
+      additionalProperties: false
+      required: [version, settings]
+      properties:
+        version:
+          type: integer
+          format: int64
+        settings:
+          $ref: "#/components/schemas/Settings"
+        changed_by:
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: [string, "null"]
+        changed_at:
+          type: [string, "null"]
+          format: date-time
+
+    SettingsHistory:
+      type: object
+      additionalProperties: false
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettingsVersion"
+
+    ChangeSettings:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, settings, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        settings:
+          $ref: "#/components/schemas/Settings"
+        reason:
+          type: string
+
     GeoJsonPolygon:
       description: GeoJSON Polygon or MultiPolygon, WGS84 (longitude, latitude).
       type: object
