@@ -2178,6 +2178,63 @@ paths:
         "403": {$ref: "./common.yaml#/components/responses/Forbidden"}
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
 
+  /api/admin/v1/settings/safety-contacts/{city_id}:
+    parameters:
+      - name: city_id
+        in: path
+        required: true
+        schema:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+    get:
+      operationId: getSafetyContacts
+      summary: Support and emergency contacts of a city
+      description: Version 0 with 112 and nothing else until the first change. Needs settings.manage for the city.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./safety.yaml#/components/schemas/SafetyContactsVersion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: changeSafetyContacts
+      summary: Replace the contacts of a city
+      description: >-
+        A new version with author and reason; audited. Needs settings.manage for the city. emergency_number is 2–6
+        digits; phones are E.164; at most 5 extra contacts, each labelled at least in the service's default
+        language.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./safety.yaml#/components/schemas/ChangeSafetyContacts"
+      responses:
+        "200":
+          description: The new version.
+          content:
+            application/json:
+              schema:
+                $ref: "./safety.yaml#/components/schemas/SafetyContactsVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Integrations
     description: Keys of Firebase, GraphHopper, maps and payment merchants (REQ-ADM-10)

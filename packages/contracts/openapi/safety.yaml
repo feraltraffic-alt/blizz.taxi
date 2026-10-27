@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — safety contacts components
+  version: 1.0.0
+  description: >-
+    Shared schemas of the safety button (REQ-RID-09): the service's support contacts and the local emergency
+    number per city. The service never contacts emergency services by itself. Referenced by the rider, driver and
+    admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    EmergencyNumber:
+      description: The local emergency number, digits only (2–6), e.g. 112.
+      type: string
+      pattern: "^[0-9]{2,6}$"
+      examples: ["112"]
+
+    Phone:
+      description: A phone number in E.164.
+      type: string
+      pattern: "^\\+[1-9][0-9]{7,14}$"
+      examples: ["+380441234567"]
+
+    ExtraLabels:
+      description: >-
+        The contact's name by language (uk, pl, ru, en), at most 80 characters each; the service's default language
+        is required.
+      type: object
+      additionalProperties:
+        type: string
+        maxLength: 80
+      examples:
+        - uk: Поліція
+          pl: Policja
+          ru: Полиция
+          en: Police
+
+    SafetyContacts:
+      description: >-
+        What the safety button shows for a city, labels in the caller's language (else the service's default).
+        Never a 404: a city nobody configured gets emergency_number 112 and no support phone. disclaimer_code is
+        always NO_AUTO_DISPATCH — the app shows its fixed text that the service does not call emergency services
+        by itself.
+      type: object
+      additionalProperties: false
+      required: [city_id, emergency_number, support_phone, extra, disclaimer_code]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        emergency_number:
+          $ref: "#/components/schemas/EmergencyNumber"
+        support_phone:
+          oneOf:
+            - $ref: "#/components/schemas/Phone"
+            - type: "null"
+        extra:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, phone]
+            properties:
+              label:
+                type: string
+                maxLength: 80
+              phone:
+                $ref: "#/components/schemas/Phone"
+        disclaimer_code:
+          type: string
+          enum: [NO_AUTO_DISPATCH]
+
+    SafetyContactsVersion:
+      description: >-
+        The contacts of a city in force for the admin panel; version 0 with the default (112, nothing else) until
+        the first change.
+      type: object
+      additionalProperties: false
+      required: [city_id, version, emergency_number, support_phone, extra, changed_by, reason, changed_at]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        emergency_number:
+          $ref: "#/components/schemas/EmergencyNumber"
+        support_phone:
+          oneOf:
+            - $ref: "#/components/schemas/Phone"
+            - type: "null"
+        extra:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/ExtraContact"
+        changed_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        reason:
+          type: [string, "null"]
+        changed_at:
+          type: [string, "null"]
+          format: date-time
+
+    ExtraContact:
+      type: object
+      additionalProperties: false
+      required: [label, phone]
+      properties:
+        label:
+          $ref: "#/components/schemas/ExtraLabels"
+        phone:
+          $ref: "#/components/schemas/Phone"
+
+    ChangeSafetyContacts:
+      description: >-
+        Replaces the city's contacts. A command: a repeat with the same command_id returns the first result, the
+        same command_id with another body is a 409, and a stale expected_version is a 409.
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, emergency_number, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        emergency_number:
+          $ref: "#/components/schemas/EmergencyNumber"
+        support_phone:
+          oneOf:
+            - $ref: "#/components/schemas/Phone"
+            - type: "null"
+        extra:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/ExtraContact"
+        reason:
+          description: Why the contacts are changed; goes to the audit log.
+          type: string
+          minLength: 1
+          maxLength: 500
