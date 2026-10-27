@@ -236,7 +236,8 @@ class PushNotificationTests {
         String token = register(first, session(first), "ANDROID", null);
 
         RestClient http = RestClient.builder().baseUrl("http://localhost:" + port).build();
-        Map<?, ?> device = http.post().uri("/api/rider/v1/push-devices")
+        @SuppressWarnings("unchecked")
+        Map<String, Object> device = http.post().uri("/api/rider/v1/push-devices")
                 .header("Authorization", "Bearer " + secondSession.accessToken()).contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("command_id", UUID.randomUUID().toString(), "platform", "android", "token", token,
                         "locale", "uk-UA"))
