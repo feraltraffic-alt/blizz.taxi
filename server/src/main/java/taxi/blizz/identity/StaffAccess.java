@@ -17,4 +17,30 @@ public interface StaffAccess {
      * {@code ACCESS_DENIED}.
      */
     void require(Actor actor, String permission, UUID... cityIds);
+
+    /**
+     * Where a staff member may use {@code permission}: every city ({@code allCities}), the listed ones, or none
+     * (an inactive member, a member without the permission, or not staff at all).
+     */
+    record Scope(boolean allCities, java.util.Set<UUID> cityIds) {
+        public Scope {
+            cityIds = cityIds == null ? java.util.Set.of() : java.util.Set.copyOf(cityIds);
+        }
+
+        public boolean covers(UUID cityId) {
+            return allCities || (cityId != null && cityIds.contains(cityId));
+        }
+
+        public static Scope none() {
+            return new Scope(false, java.util.Set.of());
+        }
+    }
+
+    Scope scope(Actor actor, String permission);
+
+    /**
+     * The ACTIVE staff members who may use {@code permission} in {@code cityId} — or, for a null city, only those with
+     * all cities. For pushing to the people concerned (a ringing call); never a check of access itself.
+     */
+    java.util.Set<UUID> holders(String permission, UUID cityId);
 }

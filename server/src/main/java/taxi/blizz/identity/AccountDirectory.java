@@ -15,6 +15,9 @@ public interface AccountDirectory {
     /** The language a client or driver chose (uk, pl, ru, en); empty when not set. */
     Optional<String> language(Actor subject);
 
+    /** The name a client or driver gave; empty when not set or anonymized. */
+    Optional<String> name(Actor subject);
+
     /** The client account with this phone (any state); e.g. for staff who find a rider by the number they called. */
     Optional<java.util.UUID> clientByPhone(PhoneNumber phone);
 
