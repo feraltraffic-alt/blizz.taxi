@@ -11,8 +11,9 @@ import taxi.blizz.platform.Actor;
 public interface StaffAccess {
 
     /**
-     * Requires an {@code ACTIVE} staff member holding {@code permission}; for each given city the
-     * city must also be in the member's {@code city_scope}. Null city ids are ignored. Fails with
+     * Requires an {@code ACTIVE} staff member who has changed the initial password and holds
+     * {@code permission}; for each given city the member must have all cities or that city in
+     * {@code city_scope}. A super admin passes every check. Null city ids are ignored. Fails with
      * {@code ACCESS_DENIED}.
      */
     void require(Actor actor, String permission, UUID... cityIds);

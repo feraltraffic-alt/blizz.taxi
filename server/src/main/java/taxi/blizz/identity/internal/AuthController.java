@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.ChallengeIssued;
+import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.IssuedSession;
+import taxi.blizz.identity.StaffSignIn;
 import taxi.blizz.identity.OtpAudience;
 import taxi.blizz.identity.OtpService;
 import taxi.blizz.identity.SessionService;
@@ -29,10 +31,12 @@ class AuthController {
 
     private final OtpService otp;
     private final SessionService sessions;
+    private final StaffSignIn staffSignIn;
 
-    AuthController(OtpService otp, SessionService sessions) {
+    AuthController(OtpService otp, SessionService sessions, StaffSignIn staffSignIn) {
         this.otp = otp;
         this.sessions = sessions;
+        this.staffSignIn = staffSignIn;
     }
 
     record ChallengeRequest(@NotNull OtpAudience audience, @NotBlank String phone, @Size(max = 128) String deviceRef) {
@@ -54,14 +58,22 @@ class AuthController {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record SessionResponse(UUID sessionId, Subject subject, String audience, String accessToken,
                            OffsetDateTime accessExpiresAt, String refreshToken, OffsetDateTime refreshExpiresAt,
-                           Boolean accountCreated) {
+                           Boolean accountCreated, Boolean passwordChangeRequired) {
 
         static SessionResponse of(IssuedSession session, Boolean accountCreated) {
+            return of(session, accountCreated, null);
+        }
+
+        static SessionResponse of(IssuedSession session, Boolean accountCreated, Boolean passwordChangeRequired) {
             return new SessionResponse(session.sessionId(),
                     new Subject(session.actor().type().name(), session.actor().id()),
                     session.audience().value(), session.accessToken(), session.accessExpiresAt(),
-                    session.refreshToken(), session.refreshExpiresAt(), accountCreated);
+                    session.refreshToken(), session.refreshExpiresAt(), accountCreated, passwordChangeRequired);
         }
+    }
+
+    record StaffSignInRequest(@NotBlank @Size(max = 64) String login, @NotBlank @Size(max = 128) String password,
+                              @NotNull ApiAudience audience, @Size(max = 128) String deviceRef) {
     }
 
     @PostMapping("/otp/challenges")
@@ -76,6 +88,13 @@ class AuthController {
     SessionResponse verify(@Valid @RequestBody VerifyRequest body) {
         VerifiedSubject subject = otp.verify(body.challengeId(), body.code());
         return SessionResponse.of(sessions.open(subject, body.deviceRef()), subject.created());
+    }
+
+    /** Staff sign in by login and password (owner decision 27.10.2026). */
+    @PostMapping("/staff/sign-in")
+    SessionResponse staffSignIn(@Valid @RequestBody StaffSignInRequest body) {
+        StaffSignIn.Result result = staffSignIn.signIn(body.login(), body.password(), body.audience(), body.deviceRef());
+        return SessionResponse.of(result.session(), null, result.passwordChangeRequired());
     }
 
     @PostMapping("/token/refresh")

@@ -15,6 +15,9 @@ public interface SessionService {
      */
     IssuedSession open(VerifiedSubject subject, String deviceRef);
 
+    /** Opens a staff session for the admin or operator audience, with the shorter staff session age. */
+    IssuedSession openStaff(VerifiedSubject subject, ApiAudience audience, String deviceRef);
+
     /**
      * Exchanges a refresh token for a new pair. Reusing an already exchanged token revokes the
      * whole session (token family), including the newest tokens.

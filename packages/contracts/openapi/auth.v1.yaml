@@ -80,6 +80,40 @@ paths:
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
 
+  /auth/v1/staff/sign-in:
+    post:
+      operationId: staffSignIn
+      summary: Staff sign in with login and password
+      description: |
+        Into the admin panel (audience ADMIN) or the operator workstation (OPERATOR), owner decision 27.10.2026.
+        A wrong login and a wrong password both give 401 UNAUTHENTICATED. After too many wrong passwords in a
+        row the account is locked for a while: 429 with Retry-After. A suspended account gets 403. When
+        password_change_required is true the token only allows changing the password (/me/password).
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffSignInRequest"
+      responses:
+        "200":
+          description: Session opened.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
   /auth/v1/token/refresh:
     post:
       operationId: refreshSession
@@ -128,6 +162,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
 
 tags:
+  - name: Staff
+    description: Staff sign in by login and password
   - name: OTP
     description: Phone sign-in by one-time code
   - name: Session
@@ -191,6 +227,25 @@ components:
           type: string
           minLength: 1
 
+    StaffSignInRequest:
+      type: object
+      additionalProperties: false
+      required: [login, password, audience]
+      properties:
+        login:
+          type: string
+          maxLength: 64
+        password:
+          type: string
+          format: password
+          maxLength: 128
+        audience:
+          type: string
+          enum: [ADMIN, OPERATOR]
+        device_ref:
+          type: string
+          maxLength: 128
+
     Subject:
       type: object
       additionalProperties: false
@@ -198,7 +253,7 @@ components:
       properties:
         type:
           type: string
-          enum: [CLIENT, DRIVER]
+          enum: [CLIENT, DRIVER, STAFF]
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
 
@@ -221,7 +276,7 @@ components:
         audience:
           description: API audience the access token is valid for (/api/{audience}/v1).
           type: string
-          enum: [rider, driver]
+          enum: [rider, driver, admin, operator]
         access_token:
           description: Bearer token for the audience API.
           type: string
@@ -234,4 +289,7 @@ components:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         account_created:
           description: True on the first sign-in, when the account was just created.
+          type: boolean
+        password_change_required:
+          description: Staff only — the initial or temporary password must be changed before anything else.
           type: boolean
