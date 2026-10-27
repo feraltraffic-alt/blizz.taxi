@@ -28,7 +28,7 @@ class IntegrationsController {
     }
 
     record Change(@NotNull UUID commandId, @NotBlank String password,
-                  @NotEmpty List<@Valid Integrations.Change> changes, @NotBlank String reason) {
+                  @NotEmpty List<Integrations.Change> changes, @NotBlank String reason) {
 
         @Override
         public String toString() {
