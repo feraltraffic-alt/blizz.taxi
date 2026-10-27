@@ -12,9 +12,11 @@ import java.util.stream.Collectors;
  */
 public final class StaffPermissions {
 
+    /** One checkbox; {@code group} lets the UI group them, {@code description} is the English label. */
     public record Permission(String code, String group, String description) {
     }
 
+    /** Reading the staff logs; checked in identity itself. */
     public static final String AUDIT_VIEW = "audit.view";
 
     public static final List<Permission> CATALOG = List.of(
