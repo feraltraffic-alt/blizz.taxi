@@ -25,7 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
 - Schema changes only as new Flyway migrations; never edit an applied migration; Hibernate stays `ddl-auto=validate`.
-- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex and `3` for the second Claude (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, check that your migration sorts **after** every migration already on `main`; if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
+- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex and `3` for the second Claude (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, `git fetch` and check that your migration sorts **after** every migration on the **current** `origin/main` (not the `main` you branched from); if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.
@@ -50,7 +50,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 ## Trying the system by hand
 
-The sandbox ([`docs/sandbox.md`](docs/sandbox.md)) runs the whole system with fictional data in GitHub Actions: `gh workflow run sandbox.yml -f scenario=all`. When a change adds or alters an HTTP flow, add or extend a scenario in `scripts/sandbox/scenarios/` and run the workflow on your branch (`--ref <branch>`); link the run in the PR.
+The sandbox ([`docs/sandbox.md`](docs/sandbox.md)) runs the whole system with fictional data in GitHub Actions: `gh workflow run sandbox.yml -f scenario=all`. Before adding a helper to `scripts/sandbox/lib.sh`, look for it in the current `origin/main`. When a change adds or alters an HTTP flow, add or extend a scenario in `scripts/sandbox/scenarios/` and run the workflow on your branch (`--ref <branch>`); link the run in the PR.
 
 ## Commits
 
