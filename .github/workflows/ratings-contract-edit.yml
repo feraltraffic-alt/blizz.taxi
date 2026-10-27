@@ -1,0 +1,64 @@
+name: Ratings contract edit
+on:
+  push:
+    branches: ["codex/45-ratings"]
+    paths: [".github/workflows/ratings-contract-edit.yml"]
+permissions:
+  contents: write
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: codex/45-ratings
+      - name: Add ratings paths without rewriting existing contract content
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          public_response = '''              schema:\n                type: object\n                additionalProperties: false\n                required: [order_id, score, created_at]\n                properties:\n                  order_id: {type: string, format: uuid}\n                  score: {type: integer, minimum: 1, maximum: 5}\n                  created_at: {type: string, format: date-time}\n'''
+          submit_body = '''        content:\n          application/json:\n            schema:\n              type: object\n              additionalProperties: false\n              required: [command_id, score]\n              properties:\n                command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}\n                score: {type: integer, minimum: 1, maximum: 5}\n                comment: {type: [string, "null"], maxLength: 500}\n'''
+
+          rider = '''\n  /api/rider/v1/orders/{order_id}/rating:\n    get:\n      operationId: getRiderOrderRating\n      summary: My rating after a fulfilled trip\n      description: The comment is staff-only and is never returned to the rider. Non-participants and non-fulfilled orders look like 404.\n      tags: [Orders]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n        - name: order_id\n          in: path\n          required: true\n          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}\n      responses:\n        "200":\n          description: Active rating.\n          content:\n            application/json:\n''' + public_response + '''        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n        "404": {$ref: "./common.yaml#/components/responses/NotFound"}\n    post:\n      operationId: rateDriver\n      summary: Rate the driver after a fulfilled trip\n      description: Score 1–5. A blank comment is stored as absent. The rating may be replaced during the configured edit window; later → 409.\n      tags: [Orders]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n        - name: order_id\n          in: path\n          required: true\n          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}\n      requestBody:\n        required: true\n''' + submit_body + '''      responses:\n        "200":\n          description: Active rating; comment stays staff-only.\n          content:\n            application/json:\n''' + public_response + '''        "400": {$ref: "./common.yaml#/components/responses/BadRequest"}\n        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n        "404": {$ref: "./common.yaml#/components/responses/NotFound"}\n        "409": {$ref: "./common.yaml#/components/responses/Conflict"}\n'''
+
+          driver = '''\n  /api/driver/v1/orders/{order_id}/rating:\n    get:\n      operationId: getDriverOrderRating\n      summary: My rating after a fulfilled trip\n      description: The comment is staff-only and is never returned to the driver. Non-participants and non-fulfilled orders look like 404.\n      tags: [Trips]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n        - name: order_id\n          in: path\n          required: true\n          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}\n      responses:\n        "200":\n          description: Active rating.\n          content:\n            application/json:\n''' + public_response + '''        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n        "404": {$ref: "./common.yaml#/components/responses/NotFound"}\n    post:\n      operationId: rateRider\n      summary: Rate the rider after a fulfilled trip\n      description: Score 1–5; the comment is staff-only. The configured edit window applies.\n      tags: [Trips]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n        - name: order_id\n          in: path\n          required: true\n          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}\n      requestBody:\n        required: true\n''' + submit_body + '''      responses:\n        "200":\n          description: Active rating; comment stays staff-only.\n          content:\n            application/json:\n''' + public_response + '''        "400": {$ref: "./common.yaml#/components/responses/BadRequest"}\n        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n        "404": {$ref: "./common.yaml#/components/responses/NotFound"}\n        "409": {$ref: "./common.yaml#/components/responses/Conflict"}\n\n  /api/driver/v1/me/rating:\n    get:\n      operationId: getDriverRatingSummary\n      summary: My average rider score\n      description: Aggregate only; comments and author identities are never exposed.\n      tags: [Account]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n      responses:\n        "200":\n          description: Integer aggregate and average in hundredths.\n          content:\n            application/json:\n              schema:\n                type: object\n                additionalProperties: false\n                required: [score_sum, count, average_hundredths]\n                properties:\n                  score_sum: {type: integer, format: int64, minimum: 0}\n                  count: {type: integer, format: int64, minimum: 0}\n                  average_hundredths: {type: integer, format: int64, minimum: 0, maximum: 500}\n        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n'''
+
+          staff_schema = '''              schema:\n                type: object\n                additionalProperties: false\n                required: [ratings]\n                properties:\n                  ratings:\n                    type: array\n                    maxItems: 2\n                    items:\n                      type: object\n                      additionalProperties: false\n                      required: [order_id, author_type, author_id, target_type, target_id, score, created_at]\n                      properties:\n                        order_id: {type: string, format: uuid}\n                        author_type: {type: string, enum: [RIDER, DRIVER]}\n                        author_id: {type: string, format: uuid}\n                        target_type: {type: string, enum: [RIDER, DRIVER]}\n                        target_id: {type: string, format: uuid}\n                        score: {type: integer, minimum: 1, maximum: 5}\n                        comment: {type: [string, "null"], maxLength: 500}\n                        created_at: {type: string, format: date-time}\n'''
+          def staff_path(prefix, op):
+              return f'''\n  {prefix}/orders/{{order_id}}/ratings:\n    get:\n      operationId: {op}\n      summary: Active ratings for an order, including staff-only comments\n      description: Requires orders.view for the order city.\n      tags: [Orders]\n      parameters:\n        - $ref: "./common.yaml#/components/parameters/CorrelationId"\n        - name: order_id\n          in: path\n          required: true\n          schema: {{$ref: "./common.yaml#/components/schemas/Uuid"}}\n      responses:\n        "200":\n          description: Up to the rider and driver active ratings.\n          content:\n            application/json:\n''' + staff_schema + '''        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}\n        "403": {$ref: "./common.yaml#/components/responses/Forbidden"}\n        "404": {$ref: "./common.yaml#/components/responses/NotFound"}\n'''
+
+          def add_paths(path, block):
+              p = Path(path)
+              text = p.read_text()
+              marker = "\ntags:\n" if "\ntags:\n" in text else "\ncomponents:\n"
+              pos = text.rfind(marker)
+              if pos < 0:
+                  raise SystemExit(f"no paths terminator in {path}")
+              if block.strip().splitlines()[0].strip() in text:
+                  return
+              p.write_text(text[:pos] + block + text[pos:])
+
+          add_paths("packages/contracts/openapi/rider.v1.yaml", rider)
+          add_paths("packages/contracts/openapi/driver.v1.yaml", driver)
+          add_paths("packages/contracts/openapi/operator.v1.yaml", staff_path("/api/operator/v1", "getOperatorOrderRatings"))
+          add_paths("packages/contracts/openapi/admin.v1.yaml", staff_path("/api/admin/v1", "getAdminOrderRatings"))
+
+          admin = Path("packages/contracts/openapi/admin.v1.yaml")
+          text = admin.read_text()
+          anchor = '''        preorders:\n          description: Omitted — the defaults (60 min threshold, 7 days, BROADCAST_BEFORE 30 min).\n          $ref: "./config.v1.yaml#/components/schemas/Preorders"\n'''
+          addition = '''        ratings:\n          type: object\n          additionalProperties: false\n          required: [edit_window_hours]\n          properties:\n            edit_window_hours:\n              type: integer\n              minimum: 1\n              maximum: 720\n              default: 24\n              description: Hours after trip completion during which a rating may be submitted or replaced.\n'''
+          if addition.strip() not in text:
+              if anchor not in text:
+                  raise SystemExit("admin Settings anchor changed")
+              text = text.replace(anchor, anchor + addition, 1)
+              admin.write_text(text)
+          PY
+          git diff --check
+          git diff -- packages/contracts
+          git config user.name "Codex ratings contract editor"
+          git config user.email "noreply@openai.com"
+          git add packages/contracts/openapi/{rider,driver,operator,admin}.v1.yaml
+          git commit -m "Document ratings API contracts"
+          git push origin HEAD:codex/45-ratings
