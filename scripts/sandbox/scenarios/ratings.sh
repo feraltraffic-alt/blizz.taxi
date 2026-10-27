@@ -9,7 +9,8 @@ RIDER_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
 
 say "Driver and rider sign in"
 DRIVER=$(sign_in DRIVER "$DRIVER_PHONE")
-SESSION=$(go_online "$DRIVER" "$DRIVER_VEHICLE" 50.4520 "$PICKUP_LON")
+# Online next to the pickup: a 190 m hop within a second is flagged as a JUMP and not used for arrive.
+SESSION=$(go_online "$DRIVER" "$DRIVER_VEHICLE" 50.4503 "$PICKUP_LON")
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")
 
 say "Rider creates a cash order"
