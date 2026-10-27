@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import taxi.blizz.location.TrackService;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.SubjectType;
 
@@ -52,10 +54,10 @@ class JdbcTrackService implements TrackService {
     @Override
     public BatchResult store(Actor driver, UUID deviceSessionId, UUID commandId, List<InputPoint> points) {
         if (driver == null || driver.type() != SubjectType.DRIVER || driver.id() == null) {
-            throw new IllegalArgumentException("driver actor required");
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a driver uploads a track");
         }
         if (deviceSessionId == null || commandId == null || points == null || points.isEmpty() || points.size() > 100) {
-            throw new IllegalArgumentException("invalid location batch");
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A batch has 1 to 100 points");
         }
         StoreRequest request = new StoreRequest(deviceSessionId, points);
         return commands.execute(new CommandKey(driver, "location.store-batch", commandId), request, BatchResult.class,
