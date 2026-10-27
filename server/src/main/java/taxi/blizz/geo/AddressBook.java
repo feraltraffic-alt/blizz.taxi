@@ -18,6 +18,15 @@ public interface AddressBook {
     Address hide(Change command);
     Address restore(Change command);
 
+    /**
+     * For the admin panel: addresses of a city, hidden ones included when asked, matched by a plain text
+     * fragment (or all when blank), newest changes first; needs {@link #MANAGE_PERMISSION} for the city.
+     */
+    List<Address> listForStaff(Actor staff, UUID cityId, String text, boolean includeHidden, int limit);
+
+    /** One address whatever its visibility, for the admin panel; needs {@link #MANAGE_PERMISSION} for its city. */
+    Address getForStaff(Actor staff, UUID id);
+
     /** Fresh visibility check for selections from old suggestions. */
     Optional<Address> find(UUID id);
     /** All alias languages are searched; language is a ranking preference. Limits above 20 are capped. */
