@@ -1,0 +1,107 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — driver earnings components
+  version: 1.0.0
+  description: >-
+    The driver's earnings screen (REQ-DRV-12): separate figures per day of the city's calendar (local midnight,
+    daylight saving included — T-40), from the journal. "Available for payout" comes with payouts (Q-11).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    EarningsFigures:
+      description: Minor units of the city's currency.
+      type: object
+      additionalProperties: false
+      required: [trips, fare_minor, commission_minor, driver_share_minor, cash_minor, cashless_minor, tips_minor,
+                 bonuses_minor, top_ups_minor, transfers_in_minor, transfers_out_minor, adjustments_minor, net_minor]
+      properties:
+        trips:
+          type: integer
+        fare_minor:
+          description: What the trips cost.
+          type: integer
+          format: int64
+        commission_minor:
+          description: The service's part of the fares.
+          type: integer
+          format: int64
+        driver_share_minor:
+          description: The driver's part of the fares.
+          type: integer
+          format: int64
+        cash_minor:
+          description: Taken by the driver in cash or at the own terminal.
+          type: integer
+          format: int64
+        cashless_minor:
+          description: Paid by the riders through the service (card, bonuses, the service's discount).
+          type: integer
+          format: int64
+        tips_minor:
+          type: integer
+          format: int64
+        bonuses_minor:
+          description: Promotions and bonuses of the service.
+          type: integer
+          format: int64
+        top_ups_minor:
+          description: Money the driver paid in (card, terminal, at the office).
+          type: integer
+          format: int64
+        transfers_in_minor:
+          type: integer
+          format: int64
+        transfers_out_minor:
+          type: integer
+          format: int64
+        adjustments_minor:
+          description: Anything else on the balance.
+          type: integer
+          format: int64
+        net_minor:
+          description: How the balance changed; positive — the service owes the driver more.
+          type: integer
+          format: int64
+
+    Earnings:
+      type: object
+      additionalProperties: false
+      required: [driver_id, city_id, currency, timezone, from, to, days, total, balance_minor]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          description: Only days with movements, oldest first.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, figures]
+            properties:
+              date:
+                type: string
+                format: date
+              figures:
+                $ref: "#/components/schemas/EarningsFigures"
+        total:
+          $ref: "#/components/schemas/EarningsFigures"
+        balance_minor:
+          description: The balance now, whatever the period; negative — the driver owes the service.
+          type: integer
+          format: int64

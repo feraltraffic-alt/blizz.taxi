@@ -1159,6 +1159,47 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/driver/v1/earnings:
+    get:
+      operationId: getDriverEarnings
+      summary: My earnings per day
+      description: Separate figures per local day of the city (REQ-DRV-12).
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          description: The city whose calendar and currency the figures use.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: Included; at most 92 days after from.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./earnings.yaml#/components/schemas/Earnings"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/driver/v1/balance:
     get:
       operationId: getDriverBalance

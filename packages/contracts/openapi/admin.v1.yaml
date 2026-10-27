@@ -1603,6 +1603,54 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/drivers/{driver_id}/earnings:
+    get:
+      operationId: getDriverEarningsForStaff
+      summary: A driver's earnings per day
+      description: Requires finance.manage.
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: city_id
+          in: query
+          required: true
+          description: The city whose calendar and currency the figures use.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: Included; at most 92 days after from.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./earnings.yaml#/components/schemas/Earnings"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity
