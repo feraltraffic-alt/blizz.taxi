@@ -62,4 +62,5 @@ say "The promotion is stopped"
 api POST "/api/admin/v1/promotions/$PROMO_ID/archive" "$ADMIN" "{\"command_id\":\"$(uuid)\",
   \"expected_version\":$(jq -r .version <<<"$PROMO"),\"reason\":\"Кінець акції\"}" >/dev/null
 expect 200
+go_offline "$IVAN"
 note "Done: order $(jq -r .id <<<"$ORDER")."

@@ -51,4 +51,6 @@ expect 200
 [[ "$(api GET "/api/operator/v1/orders/$ORDER" "$OPERATOR" | jq -r .payment_state)" == "TERMINAL_REPORTED" ]]
 sleep 3
 api GET /api/driver/v1/balance "$ANDRII" >/dev/null; expect 200
+go_offline "$IVAN"
+go_offline "$ANDRII"
 note "Done: terminal order $ORDER by Andrii ($ANDRII_ID)."
