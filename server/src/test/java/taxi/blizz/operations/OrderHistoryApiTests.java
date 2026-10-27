@@ -128,8 +128,10 @@ class OrderHistoryApiTests {
         assertThat(byId(riderHistory, cancelledWithDriver.order().id())).containsEntry("chat_available", true);
         assertThat(byId(riderHistory, beforeAssignment.id())).containsEntry("chat_available", false)
                 .containsEntry("driver", null);
-        assertThat(byId(riderHistory, completed.order().id())).containsEntry("chat_available", true)
-                .containsEntry("final_price_minor", completedFare(completed.order().id()));
+        Map<String, Object> completedItem = byId(riderHistory, completed.order().id());
+        assertThat(completedItem).containsEntry("chat_available", true);
+        assertThat(((Number) completedItem.get("final_price_minor")).longValue())
+                .isEqualTo(completedFare(completed.order().id()));
 
         OffsetDateTime cursor = jdbc.sql("select created_at from ride_order where id = :id")
                 .param("id", beforeAssignment.id()).query(OffsetDateTime.class).single();
