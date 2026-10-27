@@ -16,6 +16,7 @@ import taxi.blizz.TestQuotes;
 import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.driver.DriverAdmission;
+import taxi.blizz.driver.DriverProfile;
 import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.geo.GeoPoint;
