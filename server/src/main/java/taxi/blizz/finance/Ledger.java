@@ -17,7 +17,9 @@ public interface Ledger {
      */
     enum Account {
         RIDER_RECEIVABLE, DRIVER_PAYABLE, SERVICE_COMMISSION, SERVICE_FUNDS, PROVIDER_CLEARING,
-        PARTNER_SETTLEMENT, TIPS_PAYABLE, REFUNDS_PAYABLE, SUSPENSE
+        PARTNER_SETTLEMENT, TIPS_PAYABLE, REFUNDS_PAYABLE, SUSPENSE,
+        /** What the service pays itself, e.g. the driver of a follow-up ride the rider gets for free (T-22). */
+        SERVICE_EXPENSE
     }
 
     record Line(Account account, UUID partyId, long debitMinor, long creditMinor) {

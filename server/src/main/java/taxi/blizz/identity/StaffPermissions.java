@@ -23,6 +23,7 @@ public final class StaffPermissions {
             new Permission("orders.create", "Orders", "Create orders (phone orders)"),
             new Permission("orders.cancel", "Orders", "Cancel orders"),
             new Permission("orders.reassign", "Orders", "Take a driver off an order"),
+            new Permission("orders.interrupt", "Orders", "Interrupt a trip in progress and send a follow-up"),
             new Permission("orders.view", "Orders", "Order details and the rider–driver chat"),
             new Permission("driver.review", "Drivers", "Review drivers, vehicles and documents"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),

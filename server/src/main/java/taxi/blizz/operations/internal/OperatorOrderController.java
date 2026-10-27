@@ -105,7 +105,7 @@ class OperatorOrderController {
                              Long finalPriceMinor, String currency, String searchPhase,
                              AssignmentView assignment, OffsetDateTime createdAt, CallerView caller,
                              OrderView.Cancellation cancellation, OffsetDateTime pickupAt, boolean preorder,
-                             taxi.blizz.operations.Preorders.Holder reservation) {
+                             taxi.blizz.operations.Preorders.Holder reservation, UUID relatedOrderId) {
     }
 
     record Timeline(List<Orders.TimelineEntry> events) {
@@ -176,6 +176,24 @@ class OperatorOrderController {
                 body.expectedVersion(), body.reasonCode()));
     }
 
+    record InterruptRequest(@NotNull UUID commandId, @NotNull @jakarta.validation.constraints.Min(0) Long expectedVersion,
+                            @NotBlank @Size(max = 40) String reasonCode, @Size(max = 500) String comment,
+                            @NotNull Boolean followUp, GeoPoint followUpPickup,
+                            @Size(max = 300) String followUpPickupLabel) {
+    }
+
+    record InterruptedView(OperatorOrderView order, OperatorOrderView followUp) {
+    }
+
+    /** A trip in progress cannot go on (T-22): cancelled for free, and optionally a follow-up on the service. */
+    @PostMapping("/orders/{orderId}/interrupt")
+    InterruptedView interrupt(AccessClaims claims, @PathVariable UUID orderId, @Valid @RequestBody InterruptRequest body) {
+        Orders.Interrupted result = orders.interrupt(claims.actor(), body.commandId(), orderId, body.expectedVersion(),
+                new Orders.Interruption(body.reasonCode(), body.comment(), body.followUp(), body.followUpPickup(),
+                        body.followUpPickupLabel()));
+        return new InterruptedView(view(result.order()), result.followUp() == null ? null : view(result.followUp()));
+    }
+
     @PostMapping("/orders/{orderId}/revoke-assignment")
     OperatorOrderView revoke(AccessClaims claims, @PathVariable UUID orderId,
                              @Valid @RequestBody RevokeRequest body) {
@@ -206,7 +224,8 @@ class OperatorOrderController {
                 order.pickup(), order.pickupLabel(), order.dropoff(), order.dropoffLabel(), order.paymentMethod(),
                 order.paymentState(), order.priceMinor(), order.finalPriceMinor(), order.currency(), order.searchPhase(),
                 order.assignment(), order.createdAt(), contact(order.id()), order.cancellation(), order.pickupAt(),
-                order.preorder(), "SCHEDULED".equals(order.status()) ? preorders.holder(order.id()).orElse(null) : null);
+                order.preorder(), "SCHEDULED".equals(order.status()) ? preorders.holder(order.id()).orElse(null) : null,
+                order.relatedOrderId());
     }
 
     private CallerView contact(UUID orderId) {

@@ -942,7 +942,7 @@ components:
           type: [string, "null"]
         payment_method:
           type: string
-          enum: [CASH, CARD]
+          enum: [CASH, CARD, SERVICE]
         driver:
           oneOf:
             - $ref: "#/components/schemas/HistoryDriver"
@@ -993,7 +993,7 @@ components:
           type: string
         payment_method:
           type: string
-          enum: [CASH, CARD]
+          enum: [CASH, CARD, SERVICE]
         payment_state:
           type: [string, "null"]
           enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, null]
@@ -1022,6 +1022,13 @@ components:
           description: Requested pickup time of an order for later; null for an order for now.
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        related_order_id:
+          description: >-
+            On a follow-up: the interrupted order it continues (T-22). Its payment_method is SERVICE — the rider pays
+            nothing for it.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
         preorder:
           description: >-

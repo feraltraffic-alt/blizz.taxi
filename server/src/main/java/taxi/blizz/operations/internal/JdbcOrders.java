@@ -1,5 +1,6 @@
 package taxi.blizz.operations.internal;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
+import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.operations.AssignmentView;
@@ -81,6 +83,9 @@ class JdbcOrders implements Orders {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Caller contact is only valid for a staff phone order");
         }
         String channel = authorizeCreate(actor, order, city);
+        if (order.paymentMethod() == PaymentMethod.SERVICE) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "SERVICE is set only for a follow-up order");
+        }
         if (order.paymentMethod() == PaymentMethod.CARD) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Card payment is not available yet");
         }
@@ -381,6 +386,140 @@ class JdbcOrders implements Orders {
                             rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels")),
                     rs.getObject("pickup_at", OffsetDateTime.class));
         }).list();
+    }
+
+    record InterruptRequest(UUID orderId, long expectedVersion, Interruption interruption) {
+    }
+
+    @Override
+    public Interrupted interrupt(Actor actor, UUID commandId, UUID orderId, long expectedVersion,
+                                 Interruption interruption) {
+        if (interruption == null || interruption.reasonCode() == null || interruption.reasonCode().isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+        }
+        if (interruption.comment() != null && interruption.comment().length() > 500) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The comment has at most 500 characters");
+        }
+        record Facts(UUID cityId, String vehicleClass, GeoPoint dropoff) {
+        }
+        Facts facts = jdbc.sql("""
+                        select city_id, vehicle_class, ST_Y(dropoff) as lat, ST_X(dropoff) as lon
+                        from ride_order where id = :id""")
+                .param("id", orderId)
+                .query((rs, i) -> new Facts(rs.getObject("city_id", UUID.class), rs.getString("vehicle_class"),
+                        new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon"))))
+                .optional().orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        requireStaff(actor, INTERRUPT_PERMISSION, facts.cityId());
+        // The follow-up's price comes from an ordinary quote, made outside the transaction like every quote and
+        // keyed by the command, so a repeated command reuses it.
+        QuoteService.Quote quote = null;
+        GeoPoint followUpPickup = null;
+        if (interruption.followUp()) {
+            followUpPickup = interruption.pickup() != null ? interruption.pickup() : stopPoint(orderId)
+                    .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED,
+                            "The driver's position is unknown; give the follow-up pickup point"));
+            VehicleClasses.VehicleClass vehicleClass = classes.active(facts.cityId(), facts.vehicleClass())
+                    .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "The class is no longer offered"));
+            quote = quotes.create(UUID.nameUUIDFromBytes(("follow-up:" + commandId).getBytes(StandardCharsets.UTF_8)),
+                    new QuoteService.Request(facts.cityId(), vehicleClass.id(), followUpPickup, facts.dropoff(), actor));
+        }
+        QuoteService.Quote followUpQuote = quote;
+        GeoPoint pickup = followUpPickup;
+        return commands.execute(new CommandKey(actor, "order.interrupt", commandId),
+                new InterruptRequest(orderId, expectedVersion, interruption), Interrupted.class, () -> {
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (order.version() != expectedVersion) {
+                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                    }
+                    if (!"IN_SERVICE".equals(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "Only a trip in progress is interrupted; before the start cancel or reassign");
+                    }
+                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.STAFF,
+                            interruption.reasonCode().trim());
+                    AssignmentView assignment = core.assignmentOfOrder(orderId)
+                            .filter(a -> "COMMITTED".equals(a.state()) && "IN_PROGRESS".equals(a.tripPhase()))
+                            .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No trip in progress"));
+                    core.lockCapacity(assignment.driverId());
+                    OffsetDateTime now = core.now();
+                    Optional<GeoPoint> stoppedAt = stopPoint(orderId);
+                    jdbc.sql("""
+                                    update trip set phase = 'ABORTED', interrupted_at = :now,
+                                           interrupted_at_point = case when cast(:lat as double precision) is null
+                                               then null else ST_SetSRID(ST_MakePoint(cast(:lon as double precision),
+                                                   cast(:lat as double precision)), 4326) end,
+                                           version = version + 1
+                                    where id = :id and phase = 'IN_PROGRESS'""")
+                            .param("now", now).param("id", assignment.tripId())
+                            .param("lat", stoppedAt.map(GeoPoint::lat).orElse(null))
+                            .param("lon", stoppedAt.map(GeoPoint::lon).orElse(null))
+                            .update();
+                    jdbc.sql("""
+                                    update assignment set state = 'RELEASED', closed_at = :now, close_reason = :reason,
+                                           version = version + 1
+                                    where id = :id and state = 'COMMITTED'""")
+                            .param("now", now).param("reason", "INTERRUPTED: " + reason.code())
+                            .param("id", assignment.id()).update();
+                    core.setOccupancy(assignment.driverId(), "FREE", null);
+                    UUID followUpId = interruption.followUp() ? UUID.randomUUID() : null;
+                    Map<String, Object> details = new java.util.LinkedHashMap<>();
+                    details.put("trip_id", assignment.tripId().toString());
+                    details.put("driver_id", assignment.driverId().toString());
+                    details.put("partial_fare", "FREE");
+                    if (interruption.comment() != null && !interruption.comment().isBlank()) {
+                        details.put("comment", interruption.comment().strip());
+                    }
+                    if (followUpId != null) {
+                        details.put("follow_up_order_id", followUpId.toString());
+                    }
+                    // The rider's one active order is now the follow-up, so the interrupted one is closed first.
+                    core.cancel(order, "STAFF", reason, "TripInterrupted", actor, details);
+                    audit.record(new AuditEntry(actor, "order.interrupt", "ride_order", orderId.toString(),
+                            reason.code(), Map.of("status", "IN_SERVICE"), Map.of("status", "CANCELLED",
+                            "follow_up_order_id", followUpId == null ? "" : followUpId.toString())));
+                    if (followUpId == null) {
+                        return new Interrupted(core.view(orderId), null);
+                    }
+                    QuoteService.Quote consumed = quotes.consume(followUpQuote.id(), actor, followUpQuote.fingerprint());
+                    jdbc.sql("""
+                                    insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
+                                                            city_id, vehicle_class, pickup, pickup_label, dropoff,
+                                                            dropoff_label, payment_method, price_minor, currency,
+                                                            quote_id, source_ref, status, related_order_id,
+                                                            created_at, updated_at)
+                                    select :id, channel, payer_client_id, 'STAFF', :staff, city_id, vehicle_class,
+                                           ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :label, dropoff, dropoff_label,
+                                           'SERVICE', :price, :currency, :quote, source_ref, 'READY', id, :now, :now
+                                    from ride_order where id = :original""")
+                            .param("id", followUpId).param("staff", actor.id())
+                            .param("lon", pickup.lon()).param("lat", pickup.lat())
+                            .param("label", interruption.pickupLabel() == null || interruption.pickupLabel().isBlank()
+                                    ? "Where the previous car stopped" : label(interruption.pickupLabel()))
+                            .param("price", consumed.amountMinor()).param("currency", consumed.currency())
+                            .param("quote", consumed.id()).param("now", now).param("original", orderId).update();
+                    jdbc.sql("""
+                                    insert into order_contact (order_id, name, phone, created_by, created_at)
+                                    select :id, name, phone, :staff, :now from order_contact where order_id = :original""")
+                            .param("id", followUpId).param("staff", actor.id()).param("now", now)
+                            .param("original", orderId).update();
+                    core.recordEvent(followUpId, 0, "OrderCreated", actor, null, Map.of(
+                            "related_order_id", orderId.toString(), "payment_method", "SERVICE",
+                            "quote_id", consumed.id().toString(), "price_minor", consumed.amountMinor()));
+                    engine.startSearch(core.lockOrder(followUpId));
+                    return new Interrupted(core.view(orderId), core.view(followUpId));
+                });
+    }
+
+    /** Where the car of the order's active assignment is now: its driver's open work session. */
+    private Optional<GeoPoint> stopPoint(UUID orderId) {
+        return jdbc.sql("""
+                        select ST_Y(ws.last_location) as lat, ST_X(ws.last_location) as lon
+                        from assignment a join work_session ws on ws.driver_id = a.driver_id
+                        where a.order_id = :id and ws.state <> 'CLOSED' and ws.last_location is not null
+                        order by a.created_at desc, ws.opened_at desc limit 1""")
+                .param("id", orderId)
+                .query((rs, i) -> new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")))
+                .optional();
     }
 
     @SuppressWarnings("unchecked")

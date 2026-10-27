@@ -67,6 +67,28 @@ public interface Orders {
                          java.util.Map<String, Object> details) {
     }
 
+    String INTERRUPT_PERMISSION = "orders.interrupt";
+
+    /**
+     * {@code pickup}: where the follow-up picks the rider up; null — the driver's last position.
+     * {@code pickupLabel}: what the new driver sees; null — "where the previous car stopped".
+     */
+    record Interruption(String reasonCode, String comment, boolean followUp, taxi.blizz.geo.GeoPoint pickup,
+                        String pickupLabel) {
+    }
+
+    record Interrupted(OrderView order, OrderView followUp) {
+    }
+
+    /**
+     * A trip in progress cannot go on (T-22, REQ-OPS-05; owner decision 27.10.2026): staff with
+     * {@link #INTERRUPT_PERMISSION} cancel it with a staff reason; the trip is ABORTED where the car stopped, the part
+     * driven is free and the driver is released. With {@code followUp}, a new order linked to this one takes the rider
+     * from that point to the original destination; the rider pays nothing and the service pays its driver by the
+     * tariff (payment method SERVICE). The interrupted driver is not offered the follow-up.
+     */
+    Interrupted interrupt(Actor staff, UUID commandId, UUID orderId, long expectedVersion, Interruption interruption);
+
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);
 }

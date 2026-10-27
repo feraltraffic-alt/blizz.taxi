@@ -220,7 +220,7 @@ class OrderCore {
                                ST_X(o.pickup) as pickup_lon, o.pickup_label, ST_Y(o.dropoff) as dropoff_lat,
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
                                o.final_price_minor, o.currency, o.created_at, o.cancelled_by, o.cancel_reason_code,
-                               o.cancel_reason_labels::text as cancel_reason_labels, o.pickup_at, o.preorder,
+                               o.cancel_reason_labels::text as cancel_reason_labels, o.pickup_at, o.preorder, o.related_order_id,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
                         from ride_order o where o.id = :id""")
@@ -235,7 +235,8 @@ class OrderCore {
                         rs.getString("payment_state"), (Long) rs.getObject("price_minor"),
                         (Long) rs.getObject("final_price_minor"), rs.getString("currency"), rs.getString("search_phase"),
                         null, rs.getObject("created_at", OffsetDateTime.class), cancellation(rs),
-                        rs.getObject("pickup_at", OffsetDateTime.class), rs.getBoolean("preorder")))
+                        rs.getObject("pickup_at", OffsetDateTime.class), rs.getBoolean("preorder"),
+                        rs.getObject("related_order_id", UUID.class)))
                 .optional()
                 .map(order -> withAssignment(order, assignmentOfOrder(order.id())))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
@@ -246,7 +247,8 @@ class OrderCore {
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
                 o.searchPhase(),
-                assignment.orElse(null), o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder());
+                assignment.orElse(null), o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder(),
+                o.relatedOrderId());
     }
 
     @SuppressWarnings("unchecked")
@@ -338,7 +340,8 @@ class OrderCore {
                           and (:includeOffered or not exists (
                                 select 1 from offer f where f.order_id = o.id and f.driver_id = ws.driver_id))
                           and not exists (
-                                select 1 from assignment x where x.order_id = o.id and x.driver_id = ws.driver_id)
+                                select 1 from assignment x
+                                where x.order_id in (o.id, o.related_order_id) and x.driver_id = ws.driver_id)
                           and not exists (
                                 select 1 from driver_restriction r where r.driver_id = ws.driver_id and r.active)
                         order by distance_m, ws.driver_id

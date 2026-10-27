@@ -271,6 +271,45 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/interrupt:
+    post:
+      operationId: interruptTrip
+      summary: Interrupt a trip in progress
+      description: >-
+        Only IN_SERVICE (before the start cancel or take the driver off → 409). Requires orders.interrupt for the order
+        city (T-22, REQ-OPS-05). The order is cancelled by staff with a reason from the staff list; the trip is
+        ABORTED where the car stopped, the part driven is free and the driver is released. With follow_up a new order
+        linked by related_order_id takes the rider from follow_up_pickup (default: the driver's last position) to the
+        original destination; the rider pays nothing (payment_method SERVICE) and the service pays its driver by the
+        tariff. The interrupted driver is not offered it. Audited.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterruptOrder"
+      responses:
+        "200":
+          description: The interrupted order and the follow-up, if any.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterruptedOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/operator/v1/orders/{order_id}/remove-reservation:
     post:
       operationId: removePreorderReservation
@@ -801,6 +840,45 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/ReservationHolder"
                 - type: "null"
+
+    InterruptOrder:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason_code, follow_up]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason_code:
+          description: From GET /api/operator/v1/cancel-reasons, e.g. VEHICLE_BREAKDOWN, ACCIDENT.
+          type: string
+          minLength: 1
+          maxLength: 40
+        comment:
+          type: string
+          maxLength: 500
+        follow_up:
+          type: boolean
+        follow_up_pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        follow_up_pickup_label:
+          type: string
+          maxLength: 300
+
+    InterruptedOrder:
+      type: object
+      additionalProperties: false
+      required: [order, follow_up]
+      properties:
+        order:
+          $ref: "#/components/schemas/OperatorOrder"
+        follow_up:
+          oneOf:
+            - $ref: "#/components/schemas/OperatorOrder"
+            - type: "null"
 
     ReservationHolder:
       type: object

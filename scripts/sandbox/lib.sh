@@ -92,8 +92,15 @@ location() { # LAT LON SEQUENCE
     echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$3}"
 }
 
-# go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id.
+# go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id; an earlier open session of this
+# driver (another scenario in the same sandbox) is closed first.
 go_online() {
+    local current
+    current=$(api GET /api/driver/v1/work-sessions/current "$1")
+    if [[ "$(cat /tmp/sandbox-status)" == 200 && "$(jq -r '.session_id // empty' <<<"$current")" != "" ]]; then
+        api POST "/api/driver/v1/work-sessions/$(jq -r .session_id <<<"$current")/close" "$1" \
+            "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
+    fi
     api POST /api/driver/v1/work-sessions "$1" \
         "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$2\",\"location\":$(location "$3" "$4" 1)}" | jq -r .session_id
     expect 201

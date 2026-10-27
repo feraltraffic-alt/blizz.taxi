@@ -62,7 +62,10 @@ class TripFarePosting implements OutboxHandler {
             return;
         }
         List<Line> fare = new ArrayList<>();
-        fare.add(Line.debit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()));
+        // A follow-up of an interrupted trip is on the service, not the rider (T-22, owner decision 27.10.2026).
+        fare.add("SERVICE".equals(trip.paymentMethod())
+                ? Line.debit(Account.SERVICE_EXPENSE, null, trip.amountMinor())
+                : Line.debit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()));
         if (trip.driverShareMinor() > 0) {
             fare.add(Line.credit(Account.DRIVER_PAYABLE, trip.driverId(), trip.driverShareMinor()));
         }
