@@ -126,3 +126,112 @@ components:
           description: What a DISCOUNT takes off the price; 0 for a BONUS (credited after the trip).
           type: integer
           format: int64
+
+    DriverPromotionDraft:
+      description: >-
+        Complete orders_required orders within period_days days (periods run from starts_at) — optionally only on
+        days_of_week, between time_from and time_to (city time, when the driver took the order) and with
+        payment_method — and get reward_minor on the balance; once, or in every period (ADR 0010).
+      type: object
+      required: [name, reward_minor, currency, period_days, orders_required, repeat, starts_at]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        reward_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        city_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        period_days:
+          type: integer
+          minimum: 1
+          maximum: 366
+        orders_required:
+          type: integer
+          minimum: 1
+        days_of_week:
+          type: [array, "null"]
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        time_from:
+          type: [string, "null"]
+          examples: ["08:00"]
+        time_to:
+          type: [string, "null"]
+          examples: ["09:00"]
+        payment_method:
+          type: [string, "null"]
+          enum: [CASH, CARD, TERMINAL, null]
+        repeat:
+          type: string
+          enum: [ONCE, EVERY_PERIOD]
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: [string, "null"]
+          format: date-time
+
+    DriverPromotion:
+      type: object
+      required: [id, terms, state, version, created_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        terms:
+          $ref: "#/components/schemas/DriverPromotionDraft"
+        state:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        created_by:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DriverPromotionProgress:
+      type: object
+      required: [promotion_id, name, reward_minor, currency, orders_required, orders_done, period_start, period_end,
+                 rewarded, repeat]
+      properties:
+        promotion_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: string
+        reward_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        orders_required:
+          type: integer
+        orders_done:
+          type: integer
+          format: int64
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        rewarded:
+          description: Already paid in this period (or, for ONCE, ever).
+          type: boolean
+        repeat:
+          type: string
+          enum: [ONCE, EVERY_PERIOD]

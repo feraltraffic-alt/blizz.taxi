@@ -359,6 +359,11 @@ class JdbcTrips implements Trips {
                     payload.put("commission_minor", fare.commissionMinor());
                     payload.put("driver_share_minor", fare.driverShareMinor());
                     payload.put("currency", fare.currency());
+                    // For promotions of drivers (ADR 0010): the city and when the driver took the order.
+                    payload.put("city_id", jdbc.sql("select city_id from ride_order where id = :id")
+                            .param("id", trip.orderId()).query(UUID.class).single().toString());
+                    payload.put("accepted_at", jdbc.sql("select created_at from assignment where id = :id")
+                            .param("id", trip.assignmentId()).query(OffsetDateTime.class).single().toString());
                     core.changeStatus(trip.order(), "FULFILLED", null, "TripCompleted", driver, payload);
                     return view(tripId);
                 });

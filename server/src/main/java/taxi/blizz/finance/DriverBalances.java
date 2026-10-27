@@ -53,4 +53,11 @@ public interface DriverBalances {
     List<TransferRule> transferRules();
 
     TransferRule setTransferRule(Actor staff, UUID commandId, TransferRule rule, long expectedVersion, String reason);
+
+    /**
+     * The reward of a drivers' promotion (ADR 0010 p. 5), in the caller's transaction; the service's expense. Once per
+     * promotion, driver and period: {@code false} when already credited.
+     */
+    boolean creditPromotion(UUID driverId, UUID promotionId, int periodIndex, String currency, long amountMinor,
+                            String promotionName);
 }

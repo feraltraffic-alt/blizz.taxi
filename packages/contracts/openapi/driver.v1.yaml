@@ -1690,6 +1690,30 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/promotions:
+    get:
+      operationId: getDriverPromotionProgress
+      summary: Promotions for me and how far I am
+      description: Active promotions with the current period, orders done and whether the reward was paid (ADR 0010).
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promotions]
+                properties:
+                  promotions:
+                    type: array
+                    items:
+                      $ref: "./promotions.yaml#/components/schemas/DriverPromotionProgress"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
   - name: Push
     description: Push notifications to the app (section 20)

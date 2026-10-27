@@ -95,9 +95,10 @@ class JdbcDriverBalances implements DriverBalances {
                         case "DRIVER_TOP_UP" -> rs.getString("top_up_kind");
                         case "DRIVER_TRANSFER" -> amount < 0 ? "TRANSFER_OUT" : "TRANSFER_IN";
                         case "DRIVER_PAYMENT" -> "DEPOSIT";
+                        case "DRIVER_PROMOTION" -> "PROMOTION";
                         default -> basis;
                     };
-                    boolean ownBasis = Stream.of("DRIVER_TOP_UP", "DRIVER_TRANSFER", "DRIVER_PAYMENT")
+                    boolean ownBasis = Stream.of("DRIVER_TOP_UP", "DRIVER_TRANSFER", "DRIVER_PAYMENT", "DRIVER_PROMOTION")
                             .anyMatch(basis::equals);
                     return new Entry(rs.getObject("id", UUID.class), rs.getObject("occurred_at", OffsetDateTime.class),
                             kind, rs.getString("currency"), amount, rs.getString("reason"),
@@ -231,6 +232,23 @@ class JdbcDriverBalances implements DriverBalances {
                                     "transfer_id", id.toString())));
                     return new Transfer(id, driver.id(), recipient, currency, amountMinor, note, now);
                 });
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public boolean creditPromotion(UUID driverId, UUID promotionId, int periodIndex, String currency,
+                                   long amountMinor, String promotionName) {
+        if (amountMinor <= 0) {
+            return false;
+        }
+        boolean posted = ledger.post(new Ledger.Posting("driver-promotion:" + promotionId + ":" + driverId + ":"
+                + periodIndex, "DRIVER_PROMOTION", promotionId, currency, promotionName,
+                List.of(Line.debit(Account.PROMO_EXPENSE, null, amountMinor),
+                        Line.credit(Account.DRIVER_PAYABLE, driverId, amountMinor))));
+        if (posted) {
+            debts.refresh(driverId, currency);
+        }
+        return posted;
     }
 
     private void lock(UUID driverId) {

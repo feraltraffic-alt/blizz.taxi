@@ -2494,6 +2494,169 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/driver-promotions:
+    get:
+      operationId: listDriverPromotions
+      summary: Promotions for drivers
+      description: Needs promotions.manage. Active ones unless include_archived.
+      tags: [Promotions]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: include_archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promotions]
+                properties:
+                  promotions:
+                    type: array
+                    items:
+                      $ref: "./promotions.yaml#/components/schemas/DriverPromotion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createDriverPromotion
+      summary: Create a promotion for drivers
+      description: Audited with the reason (ADR 0010).
+      tags: [Promotions]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, promotion, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                promotion:
+                  $ref: "./promotions.yaml#/components/schemas/DriverPromotionDraft"
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        "201":
+          description: The promotion.
+          content:
+            application/json:
+              schema:
+                $ref: "./promotions.yaml#/components/schemas/DriverPromotion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/driver-promotions/{promotion_id}/change:
+    post:
+      operationId: changeDriverPromotion
+      summary: Change a promotion for drivers
+      tags: [Promotions]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: promotion_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, promotion, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                promotion:
+                  $ref: "./promotions.yaml#/components/schemas/DriverPromotionDraft"
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: The promotion.
+          content:
+            application/json:
+              schema:
+                $ref: "./promotions.yaml#/components/schemas/DriverPromotion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/driver-promotions/{promotion_id}/archive:
+    post:
+      operationId: archiveDriverPromotion
+      summary: Stop a promotion for drivers
+      tags: [Promotions]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: promotion_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: The promotion.
+          content:
+            application/json:
+              schema:
+                $ref: "./promotions.yaml#/components/schemas/DriverPromotion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Promotions
     description: Discounts and bonuses for riders (ADR 0009)
