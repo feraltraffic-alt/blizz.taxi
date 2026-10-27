@@ -12,6 +12,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param bindingTtl         how long a started "add a card" stays open
  * @param holdTimeoutSeconds how long the provider keeps a hold (WayForPay: up to 20 days)
  * @param timeout            how long to wait for the provider before the result counts as UNKNOWN
+ * @param fakeMerchantsAllowed whether the admin panel may add FAKE merchants (they confirm any payment): only in
+ *                           development, tests and the sandbox
  */
 @ConfigurationProperties("blizz.payments")
 record PaymentsProperties(
@@ -19,7 +21,8 @@ record PaymentsProperties(
         Map<String, String> secrets,
         @DefaultValue("PT30M") Duration bindingTtl,
         @DefaultValue("172800") long holdTimeoutSeconds,
-        @DefaultValue("PT20S") Duration timeout) {
+        @DefaultValue("PT20S") Duration timeout,
+        @DefaultValue("false") boolean fakeMerchantsAllowed) {
 
     PaymentsProperties {
         secrets = secrets == null ? Map.of() : Map.copyOf(secrets);

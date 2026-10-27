@@ -9,10 +9,14 @@ blizz:
     local-dir: ${java.io.tmpdir}/blizz-test-files
   dispatch:
     worker-enabled: false
+  secrets:
+    # Tests only; every real instance has its own (REQ-ENG-13).
+    master-key: OvNcyb/UEGrsbxNURayDR7cukvqN5pG5gLYhC2py82Q=
   push:
     provider: FAKE
     worker-enabled: false
   payments:
+    fake-merchants-allowed: true
     public-base-url: http://blizz.test
     secrets:
       test: test-merchant-secret-0123456789

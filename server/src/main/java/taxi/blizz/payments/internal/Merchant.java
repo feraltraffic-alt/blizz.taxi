@@ -2,7 +2,7 @@ package taxi.blizz.payments.internal;
 
 import java.util.UUID;
 
-/** A merchant account at a provider; {@code secret} comes from the environment, never from the database. */
+/** A merchant account at a provider; {@code secret} from the admin panel (stored encrypted) or the environment. */
 record Merchant(UUID id, String provider, String account, String domain, String secret, String currency) {
 
     @Override

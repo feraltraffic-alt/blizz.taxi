@@ -41,7 +41,7 @@ components:
     Bootstrap:
       type: object
       additionalProperties: false
-      required: [settings_version, brand, languages, calls, preorders, cities]
+      required: [settings_version, brand, languages, calls, preorders, maps, cities]
       properties:
         settings_version:
           type: integer
@@ -71,6 +71,23 @@ components:
               type: integer
             max_days_ahead:
               type: integer
+        maps:
+          description: >-
+            The map of the apps, as set in the admin panel (Integrations). The keys are restricted to the apps'
+            package names, bundle ids and domains at the provider, so they are not secrets. Null until set.
+          type: object
+          additionalProperties: false
+          required: [provider, android_key, ios_key, web_key]
+          properties:
+            provider:
+              type: [string, "null"]
+              enum: [GOOGLE, MAPBOX, MAPTILER, null]
+            android_key:
+              type: [string, "null"]
+            ios_key:
+              type: [string, "null"]
+            web_key:
+              type: [string, "null"]
         cities:
           type: array
           items:

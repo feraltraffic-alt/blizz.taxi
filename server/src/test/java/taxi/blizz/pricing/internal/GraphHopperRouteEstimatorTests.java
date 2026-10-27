@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import taxi.blizz.configuration.Integrations;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.pricing.RouteEstimator;
 import tools.jackson.databind.json.JsonMapper;
@@ -27,6 +28,8 @@ class GraphHopperRouteEstimatorTests {
     volatile int status = 200;
     volatile String body = "";
     volatile long delayMillis;
+    volatile int infoStatus = 200;
+    volatile String infoBody = "{\"profiles\":[{\"name\":\"car\"}]}";
 
     @BeforeEach
     void start() throws IOException {
@@ -43,6 +46,13 @@ class GraphHopperRouteEstimatorTests {
             if (bytes.length > 0) {
                 exchange.getResponseBody().write(bytes);
             }
+            exchange.close();
+        });
+        server.createContext("/info", exchange -> {
+            lastQuery.set(exchange.getRequestURI().getRawQuery());
+            byte[] bytes = infoBody.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(infoStatus, bytes.length);
+            exchange.getResponseBody().write(bytes);
             exchange.close();
         });
         server.start();
@@ -104,5 +114,52 @@ class GraphHopperRouteEstimatorTests {
         }
         return new GraphHopperRouteEstimator(new GraphHopperProperties(true, "http://127.0.0.1:" + closedPort, null,
                 "car", Duration.ofMillis(500)), (a, b) -> FALLBACK, JsonMapper.builder().build());
+    }
+
+    @Test
+    void checkingTheConnectionAsksInfoAndNeverShowsTheKey() {
+        Integrations.Check ok = estimator("secret-key-1234").check();
+        assertThat(ok.ok()).isTrue();
+        assertThat(lastQuery.get()).isEqualTo("key=secret-key-1234");
+        assertThat(ok.message()).doesNotContain("secret-key");
+
+        infoBody = "{\"profiles\":[{\"name\":\"bike\"}]}";
+        assertThat(estimator(null).check().ok()).as("no car profile").isFalse();
+        infoStatus = 401;
+        Integrations.Check refused = estimator("wrong-key-9999").check();
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.message()).contains("refused").doesNotContain("wrong-key");
+    }
+
+    /** The panel's values (a stub of Integrations) switch GraphHopper on and off without a restart. */
+    @Test
+    void thePanelSwitchesGraphHopperOnAndOff() {
+        java.util.Map<String, String> values = new java.util.concurrent.ConcurrentHashMap<>();
+        java.util.concurrent.atomic.AtomicLong revision = new java.util.concurrent.atomic.AtomicLong();
+        Integrations panel = (Integrations) java.lang.reflect.Proxy.newProxyInstance(
+                Integrations.class.getClassLoader(), new Class<?>[] {Integrations.class}, (proxy, method, args) ->
+                        switch (method.getName()) {
+                            case "value" -> java.util.Optional.ofNullable(values.get((String) args[0]));
+                            case "revision" -> revision.get();
+                            default -> throw new UnsupportedOperationException(method.getName());
+                        });
+        GraphHopperProperties environment = new GraphHopperProperties(false, "http://127.0.0.1:1", null, "car",
+                Duration.ofMillis(500));
+        RouteEstimator.Estimate straight = new RouteEstimator.Estimate(7, 7);
+        RouteEstimator straightLine = (a, b) -> straight;
+        ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(panel, environment, straightLine,
+                JsonMapper.builder().build());
+        assertThat(configured.estimate(MAIDAN, STATION)).as("off in the environment").isEqualTo(straight);
+
+        body = """
+                {"paths":[{"distance":1000,"time":60000}]}""";
+        values.put(Integrations.GRAPHHOPPER_ENABLED, "true");
+        values.put(Integrations.GRAPHHOPPER_BASE_URL, "http://127.0.0.1:" + server.getAddress().getPort());
+        revision.incrementAndGet();
+        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
+
+        values.put(Integrations.GRAPHHOPPER_ENABLED, "false");
+        revision.incrementAndGet();
+        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(straight);
     }
 }

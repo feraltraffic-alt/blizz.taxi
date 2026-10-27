@@ -2,23 +2,36 @@
 
 Deployment, backup and restore for client instances: single-instance and high-availability profiles (section 26 of the specification).
 
-## Push notifications
+## Keys of integrations
 
-Each service sends pushes from its own Firebase project (REQ-TEN-08), so the apps of one service never receive
-another's. A real instance needs, from the environment:
+Keys of Firebase, GraphHopper, the map keys of the apps and the payment merchants are entered in the admin panel
+(Integrations, permission `integrations.manage`; every change asks for the password again and goes to the audit
+without the key). The servers use a new value within seconds, without a restart. A value in the panel wins over
+the environment; the environment variables below remain for instances configured without the panel.
+
+The panel stores keys encrypted with the instance's master key, which only the environment knows:
 
 | Variable | Value |
 |---|---|
-| `FCM_PROJECT_ID` | the Firebase project id |
-| `FCM_CREDENTIALS` | the whole service account JSON (role "Firebase Cloud Messaging API Admin") |
+| `SECRETS_MASTER_KEY` | 32 random bytes in Base64 (`openssl rand -base64 32`), one per instance |
 
-Without them the server does not start. `PUSH_PROVIDER=FAKE` only writes pushes to the log; the `dev` and `sandbox`
-profiles use it.
+Keep the master key with the database backups but not in them: a restored database without it has unreadable
+keys (they are entered again), and a stolen dump without it reveals none. Without a master key the panel cannot
+store keys.
+
+## Push notifications
+
+Each service sends pushes from its own Firebase project (REQ-TEN-08), so the apps of one service never receive
+another's. The project id and the service account JSON (role "Firebase Cloud Messaging API Admin") are entered in
+the panel; "Check the connection" signs in to Firebase without sending anything. Alternatively from the
+environment: `FCM_PROJECT_ID`, `FCM_CREDENTIALS`. Without keys the server runs, and pushes wait until their
+deadline. `PUSH_PROVIDER=FAKE` only writes pushes to the log; the `dev` and `sandbox` profiles use it.
 
 ## Routing (GraphHopper)
 
 Prices and times come from the road route when GraphHopper is on; without it, a straight-line estimate is used
-(also as the fallback when GraphHopper is slow, down or finds no route). Set through the environment:
+(also as the fallback when GraphHopper is slow, down or finds no route). Set in the admin panel (Integrations →
+routing) or through the environment:
 
 | Variable | Hosted API | Own server |
 | --- | --- | --- |

@@ -151,6 +151,43 @@ class JdbcStaffSignIn implements StaffSignIn {
         });
     }
 
+    @Override
+    public void confirmPassword(Actor staff, String password) {
+        if (staff == null || staff.type() != SubjectType.STAFF) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff only");
+        }
+        // Called before the change starts its transaction, so a failure is counted although the change is refused.
+        Boolean ok = tx.execute(status -> {
+            record Row(String hash, int failed, OffsetDateTime lockedUntil) {
+            }
+            OffsetDateTime now = now();
+            Row row = jdbc.sql("""
+                            select password_hash, failed_sign_ins, locked_until from staff_user
+                            where id = :id and state = 'ACTIVE' for update""")
+                    .param("id", staff.id())
+                    .query((rs, i) -> new Row(rs.getString(1), rs.getInt(2), rs.getObject(3, OffsetDateTime.class)))
+                    .optional().orElse(null);
+            if (row == null || (row.lockedUntil() != null && row.lockedUntil().isAfter(now))) {
+                passwords.burn(password);
+                return false;
+            }
+            if (password == null || !passwords.matches(password, row.hash())) {
+                int failed = row.failed() + 1;
+                boolean lock = failed >= properties.maxFailedSignIns();
+                jdbc.sql("update staff_user set failed_sign_ins = :failed, locked_until = :until where id = :id")
+                        .param("failed", lock ? 0 : failed)
+                        .param("until", lock ? now.plus(properties.lockout()) : null)
+                        .param("id", staff.id()).update();
+                return false;
+            }
+            jdbc.sql("update staff_user set failed_sign_ins = 0 where id = :id").param("id", staff.id()).update();
+            return true;
+        });
+        if (!Boolean.TRUE.equals(ok)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "The password is wrong");
+        }
+    }
+
     private OffsetDateTime now() {
         return clock.instant().atOffset(ZoneOffset.UTC);
     }

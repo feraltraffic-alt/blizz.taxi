@@ -5,8 +5,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * @param provider        FCM in a real instance; FAKE only logs (development, tests, sandbox)
- * @param fcmProjectId    the Firebase project of the service's apps (REQ-TEN-08: each service its own)
- * @param fcmCredentials  the service account JSON; from the environment only
+ * @param fcmProjectId    the Firebase project of the service's apps (REQ-TEN-08: each service its own); the admin
+ *                        panel's value (Integrations) wins
+ * @param fcmCredentials  the service account JSON from the environment; the admin panel's value wins
  * @param workerEnabled   off in tests, which run {@link PushWorker#runOnce()} themselves
  * @param pollInterval    how often the worker looks for due notifications
  */

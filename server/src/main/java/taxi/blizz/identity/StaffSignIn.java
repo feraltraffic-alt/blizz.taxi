@@ -19,4 +19,10 @@ public interface StaffSignIn {
     Result signIn(String login, String password, ApiAudience audience, String deviceRef, String clientIp);
 
     void changePassword(Actor staff, String currentPassword, String newPassword);
+
+    /**
+     * Asks for the password again before a sensitive change, e.g. keys of integrations (REQ-ADM-10). A wrong password
+     * counts like a failed sign-in and fails with {@code ACCESS_DENIED}. Call it outside a transaction.
+     */
+    void confirmPassword(Actor staff, String password);
 }

@@ -44,15 +44,21 @@ class FcmPushProvider implements PushProvider {
     FcmPushProvider(Transport http, JsonMapper json, Clock clock, String projectId, String credentials) {
         if (projectId == null || projectId.isBlank() || credentials == null || credentials.isBlank()) {
             throw new IllegalStateException(
-                    "blizz.push.provider=FCM needs blizz.push.fcm-project-id and blizz.push.fcm-credentials "
-                            + "(the service account JSON, from the environment)");
+                    "Firebase needs the project id and the service account key (admin panel → Integrations, or "
+                            + "blizz.push.fcm-project-id and blizz.push.fcm-credentials)");
         }
         this.http = http;
         this.json = json;
         this.clock = clock;
         this.projectId = projectId;
-        @SuppressWarnings("unchecked")
-        Map<String, Object> account = json.readValue(credentials, Map.class);
+        Map<String, Object> account;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parsed = json.readValue(credentials, Map.class);
+            account = parsed;
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("The Firebase service account key is not JSON");
+        }
         this.clientEmail = (String) account.get("client_email");
         Object uri = account.get("token_uri");
         this.tokenUri = uri == null ? "https://oauth2.googleapis.com/token" : (String) uri;
@@ -114,6 +120,16 @@ class FcmPushProvider implements PushProvider {
             return new Result(Outcome.INVALID_TOKEN, error);
         }
         return new Result(Outcome.RETRY, error);
+    }
+
+    /** Signs in without sending anything ("check the connection"); returns the service account's e-mail. */
+    String signIn() {
+        accessToken();
+        return clientEmail;
+    }
+
+    String projectId() {
+        return projectId;
     }
 
     private synchronized String accessToken() {

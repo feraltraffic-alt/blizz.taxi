@@ -65,6 +65,44 @@ class GraphHopperRouteEstimator implements RouteEstimator {
         }
     }
 
+    /** Asks /info ("check the connection"): reachable, the key accepted, the profile known. Never shows the key. */
+    taxi.blizz.configuration.Integrations.Check check() {
+        String group = taxi.blizz.configuration.Integrations.ROUTING;
+        StringBuilder url = new StringBuilder(properties.baseUrl().replaceAll("/+$", "")).append("/info");
+        if (properties.apiKey() != null && !properties.apiKey().isBlank()) {
+            url.append("?key=").append(encode(properties.apiKey()));
+        }
+        try {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(url.toString()))
+                    .timeout(properties.timeout()).header("Accept", "application/json").GET().build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                return new taxi.blizz.configuration.Integrations.Check(group, false,
+                        "GraphHopper refused the key (" + response.statusCode() + ")");
+            }
+            if (response.statusCode() != 200) {
+                return new taxi.blizz.configuration.Integrations.Check(group, false,
+                        "GraphHopper answered " + response.statusCode());
+            }
+            JsonNode profiles = json.readTree(response.body()).path("profiles");
+            boolean known = false;
+            for (JsonNode profile : profiles) {
+                known |= properties.profile().equals(profile.path("name").asString());
+            }
+            return known || profiles.isMissingNode() || profiles.isEmpty()
+                    ? new taxi.blizz.configuration.Integrations.Check(group, true,
+                            "GraphHopper answered; profile " + properties.profile())
+                    : new taxi.blizz.configuration.Integrations.Check(group, false,
+                            "GraphHopper has no profile " + properties.profile());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new taxi.blizz.configuration.Integrations.Check(group, false, "Interrupted");
+        } catch (Exception e) {
+            return new taxi.blizz.configuration.Integrations.Check(group, false,
+                    "GraphHopper is unreachable: " + e.getClass().getSimpleName());
+        }
+    }
+
     URI uri(GeoPoint pickup, GeoPoint dropOff) {
         StringBuilder query = new StringBuilder(properties.baseUrl().replaceAll("/+$", "")).append("/route?")
                 .append("point=").append(point(pickup))

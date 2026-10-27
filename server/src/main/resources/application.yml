@@ -38,8 +38,13 @@ blizz:
   auth:
     instance-id: ${INSTANCE_ID:}
     access-token-secret: ${ACCESS_TOKEN_SECRET:}
+  secrets:
+    # Encrypts the keys entered in the admin panel; 32 bytes in Base64 (openssl rand -base64 32). Keep it with the
+    # backups of the database: without it the stored keys cannot be read.
+    master-key: ${SECRETS_MASTER_KEY:}
   push:
-    # Firebase Cloud Messaging of the service's own project (REQ-TEN-08); the key only from the environment.
+    # Firebase Cloud Messaging of the service's own project (REQ-TEN-08). The keys are entered in the admin panel
+    # (Integrations); the environment's are used when the panel has none.
     provider: ${PUSH_PROVIDER:FCM}
     fcm-project-id: ${FCM_PROJECT_ID:}
     fcm-credentials: ${FCM_CREDENTIALS:}

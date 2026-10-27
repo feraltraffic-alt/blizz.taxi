@@ -1,0 +1,192 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — integration components
+  version: 1.0.0
+  description: >-
+    Shared schemas of the keys and settings of integrations entered in the admin panel (REQ-ADM-10): Firebase,
+    GraphHopper, the map keys of the apps and the payment merchants. Secrets are write-only.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    IntegrationField:
+      type: object
+      required: [name, group, kind, label, description, for_apps, set]
+      properties:
+        name:
+          type: string
+          examples: [push.fcm.credentials]
+        group:
+          type: string
+          enum: [push, routing, maps]
+        kind:
+          type: string
+          enum: [TEXT, SECRET, FLAG]
+        label:
+          type: string
+        description:
+          type: string
+        for_apps:
+          type: boolean
+          description: The value goes to the apps in the public start-up data (config.v1 bootstrap).
+        set:
+          type: boolean
+        value:
+          type: [string, "null"]
+          description: Always null for a SECRET.
+        hint:
+          type: [string, "null"]
+          description: The last characters of a SECRET, e.g. "…a1b2".
+        changed_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        changed_at:
+          type: [string, "null"]
+          format: date-time
+
+    IntegrationFieldList:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/IntegrationField"
+
+    ChangeIntegrations:
+      type: object
+      additionalProperties: false
+      required: [command_id, password, changes, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        password:
+          type: string
+          description: The staff member's own password, asked again for every change of keys.
+        changes:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+              value:
+                type: [string, "null"]
+                description: Null or blank removes the panel's value (the environment's applies again).
+        reason:
+          type: string
+          minLength: 1
+
+    IntegrationCheck:
+      type: object
+      required: [group, ok, message]
+      properties:
+        group:
+          type: string
+        ok:
+          type: boolean
+        message:
+          type: string
+          description: What was checked; never a key.
+
+    PaymentMerchant:
+      type: object
+      required: [id, provider, account, domain, currency, city_ids, secret_source, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        provider:
+          type: string
+          enum: [WAYFORPAY, FAKE]
+        account:
+          type: string
+        domain:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        city_ids:
+          type: array
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        secret_source:
+          type: string
+          enum: [PANEL, ENVIRONMENT, NONE]
+          description: NONE — the merchant cannot be used until a key is entered.
+        secret_hint:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    PaymentMerchantList:
+      type: object
+      required: [merchants]
+      properties:
+        merchants:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentMerchant"
+
+    CreatePaymentMerchant:
+      type: object
+      additionalProperties: false
+      required: [command_id, password, provider, account, domain, currency, secret, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        password:
+          type: string
+        provider:
+          type: string
+          description: WAYFORPAY; FAKE only on development and sandbox servers.
+          enum: [WAYFORPAY, FAKE]
+        account:
+          type: string
+          maxLength: 100
+        domain:
+          type: string
+          maxLength: 253
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        secret:
+          type: string
+          maxLength: 512
+        city_ids:
+          type: array
+          description: A city already served by another merchant moves to this one.
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+
+    ChangePaymentMerchant:
+      type: object
+      additionalProperties: false
+      required: [command_id, password, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        password:
+          type: string
+        domain:
+          type: [string, "null"]
+        secret:
+          type: [string, "null"]
+          description: A new key; null keeps the current one.
+        city_ids:
+          type: [array, "null"]
+          description: The full list of cities; null keeps them.
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1

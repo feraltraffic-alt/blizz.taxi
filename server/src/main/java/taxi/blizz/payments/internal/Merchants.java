@@ -4,8 +4,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import taxi.blizz.configuration.Integrations;
 
-/** Merchants with their secret from the environment; a merchant without a secret is not usable. */
+/**
+ * Merchants with their secret: the one entered in the admin panel, else the environment's by {@code secret_ref}. A
+ * merchant without a secret is not usable.
+ */
 @Component
 class Merchants {
 
@@ -13,10 +17,38 @@ class Merchants {
 
     private final JdbcClient jdbc;
     private final PaymentsProperties properties;
+    private final Integrations integrations;
 
-    Merchants(JdbcClient jdbc, PaymentsProperties properties) {
+    Merchants(JdbcClient jdbc, PaymentsProperties properties, Integrations integrations) {
         this.jdbc = jdbc;
         this.properties = properties;
+        this.integrations = integrations;
+    }
+
+    /** Where the panel keeps a merchant's secret. */
+    static String secretName(UUID merchantId) {
+        return "payments.merchant." + merchantId + ".secret";
+    }
+
+    /** PANEL, ENVIRONMENT or NONE. */
+    String secretSource(UUID merchantId, String secretRef) {
+        if (integrations.secretHint(secretName(merchantId)).isPresent()) {
+            return "PANEL";
+        }
+        String env = properties.secrets().get(secretRef);
+        return env == null || env.isBlank() ? "NONE" : "ENVIRONMENT";
+    }
+
+    private String secret(UUID merchantId, String secretRef) {
+        try {
+            Optional<String> panel = integrations.value(secretName(merchantId));
+            if (panel.isPresent()) {
+                return panel.get();
+            }
+        } catch (RuntimeException e) {
+            // A stored secret that cannot be decrypted (no master key): the environment's, if any.
+        }
+        return properties.secrets().get(secretRef);
     }
 
     Optional<Merchant> forCity(UUID cityId) {
@@ -37,12 +69,16 @@ class Merchants {
     }
 
     String secretOfAccount(String account) {
-        return jdbc.sql("select secret_ref from payment_merchant where account = :account").param("account", account)
-                .query(String.class).optional().map(ref -> properties.secrets().get(ref)).orElse("");
+        record Ref(UUID id, String secretRef) {
+        }
+        return jdbc.sql("select id, secret_ref from payment_merchant where account = :account")
+                .param("account", account)
+                .query((rs, i) -> new Ref(rs.getObject(1, UUID.class), rs.getString(2))).optional()
+                .map(ref -> secret(ref.id(), ref.secretRef())).orElse("");
     }
 
     private Merchant merchant(java.sql.ResultSet rs) throws java.sql.SQLException {
-        String secret = properties.secrets().get(rs.getString("secret_ref"));
+        String secret = secret(rs.getObject("id", UUID.class), rs.getString("secret_ref"));
         if (secret == null || secret.isBlank()) {
             return null;
         }

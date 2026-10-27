@@ -1064,6 +1064,196 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/integrations:
+    get:
+      operationId: listIntegrations
+      summary: Keys and settings of integrations
+      description: Secrets are never returned, only whether they are set and their last characters. Needs integrations.manage.
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/IntegrationFieldList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: changeIntegrations
+      summary: Set, replace or remove keys and settings
+      description: >-
+        All changes or none, after the password is asked again (REQ-ADM-10); a wrong password counts like a failed
+        sign-in and answers 403. The audit keeps who, when, why and the last characters of a key, never the key.
+        The servers use the new values within seconds, without a restart. 409 when the server has no master key
+        for secrets.
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./integrations.yaml#/components/schemas/ChangeIntegrations"
+      responses:
+        "200":
+          description: All fields after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/IntegrationFieldList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/integrations/{group}/check:
+    post:
+      operationId: checkIntegration
+      summary: Check the connection
+      description: >-
+        push — signs in to Firebase without sending anything; routing — asks GraphHopper's /info. The answer never
+        contains a key.
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [push, routing]
+      responses:
+        "200":
+          description: The result, also when the check failed.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/IntegrationCheck"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/payment-merchants:
+    get:
+      operationId: listPaymentMerchants
+      summary: Payment merchants
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/PaymentMerchantList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createPaymentMerchant
+      summary: Add a merchant account
+      description: The password is asked again; the key is stored encrypted and never shown (REQ-ADM-10).
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./integrations.yaml#/components/schemas/CreatePaymentMerchant"
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/PaymentMerchant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/payment-merchants/{merchant_id}/change:
+    post:
+      operationId: changePaymentMerchant
+      summary: Change the domain, the key or the cities of a merchant
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: merchant_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./integrations.yaml#/components/schemas/ChangePaymentMerchant"
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/PaymentMerchant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/payment-merchants/{merchant_id}/check:
+    post:
+      operationId: checkPaymentMerchant
+      summary: Check the merchant's account and key
+      description: >-
+        Asks the provider about an order that does not exist; nothing is charged. The provider's answer is shown,
+        never the key.
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: merchant_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The result, also when the check failed.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/IntegrationCheck"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/settings:
     get:
       operationId: getServiceSettings
@@ -1665,6 +1855,8 @@ paths:
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
 tags:
+  - name: Integrations
+    description: Keys of Firebase, GraphHopper, maps and payment merchants (REQ-ADM-10)
   - name: Support
     description: Support cases (REQ-ADM-09)
   - name: Settings
