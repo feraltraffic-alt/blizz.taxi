@@ -55,4 +55,16 @@ class JdbcAccountDirectory implements AccountDirectory {
         }
         return jdbc.sql(sql).param("id", subject.id()).query(String.class).optional().filter(l -> !l.isBlank());
     }
+
+    @Override
+    public Optional<java.util.UUID> clientByPhone(taxi.blizz.identity.PhoneNumber phone) {
+        return jdbc.sql("select id from client where phone_normalized = :phone and account_state <> 'ANONYMIZED'")
+                .param("phone", phone.e164()).query(java.util.UUID.class).optional();
+    }
+
+    @Override
+    public Optional<java.util.UUID> driverByPhone(taxi.blizz.identity.PhoneNumber phone) {
+        return jdbc.sql("select id from driver where phone_normalized = :phone and account_state <> 'ANONYMIZED'")
+                .param("phone", phone.e164()).query(java.util.UUID.class).optional();
+    }
 }
