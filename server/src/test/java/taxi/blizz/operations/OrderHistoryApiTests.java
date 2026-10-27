@@ -156,8 +156,10 @@ class OrderHistoryApiTests {
         assertThat(driverHistory).extracting(item -> item.get("id"))
                 .contains(completedTrip.id().toString(), cancelledWithDriver.trip().id().toString(), aborted.id().toString())
                 .doesNotContain(otherCompleted.id().toString());
-        assertThat(byId(driverHistory, aborted.id())).containsEntry("phase", "ABORTED")
-                .containsEntry("order_short_number", shortNumber(withdrawn.order().id()));
+        Map<String, Object> abortedItem = byId(driverHistory, aborted.id());
+        assertThat(abortedItem).containsEntry("phase", "ABORTED");
+        assertThat(((Number) abortedItem.get("order_short_number")).longValue())
+                .isEqualTo(shortNumber(withdrawn.order().id()));
     }
 
     @Test
