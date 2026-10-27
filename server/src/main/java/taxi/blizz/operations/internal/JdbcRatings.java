@@ -44,7 +44,7 @@ class JdbcRatings implements Ratings {
     record SubmitRequest(UUID orderId, String authorType, UUID authorId, int score, String comment) {
     }
 
-    record Context(UUID payerId, UUID driverId, UUID cityId, OffsetDateTime completedAt, long orderVersion) {
+    record Context(UUID payerId, UUID driverId, UUID cityId, OffsetDateTime completedAt) {
     }
 
     record RatingSubmitted(UUID orderId, String authorType, String targetType, UUID targetId, int score) {
@@ -79,17 +79,18 @@ class JdbcRatings implements Ratings {
                 .param("now", now).param("orderId", orderId).param("authorType", authorType)
                 .param("authorId", actor.id()).update();
 
+        UUID ratingId = UUID.randomUUID();
         jdbc.sql("""
                         insert into rating (id, order_id, author_type, author_id, target_type, target_id,
                                             score, comment, created_at)
                         values (:id, :orderId, :authorType, :authorId, :targetType, :targetId,
                                 :score, :comment, :createdAt)
                         """)
-                .param("id", UUID.randomUUID()).param("orderId", orderId).param("authorType", authorType)
+                .param("id", ratingId).param("orderId", orderId).param("authorType", authorType)
                 .param("authorId", actor.id()).param("targetType", target.type()).param("targetId", target.id())
                 .param("score", score).param("comment", comment).param("createdAt", now).update();
 
-        outbox.publish(new OutboxEvent("RatingSubmitted", 1, "Order", orderId, context.orderVersion(),
+        outbox.publish(new OutboxEvent("RatingSubmitted", 1, "Rating", ratingId, 1,
                 new RatingSubmitted(orderId, authorType, target.type(), target.id(), score)));
         return new Rating(orderId, score, now);
     }
@@ -153,7 +154,7 @@ class JdbcRatings implements Ratings {
     private Context context(UUID orderId, boolean lock) {
         String suffix = lock ? " for update of o" : "";
         return jdbc.sql("""
-                        select o.payer_client_id, a.driver_id, o.city_id, t.completed_at, o.version
+                        select o.payer_client_id, a.driver_id, o.city_id, t.completed_at
                         from ride_order o
                         join trip t on t.order_id = o.id and t.phase = 'COMPLETED'
                         join assignment a on a.id = t.assignment_id
@@ -162,7 +163,7 @@ class JdbcRatings implements Ratings {
                 .param("orderId", orderId)
                 .query((rs, i) -> new Context(rs.getObject("payer_client_id", UUID.class),
                         rs.getObject("driver_id", UUID.class), rs.getObject("city_id", UUID.class),
-                        rs.getObject("completed_at", OffsetDateTime.class), rs.getLong("version")))
+                        rs.getObject("completed_at", OffsetDateTime.class)))
                 .optional().orElseThrow(JdbcRatings::notFound);
     }
 
