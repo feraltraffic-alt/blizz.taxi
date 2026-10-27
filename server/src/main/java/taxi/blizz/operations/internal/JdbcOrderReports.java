@@ -96,7 +96,8 @@ class JdbcOrderReports implements OrderReports {
                 .map(e -> new Reason(e.getKey().split("\\|", 2)[0], e.getKey().split("\\|", 2)[1], e.getValue()))
                 .sorted(Comparator.comparingInt(Reason::count).reversed().thenComparing(Reason::code))
                 .toList();
-        return new Report(cityId, city.timezone(), from, to, days, total.counts(), top);
+        return new Report(cityId, city.timezone(), from, to, days, total.counts(), top,
+                OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     private static final class Tally {

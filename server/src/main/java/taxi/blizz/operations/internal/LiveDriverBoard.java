@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.operations.Orders;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
 
 /**
  * The call centre's map of the cars on the line (REQ-OPS-01, operator.v1.yaml): every driver with an open or closing
@@ -55,9 +57,20 @@ class LiveDriverBoard {
     record Board(UUID cityId, OffsetDateTime at, List<LiveDriver> drivers) {
     }
 
+    /**
+     * Filters (REQ-ADM-08): {@code status} (any of), {@code vehicle_class}, {@code fresh} (a fresh position only)
+     * and a box {@code min_lat,min_lon,max_lat,max_lon} for the part of the map in view.
+     */
     @GetMapping("/api/operator/v1/drivers/live")
-    ResponseEntity<Board> board(AccessClaims claims, @RequestParam("city_id") UUID cityId) {
+    ResponseEntity<Board> board(AccessClaims claims, @RequestParam("city_id") UUID cityId,
+                                @RequestParam(required = false) List<String> status,
+                                @RequestParam(name = "vehicle_class", required = false) String vehicleClass,
+                                @RequestParam(defaultValue = "false") boolean fresh,
+                                @RequestParam(required = false) List<Double> box) {
         staff.require(claims.actor(), Orders.VIEW_PERMISSION, cityId);
+        if (box != null && box.size() != 4) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "box is min_lat,min_lon,max_lat,max_lon");
+        }
         OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
         List<LiveDriver> drivers = jdbc.sql("""
                         select ws.driver_id, d.name, d.has_payment_terminal, v.registration_number, v.make, v.model,
@@ -72,8 +85,16 @@ class LiveDriverBoard {
                         left join vehicle v on v.id = ws.vehicle_id
                         left join driver_capacity c on c.driver_id = ws.driver_id
                         where ws.city_id = :city and ws.state in ('OPEN', 'CLOSING')
+                          and (cast(:vehicleClass as text) is null
+                               or cast(:vehicleClass as text) = any(v.class_approvals))
+                          and (cast(:minLat as double precision) is null
+                               or (ws.last_location is not null
+                                   and ST_Y(ws.last_location) between :minLat and :maxLat
+                                   and ST_X(ws.last_location) between :minLon and :maxLon))
                         order by d.name nulls last, ws.driver_id""")
-                .param("city", cityId)
+                .param("city", cityId).param("vehicleClass", vehicleClass)
+                .param("minLat", box == null ? null : box.get(0)).param("minLon", box == null ? null : box.get(1))
+                .param("maxLat", box == null ? null : box.get(2)).param("maxLon", box == null ? null : box.get(3))
                 .query((rs, i) -> {
                     OffsetDateTime heartbeat = rs.getObject("last_heartbeat_at", OffsetDateTime.class);
                     OffsetDateTime located = rs.getObject("last_location_at", OffsetDateTime.class);
@@ -86,13 +107,17 @@ class LiveDriverBoard {
                             : new Car(rs.getString("registration_number"), rs.getString("make"), rs.getString("model"),
                             rs.getString("color"), classes == null ? List.of()
                             : List.of((String[]) classes.getArray()));
-                    Point point = rs.getObject("lat") == null ? null : new Point(rs.getDouble("lat"), rs.getDouble("lon"));
+                    Point point = rs.getObject("lat") == null ? null
+                            : new Point(rs.getDouble("lat"), rs.getDouble("lon"));
                     return new LiveDriver(rs.getObject("driver_id", UUID.class), rs.getString("name"), car,
                             rs.getBoolean("has_payment_terminal"),
                             status(rs.getString("state"), rs.getString("intent"), occupancy, connection, geolocation),
                             occupancy, connection, geolocation, point, located, rs.getObject("order_id", UUID.class));
                 })
-                .list();
+                .list().stream()
+                .filter(d -> status == null || status.isEmpty() || status.contains(d.status()))
+                .filter(d -> !fresh || "FRESH".equals(d.geolocation()))
+                .toList();
         return ResponseEntity.ok(new Board(cityId, now, drivers));
     }
 

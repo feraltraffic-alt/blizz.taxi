@@ -27,8 +27,9 @@ public interface OrderReports {
     record Reason(String cancelledBy, String code, int count) {
     }
 
+    /** {@code generatedAt}: when the figures were read (REQ-ADM-06). */
     record Report(UUID cityId, String timezone, LocalDate from, LocalDate to, List<Day> days, Counts total,
-                  List<Reason> cancellationReasons) {
+                  List<Reason> cancellationReasons, java.time.OffsetDateTime generatedAt) {
     }
 
     /** At most 92 days, {@code to} included. */

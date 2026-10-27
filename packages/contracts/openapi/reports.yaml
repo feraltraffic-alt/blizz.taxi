@@ -45,8 +45,11 @@ components:
     OrderReport:
       type: object
       additionalProperties: false
-      required: [city_id, timezone, from, to, days, total, cancellation_reasons]
+      required: [city_id, timezone, from, to, days, total, cancellation_reasons, generated_at]
       properties:
+        generated_at:
+          description: When the figures were read (REQ-ADM-06).
+          $ref: "./common.yaml#/components/schemas/Timestamp"
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         timezone:
@@ -137,8 +140,11 @@ components:
     MoneyReport:
       type: object
       additionalProperties: false
-      required: [city_id, currency, timezone, from, to, days, total]
+      required: [city_id, currency, timezone, from, to, days, total, generated_at]
       properties:
+        generated_at:
+          description: When the figures were read (REQ-ADM-06).
+          $ref: "./common.yaml#/components/schemas/Timestamp"
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         currency:

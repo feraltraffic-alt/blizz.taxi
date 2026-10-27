@@ -27,8 +27,9 @@ public interface FinanceReports {
     record Day(LocalDate date, Figures figures) {
     }
 
+    /** {@code generatedAt}: when the figures were read (REQ-ADM-06). */
     record Report(UUID cityId, String currency, String timezone, LocalDate from, LocalDate to, List<Day> days,
-                  Figures total) {
+                  Figures total, java.time.OffsetDateTime generatedAt) {
     }
 
     /** At most 92 days, {@code to} included. */

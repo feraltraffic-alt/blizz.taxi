@@ -81,6 +81,19 @@ class LiveDriverBoardTests {
         });
         assertThat(result.getResponse().getContentAsString()).as("no phone numbers").doesNotContain("+38099");
 
+        // Filters (REQ-ADM-08): by status, and by the part of the map in view.
+        List<Map<String, Object>> onOrder = (List<Map<String, Object>>) json.readValue(mvc.perform(
+                get("/api/operator/v1/drivers/live").param("city_id", city.toString()).param("status", "ON_ORDER")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + operator)).andReturn().getResponse()
+                .getContentAsString(), Map.class).get("drivers");
+        assertThat(onOrder).extracting(d -> d.get("driver_id")).containsExactly(busy.actor().id().toString());
+        List<Map<String, Object>> inBox = (List<Map<String, Object>>) json.readValue(mvc.perform(
+                get("/api/operator/v1/drivers/live").param("city_id", city.toString())
+                        .param("box", "-39.85,85.7,-39.7,85.9")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + operator)).andReturn().getResponse()
+                .getContentAsString(), Map.class).get("drivers");
+        assertThat(inBox).extracting(d -> d.get("driver_id")).containsExactly(free.actor().id().toString());
+
         String elsewhere = token(new String[]{Orders.VIEW_PERMISSION}, UUID.randomUUID());
         assertThat(mvc.perform(get("/api/operator/v1/drivers/live").param("city_id", city.toString())
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + elsewhere)).andReturn().getResponse().getStatus())

@@ -205,6 +205,35 @@ paths:
           required: true
           schema:
             $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: status
+          in: query
+          description: Any of these (repeat the parameter).
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [FREE, ON_ORDER, PAUSED, CLOSING, NO_SIGNAL]
+        - name: vehicle_class
+          in: query
+          schema:
+            type: string
+        - name: fresh
+          in: query
+          description: Only drivers with a fresh position.
+          schema:
+            type: boolean
+            default: false
+        - name: box
+          in: query
+          description: The part of the map in view, min_lat,min_lon,max_lat,max_lon.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 4
+            items:
+              type: number
       responses:
         "200":
           description: By name.
@@ -285,6 +314,8 @@ paths:
                           oneOf:
                             - $ref: "./common.yaml#/components/schemas/Uuid"
                             - type: "null"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
