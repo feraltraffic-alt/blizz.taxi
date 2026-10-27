@@ -3,6 +3,7 @@ package taxi.blizz.operations.internal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +60,33 @@ class JdbcTrips implements Trips {
                 .query(UUID.class)
                 .optional()
                 .map(this::view);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit) {
+        requireDriver(driver);
+        int size = Math.max(1, Math.min(limit, 50));
+        String cursor = before == null ? "" : " and t.created_at < :before";
+        JdbcClient.StatementSpec query = jdbc.sql("""
+                        select t.id, t.order_id, o.short_number, t.created_at, o.pickup_label, o.dropoff_label,
+                               o.final_price_minor, o.currency, o.payment_method, t.phase
+                        from trip t
+                        join assignment a on a.id = t.assignment_id
+                        join ride_order o on o.id = t.order_id
+                        where a.driver_id = :driver and t.phase in ('COMPLETED', 'ABORTED')
+                        """ + cursor + " order by t.created_at desc, t.id desc limit :limit")
+                .param("driver", driver.id()).param("limit", size);
+        if (before != null) {
+            query = query.param("before", before);
+        }
+        return query.query((rs, i) -> new HistoryItem(rs.getObject("id", UUID.class),
+                        rs.getObject("order_id", UUID.class), rs.getLong("short_number"),
+                        rs.getObject("created_at", OffsetDateTime.class), rs.getString("pickup_label"),
+                        rs.getString("dropoff_label"), (Long) rs.getObject("final_price_minor"),
+                        rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")),
+                        rs.getString("phase")))
+                .list();
     }
 
     record PhaseRequest(UUID tripId, long expectedVersion, String exceptionReason) {

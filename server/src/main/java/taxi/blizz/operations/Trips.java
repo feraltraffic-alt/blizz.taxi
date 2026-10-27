@@ -1,6 +1,7 @@
 package taxi.blizz.operations;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
@@ -11,7 +12,15 @@ import taxi.blizz.platform.Actor;
  */
 public interface Trips {
 
+    record HistoryItem(UUID id, UUID orderId, long orderShortNumber, OffsetDateTime createdAt,
+                       String pickupLabel, String dropoffLabel, Long finalPriceMinor, String currency,
+                       PaymentMethod paymentMethod, String phase) {
+    }
+
     Optional<TripView> current(Actor driver);
+
+    /** Completed and aborted trips of the signed-in driver, newest first; limit is capped at 50. */
+    List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit);
 
     /**
      * TO_PICKUP → WAITING. The driver's last server-side position must be fresh and near the pickup

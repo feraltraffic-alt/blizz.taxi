@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.operations.TripView;
@@ -42,6 +44,13 @@ class DriverTripController {
 
     record CompleteCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                            @NotNull OffsetDateTime reportedAt, Boolean cashReceived) {
+    }
+
+    @GetMapping
+    List<Trips.HistoryItem> history(AccessClaims claims,
+                                    @RequestParam(required = false) OffsetDateTime before,
+                                    @RequestParam(defaultValue = "20") int limit) {
+        return trips.history(claims.actor(), before, limit);
     }
 
     @GetMapping("/current")

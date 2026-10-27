@@ -14,6 +14,17 @@ public interface Orders {
     String CANCEL_PERMISSION = "orders.cancel";
     String REASSIGN_PERMISSION = "orders.reassign";
 
+    record HistoryVehicle(String make, String model, String color, String registrationNumber) {
+    }
+
+    record HistoryDriver(String name, HistoryVehicle vehicle) {
+    }
+
+    record HistoryItem(UUID id, long shortNumber, String status, OffsetDateTime createdAt, String pickupLabel,
+                       String dropoffLabel, String vehicleClass, Long priceMinor, Long finalPriceMinor,
+                       String currency, PaymentMethod paymentMethod, HistoryDriver driver, boolean chatAvailable) {
+    }
+
     /**
      * Creates the order and starts the search. A client creates orders it pays for; staff need
      * {@link #CREATE_PERMISSION} and the pickup city in their scope (REQ-OPS-03).
@@ -36,6 +47,9 @@ public interface Orders {
 
     /** Orders of one city visible to staff, newest first; limit is capped at 100 (REQ-OPS-01). */
     List<OrderView> inCity(Actor staff, UUID cityId, boolean activeOnly, OffsetDateTime before, int limit);
+
+    /** The signed-in payer's orders, newest first; the limit is capped at 50 (REQ-RID-*). */
+    List<HistoryItem> history(Actor payer, OffsetDateTime before, int limit);
 
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);
