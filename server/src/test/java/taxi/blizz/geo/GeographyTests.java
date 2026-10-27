@@ -38,10 +38,21 @@ class GeographyTests {
     @Autowired CityResolver resolver;
     @Autowired JdbcClient jdbc;
 
+    /** Every polygon these tests use lies here; other test classes' cities are far away. */
+    private static final String AREA = "SRID=4326;MULTIPOLYGON(((28 48,35 48,35 53,28 53,28 48)))";
+
     @BeforeEach
     void clearGeography() {
-        jdbc.sql("delete from zone").update();
-        jdbc.sql("delete from city").update();
+        // Cities here may already carry orders and work sessions of other test classes (e.g. the operator API tests),
+        // so they are archived rather than deleted; then nothing in the area resolves.
+        jdbc.sql("""
+                update zone set state = 'ARCHIVED' where state <> 'ARCHIVED'
+                  and city_id in (select id from city where ST_Intersects(polygon, ST_GeomFromEWKT(:area)))""")
+                .param("area", AREA).update();
+        jdbc.sql("""
+                update city set state = 'ARCHIVED' where state <> 'ARCHIVED'
+                  and ST_Intersects(polygon, ST_GeomFromEWKT(:area))""")
+                .param("area", AREA).update();
         permittedStaff(STAFF.id(), "ACTIVE", GeoConfiguration.MANAGE_PERMISSION);
     }
 
@@ -171,7 +182,8 @@ class GeographyTests {
         } finally {
             start.countDown();
         }
-        assertThat(jdbc.sql("select count(*) from city where state = 'PUBLISHED'").query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from city where state = 'PUBLISHED' and ST_Intersects(polygon, "
+                + "ST_GeomFromEWKT(:area))").param("area", AREA).query(Long.class).single()).isEqualTo(1);
     }
 
     @Test
