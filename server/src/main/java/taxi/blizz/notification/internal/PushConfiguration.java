@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,8 +19,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 class PushConfiguration {
 
     @Bean
-    FakePushProvider fakePushProvider() {
-        return new FakePushProvider();
+    FakePushProvider fakePushProvider(Clock clock) {
+        return new FakePushProvider(clock);
     }
 
     @Bean
