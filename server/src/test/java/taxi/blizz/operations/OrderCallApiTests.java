@@ -40,8 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class OrderCallApiTests {
 
-    private static final GeoPoint PICKUP = new GeoPoint(-39.5, 150.5);
-    private static final GeoPoint DROPOFF = new GeoPoint(-39.45, 150.55);
+    private static final GeoPoint PICKUP = new GeoPoint(-39.5, 70.5);
+    private static final GeoPoint DROPOFF = new GeoPoint(-39.45, 70.55);
     private static final String SERVICE_PHONE = "+380440000038";
     private static final String CALLER_PHONE = "+48512345038";
 
@@ -67,7 +67,7 @@ class OrderCallApiTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         rides = new TestRides(jdbc, orders, dispatch, trips, workSessions, auth, quoteService);
-        city = rides.city("test-order-calls", "UAH", 150.0);
+        city = rides.city("test-order-calls", "UAH", 70.0);
         admin = superAdmin();
     }
 

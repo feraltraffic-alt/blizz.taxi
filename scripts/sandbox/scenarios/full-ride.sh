@@ -40,6 +40,10 @@ TRIP=$(api GET /api/driver/v1/trips/current "$DRIVER" | jq -r .id)
 api POST "/api/driver/v1/trips/$TRIP/messages" "$DRIVER" \
     "{\"command_id\":\"$(uuid)\",\"body\":\"Буду за 3 хвилини\"}" >/dev/null
 
+say "\"Call\" from the order card on both sides (settings: call mode)"
+api GET "/api/rider/v1/orders/$ORDER/call" "$RIDER" >/dev/null; expect 200
+api GET "/api/driver/v1/trips/$TRIP/call" "$DRIVER" >/dev/null; expect 200
+
 say "The driver arrives, picks up and drives"
 move "$DRIVER" "$SESSION" 50.4503 "$PICKUP_LON" 2
 VERSION=$(api GET /api/driver/v1/trips/current "$DRIVER" | jq -r .version)
