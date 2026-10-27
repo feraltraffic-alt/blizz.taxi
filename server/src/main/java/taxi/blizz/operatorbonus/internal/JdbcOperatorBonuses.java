@@ -59,13 +59,13 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     }
 
     @Override
-    public String name() {
+    public String consumerId() {
         return "operator-bonuses";
     }
 
     @Override
-    public java.util.Set<String> eventTypes() {
-        return java.util.Set.of("TripCompleted", "OrderCancelled");
+    public boolean supports(String eventType) {
+        return "TripCompleted".equals(eventType) || "OrderCancelled".equals(eventType);
     }
 
     @Override
