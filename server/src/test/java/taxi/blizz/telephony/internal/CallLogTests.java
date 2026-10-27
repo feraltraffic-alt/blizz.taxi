@@ -120,7 +120,7 @@ class CallLogTests {
     }
 
     private Actor callOperator(UUID city) {
-        return operator(city, Calls.ANSWER_PERMISSION, Orders.CREATE_PERMISSION);
+        return operator(city, Calls.ANSWER_PERMISSION, Orders.CREATE_PERMISSION, Orders.CANCEL_PERMISSION);
     }
 
     private String channel() {
@@ -228,8 +228,10 @@ class CallLogTests {
                 : orders.createDuringCall(operator, UUID.randomUUID(), order, callId, again);
     }
 
-    private void cancel(Actor operator, OrderView order) {
-        orders.cancel(operator, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "NO_CARS");
+    /** Clean-up: staff and riders each give a reason of their own list. */
+    private void cancel(Actor who, OrderView order) {
+        orders.cancel(who, UUID.randomUUID(), order.id(), orders.get(order.id()).version(),
+                who.type() == SubjectType.STAFF ? "NO_CARS" : "CHANGED_MIND");
     }
 
     // ------------------------------------------------------------ the log
@@ -310,7 +312,8 @@ class CallLogTests {
         Actor withoutTheRight = operator(cityId, Orders.CREATE_PERMISSION);
         Inbox mineInbox = connect(mine);
         Inbox elsewhereInbox = connect(elsewhere);
-        Inbox noRightInbox = connect(withoutTheRight);
+        assertThatThrownBy(() -> connect(withoutTheRight)).as("no calls.answer: no operator channel")
+                .rootCause().hasMessageContaining("403");
 
         // A known rider with an open order.
         TestRides.Driver driver = rides.driverNear(PICKUP);
@@ -340,7 +343,6 @@ class CallLogTests {
 
         TimeUnit.MILLISECONDS.sleep(500);
         assertThat(pops(elsewhereInbox, call(known).id())).as("another city").isEmpty();
-        assertThat(pops(noRightInbox, call(known).id())).as("no calls.answer").isEmpty();
 
         // The call log follows the same rule.
         assertThat(calls.recent(mine, null, 100)).extracting(Calls.Call::id)
@@ -350,6 +352,16 @@ class CallLogTests {
                 .doesNotContain(call(known).id());
         assertCode(() -> calls.recent(withoutTheRight, null, 10), ErrorCode.ACCESS_DENIED);
         assertCode(() -> calls.answer(elsewhere, UUID.randomUUID(), call(known).id()), ErrorCode.ACCESS_DENIED);
+
+        // The right is taken away during the shift: the next call does not pop for him.
+        jdbc.sql("update staff_user set permissions = array_remove(permissions, :p) where id = :id")
+                .param("p", Calls.ANSWER_PERMISSION).param("id", mine.id()).update();
+        String later = channel();
+        created(later, newPhone("+38067"), line);
+        deliverEvents();
+        TimeUnit.MILLISECONDS.sleep(500);
+        assertThat(pops(mineInbox, call(later).id())).isEmpty();
+        destroyed(later);
 
         cancel(rider, open);
         destroyed(known);

@@ -75,7 +75,11 @@ class JdbcCalls implements Calls {
         Optional<UUID> city = jdbc.sql("select city_id from call_line where number = :number")
                 .param("number", called.get()).query(UUID.class).optional();
         if (city.isEmpty()) {
-            return Optional.empty(); // not a service number: a leg towards an operator, an outgoing call…
+            // Not a service number: usually a leg towards an operator or an outgoing call. A full external number may
+            // be a service number missing from the call lines — said in the log (without the caller) to be fixed.
+            log.warn("A call to {} is not logged: the number is not a service number (call lines)",
+                    new PhoneNumber(called.get()).masked());
+            return Optional.empty();
         }
         return tx.execute(status -> {
             UUID id = UUID.randomUUID();

@@ -6,6 +6,8 @@ import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.SessionService;
+import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.telephony.Calls;
 
 /** {@code /ws/v1/rider}, {@code /ws/v1/driver} and {@code /ws/v1/operator}: one live channel per audience. */
 @Configuration(proxyBeanMethods = false)
@@ -14,10 +16,12 @@ class LiveConfiguration implements WebSocketConfigurer {
 
     private final LiveSessions sessions;
     private final SessionService auth;
+    private final StaffAccess staff;
 
-    LiveConfiguration(LiveSessions sessions, SessionService auth) {
+    LiveConfiguration(LiveSessions sessions, SessionService auth, StaffAccess staff) {
         this.sessions = sessions;
         this.auth = auth;
+        this.staff = staff;
     }
 
     @Override
@@ -28,7 +32,12 @@ class LiveConfiguration implements WebSocketConfigurer {
         registry.addHandler(handler, "/ws/v1/driver").addInterceptors(new LiveHandshake(auth, ApiAudience.DRIVER))
                 .setAllowedOriginPatterns("*");
         // The operator workstation: card-pop of incoming calls (issue #64).
-        registry.addHandler(handler, "/ws/v1/operator").addInterceptors(new LiveHandshake(auth, ApiAudience.OPERATOR))
+        // Only staff who take calls in some city; the card-pop itself goes to who holds the right at that moment.
+        registry.addHandler(handler, "/ws/v1/operator").addInterceptors(new LiveHandshake(auth, ApiAudience.OPERATOR,
+                        claims -> {
+                            StaffAccess.Scope scope = staff.scope(claims.actor(), Calls.ANSWER_PERMISSION);
+                            return scope.allCities() || !scope.cityIds().isEmpty();
+                        }))
                 .setAllowedOriginPatterns("*");
     }
 }

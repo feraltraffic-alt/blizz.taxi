@@ -24,10 +24,17 @@ class LiveHandshake implements HandshakeInterceptor {
 
     private final SessionService sessions;
     private final ApiAudience audience;
+    private final java.util.function.Predicate<AccessClaims> allowed;
 
     LiveHandshake(SessionService sessions, ApiAudience audience) {
+        this(sessions, audience, claims -> true);
+    }
+
+    /** {@code allowed}: a further condition on who may connect (an operator must take calls). */
+    LiveHandshake(SessionService sessions, ApiAudience audience, java.util.function.Predicate<AccessClaims> allowed) {
         this.sessions = sessions;
         this.audience = audience;
+        this.allowed = allowed;
     }
 
     @Override
@@ -36,6 +43,10 @@ class LiveHandshake implements HandshakeInterceptor {
         Optional<AccessClaims> claims = token(request).flatMap(token -> sessions.verifyAccess(token, audience));
         if (claims.isEmpty()) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        if (!allowed.test(claims.get())) {
+            response.setStatusCode(HttpStatus.FORBIDDEN);
             return false;
         }
         attributes.put(CLAIMS, claims.get());
