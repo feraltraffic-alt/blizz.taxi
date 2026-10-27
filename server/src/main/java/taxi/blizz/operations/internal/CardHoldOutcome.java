@@ -66,7 +66,10 @@ class CardHoldOutcome implements OutboxHandler {
             return;
         }
         if (CardPayments.HOLD_AUTHORIZED.equals(message.type())) {
-            core.setPaymentState(order.id(), "AUTHORIZED");
+            // Events may arrive out of order: never overwrite a later payment state.
+            if ("AUTH_PENDING".equals(core.paymentState(order.id()))) {
+                core.setPaymentState(order.id(), "AUTHORIZED");
+            }
             if (core.isPreorder(order.id())) {
                 core.changeStatus(order, "SCHEDULED", null, "CardHoldAuthorized", OrderCore.system(), Map.of());
             } else {
