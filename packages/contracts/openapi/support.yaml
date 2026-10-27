@@ -18,10 +18,81 @@ components:
     State:
       type: string
       enum: [OPEN, IN_PROGRESS, WAITING_REQUESTER, RESOLVED, CLOSED]
+    Attachment:
+      type: object
+      additionalProperties: false
+      required: [file_id, content_type, size_bytes]
+      properties:
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, application/pdf]
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10485760
+        name:
+          type: [string, "null"]
+          maxLength: 255
+    AttachmentIds:
+      type: array
+      maxItems: 5
+      uniqueItems: true
+      items:
+        $ref: "./common.yaml#/components/schemas/Uuid"
+    OpenAttachmentUpload:
+      type: object
+      additionalProperties: false
+      required: [command_id, content_type, size_bytes]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, application/pdf]
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10485760
+    UploadSession:
+      type: object
+      additionalProperties: false
+      required: [file_id, upload_path, expires_at, max_bytes]
+      properties:
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        upload_path:
+          type: string
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        max_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+    StoredFile:
+      type: object
+      additionalProperties: false
+      required: [file_id, state, size_bytes]
+      properties:
+        file_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [SAFE, REJECTED]
+        content_type:
+          type: [string, "null"]
+        size_bytes:
+          type: integer
+          format: int64
+        reject_reason:
+          type: [string, "null"]
     Message:
       type: object
       additionalProperties: false
-      required: [id, sequence, author_type, visibility, body, created_at]
+      required: [id, sequence, author_type, visibility, body, created_at, attachments]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -44,6 +115,11 @@ components:
           maxLength: 4000
         created_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        attachments:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Attachment"
     Case:
       type: object
       additionalProperties: false
@@ -123,6 +199,8 @@ components:
         message:
           type: string
           maxLength: 4000
+        attachment_ids:
+          $ref: "#/components/schemas/AttachmentIds"
     Reply:
       type: object
       additionalProperties: false
@@ -133,6 +211,8 @@ components:
         message:
           type: string
           maxLength: 4000
+        attachment_ids:
+          $ref: "#/components/schemas/AttachmentIds"
     Assign:
       type: object
       additionalProperties: false
@@ -185,6 +265,8 @@ components:
         wait_for_requester:
           description: With a PUBLIC message — the case waits for the requester's answer.
           type: boolean
+        attachment_ids:
+          $ref: "#/components/schemas/AttachmentIds"
     Decision:
       type: object
       additionalProperties: false

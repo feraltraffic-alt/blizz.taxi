@@ -195,6 +195,31 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/support/uploads:
+    post:
+      operationId: openDriverSupportAttachmentUpload
+      summary: Open an upload session for one support attachment
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/OpenAttachmentUpload"
+      responses:
+        "201":
+          description: Upload session.
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/UploadSession"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/driver/v1/uploads/{file_id}:
     put:
       operationId: uploadFile
@@ -222,6 +247,10 @@ paths:
             schema:
               type: string
               contentMediaType: image/png
+          image/webp:
+            schema:
+              type: string
+              contentMediaType: image/webp
           application/pdf:
             schema:
               type: string
@@ -1134,9 +1163,8 @@ paths:
       operationId: getDriverBalance
       summary: Settlement balance with the service
       description: |
-        Per currency, from the journal (REQ-LED-01). Positive — the service owes the driver; negative — the
-        driver owes the service, e.g. the commission of cash trips (REQ-PAY-16). This is the settlement
-        balance only; "available for payout" is a separate figure that arrives with payouts (REQ-LED-06).
+        Per currency, from the journal (REQ-LED-01). Positive — owed to the driver; negative — owed by the driver,
+        e.g. the commission of cash trips (REQ-PAY-16).
       tags: [Finance]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1287,6 +1315,7 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/driver/v1/support/cases/{case_id}:
     get:
       operationId: getDriverSupportCase
@@ -1311,6 +1340,7 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/driver/v1/support/cases/{case_id}/messages:
     post:
       operationId: replyDriverSupportCase
@@ -1349,6 +1379,36 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/support/cases/{case_id}/attachments/{file_id}:
+    get:
+      operationId: downloadDriverSupportAttachment
+      summary: Download a PUBLIC attachment of my support case
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: Attachment bytes.
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+            application/pdf: {schema: {type: string, format: binary}}
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
 
 tags:
   - name: Support
