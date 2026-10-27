@@ -104,3 +104,55 @@ components:
           description: ANONYMIZED after completion; after a rejection the state the account had before the request.
           type: string
           enum: [ANONYMIZED, ACTIVE, BLOCKED]
+
+    DeletionCodeChallenge:
+      description: A code of purpose ACCOUNT_DELETION was sent to the rider's current phone.
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_at, resend_available_at]
+      properties:
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resend_available_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    DeletionRequestCommand:
+      description: >-
+        The rider confirms the request with the code of the challenge. A sign-in code is refused (OTP_INVALID); a
+        wrong code counts as an attempt.
+      type: object
+      additionalProperties: false
+      required: [command_id, challenge_id, otp_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        otp_code:
+          type: string
+          pattern: "^[0-9]{4,8}$"
+
+    DeletionCancelCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    AccountDeletionStatus:
+      type: object
+      additionalProperties: false
+      required: [client_id, account_state, requested_at]
+      properties:
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: DELETION_PENDING after a request; after a cancellation the state the account had before.
+          type: string
+          enum: [DELETION_PENDING, ACTIVE, BLOCKED]
+        requested_at:
+          type: [string, "null"]
+          format: date-time
