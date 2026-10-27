@@ -47,8 +47,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class SupportAttachmentApiTests {
 
-    private static final GeoPoint PICKUP = new GeoPoint(-39.5, 80.5);
-    private static final GeoPoint DROPOFF = new GeoPoint(-39.45, 80.55);
+    private static final GeoPoint PICKUP = new GeoPoint(-39.5, 175.5);
+    private static final GeoPoint DROPOFF = new GeoPoint(-39.45, 175.55);
     private static final byte[] PNG = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
@@ -74,7 +74,7 @@ class SupportAttachmentApiTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         rides = new TestRides(jdbc, orders, dispatch, trips, workSessions, auth, quotes);
-        city = rides.city("test-support-attachments", "UAH", 80.0);
+        city = rides.city("test-support-attachments", "UAH", 175.0);
     }
 
     @Test
