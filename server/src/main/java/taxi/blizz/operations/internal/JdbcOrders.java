@@ -7,6 +7,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.audit.AuditEntry;
+import taxi.blizz.audit.AuditLog;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.identity.StaffAccess;
@@ -31,6 +33,7 @@ class JdbcOrders implements Orders {
 
     private final JdbcClient jdbc;
     private final StaffAccess staff;
+    private final AuditLog audit;
     private final IdempotentCommands commands;
     private final CityResolver cities;
     private final OrderCore core;
@@ -39,8 +42,10 @@ class JdbcOrders implements Orders {
     private final QuoteService quotes;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
-               DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff) {
+               DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
+               AuditLog audit) {
         this.staff = staff;
+        this.audit = audit;
         this.jdbc = jdbc;
         this.commands = commands;
         this.cities = cities;
@@ -101,6 +106,10 @@ class JdbcOrders implements Orders {
                         .update();
             } catch (DuplicateKeyException e) {
                 throw new DomainException(ErrorCode.ORDER_ALREADY_ACTIVE, "The payer already has an active order");
+            }
+            if (actor.type() == SubjectType.STAFF) {
+                audit.record(new AuditEntry(actor, "order.create", "ride_order", id.toString(), "Phone order",
+                        null, Map.of("channel", channel, "city_id", city.id().toString())));
             }
             core.recordEvent(id, 0, "OrderCreated", actor, null, Map.of("channel", channel,
                     "city_id", city.id().toString(), "payment_method", order.paymentMethod().name(),
@@ -171,6 +180,10 @@ class JdbcOrders implements Orders {
                                 "An order in " + order.status() + " cannot be cancelled this way");
                     }
                     core.changeStatus(order, "CANCELLED", reasonCode, "OrderCancelled", actor, Map.of());
+                    if (actor.type() == SubjectType.STAFF) {
+                        audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reasonCode,
+                                Map.of("status", order.status()), Map.of("status", "CANCELLED")));
+                    }
                     return core.view(orderId);
                 });
     }
@@ -211,6 +224,8 @@ class JdbcOrders implements Orders {
                             .filter(a -> "COMMITTED".equals(a.state()))
                             .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No active assignment"));
                     core.endAssignmentBeforeStart(assignment, "REVOKED", reason);
+                    audit.record(new AuditEntry(staff, "order.revokeAssignment", "ride_order", orderId.toString(),
+                            reason, Map.of("driver_id", assignment.driverId().toString()), null));
                     core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staff, reason,
                             Map.<String, Object>of("assignment_id", assignment.id().toString(),
                                     "driver_id", assignment.driverId().toString()));

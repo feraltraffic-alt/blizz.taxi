@@ -323,7 +323,134 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/logs/activity:
+    get:
+      operationId: listStaffActivity
+      summary: What staff did, by role
+      description: |
+        Every request of every staff member to the admin and operator APIs (reads too) and every sign-in attempt,
+        newest first, with the role at that moment (owner decision 27.10.2026). Bodies are never stored — the
+        path template and its ids say what was touched. Needs audit.view.
+      tags: [Logs]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: role
+          in: query
+          description: Staff role at the moment of the action.
+          schema:
+            $ref: "#/components/schemas/Role"
+        - name: staff_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: from
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: to
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: before
+          in: query
+          description: Next page — occurred_at of the last entry of the previous page.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [REQUEST, SIGN_IN]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/logs/changes:
+    get:
+      operationId: listStaffChanges
+      summary: What staff changed, by role
+      description: |
+        The audit log of staff changes (orders, drivers, cities, addresses, tariffs, finance, staff, chat reads)
+        with before/after, reason and the role at that moment, newest first. Needs audit.view.
+      tags: [Logs]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: role
+          in: query
+          description: Staff role at the moment of the action.
+          schema:
+            $ref: "#/components/schemas/Role"
+        - name: staff_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: from
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: to
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: before
+          in: query
+          description: Next page — occurred_at of the last entry of the previous page.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: action
+          in: query
+          schema:
+            type: string
+            examples: [order.cancel]
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangesPage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
 tags:
+  - name: Logs
+    description: Logs of all staff actions, by role
   - name: Me
     description: The signed-in staff member
   - name: Staff
@@ -334,6 +461,108 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    ActivityEntry:
+      type: object
+      additionalProperties: false
+      required: [id, occurred_at, kind, audience]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        occurred_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        kind:
+          type: string
+          enum: [REQUEST, SIGN_IN]
+        staff_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null for a request without a valid staff token or a sign-in with an unknown login.
+        staff_login:
+          type: [string, "null"]
+        role:
+          type: [string, "null"]
+          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+        audience:
+          type: string
+          enum: [admin, operator]
+        method:
+          type: [string, "null"]
+        path:
+          description: Path template, e.g. /api/admin/v1/staff/{staff_id}/suspend.
+          type: [string, "null"]
+        resource_ids:
+          description: "Values of the path template, e.g. staff_id."
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          type: [integer, "null"]
+        outcome:
+          description: OK / HTTP_4xx for requests; SUCCESS, BAD_CREDENTIALS, LOCKED, NOT_ACTIVE for sign-ins.
+          type: [string, "null"]
+        duration_ms:
+          type: [integer, "null"]
+        client_ip:
+          type: [string, "null"]
+        correlation_id:
+          type: [string, "null"]
+          format: uuid
+
+    ActivityPage:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEntry"
+
+    Change:
+      type: object
+      additionalProperties: false
+      required: [id, occurred_at, actor_type, action, resource_type, correlation_id]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        occurred_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        actor_type:
+          type: string
+        actor_id:
+          type: [string, "null"]
+          format: uuid
+        actor_role:
+          type: [string, "null"]
+          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: [string, "null"]
+        reason:
+          type: [string, "null"]
+        before:
+          description: JSON snapshot before the change, as text.
+          type: [string, "null"]
+        after:
+          description: JSON snapshot after the change, as text.
+          type: [string, "null"]
+        correlation_id:
+          type: string
+          format: uuid
+
+    ChangesPage:
+      type: object
+      additionalProperties: false
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Change"
+
     Role:
       type: string
       enum: [SUPER_ADMIN, ADMIN, OPERATOR]

@@ -12,8 +12,11 @@ public interface StaffSignIn {
     record Result(IssuedSession session, boolean passwordChangeRequired) {
     }
 
-    /** {@code audience} is {@link ApiAudience#ADMIN} or {@link ApiAudience#OPERATOR}. */
-    Result signIn(String login, String password, ApiAudience audience, String deviceRef);
+    /**
+     * {@code audience} is {@link ApiAudience#ADMIN} or {@link ApiAudience#OPERATOR}. Every attempt goes to the
+     * staff activity log with {@code clientIp}.
+     */
+    Result signIn(String login, String password, ApiAudience audience, String deviceRef, String clientIp);
 
     void changePassword(Actor staff, String currentPassword, String newPassword);
 }

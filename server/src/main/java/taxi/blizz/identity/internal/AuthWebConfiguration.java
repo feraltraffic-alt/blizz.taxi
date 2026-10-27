@@ -11,13 +11,18 @@ import taxi.blizz.identity.SessionService;
 class AuthWebConfiguration implements WebMvcConfigurer {
 
     private final SessionService sessions;
+    private final StaffActivityLog activity;
 
-    AuthWebConfiguration(SessionService sessions) {
+    AuthWebConfiguration(SessionService sessions, StaffActivityLog activity) {
         this.sessions = sessions;
+        this.activity = activity;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // First, so that requests refused by the bearer check are logged too.
+        registry.addInterceptor(new StaffActivityInterceptor(activity))
+                .addPathPatterns("/api/admin/**", "/api/operator/**");
         registry.addInterceptor(new BearerAuthenticationInterceptor(sessions)).addPathPatterns("/api/**");
     }
 
