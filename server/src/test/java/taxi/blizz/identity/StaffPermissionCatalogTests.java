@@ -19,7 +19,7 @@ class StaffPermissionCatalogTests {
     @Test
     void theCatalogListsExactlyThePermissionsTheModulesCheck() {
         assertThat(StaffPermissions.CODES).containsExactlyInAnyOrderElementsOf(Set.of(
-                Orders.CREATE_PERMISSION, Orders.CANCEL_PERMISSION, Orders.REASSIGN_PERMISSION,
+                Orders.CREATE_PERMISSION, Orders.CANCEL_PERMISSION, Orders.REASSIGN_PERMISSION, Orders.INTERRUPT_PERMISSION,
                 OrderChat.VIEW_PERMISSION, DriverAdmission.REVIEW_PERMISSION, GeoConfiguration.MANAGE_PERMISSION,
                 TariffService.MANAGE_PERMISSION, DriverDebts.MANAGE_PERMISSION, StaffPermissions.AUDIT_VIEW,
                 ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION));
