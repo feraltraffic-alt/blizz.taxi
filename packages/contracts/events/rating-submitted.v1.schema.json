@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/rating-submitted.v1.schema.json",
+  "title": "RatingSubmitted v1 payload",
+  "description": "A rider or driver submitted or replaced a post-trip rating (REQ-RID-08). Comments are deliberately excluded because they are staff-only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "author_type", "target_type", "target_id", "score"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "author_type": { "type": "string", "enum": ["RIDER", "DRIVER"] },
+    "target_type": { "type": "string", "enum": ["RIDER", "DRIVER"] },
+    "target_id": { "type": "string", "format": "uuid" },
+    "score": { "type": "integer", "minimum": 1, "maximum": 5 }
+  }
+}

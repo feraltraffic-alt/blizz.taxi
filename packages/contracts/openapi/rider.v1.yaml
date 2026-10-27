@@ -899,6 +899,74 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/rider/v1/orders/{order_id}/rating:
+    get:
+      operationId: getRiderOrderRating
+      summary: My rating after a fulfilled trip
+      description: The comment is staff-only and is never returned to the rider. Non-participants and non-fulfilled orders look like 404.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}
+      responses:
+        "200":
+          description: Active rating.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order_id, score, created_at]
+                properties:
+                  order_id: {type: string, format: uuid}
+                  score: {type: integer, minimum: 1, maximum: 5}
+                  created_at: {type: string, format: date-time}
+        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}
+        "404": {$ref: "./common.yaml#/components/responses/NotFound"}
+    post:
+      operationId: rateDriver
+      summary: Rate the driver after a fulfilled trip
+      description: Score 1–5. A blank comment is stored as absent. The rating may be replaced during the configured edit window; later → 409.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, score]
+              properties:
+                command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
+                score: {type: integer, minimum: 1, maximum: 5}
+                comment: {type: [string, "null"], maxLength: 500}
+      responses:
+        "200":
+          description: Active rating; comment stays staff-only.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order_id, score, created_at]
+                properties:
+                  order_id: {type: string, format: uuid}
+                  score: {type: integer, minimum: 1, maximum: 5}
+                  created_at: {type: string, format: date-time}
+        "400": {$ref: "./common.yaml#/components/responses/BadRequest"}
+        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}
+        "404": {$ref: "./common.yaml#/components/responses/NotFound"}
+        "409": {$ref: "./common.yaml#/components/responses/Conflict"}
+
 tags:
   - name: Push
     description: Push notifications to the app (section 20)

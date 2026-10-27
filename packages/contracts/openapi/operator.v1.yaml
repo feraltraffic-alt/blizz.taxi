@@ -834,6 +834,48 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/operator/v1/orders/{order_id}/ratings:
+    get:
+      operationId: getOperatorOrderRatings
+      summary: Active ratings for an order, including staff-only comments
+      description: Requires orders.view for the order city.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}
+      responses:
+        "200":
+          description: Up to the rider and driver active ratings.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [ratings]
+                properties:
+                  ratings:
+                    type: array
+                    maxItems: 2
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [order_id, author_type, author_id, target_type, target_id, score, created_at]
+                      properties:
+                        order_id: {type: string, format: uuid}
+                        author_type: {type: string, enum: [RIDER, DRIVER]}
+                        author_id: {type: string, format: uuid}
+                        target_type: {type: string, enum: [RIDER, DRIVER]}
+                        target_id: {type: string, format: uuid}
+                        score: {type: integer, minimum: 1, maximum: 5}
+                        comment: {type: [string, "null"], maxLength: 500}
+                        created_at: {type: string, format: date-time}
+        "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}
+        "403": {$ref: "./common.yaml#/components/responses/Forbidden"}
+        "404": {$ref: "./common.yaml#/components/responses/NotFound"}
+
 tags:
   - name: Support
     description: Support cases (REQ-ADM-09)
