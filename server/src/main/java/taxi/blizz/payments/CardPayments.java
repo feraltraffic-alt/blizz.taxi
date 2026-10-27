@@ -14,6 +14,8 @@ public interface CardPayments {
 
     String HOLD_AUTHORIZED = "CardHoldAuthorized";
     String HOLD_DECLINED = "CardHoldDeclined";
+    /** After the trip: {@code paid_minor} of {@code due_minor} was taken from the card (ADR 0008, part C). */
+    String PAYMENT_SETTLED = "CardPaymentSettled";
 
     record Intent(UUID id, UUID orderId, String state, long holdMinor, String currency, String maskedPan) {
     }

@@ -135,13 +135,91 @@ class JdbcCardPayments implements CardPayments {
                 .update();
     }
 
-    private void requestVoid(UUID intentId, long amountMinor, String reason) {
-        String authReference = jdbc.sql("""
+    /**
+     * Within the caller's transaction: the trip cost {@code finalMinor}. Takes the hold up to that amount first; the
+     * part above the hold is charged once that succeeded (REQ-PAY-05). A repeated call does nothing.
+     */
+    void startCapture(UUID orderId, long finalMinor, String currency) {
+        record Locked(UUID id, String state, long hold, String currency) {
+        }
+        Optional<Locked> intent = jdbc.sql("""
+                        select id, state, hold_minor, currency from payment_intent where order_id = :order for update""")
+                .param("order", orderId)
+                .query((rs, i) -> new Locked(rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
+                        rs.getString(4)))
+                .optional();
+        if (intent.isEmpty() || !"AUTHORIZED".equals(intent.get().state())) {
+            return;
+        }
+        Locked i = intent.get();
+        if (!i.currency().equals(currency)) {
+            throw new IllegalStateException("Fare currency " + currency + " differs from the hold " + i.currency());
+        }
+        jdbc.sql("""
+                        update payment_intent set capture_minor = :amount, state = 'CAPTURE_PENDING', updated_at = :now,
+                               version = version + 1
+                        where id = :id""")
+                .param("amount", finalMinor).param("now", now()).param("id", i.id()).update();
+        if (finalMinor == 0) {
+            requestVoid(i.id(), i.hold(), "Nothing to pay");
+            finishCapture(i.id());
+            return;
+        }
+        UUID id = UUID.randomUUID();
+        createOperation(id, i.id(), "SETTLE", "settle-" + id, authReference(i.id()), Math.min(finalMinor, i.hold()));
+    }
+
+    private String authReference(UUID intentId) {
+        return jdbc.sql("""
                         select reference from payment_operation
                         where intent_id = :intent and type = 'AUTH' and state = 'SUCCEEDED'""")
                 .param("intent", intentId).query(String.class).single();
+    }
+
+    /** After a SETTLE or CHARGE is final: charge what is still due, or close the capture. */
+    private void continueCapture(UUID intentId, String type, String state, long amount) {
+        record Due(UUID orderId, long capture, long hold) {
+        }
+        Due due = jdbc.sql("select order_id, capture_minor, hold_minor from payment_intent where id = :id")
+                .param("id", intentId)
+                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getLong(2), rs.getLong(3))).single();
+        long paid = paid(intentId);
+        if ("SETTLE".equals(type)) {
+            // Above the hold — or the whole fare when the hold could not be taken — goes to the saved card once.
+            long rest = "SUCCEEDED".equals(state) ? due.capture() - paid : due.capture();
+            if (rest > 0) {
+                UUID id = UUID.randomUUID();
+                createOperation(id, intentId, "CHARGE", "charge-" + id, null, rest);
+                return;
+            }
+        }
+        finishCapture(intentId);
+    }
+
+    private long paid(UUID intentId) {
+        return jdbc.sql("""
+                        select coalesce(sum(amount_minor), 0) from payment_operation
+                        where intent_id = :intent and type in ('SETTLE', 'CHARGE') and state = 'SUCCEEDED'""")
+                .param("intent", intentId).query(Long.class).single();
+    }
+
+    private void finishCapture(UUID intentId) {
+        record Done(UUID orderId, UUID clientId, long capture, String currency) {
+        }
+        Done done = jdbc.sql("select order_id, client_id, capture_minor, currency from payment_intent where id = :id")
+                .param("id", intentId)
+                .query((rs, i) -> new Done(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getLong(3),
+                        rs.getString(4)))
+                .single();
+        long paid = paid(intentId);
+        intentState(intentId, paid >= done.capture() ? "PAID" : "PARTIALLY_PAID");
+        publish(PAYMENT_SETTLED, done.orderId(), intentId, Map.of("paid_minor", paid, "due_minor", done.capture(),
+                "currency", done.currency(), "payer_client_id", done.clientId().toString()));
+    }
+
+    private void requestVoid(UUID intentId, long amountMinor, String reason) {
         UUID id = UUID.randomUUID();
-        createOperation(id, intentId, "REFUND", "void-" + id, authReference, amountMinor);
+        createOperation(id, intentId, "REFUND", "void-" + id, authReference(intentId), amountMinor);
         intentState(intentId, "VOID_PENDING");
     }
 
@@ -212,8 +290,13 @@ class JdbcCardPayments implements CardPayments {
                     intentState(intent.id(), "VOIDED");
                 }
             }
+            case "SETTLE", "CHARGE" -> {
+                if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
+                    continueCapture(intent.id(), op.type(), state, 0);
+                }
+            }
             default -> {
-                // SETTLE and CHARGE: part C.
+                // nothing else changes the intent
             }
         }
     }

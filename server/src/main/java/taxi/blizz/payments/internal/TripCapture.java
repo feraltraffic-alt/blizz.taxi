@@ -1,0 +1,48 @@
+package taxi.blizz.payments.internal;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+import taxi.blizz.platform.OutboxHandler;
+import taxi.blizz.platform.OutboxMessage;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * A card trip is completed (TripCompleted, REQ-PAY-04/05): the hold is taken up to the final fare, the rest of the
+ * hold is left to lapse, and anything above the hold is charged to the saved card afterwards. The provider is called
+ * by the worker, not here.
+ */
+@Component
+class TripCapture implements OutboxHandler {
+
+    private final JdbcCardPayments payments;
+    private final JsonMapper json;
+
+    TripCapture(JdbcCardPayments payments, JsonMapper json) {
+        this.payments = payments;
+        this.json = json;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TripCompleted(UUID orderId, String paymentMethod, Long amountMinor, String currency) {
+    }
+
+    @Override
+    public String consumerId() {
+        return "payments.trip-capture";
+    }
+
+    @Override
+    public boolean supports(String eventType) {
+        return "TripCompleted".equals(eventType);
+    }
+
+    @Override
+    public void handle(OutboxMessage message) {
+        TripCompleted trip = json.readValue(message.payload(), TripCompleted.class);
+        if (!"CARD".equals(trip.paymentMethod()) || trip.amountMinor() == null) {
+            return;
+        }
+        payments.startCapture(trip.orderId(), trip.amountMinor(), trip.currency());
+    }
+}

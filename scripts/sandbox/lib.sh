@@ -57,8 +57,13 @@ expect() {
 # sign_in CLIENT|DRIVER PHONE — signs in by SMS code (read from the sandbox) and prints the access token.
 sign_in() {
     local audience="$1" phone="$2" device="sandbox-$RANDOM" challenge code
-    challenge=$(api POST /auth/v1/otp/challenges "" \
-        "{\"audience\":\"$audience\",\"phone\":\"$phone\",\"device_ref\":\"$device\"}" | jq -r .challenge_id)
+    local body="{\"audience\":\"$audience\",\"phone\":\"$phone\",\"device_ref\":\"$device\"}"
+    challenge=$(api POST /auth/v1/otp/challenges "" "$body" | jq -r .challenge_id)
+    if [[ "$(cat /tmp/sandbox-status)" == 429 ]]; then
+        # The same phone asked for a code a moment ago (an earlier scenario): wait out the resend pause once.
+        sleep "$(jq -r '.retry_after_seconds // 2' /tmp/sandbox-body)"
+        challenge=$(api POST /auth/v1/otp/challenges "" "$body" | jq -r .challenge_id)
+    fi
     expect 201
     code=$(api GET "/sandbox/v1/otp?phone=$(jq -rn --arg p "$phone" '$p|@uri')" | jq -r .code)
     expect 200

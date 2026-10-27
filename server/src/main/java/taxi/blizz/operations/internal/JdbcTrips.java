@@ -303,6 +303,10 @@ class JdbcTrips implements Trips {
                                 .param("state", Boolean.TRUE.equals(cashReceived) ? "CASH_REPORTED" : "CASH_NOT_RECEIVED")
                                 .param("id", trip.orderId())
                                 .update();
+                    } else if (payment == PaymentMethod.CARD) {
+                        // The driver is free now; the bank takes the money afterwards (REQ-PAY-04).
+                        jdbc.sql("update ride_order set payment_state = 'CAPTURE_PENDING' where id = :id")
+                                .param("id", trip.orderId()).update();
                     }
                     // The fare is fixed together with the fact of completion; posting follows from the event (REQ-LED-05).
                     // Waiting is charged only after an arrival that passed the normal check; an arrival or start

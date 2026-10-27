@@ -28,7 +28,7 @@ class CardHoldOutcome implements OutboxHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Hold(UUID orderId, String reason) {
+    record Hold(UUID orderId, String reason, Long paidMinor, Long dueMinor) {
     }
 
     @Override
@@ -38,13 +38,24 @@ class CardHoldOutcome implements OutboxHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return CardPayments.HOLD_AUTHORIZED.equals(eventType) || CardPayments.HOLD_DECLINED.equals(eventType);
+        return CardPayments.HOLD_AUTHORIZED.equals(eventType) || CardPayments.HOLD_DECLINED.equals(eventType)
+                || CardPayments.PAYMENT_SETTLED.equals(eventType);
     }
 
     @Override
     public void handle(OutboxMessage message) {
         Hold hold = json.readValue(message.payload(), Hold.class);
         OrderCore.LockedOrder order = core.lockOrder(hold.orderId());
+        if (CardPayments.PAYMENT_SETTLED.equals(message.type())) {
+            if ("PAID".equals(core.paymentState(order.id())) || "PARTIALLY_PAID".equals(core.paymentState(order.id()))) {
+                return; // a repeated delivery
+            }
+            boolean paid = hold.paidMinor() != null && hold.dueMinor() != null && hold.paidMinor() >= hold.dueMinor();
+            core.setPaymentState(order.id(), paid ? "PAID" : "PARTIALLY_PAID");
+            core.recordEvent(order.id(), core.touch(order.id()), "CardPaymentSettled", OrderCore.system(), null,
+                    Map.of("paid_minor", hold.paidMinor(), "due_minor", hold.dueMinor()));
+            return;
+        }
         if (!"AWAITING_PAYMENT".equals(order.status())) {
             // A repeated delivery finds the order already moving: nothing to do. An order that ended meanwhile must
             // not keep the money blocked.

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/card-payment-settled.v1.schema.json",
+  "title": "CardPaymentSettled v1",
+  "description": "After a card trip the money was taken (ADR 0008): paid_minor of due_minor. Less than due — the rest is the rider's debt. Published by payments; consumed by operations (payment state) and finance (posting).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "intent_id", "paid_minor", "due_minor", "currency", "payer_client_id"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "paid_minor": { "type": "integer", "minimum": 0 },
+    "due_minor": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "payer_client_id": { "type": "string", "format": "uuid" }
+  },
+  "examples": [
+    { "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f", "intent_id": "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b",
+      "paid_minor": 15400, "due_minor": 15400, "currency": "UAH", "payer_client_id": "2c3d4e5f-6071-4829-9a0b-1c2d3e4f5a6b" }
+  ]
+}
