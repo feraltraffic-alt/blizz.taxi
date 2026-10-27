@@ -1,5 +1,7 @@
 package taxi.blizz.notification.internal;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Optional;
 
@@ -87,8 +89,7 @@ final class PushTemplates {
                     "pl", "Ubezpieczenie", "en", "Insurance"),
             "OTHER", Map.of("ru", "Документ", "uk", "Документ", "pl", "Dokument", "en", "Document"));
 
-    private static final java.time.format.DateTimeFormatter DAY_MONTH_YEAR =
-            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final DateTimeFormatter DAY_MONTH_YEAR = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     private PushTemplates() {
     }
@@ -114,7 +115,7 @@ final class PushTemplates {
      * The text of {@code driver.document-expiring} with the document type and its last day filled in, in the
      * language of {@code text} (dates as dd.MM.yyyy, in English as yyyy-MM-dd).
      */
-    static Text document(Text text, String language, String documentType, java.time.LocalDate validTo) {
+    static Text document(Text text, String language, String documentType, LocalDate validTo) {
         Map<String, String> names = DOCUMENT_TYPES.getOrDefault(documentType, DOCUMENT_TYPES.get("OTHER"));
         String type = names.getOrDefault(language, names.get("en"));
         String date = "en".equals(language) ? validTo.toString() : DAY_MONTH_YEAR.format(validTo);
