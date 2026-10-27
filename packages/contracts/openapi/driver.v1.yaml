@@ -870,7 +870,84 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/trips/{trip_id}/messages:
+    get:
+      operationId: listDriverMessages
+      summary: Chat messages of the order
+      description: Oldest first, after the given sequence. The driver reads only the messages of his own assignment.
+      tags: [Chat]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: after
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessages"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      operationId: postDriverMessage
+      summary: Write to the rider
+      description: |
+        Open while a driver is assigned (to pickup, waiting, on the trip); otherwise 409 STATE_CONFLICT.
+        1 to 1000 characters. A repeat of the same command_id returns the same message. The conversation is
+        kept for the order details in the admin panel.
+      tags: [Chat]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostChatMessage"
+      responses:
+        "201":
+          description: The stored message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
+  - name: Chat
+    description: Rider–driver chat of the order
   - name: Account
     description: The signed-in driver
   - name: Admission
@@ -1380,6 +1457,51 @@ components:
               blocked:
                 description: The debt is above the limit; no new orders until it is paid in (REQ-PAY-16).
                 type: boolean
+
+    ChatMessage:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, sequence, sender_role, body, sent_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        sender_role:
+          type: string
+          enum: [RIDER, DRIVER]
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        sent_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    ChatMessages:
+      type: object
+      additionalProperties: false
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+
+    PostChatMessage:
+      type: object
+      additionalProperties: false
+      required: [command_id, body]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
 
     WithdrawCommand:
       type: object

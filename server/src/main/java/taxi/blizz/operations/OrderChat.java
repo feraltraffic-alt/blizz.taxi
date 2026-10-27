@@ -1,0 +1,33 @@
+package taxi.blizz.operations;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+import taxi.blizz.platform.Actor;
+
+/**
+ * Chat ("Написать") between the paying rider and the assigned driver of an order. Messages belong to the
+ * assignment: a driver reads only the messages of his own assignment, so after a reassignment the new
+ * driver never sees the conversation with the previous one; the rider reads the whole order. Writing is
+ * possible while the assignment is active (to pickup, waiting, on the trip). Staff read everything with
+ * {@link #VIEW_PERMISSION} for the order's city, and every such read is audited.
+ */
+public interface OrderChat {
+
+    String VIEW_PERMISSION = "orders.view";
+
+    record Message(UUID id, UUID orderId, long sequence, String senderRole, String body, OffsetDateTime sentAt) {
+    }
+
+    /** Idempotent by {@code commandId}; 1 to 1000 characters. */
+    Message post(Actor sender, UUID commandId, UUID orderId, String body);
+
+    /** Messages after {@code afterSequence}, oldest first, at most {@code limit} (≤ 100). */
+    List<Message> messages(Actor reader, UUID orderId, long afterSequence, int limit);
+
+    /** The full conversation of the order for the admin's order details; audited. */
+    List<Message> conversation(Actor staff, UUID orderId, String reason);
+
+    /** The order of the driver's trip, for the driver app that knows only the trip. */
+    UUID orderOfTrip(Actor driver, UUID tripId);
+}

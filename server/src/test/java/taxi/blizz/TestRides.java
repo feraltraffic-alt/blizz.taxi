@@ -120,17 +120,23 @@ public final class TestRides {
                 dropoff, "Work", PaymentMethod.CASH, quote));
     }
 
-    /** A cash ride of {@code driver} up to IN_PROGRESS; the driver must be the only free one near the pickup. */
-    public Ride started(UUID cityId, Driver driver, GeoPoint pickup, GeoPoint dropoff) {
+    /** A cash order accepted by {@code driver} (trip TO_PICKUP); the driver must be the only free one near. */
+    public Ride assigned(UUID cityId, Driver driver, GeoPoint pickup, GeoPoint dropoff) {
         Actor payer = client();
         moveTo(driver, north(pickup, 1000));
         OrderView order = order(payer, cityId, pickup, dropoff);
         dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        return new Ride(payer, driver, order, trips.current(driver.actor()).orElseThrow());
+    }
+
+    /** A cash ride of {@code driver} up to IN_PROGRESS; the driver must be the only free one near the pickup. */
+    public Ride started(UUID cityId, Driver driver, GeoPoint pickup, GeoPoint dropoff) {
+        Ride ride = assigned(cityId, driver, pickup, dropoff);
         moveTo(driver, north(pickup, 30));
-        TripView trip = trips.current(driver.actor()).orElseThrow();
+        TripView trip = ride.trip();
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
         TripView inProgress = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
-        return new Ride(payer, driver, order, inProgress);
+        return new Ride(ride.payer(), driver, ride.order(), inProgress);
     }
 
     public TripView complete(Ride ride, Boolean cashReceived) {
