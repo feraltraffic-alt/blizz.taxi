@@ -342,10 +342,11 @@ class GeographyTests {
         } finally {
             start.countDown();
         }
+        // Only this city: other tests archive their own cities and may leave zones behind.
         assertThat(jdbc.sql("""
                 select count(*) from zone join city on city.id = zone.city_id
-                where city.state = 'ARCHIVED' and zone.state = 'PUBLISHED'
-                """).query(Long.class).single()).isZero();
+                where city.id = :city and city.state = 'ARCHIVED' and zone.state = 'PUBLISHED'
+                """).param("city", city.id()).query(Long.class).single()).isZero();
     }
 
     private Revision execute(Command command, Actor actor, UUID commandId, Revision city, Revision zone) {
