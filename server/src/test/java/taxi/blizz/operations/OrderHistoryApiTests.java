@@ -75,14 +75,6 @@ class OrderHistoryApiTests {
         jdbc.sql("update driver set name = 'History Driver' where id = :id")
                 .param("id", driver.actor().id()).update();
 
-        Assigned completed = assign(payer, driver, PICKUP, DROPOFF);
-        rides.moveTo(driver, TestRides.north(PICKUP, 30));
-        TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), completed.trip().id(),
-                completed.trip().version(), null);
-        TripView started = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
-        TripView completedTrip = trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(),
-                OffsetDateTime.now(), true);
-
         Assigned cancelledWithDriver = assign(payer, driver, PICKUP, DROPOFF);
         OrderView cancelledAssigned = orders.cancel(payer, UUID.randomUUID(), cancelledWithDriver.order().id(),
                 orders.get(cancelledWithDriver.order().id()).version(), "RIDER_CANCELLED");
@@ -99,6 +91,14 @@ class OrderHistoryApiTests {
         assertThat(aborted.phase()).isEqualTo("ABORTED");
         orders.cancel(payer, UUID.randomUUID(), withdrawn.order().id(), orders.get(withdrawn.order().id()).version(),
                 "RIDER_CANCELLED");
+
+        Assigned completed = assign(payer, driver, PICKUP, DROPOFF);
+        rides.moveTo(driver, TestRides.north(PICKUP, 30));
+        TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), completed.trip().id(),
+                completed.trip().version(), null);
+        TripView started = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
+        TripView completedTrip = trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(),
+                OffsetDateTime.now(), true);
 
         OffsetDateTime base = OffsetDateTime.now().minusHours(1);
         setOrderCreated(completed.order().id(), base.plusMinutes(1));
