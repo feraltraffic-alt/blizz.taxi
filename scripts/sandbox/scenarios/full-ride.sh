@@ -95,6 +95,10 @@ api GET /api/rider/v1/orders "$RIDER" >/dev/null; expect 200
 api GET /api/driver/v1/trips "$DRIVER" >/dev/null; expect 200
 sleep 3 # the ledger posts the fare from the TripCompleted event
 api GET /api/driver/v1/balance "$DRIVER" >/dev/null; expect 200
+TODAY=$(TZ=Europe/Kyiv date +%F)
+EARNINGS=$(api GET "/api/driver/v1/earnings?city_id=5a000000-0000-4000-8000-000000000001&from=$TODAY&to=$TODAY" \
+  "$DRIVER"); expect 200
+(( $(jq .total.trips <<<"$EARNINGS") >= 1 ))
 
 say "The rider leaves a 10 % tip in cash: it is only recorded"
 TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
