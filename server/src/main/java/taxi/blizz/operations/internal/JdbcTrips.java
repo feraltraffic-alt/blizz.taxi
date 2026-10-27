@@ -252,7 +252,9 @@ class JdbcTrips implements Trips {
                         payload.put("cash_received", cashReceived);
                     }
                     payload.put("reported_at", reportedAt.toString());
-                    payload.put("needs_review", suspiciousTime);
+                    // Any reason: an arrival or start with an exception earlier, or the completion time now.
+                    payload.put("needs_review", jdbc.sql("select needs_review from trip where id = :id")
+                            .param("id", tripId).query(Boolean.class).single());
                     payload.put("driver_id", driver.id().toString());
                     payload.put("payer_client_id", facts.payerClientId() == null ? null : facts.payerClientId().toString());
                     payload.put("final_fare_id", fare.id().toString());

@@ -1268,7 +1268,318 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/support/cases:
+    get:
+      operationId: listAdminSupportQueue
+      summary: Support queue
+      description: Urgent first, then newest. Needs support.manage for the city. Problem queues (CASH_DISPUTE, TRIP_REVIEW) come from events.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          description: The queue of one city; without it, the cases without a city.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: state
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/State"
+        - name: priority
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/Priority"
+        - name: category
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/Category"
+        - name: assigned_staff_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: unassigned
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: before
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/CaseList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+  /api/admin/v1/support/cases/{case_id}:
+    get:
+      operationId: getAdminSupportCase
+      summary: A case with INTERNAL comments
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/support/cases/{case_id}/assign:
+    post:
+      operationId: assignAdminSupportCase
+      summary: Assign or return to the queue
+      description: OPEN → IN_PROGRESS on assignment.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Assign"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/priority:
+    post:
+      operationId: priorityAdminSupportCase
+      summary: Change the priority
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Prioritize"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/comments:
+    post:
+      operationId: commentAdminSupportCase
+      summary: Write to the requester or an internal comment
+      description: INTERNAL comments are never shown to the requester.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Comment"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/resolve:
+    post:
+      operationId: resolveAdminSupportCase
+      summary: Resolve with a resolution
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/reopen:
+    post:
+      operationId: reopenAdminSupportCase
+      summary: Reopen a resolved case
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/close:
+    post:
+      operationId: closeAdminSupportCase
+      summary: Close
+      description: A reason is required; it becomes the resolution when there is none.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
 tags:
+  - name: Support
+    description: Support cases (REQ-ADM-09)
   - name: Settings
     description: Brand, languages and how calls work (REQ-TEN-06/07), settings.manage
   - name: Geography

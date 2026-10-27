@@ -985,7 +985,132 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/driver/v1/support/cases:
+    get:
+      operationId: listDriverSupportCases
+      summary: My support cases
+      description: Newest first.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: before
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/CaseList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+    post:
+      operationId: openDriverSupportCase
+      summary: Open a support case
+      description: About one of my orders or in general; the first message is PUBLIC.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/OpenCase"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/driver/v1/support/cases/{case_id}:
+    get:
+      operationId: getDriverSupportCase
+      summary: One of my cases
+      description: PUBLIC messages only.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/driver/v1/support/cases/{case_id}/messages:
+    post:
+      operationId: replyDriverSupportCase
+      summary: Answer support
+      description: A case waiting for me goes back to work; a resolved one is reopened; a closed one → 409.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Reply"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
 tags:
+  - name: Support
+    description: Support cases (REQ-ADM-09)
   - name: Chat
     description: Rider–driver chat of the order
   - name: Account
