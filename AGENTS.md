@@ -40,6 +40,10 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - Change only what the issue needs: do not delete or reword comments, Javadoc or code outside its scope.
 - Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 
+## Trying the system by hand
+
+The sandbox ([`docs/sandbox.md`](docs/sandbox.md)) runs the whole system with fictional data in GitHub Actions: `gh workflow run sandbox.yml -f scenario=all`. When a change adds or alters an HTTP flow, add or extend a scenario in `scripts/sandbox/scenarios/` and run the workflow on your branch (`--ref <branch>`); link the run in the PR.
+
 ## Commits
 
 Imperative subject line in English, a body explaining why, one logical change per commit.

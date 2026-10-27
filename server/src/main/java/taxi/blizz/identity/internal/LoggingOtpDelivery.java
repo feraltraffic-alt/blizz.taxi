@@ -13,7 +13,7 @@ import taxi.blizz.identity.PhoneNumber;
  * {@code dev} profile; other environments fail to start until a real provider is configured.
  */
 @Component
-@Profile("dev")
+@Profile("dev & !sandbox")
 class LoggingOtpDelivery implements OtpDelivery {
 
     private static final Logger log = LoggerFactory.getLogger(LoggingOtpDelivery.class);
