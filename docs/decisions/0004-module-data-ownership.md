@@ -19,7 +19,7 @@
 
 | Читает | Таблица (владелец) | Где и зачем |
 |---|---|---|
-| `operations` | `driver`, `vehicle` (`driver`) | Подбор кандидатов и проверка класса авто и наличия платёжного терминала (`has_payment_terminal`) при принятии заказа (`OrderCore.candidates`, `JdbcDispatch`, `JdbcPreorders`, `AssignmentCommitter`): один запрос с блокировкой и PostGIS-фильтром; история заказов пассажира (`JdbcOrders.history`) показывает имя последнего назначенного водителя и автомобиль без изменения данных; лента событий заказа для оператора (`JdbcOrders.timeline`) показывает имя водителя |
+| `operations` | `driver`, `vehicle` (`driver`) | Подбор кандидатов и проверка класса авто и наличия платёжного терминала (`has_payment_terminal`) при принятии заказа (`OrderCore.candidates`, `JdbcDispatch`, `JdbcPreorders`, `AssignmentCommitter`): один запрос с блокировкой и PostGIS-фильтром; история заказов пассажира (`JdbcOrders.history`) показывает имя последнего назначенного водителя и автомобиль без изменения данных; лента событий заказа для оператора (`JdbcOrders.timeline`) показывает имя водителя; карта машин на линии для оператора (`LiveDriverBoard`) показывает имя, автомобиль и наличие терминала |
 | `operations` | `device_session` (`identity`) | Принадлежность устройства водителю при открытии смены (`JdbcWorkSessions`) |
 | `audit` | `staff_user` (`identity`) | Снимок роли сотрудника в момент действия в записи аудита (`AuditLog.record`); `identity` сам пишет аудит, поэтому вызов API образовал бы цикл |
 | `identity` | `city` (`geo`) | Проверка, что города, отмеченные сотруднику, существуют (`JdbcStaffDirectory`); `geo` сам зависит от `identity`, поэтому вызов API образовал бы цикл |

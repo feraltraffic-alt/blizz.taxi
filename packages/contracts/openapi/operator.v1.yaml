@@ -190,6 +190,106 @@ paths:
               schema:
                 $ref: "./common.yaml#/components/schemas/Problem"
 
+  /api/operator/v1/drivers/live:
+    get:
+      operationId: getLiveDrivers
+      summary: The cars on the line in a city
+      description: >-
+        Every driver with an open or closing work session in the city, with the car, the status and the last known
+        position, for the call centre's map (REQ-OPS-01). Needs orders.view for the city. Poll it; no phone numbers.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: By name.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [city_id, at, drivers]
+                properties:
+                  city_id:
+                    $ref: "./common.yaml#/components/schemas/Uuid"
+                  at:
+                    $ref: "./common.yaml#/components/schemas/Timestamp"
+                  drivers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [driver_id, has_payment_terminal, status, occupancy, connection, geolocation]
+                      properties:
+                        driver_id:
+                          $ref: "./common.yaml#/components/schemas/Uuid"
+                        name:
+                          type: [string, "null"]
+                        car:
+                          oneOf:
+                            - type: "null"
+                            - type: object
+                              additionalProperties: false
+                              required: [registration_number, make, model, color, classes]
+                              properties:
+                                registration_number:
+                                  type: string
+                                make:
+                                  type: string
+                                model:
+                                  type: string
+                                color:
+                                  type: string
+                                classes:
+                                  type: array
+                                  items:
+                                    type: string
+                        has_payment_terminal:
+                          type: boolean
+                        status:
+                          description: >-
+                            FREE — may get an order now; ON_ORDER; PAUSED — not accepting; CLOSING — finishing the
+                            last order; NO_SIGNAL — connection or position lost.
+                          type: string
+                          enum: [FREE, ON_ORDER, PAUSED, CLOSING, NO_SIGNAL]
+                        occupancy:
+                          type: string
+                        connection:
+                          type: string
+                          enum: [CONNECTED, STALE, DISCONNECTED]
+                        geolocation:
+                          type: string
+                          enum: [FRESH, STALE, UNAVAILABLE]
+                        location:
+                          oneOf:
+                            - type: "null"
+                            - type: object
+                              additionalProperties: false
+                              required: [lat, lon]
+                              properties:
+                                lat:
+                                  type: number
+                                lon:
+                                  type: number
+                        last_location_at:
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Timestamp"
+                            - type: "null"
+                        order_id:
+                          description: The order the driver is on.
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Uuid"
+                            - type: "null"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/operator/v1/quotes:
     post:
       operationId: createOperatorQuote
