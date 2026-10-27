@@ -7,9 +7,10 @@ import taxi.blizz.platform.Actor;
 
 /**
  * Riders in the admin panel (REQ-ADM-01, section 36.4): finding a rider, blocking and unblocking. A block has a
- * reason and, optionally, an end, when the rider becomes ACTIVE again by itself. A blocked rider cannot order but may
- * still sign in to follow a trip in progress; a debt or a dispute is not touched by unblocking. Every change is
- * audited. Needs {@link #MANAGE_PERMISSION}.
+ * reason and, optionally, an end, when the rider becomes ACTIVE again by itself. A block stops new operations at once:
+ * the rider's sessions end and no new one opens (REQ-AUTH-07); a trip in progress goes on with the call centre
+ * (REQ-DS-01). A debt or a dispute is not touched by unblocking. Every change is audited. Needs
+ * {@link #MANAGE_PERMISSION}.
  */
 public interface ClientAccounts {
 

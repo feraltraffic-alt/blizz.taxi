@@ -96,8 +96,9 @@ class ClientAdminTests {
     }
 
     @Test
-    void aBlockedRiderCannotOrderButMaySignInUntilUnblocked() {
+    void aBlockedRiderIsSignedOutAndCannotOrderUntilUnblocked() {
         Actor rider = rides.client();
+        String session = auth.open(new VerifiedSubject(rider, "ACTIVE", false), "block-test").accessToken();
         long version = clients.get(support, rider.id()).version();
         assertCode(() -> clients.block(support, UUID.randomUUID(), rider.id(), version, " ", null),
                 ErrorCode.VALIDATION_FAILED);
@@ -117,8 +118,7 @@ class ClientAdminTests {
                 ErrorCode.STATE_CONFLICT);
 
         assertCode(() -> rides.order(rider, city, PICKUP, DROPOFF), ErrorCode.ACCOUNT_NOT_ACTIVE);
-        assertThat(auth.open(new VerifiedSubject(rider, "BLOCKED", false), "blocked-test").accessToken())
-                .as("may still sign in to follow a trip").isNotBlank();
+        assertThat(auth.verifyAccess(session, ApiAudience.RIDER)).as("the session ended with the block").isEmpty();
 
         ClientAccounts.Client active = clients.unblock(support, UUID.randomUUID(), rider.id(), blocked.version(),
                 "Apologised");

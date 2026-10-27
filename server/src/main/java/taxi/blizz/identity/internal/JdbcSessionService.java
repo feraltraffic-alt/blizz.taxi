@@ -37,11 +37,8 @@ class JdbcSessionService implements SessionService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Set<String> ACTIVE_STATES = Set.of("ACTIVE");
-    /**
-     * A rider who asked to delete the account still signs in, to see the request and cancel it (issue #56); a blocked
-     * rider too, to follow a trip in progress (section 36.4) — neither can order.
-     */
-    private static final Set<String> CLIENT_STATES = Set.of("ACTIVE", "DELETION_PENDING", "BLOCKED");
+    /** A rider who asked to delete the account still signs in, to see the request and cancel it (issue #56). */
+    private static final Set<String> CLIENT_STATES = Set.of("ACTIVE", "DELETION_PENDING");
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;

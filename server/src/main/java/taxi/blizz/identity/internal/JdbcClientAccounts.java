@@ -15,12 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.identity.ClientAccounts;
+import taxi.blizz.identity.SessionService;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.SubjectType;
 
 /** Riders for staff (REQ-ADM-01, section 36.4); see {@link ClientAccounts}. */
 @Service
@@ -32,13 +34,16 @@ class JdbcClientAccounts implements ClientAccounts {
     private final IdempotentCommands commands;
     private final StaffAccess staff;
     private final AuditLog audit;
+    private final SessionService sessions;
     private final Clock clock;
 
-    JdbcClientAccounts(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit, Clock clock) {
+    JdbcClientAccounts(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
+                       SessionService sessions, Clock clock) {
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
         this.audit = audit;
+        this.sessions = sessions;
         this.clock = clock;
     }
 
@@ -103,6 +108,8 @@ class JdbcClientAccounts implements ClientAccounts {
                                     where id = :id""")
                             .param("reason", why).param("until", end).param("now", now).param("by", actor.id())
                             .param("id", clientId).update();
+                    // New operations stop at once (REQ-AUTH-07); a trip in progress goes on with the call centre.
+                    sessions.revokeAll(new Actor(SubjectType.CLIENT, clientId), "ACCOUNT_BLOCKED");
                     Client after = find(clientId, false);
                     audit.record(new AuditEntry(actor, "client.block", "client", clientId.toString(), why,
                             Map.of("account_state", before.accountState()),
