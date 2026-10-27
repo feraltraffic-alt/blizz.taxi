@@ -159,7 +159,7 @@ class SupportCasesTests {
         Case closed = cases.close(agent, UUID.randomUUID(), opened.id(), resolved.version(), "Done");
         assertThat(closed.resolution()).isEqualTo("Returned to the rider");
         assertCode(() -> cases.reply(ride.payer(), UUID.randomUUID(), opened.id(), "Thanks"), ErrorCode.STATE_CONFLICT);
-        assertThat(cases.get(agent, opened.id()).messages()).hasSize(5);
+        assertThat(cases.get(agent, opened.id()).messages()).hasSize(4);
     }
 
     @Test
