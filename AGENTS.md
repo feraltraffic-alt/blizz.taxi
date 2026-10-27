@@ -38,6 +38,8 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - No secrets, keys or real personal data in the repository.
 - Do not change `docs/spec/` or `docs/decisions/` without an explicit request in the issue.
 - Change only what the issue needs: do not delete or reword comments, Javadoc or code outside its scope.
+- Edit contract and other shared files **in place** (insert your paths and schemas into the current file). Never write a whole file from your own copy or re-serialize it with a YAML tool: that reformats everything and silently drops the descriptions others added since (PR #44 lost ~20). Before opening the PR, `git diff origin/main...HEAD -- packages/contracts` must show only your additions.
+- Everything a command takes goes into its idempotency request. When you wrap an existing command with extra input (e.g. `attachment_ids` around a support message), give the extra input its own `IdempotentCommands` receipt around the call, so a repeat with different input is a 409 and not a change of the old result.
 - Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 
 ## Trying the system by hand
