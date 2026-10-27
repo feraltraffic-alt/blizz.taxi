@@ -14,7 +14,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.identity.SessionService;
+import taxi.blizz.TestQuotes;
+import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.Dispatch;
+import taxi.blizz.operations.OrderView;
+import taxi.blizz.operations.PaymentMethod;
+import taxi.blizz.operations.TripView;
+import taxi.blizz.platform.internal.OutboxRelay;
 import taxi.blizz.operations.Orders;
 import taxi.blizz.operations.Trips;
 import taxi.blizz.operations.WorkSessions;
@@ -47,6 +54,12 @@ class RiderWalletTests {
     QuoteService quotes;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    OutboxRelay relay;
+
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, 0.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 0.55);
+    UUID cityId;
 
     TestRides rides;
     Actor admin;
@@ -54,7 +67,7 @@ class RiderWalletTests {
     @BeforeEach
     void setUp() {
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
-        rides.city("test-rider-wallets", "UAH", 0);
+        cityId = rides.city("test-rider-wallets", "UAH", 0);
         admin = staff(RiderWallets.MANAGE_PERMISSION);
     }
 
@@ -79,9 +92,9 @@ class RiderWalletTests {
         RiderWallets.Wallet after = wallets.topUp(admin, command, rider.id(), "UAH", 15_000, "Компенсація за затримку");
         wallets.topUp(admin, command, rider.id(), "UAH", 15_000, "Компенсація за затримку"); // a repeat
 
-        assertThat(after.balances()).containsExactly(new RiderWallets.Balance("UAH", 15_000));
+        assertThat(after.balances()).containsExactly(new RiderWallets.Balance("UAH", 15_000, 0, 15_000));
         RiderWallets.Wallet mine = wallets.mine(rider, 10);
-        assertThat(mine.balances()).containsExactly(new RiderWallets.Balance("UAH", 15_000));
+        assertThat(mine.balances()).containsExactly(new RiderWallets.Balance("UAH", 15_000, 0, 15_000));
         assertThat(mine.entries()).singleElement().satisfies(e -> {
             assertThat(e.kind()).isEqualTo("STAFF_TOP_UP");
             assertThat(e.amountMinor()).isEqualTo(15_000);
@@ -123,5 +136,80 @@ class RiderWalletTests {
                 ErrorCode.NOT_FOUND);
         assertCode(() -> wallets.mine(admin, 10), ErrorCode.ACCESS_DENIED);
         assertThat(wallets.mine(rider, 10).balances()).isEmpty();
+    }
+
+    private void deliverEvents() {
+        while (relay.runOnce() > 0) {
+            // drain
+        }
+    }
+
+    private OrderView orderWithBonuses(Actor rider, PaymentMethod method, long bonuses) {
+        UUID quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
+        return orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP, "Home",
+                DROPOFF, "Work", method, quote, null, null, null, null, false, bonuses));
+    }
+
+    private long net(Ledger.Account account, UUID party) {
+        return ledger.balances(account, party).stream().filter(b -> b.currency().equals("UAH"))
+                .mapToLong(b -> b.debitMinor() - b.creditMinor()).sum();
+    }
+
+    @Test
+    void bonusesPayPartOfACashTripAndTheDriverCollectsTheRest() {
+        deliverEvents();
+        Actor rider = rides.client();
+        wallets.topUp(admin, UUID.randomUUID(), rider.id(), "UAH", 5_000, "Welcome bonus");
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+
+        OrderView order = orderWithBonuses(rider, PaymentMethod.CASH, 3_000);
+        assertThat(order.walletMinor()).isEqualTo(3_000);
+        assertThat(wallets.mine(rider, 10).balances()).singleElement()
+                .isEqualTo(new RiderWallets.Balance("UAH", 5_000, 3_000, 2_000));
+        assertCode(() -> orderWithBonuses(rides.client(), PaymentMethod.CASH, 1), ErrorCode.WALLET_INSUFFICIENT);
+
+        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        TripView trip = trips.current(driver.actor()).orElseThrow();
+        assertThat(trip.walletMinor()).isEqualTo(3_000);
+        rides.moveTo(driver, TestRides.north(PICKUP, 30));
+        TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
+        TripView started = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
+        trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(),
+                java.time.OffsetDateTime.now(), true);
+        deliverEvents();
+        deliverEvents();
+
+        long fare = orders.get(order.id()).finalPriceMinor();
+        RiderWallets.Wallet after = wallets.mine(rider, 10);
+        assertThat(after.balances()).singleElement().isEqualTo(new RiderWallets.Balance("UAH", 2_000, 0, 2_000));
+        assertThat(after.entries().getFirst()).satisfies(e -> {
+            assertThat(e.kind()).isEqualTo("TRIP_PAYMENT");
+            assertThat(e.amountMinor()).isEqualTo(-3_000);
+            assertThat(e.orderId()).isEqualTo(order.id());
+        });
+        assertThat(net(Ledger.Account.RIDER_RECEIVABLE, rider.id())).as("the fare is fully paid").isZero();
+        long commission = jdbc.sql("select commission_minor from final_fare where order_id = :id")
+                .param("id", order.id()).query(Long.class).single();
+        assertThat(net(Ledger.Account.DRIVER_PAYABLE, driver.actor().id()))
+                .as("the driver collected fare - 3000 in cash and owes the commission; the service owes the bonuses")
+                .isEqualTo(commission - 3_000);
+        assertThat(fare).isGreaterThan(3_000);
+    }
+
+    @Test
+    void aCancelledOrderGivesTheBonusesBackAndTheyNeverPayMoreThanThePrice() {
+        deliverEvents();
+        Actor rider = rides.client();
+        wallets.topUp(admin, UUID.randomUUID(), rider.id(), "UAH", 9_000_000, "Big bonus");
+        OrderView order = orderWithBonuses(rider, PaymentMethod.CARD, 9_000_000);
+        assertThat(order.walletMinor()).as("at most the price").isEqualTo(order.priceMinor());
+        assertThat(order.paymentMethod()).as("nothing left for the card").isEqualTo(PaymentMethod.CASH);
+        assertThat(wallets.mine(rider, 10).balances().getFirst().reservedMinor()).isEqualTo(order.priceMinor());
+
+        orders.cancel(rider, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
+        deliverEvents();
+        assertThat(wallets.mine(rider, 10).balances()).singleElement()
+                .isEqualTo(new RiderWallets.Balance("UAH", 9_000_000, 0, 9_000_000));
+
     }
 }

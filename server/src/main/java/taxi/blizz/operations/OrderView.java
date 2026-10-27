@@ -36,7 +36,9 @@ public record OrderView(
         Cancellation cancellation,
         OffsetDateTime pickupAt,
         boolean preorder,
-        UUID relatedOrderId) {
+        UUID relatedOrderId,
+        /** Bonuses of the rider's account paying part of the price (ADR 0009); the rest in cash or by card. */
+        long walletMinor) {
 
     /**
      * Who cancelled the order (RIDER, STAFF, DRIVER) and why: the reason's code and its labels as they were at the

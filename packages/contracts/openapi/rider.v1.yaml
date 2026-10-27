@@ -1189,6 +1189,14 @@ components:
         pickup_at:
           description: The quote's pickup time; must be the same as in CreateQuote, otherwise QUOTE_MISMATCH.
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        wallet_minor:
+          description: >-
+            Bonuses of my account to pay part of the price (ADR 0009); at most the price is used, the rest is paid in
+            CASH or by CARD. More than available → 422 WALLET_INSUFFICIENT ("not enough on the balance, choose another
+            way to pay"). A CARD order the bonuses pay in full becomes CASH for anything the trip adds.
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
 
     ChatMessage:
       type: object
@@ -1505,6 +1513,10 @@ components:
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
+        wallet_minor:
+          description: Bonuses paying part of the price (ADR 0009); after the trip at most the final fare is taken.
+          type: integer
+          format: int64
         preorder:
           description: >-
             A pre-order (ADR 0006): SCHEDULED until it is released into the search before pickup_at. It does not

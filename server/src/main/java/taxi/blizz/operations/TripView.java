@@ -21,5 +21,7 @@ public record TripView(
         OffsetDateTime arrivedAt,
         OffsetDateTime startedAt,
         OffsetDateTime completedAt,
-        boolean needsReview) {
+        boolean needsReview,
+        /** Paid by the rider's bonuses (ADR 0009): the driver collects the fare minus this. */
+        long walletMinor) {
 }

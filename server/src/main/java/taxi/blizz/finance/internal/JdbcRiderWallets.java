@@ -124,6 +124,37 @@ class JdbcRiderWallets implements RiderWallets {
                 });
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void reserve(UUID clientId, UUID orderId, String currency, long amountMinor) {
+        if (amountMinor <= 0) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The bonuses to use must be positive");
+        }
+        OffsetDateTime now = now();
+        ensureAccount(clientId, currency, now);
+        jdbc.sql("select 1 from rider_wallet where client_id = :client and currency = :currency for update")
+                .param("client", clientId).param("currency", currency).query(Integer.class).single();
+        long balance = ledger.balances(Account.RIDER_WALLET, clientId).stream()
+                .filter(b -> b.currency().equals(currency)).mapToLong(b -> b.creditMinor() - b.debitMinor()).sum();
+        long available = balance - reserved(clientId, currency);
+        if (amountMinor > available) {
+            throw new DomainException(ErrorCode.WALLET_INSUFFICIENT,
+                    "Not enough on the balance (" + available + " available); choose another way to pay");
+        }
+        jdbc.sql("""
+                        insert into rider_wallet_hold (order_id, client_id, currency, amount_minor, state, created_at)
+                        values (:order, :client, :currency, :amount, 'RESERVED', :now)""")
+                .param("order", orderId).param("client", clientId).param("currency", currency)
+                .param("amount", amountMinor).param("now", now).update();
+    }
+
+    private long reserved(UUID clientId, String currency) {
+        return jdbc.sql("""
+                        select coalesce(sum(amount_minor), 0) from rider_wallet_hold
+                        where client_id = :client and currency = :currency and state = 'RESERVED'""")
+                .param("client", clientId).param("currency", currency).query(Long.class).single();
+    }
+
     /** The lock row of a rider's account in a currency; spending locks it (ADR 0009). */
     private void ensureAccount(UUID clientId, String currency, OffsetDateTime now) {
         jdbc.sql("""
@@ -134,7 +165,11 @@ class JdbcRiderWallets implements RiderWallets {
 
     private Wallet wallet(UUID clientId, int limit) {
         List<Balance> balances = ledger.balances(Account.RIDER_WALLET, clientId).stream()
-                .map(b -> new Balance(b.currency(), b.creditMinor() - b.debitMinor())).toList();
+                .map(b -> {
+                    long balance = b.creditMinor() - b.debitMinor();
+                    long reserved = reserved(clientId, b.currency());
+                    return new Balance(b.currency(), balance, reserved, Math.max(0, balance - reserved));
+                }).toList();
         List<Entry> entries = jdbc.sql("""
                         select t.id, t.occurred_at, t.basis_type, t.basis_id, t.currency, t.reason,
                                l.credit_minor - l.debit_minor as amount, u.source, u.staff_id

@@ -13,7 +13,7 @@ components:
   schemas:
     WalletBalance:
       type: object
-      required: [currency, balance_minor]
+      required: [currency, balance_minor, reserved_minor, available_minor]
       properties:
         currency:
           type: string
@@ -22,6 +22,14 @@ components:
           type: integer
           format: int64
           minimum: 0
+        reserved_minor:
+          description: Set aside for orders not finished yet.
+          type: integer
+          format: int64
+        available_minor:
+          description: What may be used in a new order now.
+          type: integer
+          format: int64
 
     WalletEntry:
       type: object

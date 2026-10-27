@@ -25,6 +25,8 @@ public enum ErrorCode {
     /** As an error: the action conflicts with a payment whose outcome is not yet known; never pay again. */
     PAYMENT_UNKNOWN(409),
     PAYMENT_DECLINED(422),
+    /** Fewer bonuses on the rider's account than asked for (ADR 0009). */
+    WALLET_INSUFFICIENT(422),
     OUTSIDE_SERVICE_AREA(422),
     LOCATION_NOT_FRESH(422),
     /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */

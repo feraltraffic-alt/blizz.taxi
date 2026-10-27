@@ -14,7 +14,8 @@ public interface RiderWallets {
 
     String MANAGE_PERMISSION = "wallets.manage";
 
-    record Balance(String currency, long balanceMinor) {
+    /** {@code reservedMinor}: set aside for orders not finished yet; {@code availableMinor} may be spent now. */
+    record Balance(String currency, long balanceMinor, long reservedMinor, long availableMinor) {
     }
 
     /**
@@ -39,4 +40,11 @@ public interface RiderWallets {
 
     /** A top-up by staff with a reason (ADR 0009 p. 1); audited. */
     Wallet topUp(Actor staff, UUID commandId, UUID clientId, String currency, long amountMinor, String reason);
+
+    /**
+     * Sets bonuses aside for an order, in the caller's transaction (the order is created in it). Fails with
+     * {@code WALLET_INSUFFICIENT} when fewer are available. After the trip the account takes at most the final fare
+     * and lets the rest go; a cancelled or unfulfilled order lets everything go.
+     */
+    void reserve(UUID clientId, UUID orderId, String currency, long amountMinor);
 }

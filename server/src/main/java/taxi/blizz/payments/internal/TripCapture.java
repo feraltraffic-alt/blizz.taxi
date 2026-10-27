@@ -24,7 +24,7 @@ class TripCapture implements OutboxHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record TripCompleted(UUID orderId, String paymentMethod, Long amountMinor, String currency) {
+    record TripCompleted(UUID orderId, String paymentMethod, Long amountMinor, Long walletMinor, String currency) {
     }
 
     @Override
@@ -43,6 +43,8 @@ class TripCapture implements OutboxHandler {
         if (!"CARD".equals(trip.paymentMethod()) || trip.amountMinor() == null) {
             return;
         }
-        payments.startCapture(trip.orderId(), trip.amountMinor(), trip.currency());
+        // The rider's bonuses paid their part (ADR 0009); the card pays the rest.
+        long wallet = trip.walletMinor() == null ? 0 : trip.walletMinor();
+        payments.startCapture(trip.orderId(), Math.max(0, trip.amountMinor() - wallet), trip.currency());
     }
 }

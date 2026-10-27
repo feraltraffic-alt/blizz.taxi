@@ -54,6 +54,7 @@ class JdbcOrders implements Orders {
     private final JsonMapper json;
     private final ServiceSettings settings;
     private final CardPayments cardPayments;
+    private final taxi.blizz.finance.RiderWallets wallets;
 
     /** Pre-orders a rider may have waiting at a time; keeps a single account from booking the fleet. */
     static final int MAX_SCHEDULED_PER_PAYER = 5;
@@ -61,8 +62,9 @@ class JdbcOrders implements Orders {
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
-               ServiceSettings settings, CardPayments cardPayments) {
+               ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets) {
         this.cardPayments = cardPayments;
+        this.wallets = wallets;
         this.settings = settings;
         this.reasons = reasons;
         this.directory = directory;
@@ -102,6 +104,15 @@ class JdbcOrders implements Orders {
         if (order.terminalFallbackToCash() && !terminal) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The cash fallback is only for terminal payment");
         }
+        long walletAsked = order.walletMinor() == null ? 0 : order.walletMinor();
+        if (walletAsked < 0) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The bonuses to use cannot be negative");
+        }
+        if (walletAsked > 0 && (actor.type() != SubjectType.CLIENT || order.payerClientId() == null
+                || (order.paymentMethod() != PaymentMethod.CASH && order.paymentMethod() != PaymentMethod.CARD))) {
+            // Bonuses pay part of a rider's own order; the rest in cash or by card (ADR 0009).
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Bonuses pay a rider's own cash or card order");
+        }
         if (order.quoteId() == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "An order needs a quote");
         }
@@ -113,6 +124,12 @@ class JdbcOrders implements Orders {
                 () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
+            // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
+            // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
+            long wallet = Math.min(walletAsked, quote.amountMinor());
+            PaymentMethod method = order.paymentMethod() == PaymentMethod.CARD && wallet == quote.amountMinor()
+                    ? PaymentMethod.CASH : order.paymentMethod();
+            boolean cardHold = method == PaymentMethod.CARD;
             OffsetDateTime now = core.now();
             // The quote decided whether this is a pre-order, with the settings in force then (ADR 0006).
             boolean preorder = quote.breakdown().preorder();
@@ -139,14 +156,14 @@ class JdbcOrders implements Orders {
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
-                                                        terminal_fallback_cash, created_at, updated_at)
+                                                        terminal_fallback_cash, wallet_minor, created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
                                         :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
-                                        :releaseAt, :fallback, :now, :now)""")
+                                        :releaseAt, :fallback, :wallet, :now, :now)""")
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
-                        .param("status", card ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
+                        .param("status", cardHold ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
                         .param("pickupAt", pickupAt)
                         .param("preorder", preorder)
                         .param("releaseAt", releaseAt)
@@ -163,8 +180,9 @@ class JdbcOrders implements Orders {
                         .param("dropoffLon", order.dropoff().lon())
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
-                        .param("payment", order.paymentMethod().name())
-                        .param("paymentState", card ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
+                        .param("payment", method.name())
+                        .param("paymentState", cardHold ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
+                        .param("wallet", wallet)
                         .param("fallback", order.terminalFallbackToCash())
                         .param("price", quote.amountMinor())
                         .param("currency", quote.currency())
@@ -191,22 +209,27 @@ class JdbcOrders implements Orders {
                         null, Map.of("channel", channel, "city_id", city.id().toString())));
             }
             Map<String, Object> created = new java.util.LinkedHashMap<>(Map.of("channel", channel,
-                    "city_id", city.id().toString(), "payment_method", order.paymentMethod().name(),
+                    "city_id", city.id().toString(), "payment_method", method.name(),
                     "quote_id", quote.id().toString(), "price_minor", quote.amountMinor()));
             if (pickupAt != null) {
                 created.put("pickup_at", pickupAt.toString());
                 created.put("preorder", preorder);
             }
+            if (wallet > 0) {
+                created.put("wallet_minor", wallet);
+                wallets.reserve(order.payerClientId(), id, quote.currency(), wallet);
+            }
             core.recordEvent(id, 0, preorder ? "OrderScheduled" : "OrderCreated", actor, null, created);
-            if (card) {
-                cardPayments.requestHold(id, order.payerClientId(), city.id(), quote.amountMinor(), quote.currency(),
+            if (cardHold) {
+                cardPayments.requestHold(id, order.payerClientId(), city.id(), quote.amountMinor() - wallet,
+                        quote.currency(),
                         preorder ? pickupAt.plusDays(1) : null);
             } else if (!preorder) {
                 engine.startSearch(core.lockOrder(id));
             }
             return core.view(id);
         });
-        if (card) {
+        if (result.paymentMethod() == PaymentMethod.CARD) {
             // The hold is asked for outside the transaction; the worker retries if this attempt fails.
             cardPayments.processNow(result.id());
         }
