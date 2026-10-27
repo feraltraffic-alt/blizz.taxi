@@ -36,6 +36,7 @@ public interface Integrations {
     String ROUTING = "routing";
     String MAPS = "maps";
     String GEOCODING = "geocoding";
+    String OTP = "otp";
 
     String FCM_PROJECT_ID = "push.fcm.project-id";
     String FCM_CREDENTIALS = "push.fcm.credentials";
@@ -50,11 +51,23 @@ public interface Integrations {
     String GEOCODING_PROVIDER = "geocoding.provider";
     String GEOCODING_GOOGLE_KEY = "geocoding.google.api-key";
     String GEOCODING_VISICOM_KEY = "geocoding.visicom.api-key";
+    String OTP_CHANNEL = "otp.channel";
+    String OTP_FALLBACK = "otp.fallback";
+    String OTP_TURBOSMS_TOKEN = "otp.turbosms.token";
+    String OTP_TURBOSMS_SENDER = "otp.turbosms.sender";
+    String OTP_ASTERISK_ARI_URL = "otp.asterisk.ari-url";
+    String OTP_ASTERISK_ARI_USER = "otp.asterisk.ari-user";
+    String OTP_ASTERISK_ARI_PASSWORD = "otp.asterisk.ari-password";
+    String OTP_ASTERISK_ENDPOINT = "otp.asterisk.endpoint";
 
     /** OSM: Leaflet with OpenStreetMap tiles in the apps and panels, no key (ADR 0012, Q-08). */
     List<String> MAP_PROVIDERS = List.of("OSM", "GOOGLE", "MAPBOX", "MAPTILER");
     /** BUILT_IN: only the service's own address book; GOOGLE, VISICOM: own addresses first, then the provider. */
     List<String> GEOCODING_PROVIDERS = List.of("BUILT_IN", "GOOGLE", "VISICOM");
+    /** How sign-in codes go out first (ADR 0012 Q-18). */
+    List<String> OTP_CHANNELS = List.of("SMS", "VOICE");
+    /** Tried when the first channel fails; NONE: no second try. */
+    List<String> OTP_FALLBACKS = List.of("SMS", "VOICE", "NONE");
 
     List<Field> FIELDS = List.of(
             new Field(FCM_PROJECT_ID, PUSH, Kind.TEXT, "Firebase project id",
@@ -84,7 +97,21 @@ public interface Integrations {
             new Field(GEOCODING_GOOGLE_KEY, GEOCODING, Kind.SECRET, "Google Geocoding API key",
                     "A server key with the Geocoding API enabled", false),
             new Field(GEOCODING_VISICOM_KEY, GEOCODING, Kind.SECRET, "Visicom Data API key",
-                    "The key of api.visicom.ua (Data API 5.0)", false));
+                    "The key of api.visicom.ua (Data API 5.0)", false),
+            new Field(OTP_CHANNEL, OTP, Kind.TEXT, "How sign-in codes go out",
+                    "SMS (TurboSMS) or VOICE (a call through Asterisk that speaks the code); SMS when not set", false),
+            new Field(OTP_FALLBACK, OTP, Kind.TEXT, "When that fails",
+                    "SMS, VOICE or NONE; VOICE when not set. A rider who asks to be called is called first", false),
+            new Field(OTP_TURBOSMS_TOKEN, OTP, Kind.SECRET, "TurboSMS token",
+                    "The HTTP API token of the TurboSMS account", false),
+            new Field(OTP_TURBOSMS_SENDER, OTP, Kind.TEXT, "TurboSMS sender name",
+                    "An alpha name activated in the TurboSMS account, up to 25 characters", false),
+            new Field(OTP_ASTERISK_ARI_URL, OTP, Kind.TEXT, "Asterisk ARI address",
+                    "e.g. http://asterisk:8088 for the container next to the server", false),
+            new Field(OTP_ASTERISK_ARI_USER, OTP, Kind.TEXT, "Asterisk ARI user", "From ari.conf", false),
+            new Field(OTP_ASTERISK_ARI_PASSWORD, OTP, Kind.SECRET, "Asterisk ARI password", "From ari.conf", false),
+            new Field(OTP_ASTERISK_ENDPOINT, OTP, Kind.TEXT, "Endpoint to dial",
+                    "The trunk with {phone} for the number without +, e.g. PJSIP/{phone}@trunk", false));
 
     /** A value as the panel sees it: {@code value} is null for a secret. */
     record FieldState(String name, String group, Kind kind, String label, String description, boolean forApps,

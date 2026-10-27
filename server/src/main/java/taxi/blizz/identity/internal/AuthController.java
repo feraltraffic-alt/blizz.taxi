@@ -20,6 +20,7 @@ import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.IssuedSession;
 import taxi.blizz.identity.StaffSignIn;
 import taxi.blizz.identity.OtpAudience;
+import taxi.blizz.identity.OtpChannel;
 import taxi.blizz.identity.OtpService;
 import taxi.blizz.identity.SessionService;
 import taxi.blizz.identity.VerifiedSubject;
@@ -39,7 +40,8 @@ class AuthController {
         this.staffSignIn = staffSignIn;
     }
 
-    record ChallengeRequest(@NotNull OtpAudience audience, @NotBlank String phone, @Size(max = 128) String deviceRef) {
+    record ChallengeRequest(@NotNull OtpAudience audience, @NotBlank String phone, @Size(max = 128) String deviceRef,
+                            OtpChannel channel) {
     }
 
     record ChallengeResponse(UUID challengeId, OffsetDateTime expiresAt, OffsetDateTime resendAvailableAt) {
@@ -80,7 +82,7 @@ class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     ChallengeResponse requestChallenge(@Valid @RequestBody ChallengeRequest body, HttpServletRequest request) {
         ChallengeIssued issued = otp.requestChallenge(body.audience(), body.phone(), body.deviceRef(),
-                request.getRemoteAddr());
+                request.getRemoteAddr(), body.channel());
         return new ChallengeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt());
     }
 

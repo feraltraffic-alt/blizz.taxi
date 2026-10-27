@@ -297,6 +297,38 @@ class JdbcIntegrations implements Integrations {
                     throw invalid(field.name() + " must be one of " + GEOCODING_PROVIDERS);
                 }
             }
+            case OTP_CHANNEL -> {
+                value = value.toUpperCase(Locale.ROOT);
+                if (!OTP_CHANNELS.contains(value)) {
+                    throw invalid(field.name() + " must be one of " + OTP_CHANNELS);
+                }
+            }
+            case OTP_FALLBACK -> {
+                value = value.toUpperCase(Locale.ROOT);
+                if (!OTP_FALLBACKS.contains(value)) {
+                    throw invalid(field.name() + " must be one of " + OTP_FALLBACKS);
+                }
+            }
+            case OTP_TURBOSMS_SENDER -> {
+                if (value.length() > 25) {
+                    throw invalid(field.name() + " has at most 25 characters");
+                }
+            }
+            case OTP_ASTERISK_ARI_URL -> {
+                try {
+                    URI uri = URI.create(value);
+                    if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null) {
+                        throw invalid(field.name() + " must be an http(s) address");
+                    }
+                } catch (IllegalArgumentException e) {
+                    throw invalid(field.name() + " must be an http(s) address");
+                }
+            }
+            case OTP_ASTERISK_ENDPOINT -> {
+                if (!value.contains("{phone}")) {
+                    throw invalid(field.name() + " must contain {phone} where the number goes");
+                }
+            }
             case FCM_CREDENTIALS -> {
                 Map<?, ?> account;
                 try {

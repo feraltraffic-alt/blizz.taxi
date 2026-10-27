@@ -22,5 +22,19 @@ services:
     ports:
       - "6379:6379"
 
+  # One-time codes by a call (ADR 0012 Q-18): ARI on 8088. In the admin panel (Integrations → otp) set
+  # ari-url http://localhost:8088 (http://asterisk:8088 from another container), user blizz, password
+  # dev-only-ari-password, endpoint PJSIP/{phone}@trunk. Without a SIP trunk the call itself goes nowhere.
+  asterisk:
+    image: andrius/asterisk:latest
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./asterisk/http.conf:/etc/asterisk/http.conf:ro
+      - ./asterisk/ari.conf:/etc/asterisk/ari.conf:ro
+      - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./asterisk/logger.conf:/etc/asterisk/logger.conf:ro
+
 volumes:
   postgres-data:
