@@ -967,7 +967,34 @@ paths:
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
         "409": {$ref: "./common.yaml#/components/responses/Conflict"}
 
+  /api/rider/v1/wallet:
+    get:
+      operationId: getRiderWallet
+      summary: My bonus account
+      description: Balances per currency and the latest movements with who and why (ADR 0009).
+      tags: [Wallet]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/Wallet"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
+  - name: Wallet
+    description: The bonus account (ADR 0009)
   - name: Push
     description: Push notifications to the app (section 20)
   - name: Live

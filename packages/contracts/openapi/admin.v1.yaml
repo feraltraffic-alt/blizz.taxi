@@ -2049,7 +2049,114 @@ paths:
         "403": {$ref: "./common.yaml#/components/responses/Forbidden"}
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
 
+  /api/admin/v1/rider-wallets:
+    get:
+      operationId: findRiderWallet
+      summary: Find a rider by phone
+      description: Needs wallets.manage. Returns the client id to open the account with.
+      tags: [Wallets]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Found.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [client_id]
+                properties:
+                  client_id:
+                    $ref: "./common.yaml#/components/schemas/Uuid"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/rider-wallets/{client_id}:
+    get:
+      operationId: getRiderWalletForStaff
+      summary: A rider's bonus account
+      tags: [Wallets]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/Wallet"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/rider-wallets/{client_id}/top-ups:
+    post:
+      operationId: topUpRiderWallet
+      summary: Top up a rider's bonus account
+      description: >-
+        Needs wallets.manage; the reason is required, shown to the rider in the history and audited. A goodwill
+        top-up is the service's expense (journal PROMO_EXPENSE → RIDER_WALLET).
+      tags: [Wallets]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./wallets.yaml#/components/schemas/StaffTopUp"
+      responses:
+        "201":
+          description: The account after the top-up.
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/Wallet"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
+  - name: Wallets
+    description: Riders' bonus accounts (ADR 0009)
   - name: Integrations
     description: Keys of Firebase, GraphHopper, maps and payment merchants (REQ-ADM-10)
   - name: Support

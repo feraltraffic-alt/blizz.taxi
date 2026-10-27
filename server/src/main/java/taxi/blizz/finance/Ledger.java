@@ -19,7 +19,11 @@ public interface Ledger {
         RIDER_RECEIVABLE, DRIVER_PAYABLE, SERVICE_COMMISSION, SERVICE_FUNDS, PROVIDER_CLEARING,
         PARTNER_SETTLEMENT, TIPS_PAYABLE, REFUNDS_PAYABLE, SUSPENSE,
         /** What the service pays itself, e.g. the driver of a follow-up ride the rider gets for free (T-22). */
-        SERVICE_EXPENSE
+        SERVICE_EXPENSE,
+        /** The rider's virtual account: what the service owes the rider in bonuses and top-ups (ADR 0009). */
+        RIDER_WALLET,
+        /** What the service spends on promotions, discounts and goodwill top-ups (ADR 0009, ADR 0010). */
+        PROMO_EXPENSE
     }
 
     record Line(Account account, UUID partyId, long debitMinor, long creditMinor) {

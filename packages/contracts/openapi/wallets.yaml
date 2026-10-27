@@ -1,0 +1,91 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — rider wallet components
+  version: 1.0.0
+  description: >-
+    The rider's virtual account (ADR 0009): bonuses and top-ups in the service's currency, 1 bonus = 1 unit; never
+    expires, never paid out. Referenced by the rider and admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    WalletBalance:
+      type: object
+      required: [currency, balance_minor]
+      properties:
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        balance_minor:
+          type: integer
+          format: int64
+          minimum: 0
+
+    WalletEntry:
+      type: object
+      required: [id, at, kind, currency, amount_minor, reason]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          description: STAFF_TOP_UP, CARD_TOP_UP, PROMOTION, TRIP_PAYMENT, … (new kinds may appear).
+        currency:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+          description: Positive — in, negative — out.
+        reason:
+          type: string
+        staff_id:
+          description: Who topped up, for a top-up by staff.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        order_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+
+    Wallet:
+      type: object
+      required: [client_id, balances, entries]
+      properties:
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletBalance"
+        entries:
+          description: Newest first.
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletEntry"
+
+    StaffTopUp:
+      type: object
+      additionalProperties: false
+      required: [command_id, currency, amount_minor, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: A currency of one of the service's cities.
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10000000
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500

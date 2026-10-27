@@ -9,6 +9,7 @@ import taxi.blizz.configuration.Integrations;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.finance.DriverDebts;
+import taxi.blizz.finance.RiderWallets;
 import taxi.blizz.geo.GeoConfiguration;
 import taxi.blizz.operations.OrderChat;
 import taxi.blizz.operations.Orders;
@@ -23,6 +24,7 @@ class StaffPermissionCatalogTests {
                 Orders.CREATE_PERMISSION, Orders.CANCEL_PERMISSION, Orders.REASSIGN_PERMISSION, Orders.INTERRUPT_PERMISSION,
                 OrderChat.VIEW_PERMISSION, DriverAdmission.REVIEW_PERMISSION, GeoConfiguration.MANAGE_PERMISSION,
                 TariffService.MANAGE_PERMISSION, DriverDebts.MANAGE_PERMISSION, StaffPermissions.AUDIT_VIEW,
-                ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION));
+                ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION,
+                RiderWallets.MANAGE_PERMISSION));
     }
 }
