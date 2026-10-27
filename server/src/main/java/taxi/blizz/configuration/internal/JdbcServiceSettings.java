@@ -35,7 +35,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Brand("Blizz Taxi", "#111111", "#FFFFFF", null, null, null, null, null, null, null),
             new Languages("ru", SUPPORTED_LANGUAGES),
             new Calls(CallMode.DIRECT, null),
-            new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60));
+            new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60),
+            new Ratings(24));
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -158,13 +159,18 @@ class JdbcServiceSettings implements ServiceSettings {
                     + " threshold; the confirmation window shorter than the confirmation time; drivers may drop a"
                     + " reservation no later than the confirmation");
         }
-        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p);
+        Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
+        if (ratings.editWindowHours() < 1 || ratings.editWindowHours() > 720) {
+            throw invalid("Ratings: edit_window_hours must be between 1 and 720");
+        }
+        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings);
     }
 
     /** Versions saved before a section existed get its defaults. */
     private static Settings complete(Settings s) {
-        return s.preorders() != null ? s
-                : new Settings(s.brand(), s.languages(), s.calls(), DEFAULTS.preorders());
+        Preorders preorders = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
+        Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings);
     }
 
     private static String color(String value, boolean required) {
