@@ -23,13 +23,22 @@ public record CreateOrder(
         PaymentMethod paymentMethod,
         UUID quoteId,
         OrderChannel channel,
-        String sourceRef) {
+        String sourceRef,
+        CallerContact caller) {
 
     /** A request without an explicit source; the channel is derived from the actor. */
     public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
                        String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId) {
         this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
-                null, null);
+                null, null, null);
+    }
+
+    /** Existing callers that set source/channel but have no phone-order contact. */
+    public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
+                       String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
+                       String sourceRef) {
+        this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
+                channel, sourceRef, null);
     }
 
     public CreateOrder {
