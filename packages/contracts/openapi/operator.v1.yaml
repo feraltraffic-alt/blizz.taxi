@@ -271,6 +271,51 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/events:
+    get:
+      operationId: getOperatorOrderEvents
+      summary: Order history — who did what and why
+      description: >-
+        Every change of the order, oldest first, with the actor's name and role and the reason, for lines like
+        "Operator Anna cancelled the order: passenger asked". Requires orders.view for the order city.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: The history.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/Timeline"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/operator/v1/cancel-reasons:
+    get:
+      operationId: listOperatorCancelReasons
+      summary: Reasons staff can give when cancelling
+      description: The staff list from the admin panel. Requires orders.cancel.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Active reasons in display order.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/ReasonList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/operator/v1/orders/{order_id}/messages:
     get:
       operationId: getOperatorOrderConversation
@@ -720,9 +765,10 @@ components:
           format: int64
           minimum: 0
         reason_code:
+          description: A code from GET /api/operator/v1/cancel-reasons; the order shows cancellation.by = STAFF.
           type: string
           minLength: 1
-          maxLength: 100
+          maxLength: 40
 
     RevokeAssignment:
       type: object

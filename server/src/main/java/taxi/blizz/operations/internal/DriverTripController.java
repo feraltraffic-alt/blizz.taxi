@@ -35,8 +35,8 @@ class DriverTripController {
                         @Size(max = 500) String exceptionReason) {
     }
 
-    record WithdrawCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
-                           @NotBlank @Size(max = 500) String reason) {
+    record CancelCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                         @NotBlank @Size(max = 40) String reasonCode) {
     }
 
     record VersionCommand(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion) {
@@ -74,9 +74,10 @@ class DriverTripController {
                 body.cashReceived());
     }
 
-    @PostMapping("/{tripId}/withdraw")
-    TripView withdraw(AccessClaims claims, @PathVariable UUID tripId, @Valid @RequestBody WithdrawCommand body) {
-        return trips.withdraw(claims.actor(), body.commandId(), tripId, body.expectedVersion(), body.reason());
+    /** The driver cancels with a reason from the drivers' list; the reason decides what happens to the order. */
+    @PostMapping("/{tripId}/cancel")
+    TripView cancel(AccessClaims claims, @PathVariable UUID tripId, @Valid @RequestBody CancelCommand body) {
+        return trips.cancel(claims.actor(), body.commandId(), tripId, body.expectedVersion(), body.reasonCode());
     }
 
     @PostMapping("/{tripId}/no-show")

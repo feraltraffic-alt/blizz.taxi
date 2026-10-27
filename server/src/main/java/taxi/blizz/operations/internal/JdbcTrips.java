@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.operations.PaymentMethod;
 import taxi.blizz.operations.TripView;
@@ -36,9 +37,11 @@ class JdbcTrips implements Trips {
     private final FinalFares fares;
     private final DispatchProperties properties;
     private final PresenceProperties presence;
+    private final CancelReasons reasons;
 
     JdbcTrips(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
-              DispatchProperties properties, PresenceProperties presence, FinalFares fares) {
+              DispatchProperties properties, PresenceProperties presence, FinalFares fares, CancelReasons reasons) {
+        this.reasons = reasons;
         this.fares = fares;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -171,10 +174,48 @@ class JdbcTrips implements Trips {
         return commands.execute(new CommandKey(driver, "trip.withdraw", commandId),
                 new PhaseRequest(tripId, expectedVersion, why), TripView.class, () -> {
                     Locked trip = lock(driver, tripId, expectedVersion);
-                    taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
-                    core.endAssignmentBeforeStart(assignment, "RELEASED", "DRIVER_WITHDREW: " + why);
-                    event(trip, "AssignmentWithdrawn", driver, why, Map.<String, Object>of("driver_id", driver.id().toString()));
-                    engine.resumeSearch(core.lockOrder(trip.orderId()));
+                    giveUp(trip, driver, why, Map.<String, Object>of());
+                    return view(tripId);
+                });
+    }
+
+    /** The driver drops the order before the start; it goes back to the search with the remaining budget. */
+    private void giveUp(Locked trip, Actor driver, String why, Map<String, Object> details) {
+        taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
+        core.endAssignmentBeforeStart(assignment, "RELEASED", "DRIVER_WITHDREW: " + why);
+        Map<String, Object> payload = new LinkedHashMap<>(details);
+        payload.put("driver_id", driver.id().toString());
+        event(trip, "AssignmentWithdrawn", driver, why, payload);
+        engine.resumeSearch(core.lockOrder(trip.orderId()));
+    }
+
+    @Override
+    public TripView cancel(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reasonCode) {
+        requireDriver(driver);
+        String code = blankToNull(reasonCode);
+        if (code == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+        }
+        return commands.execute(new CommandKey(driver, "trip.cancel", commandId),
+                new PhaseRequest(tripId, expectedVersion, code), TripView.class, () -> {
+                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, code);
+                    Locked trip = lock(driver, tripId, expectedVersion);
+                    if (CancelReasons.NO_SHOW.equals(reason.code())) {
+                        noShow(trip, driver, reason);
+                    } else if (reason.driverOutcome() == CancelReasons.DriverOutcome.RETURN_TO_SEARCH) {
+                        giveUp(trip, driver, reason.code(), Map.of("reason_code", reason.code(),
+                                "reason_labels", reason.labels()));
+                    } else {
+                        if (!"TO_PICKUP".equals(trip.phase()) && !"WAITING".equals(trip.phase())) {
+                            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                    "Only an order the trip has not started for can be cancelled");
+                        }
+                        taxi.blizz.operations.AssignmentView assignment =
+                                core.assignmentOfOrder(trip.orderId()).orElseThrow();
+                        core.endAssignmentBeforeStart(assignment, "RELEASED", "DRIVER_CANCELLED: " + reason.code());
+                        core.cancel(trip.order(), "DRIVER", reason, "OrderCancelled", driver,
+                                Map.of("trip_id", tripId.toString()));
+                    }
                     return view(tripId);
                 });
     }
@@ -185,22 +226,30 @@ class JdbcTrips implements Trips {
         return commands.execute(new CommandKey(driver, "trip.no_show", commandId),
                 new PhaseRequest(tripId, expectedVersion, null), TripView.class, () -> {
                     Locked trip = lock(driver, tripId, expectedVersion);
-                    if (!"WAITING".equals(trip.phase())) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "A no-show needs a confirmed arrival");
-                    }
-                    OffsetDateTime arrivedAt = jdbc.sql("select arrived_at from trip where id = :id")
-                            .param("id", tripId).query(OffsetDateTime.class).single();
-                    Duration waited = Duration.between(arrivedAt, core.now());
-                    if (waited.compareTo(properties.noShowMinimumWait()) < 0) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Wait at least "
-                                + properties.noShowMinimumWait().toMinutes() + " minutes before reporting a no-show");
-                    }
-                    taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
-                    core.endAssignmentBeforeStart(assignment, "RELEASED", "NO_SHOW");
-                    core.changeStatus(trip.order(), "CANCELLED", "NO_SHOW", "PassengerNoShow", driver,
-                            Map.<String, Object>of("trip_id", tripId.toString(), "waited_seconds", waited.toSeconds()));
+                    // The no-show is a driver's cancellation with the NO_SHOW reason, even if the admin hid it from
+                    // the list: the waiting rule, not the list, decides when it is allowed.
+                    noShow(trip, driver, reasons.find(CancelReasons.Audience.DRIVER, CancelReasons.NO_SHOW)
+                            .orElse(new CancelReasons.Reason(null, CancelReasons.Audience.DRIVER, CancelReasons.NO_SHOW,
+                                    Map.of(), CancelReasons.DriverOutcome.CANCEL_ORDER, false, 0, 0)));
                     return view(tripId);
                 });
+    }
+
+    private void noShow(Locked trip, Actor driver, CancelReasons.Reason reason) {
+        if (!"WAITING".equals(trip.phase())) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "A no-show needs a confirmed arrival");
+        }
+        OffsetDateTime arrivedAt = jdbc.sql("select arrived_at from trip where id = :id")
+                .param("id", trip.id()).query(OffsetDateTime.class).single();
+        Duration waited = Duration.between(arrivedAt, core.now());
+        if (waited.compareTo(properties.noShowMinimumWait()) < 0) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "Wait at least "
+                    + properties.noShowMinimumWait().toMinutes() + " minutes before reporting a no-show");
+        }
+        taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
+        core.endAssignmentBeforeStart(assignment, "RELEASED", "NO_SHOW");
+        core.cancel(trip.order(), "DRIVER", reason, "PassengerNoShow", driver,
+                Map.<String, Object>of("trip_id", trip.id().toString(), "waited_seconds", waited.toSeconds()));
     }
 
     record CompleteRequest(UUID tripId, long expectedVersion, OffsetDateTime reportedAt, Boolean cashReceived) {

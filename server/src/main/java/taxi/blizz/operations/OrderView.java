@@ -1,6 +1,7 @@
 package taxi.blizz.operations;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import taxi.blizz.geo.GeoPoint;
 
@@ -29,5 +30,16 @@ public record OrderView(
         String currency,
         String searchPhase,
         AssignmentView assignment,
-        OffsetDateTime createdAt) {
+        OffsetDateTime createdAt,
+        Cancellation cancellation) {
+
+    /**
+     * Who cancelled the order (RIDER, STAFF, DRIVER) and why: the reason's code and its labels as they were at the
+     * moment of cancellation (owner decision 27.10.2026). Null unless a person cancelled the order.
+     */
+    public record Cancellation(String by, String reasonCode, Map<String, String> reasonLabels) {
+        public Cancellation {
+            reasonLabels = reasonLabels == null ? Map.of() : Map.copyOf(reasonLabels);
+        }
+    }
 }

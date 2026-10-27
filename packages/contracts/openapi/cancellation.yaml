@@ -1,0 +1,214 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — cancellation components
+  version: 1.0.0
+  description: >-
+    Shared schemas of cancellation reasons, who cancelled an order, and the order history shown in the panels
+    (owner decision 27.10.2026). Referenced by the rider, driver, operator and admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Labels:
+      description: The reason's text by language (uk, pl, ru, en); the service's default language is always present.
+      type: object
+      additionalProperties:
+        type: string
+        maxLength: 80
+      examples:
+        - ru: Пассажир попросил
+          uk: Пасажир попросив
+          en: Passenger asked
+
+    DriverOutcome:
+      description: >-
+        What a driver's reason does: RETURN_TO_SEARCH gives the order back to the search, CANCEL_ORDER cancels it
+        by the driver. Only drivers' reasons have it.
+      type: [string, "null"]
+      enum: [RETURN_TO_SEARCH, CANCEL_ORDER, null]
+
+    Cancellation:
+      description: >-
+        Who cancelled the order and why, with the labels as they were at that moment. Null unless a person
+        cancelled the order (a search that found nobody ends as UNFULFILLED instead).
+      type: [object, "null"]
+      additionalProperties: false
+      required: [by, reason_code, reason_labels]
+      properties:
+        by:
+          type: string
+          enum: [RIDER, STAFF, DRIVER]
+        reason_code:
+          type: string
+        reason_labels:
+          $ref: "#/components/schemas/Labels"
+
+    ReasonItem:
+      type: object
+      additionalProperties: false
+      required: [code, labels, driver_outcome]
+      properties:
+        code:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]{1,39}$"
+        labels:
+          $ref: "#/components/schemas/Labels"
+        driver_outcome:
+          $ref: "#/components/schemas/DriverOutcome"
+
+    ReasonList:
+      description: The active reasons of one side, in display order.
+      type: object
+      additionalProperties: false
+      required: [reasons]
+      properties:
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonItem"
+
+    Reason:
+      type: object
+      additionalProperties: false
+      required: [id, audience, code, labels, driver_outcome, active, sort_order, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          type: string
+          enum: [RIDER, DRIVER, STAFF]
+        code:
+          description: Never changes; to rename, change the labels.
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]{1,39}$"
+        labels:
+          $ref: "#/components/schemas/Labels"
+        driver_outcome:
+          $ref: "#/components/schemas/DriverOutcome"
+        active:
+          description: Inactive reasons are hidden from the apps; reasons are never deleted.
+          type: boolean
+        sort_order:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          format: int64
+
+    Catalog:
+      type: object
+      additionalProperties: false
+      required: [reasons]
+      properties:
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reason"
+
+    CreateReason:
+      type: object
+      additionalProperties: false
+      required: [command_id, audience, code, labels, active, sort_order, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          type: string
+          enum: [RIDER, DRIVER, STAFF]
+        code:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]{1,39}$"
+        labels:
+          $ref: "#/components/schemas/Labels"
+        driver_outcome:
+          $ref: "#/components/schemas/DriverOutcome"
+        active:
+          type: boolean
+        sort_order:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        reason:
+          description: Why the list is changed; goes to the audit log.
+          type: string
+          maxLength: 500
+
+    UpdateReason:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, labels, active, sort_order, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        labels:
+          $ref: "#/components/schemas/Labels"
+        driver_outcome:
+          $ref: "#/components/schemas/DriverOutcome"
+        active:
+          type: boolean
+        sort_order:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        reason:
+          type: string
+          maxLength: 500
+
+    TimelineEntry:
+      description: >-
+        One change of the order. A cancellation (type OrderCancelled or PassengerNoShow) has cancelled_by,
+        reason_code and reason_labels in details, so the panel can show "Operator Anna cancelled the order:
+        passenger asked". A driver giving the order back (AssignmentWithdrawn) has reason_code and reason_labels
+        when given through a reason from the list.
+      type: object
+      additionalProperties: false
+      required: [sequence, type, occurred_at, actor, reason, details]
+      properties:
+        sequence:
+          type: integer
+          format: int64
+        type:
+          type: string
+          examples: [OrderCreated, OrderCancelled, AssignmentWithdrawn, PassengerNoShow, TripCompleted]
+        occurred_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        actor:
+          type: object
+          additionalProperties: false
+          required: [type, id, name, role]
+          properties:
+            type:
+              type: string
+              enum: [STAFF, CLIENT, DRIVER, PARTNER, SYSTEM]
+            id:
+              oneOf:
+                - $ref: "./common.yaml#/components/schemas/Uuid"
+                - type: "null"
+            name:
+              description: Staff member's first and last name or driver's name; null for others.
+              type: [string, "null"]
+            role:
+              description: The staff member's current role.
+              type: [string, "null"]
+              enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+        reason:
+          type: [string, "null"]
+        details:
+          type: object
+          additionalProperties: true
+
+    Timeline:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"

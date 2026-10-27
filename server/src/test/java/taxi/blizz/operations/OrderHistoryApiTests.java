@@ -77,12 +77,12 @@ class OrderHistoryApiTests {
 
         Assigned cancelledWithDriver = assign(payer, driver, PICKUP, DROPOFF);
         OrderView cancelledAssigned = orders.cancel(payer, UUID.randomUUID(), cancelledWithDriver.order().id(),
-                orders.get(cancelledWithDriver.order().id()).version(), "RIDER_CANCELLED");
+                orders.get(cancelledWithDriver.order().id()).version(), "CHANGED_MIND");
         assertThat(cancelledAssigned.status()).isEqualTo("CANCELLED");
 
         OrderView beforeAssignment = rides.order(payer, city, PICKUP, DROPOFF);
         OrderView cancelledBefore = orders.cancel(payer, UUID.randomUUID(), beforeAssignment.id(),
-                orders.get(beforeAssignment.id()).version(), "RIDER_CANCELLED");
+                orders.get(beforeAssignment.id()).version(), "CHANGED_MIND");
         assertThat(cancelledBefore.status()).isEqualTo("CANCELLED");
 
         Assigned withdrawn = assign(payer, driver, PICKUP, DROPOFF);
@@ -90,7 +90,7 @@ class OrderHistoryApiTests {
                 withdrawn.trip().version(), "Cannot continue");
         assertThat(aborted.phase()).isEqualTo("ABORTED");
         orders.cancel(payer, UUID.randomUUID(), withdrawn.order().id(), orders.get(withdrawn.order().id()).version(),
-                "RIDER_CANCELLED");
+                "CHANGED_MIND");
 
         Assigned completed = assign(payer, driver, PICKUP, DROPOFF);
         rides.moveTo(driver, TestRides.north(PICKUP, 30));

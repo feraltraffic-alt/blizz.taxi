@@ -22,7 +22,8 @@ public interface Orders {
 
     record HistoryItem(UUID id, long shortNumber, String status, OffsetDateTime createdAt, String pickupLabel,
                        String dropoffLabel, String vehicleClass, Long priceMinor, Long finalPriceMinor,
-                       String currency, PaymentMethod paymentMethod, HistoryDriver driver, boolean chatAvailable) {
+                       String currency, PaymentMethod paymentMethod, HistoryDriver driver, boolean chatAvailable,
+                       OrderView.Cancellation cancellation) {
     }
 
     /**
@@ -50,6 +51,21 @@ public interface Orders {
 
     /** The signed-in payer's orders, newest first; the limit is capped at 50 (REQ-RID-*). */
     List<HistoryItem> history(Actor payer, OffsetDateTime before, int limit);
+
+    /**
+     * Who did what with the order, oldest first, for the order card in the operator and admin panels: the actor's
+     * type, name and current role, the reason and the event's details (for a cancellation {@code cancelled_by},
+     * {@code reason_code}, {@code reason_labels}). Needs {@link #VIEW_PERMISSION} for the order's city.
+     */
+    List<TimelineEntry> timeline(Actor staff, UUID orderId);
+
+    /** {@code name} and {@code role} are filled for staff and drivers. */
+    record TimelineActor(String type, UUID id, String name, String role) {
+    }
+
+    record TimelineEntry(long sequence, String type, OffsetDateTime occurredAt, TimelineActor actor, String reason,
+                         java.util.Map<String, Object> details) {
+    }
 
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);

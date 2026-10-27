@@ -158,15 +158,17 @@ class OperatorOrderApiTests {
         long orderAVersion = ((Number) createdBody.get("version")).longValue();
         UUID deniedCancel = UUID.randomUUID();
         assertThat(postJson("/api/operator/v1/orders/" + orderA + "/cancel", limited.token(), Map.of(
-                "command_id", deniedCancel, "expected_version", orderAVersion, "reason_code", "CALLER_CHANGED_MIND"))
+                "command_id", deniedCancel, "expected_version", orderAVersion, "reason_code", "PASSENGER_ASKED"))
                 .getResponse().getStatus()).isEqualTo(403);
         assertNoReceipt(deniedCancel);
 
         MvcResult cancelled = postJson("/api/operator/v1/orders/" + orderA + "/cancel", full.token(), Map.of(
                 "command_id", UUID.randomUUID(), "expected_version", orderAVersion,
-                "reason_code", "CALLER_CHANGED_MIND"));
+                "reason_code", "PASSENGER_ASKED"));
         assertThat(cancelled.getResponse().getStatus()).isEqualTo(200);
         assertThat(object(cancelled)).containsEntry("status", "CANCELLED");
+        assertThat(object(cancelled).get("cancellation")).asString().contains("by=STAFF")
+                .contains("reason_code=PASSENGER_ASKED").contains("Пассажир попросил");
         assertThat(array(getAuth("/api/operator/v1/orders?city_id=" + cityA + "&status=active", full.token())))
                 .extracting(o -> o.get("id")).doesNotContain(orderA.toString());
         assertThat(array(getAuth("/api/operator/v1/orders?city_id=" + cityA + "&status=all", full.token())))

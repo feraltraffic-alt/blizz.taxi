@@ -259,6 +259,20 @@ class JdbcStaffDirectory implements StaffDirectory {
         return before;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, Name> names(java.util.Collection<UUID> staffIds) {
+        if (staffIds == null || staffIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<UUID, Name> names = new java.util.LinkedHashMap<>();
+        jdbc.sql(SELECT + " where id = any(:ids)").param("ids", staffIds.toArray(UUID[]::new))
+                .query((rs, i) -> map(rs)).list()
+                .forEach(m -> names.put(m.id(), new Name(m.id(), m.profile().firstName(), m.profile().lastName(),
+                        m.profile().role())));
+        return names;
+    }
+
     private StaffMember read(UUID staffId) {
         return jdbc.sql(SELECT + " where id = :id").param("id", staffId).query((rs, i) -> map(rs)).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Staff member not found"));

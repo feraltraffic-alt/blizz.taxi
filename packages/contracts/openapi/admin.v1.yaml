@@ -1143,6 +1143,93 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/settings/cancel-reasons:
+    get:
+      operationId: listCancelReasons
+      summary: Cancellation reasons of riders, drivers and staff
+      description: Every reason including inactive ones. Requires settings.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: By side, then display order.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/Catalog"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createCancelReason
+      summary: Add a reason to one side's list
+      description: >-
+        A label in the service's default language is required. A driver's reason needs driver_outcome, others must
+        not have it. The code is unique within the side and never changes. Audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./cancellation.yaml#/components/schemas/CreateReason"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/Reason"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/settings/cancel-reasons/{reason_id}:
+    post:
+      operationId: updateCancelReason
+      summary: Change labels, outcome, order or activity of a reason
+      description: The side and the code stay. Deactivate instead of deleting. Audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: reason_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./cancellation.yaml#/components/schemas/UpdateReason"
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/Reason"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity

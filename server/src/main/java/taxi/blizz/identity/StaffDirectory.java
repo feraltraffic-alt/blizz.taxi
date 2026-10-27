@@ -1,6 +1,8 @@
 package taxi.blizz.identity;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
 
@@ -55,4 +57,14 @@ public interface StaffDirectory {
 
     /** The super admin reads anyone; a member reads only himself. */
     StaffMember get(Actor reader, UUID staffId);
+
+    /** The name and current role shown next to a staff action in an order's history. */
+    record Name(UUID id, String firstName, String lastName, Role role) {
+    }
+
+    /**
+     * Names and roles for histories (who cancelled, who reassigned). Returns nothing but these; the caller has
+     * already checked that the reader may see the history. Unknown ids are left out.
+     */
+    Map<UUID, Name> names(Collection<UUID> staffIds);
 }

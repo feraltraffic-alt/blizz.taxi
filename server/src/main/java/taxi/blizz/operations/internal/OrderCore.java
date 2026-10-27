@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.OrderView;
@@ -218,7 +219,8 @@ class OrderCore {
                                o.payer_client_id, o.city_id, o.vehicle_class, ST_Y(o.pickup) as pickup_lat,
                                ST_X(o.pickup) as pickup_lon, o.pickup_label, ST_Y(o.dropoff) as dropoff_lat,
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
-                               o.final_price_minor, o.currency, o.created_at,
+                               o.final_price_minor, o.currency, o.created_at, o.cancelled_by, o.cancel_reason_code,
+                               o.cancel_reason_labels::text as cancel_reason_labels,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
                         from ride_order o where o.id = :id""")
@@ -232,7 +234,7 @@ class OrderCore {
                         rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),
                         rs.getString("payment_state"), (Long) rs.getObject("price_minor"),
                         (Long) rs.getObject("final_price_minor"), rs.getString("currency"), rs.getString("search_phase"),
-                        null, rs.getObject("created_at", OffsetDateTime.class)))
+                        null, rs.getObject("created_at", OffsetDateTime.class), cancellation(rs)))
                 .optional()
                 .map(order -> withAssignment(order, assignmentOfOrder(order.id())))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
@@ -243,7 +245,38 @@ class OrderCore {
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
                 o.searchPhase(),
-                assignment.orElse(null), o.createdAt());
+                assignment.orElse(null), o.createdAt(), o.cancellation());
+    }
+
+    @SuppressWarnings("unchecked")
+    private OrderView.Cancellation cancellation(java.sql.ResultSet rs) throws java.sql.SQLException {
+        String by = rs.getString("cancelled_by");
+        if (by == null) {
+            return null;
+        }
+        String labels = rs.getString("cancel_reason_labels");
+        return new OrderView.Cancellation(by, rs.getString("cancel_reason_code"),
+                labels == null ? Map.of() : json.readValue(labels, Map.class));
+    }
+
+    /**
+     * Cancels the order on behalf of a person (RIDER, STAFF or DRIVER) with a reason from the catalog: the status,
+     * who cancelled, the reason and its labels as they are now, and one history entry that says all of it.
+     */
+    long cancel(LockedOrder order, String by, CancelReasons.Reason reason, String eventType, Actor actor,
+                Map<String, Object> payload) {
+        Map<String, Object> body = new LinkedHashMap<>(payload);
+        body.put("cancelled_by", by);
+        body.put("reason_code", reason.code());
+        body.put("reason_labels", reason.labels());
+        long version = changeStatus(order, "CANCELLED", reason.code(), eventType, actor, body);
+        jdbc.sql("""
+                        update ride_order set cancelled_by = :by, cancel_reason_code = :code,
+                                              cancel_reason_labels = cast(:labels as jsonb)
+                        where id = :id""")
+                .param("by", by).param("code", reason.code())
+                .param("labels", json.writeValueAsString(reason.labels())).param("id", order.id()).update();
+        return version;
     }
 
     /** The current or last assignment of the order. */

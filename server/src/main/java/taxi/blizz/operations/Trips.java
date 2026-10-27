@@ -54,6 +54,13 @@ public interface Trips {
      */
     TripView reportNoShow(Actor driver, UUID commandId, UUID tripId, long expectedVersion);
 
+    /**
+     * The driver cancels with a reason from the drivers' list (owner decision 27.10.2026), before the start. The
+     * reason decides the outcome: RETURN_TO_SEARCH works like {@link #withdraw}; CANCEL_ORDER cancels the order by
+     * the driver; NO_SHOW follows the no-show rule of {@link #reportNoShow}.
+     */
+    TripView cancel(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reasonCode);
+
     TripView complete(Actor driver, UUID commandId, UUID tripId, long expectedVersion, OffsetDateTime reportedAt,
                       Boolean cashReceived);
 }

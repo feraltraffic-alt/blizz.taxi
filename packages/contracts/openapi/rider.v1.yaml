@@ -324,11 +324,32 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/rider/v1/cancel-reasons:
+    get:
+      operationId: listRiderCancelReasons
+      summary: Reasons a rider can give when cancelling
+      description: The rider's list from the admin panel; the app shows the label in the user's language and sends the code.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Active reasons in display order.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/ReasonList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/rider/v1/orders/{order_id}/cancel:
     post:
       operationId: cancelOrder
       summary: Cancel before the trip starts
-      description: No fee while the cancellation policy is not set (Q-07). A stale expected_version gets VERSION_CONFLICT.
+      description: >-
+        reason_code is a code from GET /api/rider/v1/cancel-reasons; an unknown or inactive code → 400. The order
+        shows cancellation.by = RIDER. No fee while the cancellation policy is not set (Q-07). A stale
+        expected_version gets VERSION_CONFLICT.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -785,7 +806,10 @@ components:
           format: int64
           minimum: 0
         reason_code:
+          description: A code from the rider's list of cancellation reasons.
           type: string
+          minLength: 1
+          maxLength: 40
 
     Assignment:
       type: object
@@ -829,7 +853,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, short_number, status, created_at, pickup_label, dropoff_label, vehicle_class,
-                 price_minor, final_price_minor, currency, payment_method, driver, chat_available]
+                 price_minor, final_price_minor, currency, payment_method, driver, chat_available, cancellation]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -866,6 +890,8 @@ components:
         chat_available:
           description: True for the last assigned driver only while that assignment was not released or revoked.
           type: boolean
+        cancellation:
+          $ref: "./cancellation.yaml#/components/schemas/Cancellation"
 
     Order:
       type: object
@@ -926,3 +952,5 @@ components:
             - type: "null"
         created_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        cancellation:
+          $ref: "./cancellation.yaml#/components/schemas/Cancellation"

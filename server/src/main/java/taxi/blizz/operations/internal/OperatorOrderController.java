@@ -99,7 +99,11 @@ class OperatorOrderController {
                              GeoPoint pickup, String pickupLabel, GeoPoint dropoff, String dropoffLabel,
                              PaymentMethod paymentMethod, String paymentState, Long priceMinor,
                              Long finalPriceMinor, String currency, String searchPhase,
-                             AssignmentView assignment, OffsetDateTime createdAt, CallerView caller) {
+                             AssignmentView assignment, OffsetDateTime createdAt, CallerView caller,
+                             OrderView.Cancellation cancellation) {
+    }
+
+    record Timeline(List<Orders.TimelineEntry> events) {
     }
 
     record ChatMessages(List<OrderChat.Message> messages) {
@@ -177,7 +181,13 @@ class OperatorOrderController {
                 body.expectedVersion(), body.reason()));
     }
 
-    @GetMapping("/orders/{orderId}/messages")
+    /** Who did what with the order: "Operator Anna cancelled the order: passenger asked". */
+    @GetMapping("/orders/{orderId}/events")
+    Timeline events(AccessClaims claims, @PathVariable UUID orderId) {
+        return new Timeline(orders.timeline(claims.actor(), orderId));
+    }
+
+        @GetMapping("/orders/{orderId}/messages")
     ChatMessages messages(AccessClaims claims, @PathVariable UUID orderId, @RequestParam String reason) {
         if (reason == null || reason.isBlank() || reason.length() > 500) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "reason must have 1 to 500 characters");
@@ -190,7 +200,7 @@ class OperatorOrderController {
                 order.version(), order.channel(), order.payerClientId(), order.cityId(), order.vehicleClass(),
                 order.pickup(), order.pickupLabel(), order.dropoff(), order.dropoffLabel(), order.paymentMethod(),
                 order.paymentState(), order.priceMinor(), order.finalPriceMinor(), order.currency(), order.searchPhase(),
-                order.assignment(), order.createdAt(), contact(order.id()));
+                order.assignment(), order.createdAt(), contact(order.id()), order.cancellation());
     }
 
     private CallerView contact(UUID orderId) {

@@ -11,9 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
+import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.OrderChannel;
@@ -28,6 +30,7 @@ import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.SubjectType;
 import taxi.blizz.pricing.QuoteService;
 import taxi.blizz.pricing.VehicleClasses;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Order creation and cancellation before the trip starts (sections 9, 13). */
 @Service
@@ -42,10 +45,16 @@ class JdbcOrders implements Orders {
     private final DispatchEngine engine;
     private final VehicleClasses classes;
     private final QuoteService quotes;
+    private final CancelReasons reasons;
+    private final StaffDirectory directory;
+    private final JsonMapper json;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
-               AuditLog audit) {
+               AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json) {
+        this.reasons = reasons;
+        this.directory = directory;
+        this.json = json;
         this.staff = staff;
         this.audit = audit;
         this.jdbc = jdbc;
@@ -187,18 +196,22 @@ class JdbcOrders implements Orders {
                     if (order.version() != expectedVersion) {
                         throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
                     }
+                    // Rider and staff each choose from their own list (owner decision 27.10.2026).
+                    String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
+                    CancelReasons.Reason reason = reasons.require(actor.type() == SubjectType.STAFF
+                            ? CancelReasons.Audience.STAFF : CancelReasons.Audience.RIDER, reasonCode);
                     switch (order.status()) {
                         case "AWAITING_PAYMENT", "READY", "SEARCHING" -> {
                             engine.stop(orderId, "STOPPED");
                             core.closeOpenOffers(orderId, "REVOKED");
                         }
-                        case "ASSIGNED" -> releaseAssignment(orderId, reasonCode);
+                        case "ASSIGNED" -> releaseAssignment(orderId, by + "_CANCELLED: " + reason.code());
                         default -> throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "An order in " + order.status() + " cannot be cancelled this way");
                     }
-                    core.changeStatus(order, "CANCELLED", reasonCode, "OrderCancelled", actor, Map.of());
+                    core.cancel(order, by, reason, "OrderCancelled", actor, Map.of());
                     if (actor.type() == SubjectType.STAFF) {
-                        audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reasonCode,
+                        audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reason.code(),
                                 Map.of("status", order.status()), Map.of("status", "CANCELLED")));
                     }
                     return core.view(orderId);
@@ -288,6 +301,7 @@ class JdbcOrders implements Orders {
                         select o.id, o.short_number, o.status, o.created_at, o.pickup_label, o.dropoff_label,
                                o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
                                a.id as assignment_id, a.state as assignment_state, a.close_reason,
+                               o.cancelled_by, o.cancel_reason_code, o.cancel_reason_labels::text as cancel_reason_labels,
                                d.name as driver_name, v.make, v.model, v.color, v.registration_number
                         from ride_order o
                         left join lateral (
@@ -317,8 +331,65 @@ class JdbcOrders implements Orders {
                     rs.getString("dropoff_label"), rs.getString("vehicle_class"),
                     (Long) rs.getObject("price_minor"), (Long) rs.getObject("final_price_minor"),
                     rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")), driver,
-                    assignmentId != null && !driverLeft);
+                    assignmentId != null && !driverLeft, cancellation(rs.getString("cancelled_by"),
+                            rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels")));
         }).list();
+    }
+
+    @SuppressWarnings("unchecked")
+    private OrderView.Cancellation cancellation(String by, String code, String labels) {
+        return by == null ? null
+                : new OrderView.Cancellation(by, code, labels == null ? Map.of() : json.readValue(labels, Map.class));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TimelineEntry> timeline(Actor actor, UUID orderId) {
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        requireStaff(actor, VIEW_PERMISSION, cityId);
+        record Row(long sequence, String type, String actorType, UUID actorId, String reason, String payload,
+                   OffsetDateTime occurredAt) {
+        }
+        List<Row> rows = jdbc.sql("""
+                        select sequence, type, actor_type, actor_id, reason, payload::text as payload, occurred_at
+                        from order_event where order_id = :id order by sequence""")
+                .param("id", orderId)
+                .query((rs, i) -> new Row(rs.getLong("sequence"), rs.getString("type"), rs.getString("actor_type"),
+                        rs.getObject("actor_id", UUID.class), rs.getString("reason"), rs.getString("payload"),
+                        rs.getObject("occurred_at", OffsetDateTime.class)))
+                .list();
+        java.util.Set<UUID> staffIds = new java.util.HashSet<>();
+        java.util.Set<UUID> driverIds = new java.util.HashSet<>();
+        for (Row row : rows) {
+            if (row.actorId() != null && "STAFF".equals(row.actorType())) {
+                staffIds.add(row.actorId());
+            } else if (row.actorId() != null && "DRIVER".equals(row.actorType())) {
+                driverIds.add(row.actorId());
+            }
+        }
+        Map<UUID, StaffDirectory.Name> staffNames = directory.names(staffIds);
+        Map<UUID, String> driverNames = new java.util.HashMap<>();
+        if (!driverIds.isEmpty()) {
+            jdbc.sql("select id, name from driver where id = any(:ids)").param("ids", driverIds.toArray(UUID[]::new))
+                    .query((rs, i) -> driverNames.put(rs.getObject("id", UUID.class), rs.getString("name"))).list();
+        }
+        return rows.stream().map(row -> {
+            String name = null;
+            String role = null;
+            if ("STAFF".equals(row.actorType()) && staffNames.containsKey(row.actorId())) {
+                StaffDirectory.Name staffName = staffNames.get(row.actorId());
+                name = (staffName.firstName() + " " + staffName.lastName()).strip();
+                role = staffName.role().name();
+            } else if ("DRIVER".equals(row.actorType())) {
+                name = driverNames.get(row.actorId());
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = row.payload() == null ? Map.of() : json.readValue(row.payload(), Map.class);
+            return new TimelineEntry(row.sequence(), row.type(), row.occurredAt(),
+                    new TimelineActor(row.actorType(), row.actorId(), name, role), row.reason(), payload);
+        }).toList();
     }
 
     @Override
