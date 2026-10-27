@@ -27,6 +27,7 @@ class WayForPayProvider implements PaymentProvider {
 
     static final String API = "https://api.wayforpay.com/api";
     static final String VERIFY = "https://secure.wayforpay.com/verify";
+    static final String PAY = "https://secure.wayforpay.com/pay";
 
     private static final Logger log = LoggerFactory.getLogger(WayForPayProvider.class);
 
@@ -77,6 +78,46 @@ class WayForPayProvider implements PaymentProvider {
             fields.put("clientPhone", clientPhone.replace("+", ""));
         }
         return new Form(verifyUrl(), fields);
+    }
+
+    // ---------------------------------------------------------------- purchase (a top-up on the payment page)
+
+    /** Where the payer's web view posts the payment form. */
+    String payUrl() {
+        return PAY;
+    }
+
+    @Override
+    public Form purchaseForm(Merchant merchant, String reference, long amountMinor, String description,
+                             String returnUrl, String serviceUrl, String clientPhone, String language,
+                             long lifetimeSeconds) {
+        String amount = amount(amountMinor);
+        String orderDate = Long.toString(clock.instant().getEpochSecond());
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("merchantAccount", merchant.account());
+        fields.put("merchantAuthType", "SimpleSignature");
+        fields.put("merchantDomainName", merchant.domain());
+        fields.put("orderReference", reference);
+        fields.put("orderDate", orderDate);
+        fields.put("amount", amount);
+        fields.put("currency", merchant.currency());
+        fields.put("orderTimeout", Long.toString(Math.max(60, lifetimeSeconds)));
+        fields.put("orderLifetime", Long.toString(Math.max(60, lifetimeSeconds)));
+        fields.put("productName[]", description);
+        fields.put("productPrice[]", amount);
+        fields.put("productCount[]", "1");
+        fields.put("merchantSignature", sign(merchant, merchant.account(), merchant.domain(), reference, orderDate,
+                amount, merchant.currency(), description, "1", amount));
+        fields.put("returnUrl", returnUrl);
+        fields.put("serviceUrl", serviceUrl);
+        if (language != null) {
+            // The page speaks UA, RU, EN, PL among others.
+            fields.put("language", language.toUpperCase(Locale.ROOT).replace("UK", "UA"));
+        }
+        if (clientPhone != null) {
+            fields.put("clientPhone", clientPhone.replace("+", ""));
+        }
+        return new Form(payUrl(), fields);
     }
 
     // ---------------------------------------------------------------- API operations

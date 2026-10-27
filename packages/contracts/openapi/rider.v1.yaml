@@ -992,6 +992,66 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/wallet/card-top-ups:
+    post:
+      operationId: startRiderCardTopUp
+      summary: Top up the bonus account by card
+      description: >-
+        Opens the provider's payment page of the city's merchant (404 when the city takes no cards). The app POSTs
+        `fields` to `url` in a web view; the account is credited when the provider confirms the payment.
+      tags: [Wallet]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./wallets.yaml#/components/schemas/StartCardTopUp"
+      responses:
+        "201":
+          description: Started.
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/CardTopUp"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/rider/v1/wallet/card-top-ups/{top_up_id}:
+    get:
+      operationId: getRiderCardTopUp
+      summary: Result of a card top-up
+      tags: [Wallet]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: top_up_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: PENDING until the provider reports; then COMPLETED, FAILED or EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/CardTopUp"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 tags:
   - name: Wallet
     description: The bonus account (ADR 0009)

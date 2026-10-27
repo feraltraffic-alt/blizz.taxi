@@ -23,15 +23,18 @@ class PaymentsConfiguration {
     static class WorkerSchedule {
 
         private final PaymentWorker worker;
+        private final JdbcCardTopUps topUps;
 
-        WorkerSchedule(PaymentWorker worker) {
+        WorkerSchedule(PaymentWorker worker, JdbcCardTopUps topUps) {
             this.worker = worker;
+            this.topUps = topUps;
         }
 
         @org.springframework.scheduling.annotation.Scheduled(
                 fixedDelayString = "${blizz.payments.poll-interval:PT2S}")
         void poll() {
             worker.runOnce();
+            topUps.reconcile();
         }
     }
 

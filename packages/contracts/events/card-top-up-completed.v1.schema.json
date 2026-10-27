@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/card-top-up-completed.v1.schema.json",
+  "title": "CardTopUpCompleted v1",
+  "description": "The provider took the money of a top-up on its payment page (ADR 0009 p. 1, ADR 0010 p. 1); also a late or reconciled approval after the top-up failed or expired. Published by payments once per top-up; consumed by finance, which credits the rider's bonus account (CLIENT) or the driver's balance (DRIVER).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["top_up_id", "account_type", "account_id", "amount_minor", "currency"],
+  "properties": {
+    "top_up_id": { "type": "string", "format": "uuid" },
+    "account_type": { "type": "string", "enum": ["CLIENT", "DRIVER"] },
+    "account_id": { "type": "string", "format": "uuid" },
+    "amount_minor": { "type": "integer", "minimum": 1 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+  },
+  "examples": [
+    { "top_up_id": "3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6b", "account_type": "DRIVER",
+      "account_id": "4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", "amount_minor": 50000, "currency": "UAH" }
+  ]
+}

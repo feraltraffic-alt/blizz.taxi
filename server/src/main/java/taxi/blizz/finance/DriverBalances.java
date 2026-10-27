@@ -22,7 +22,8 @@ public interface DriverBalances {
 
     /**
      * One movement: {@code amountMinor} positive in, negative out. {@code kind}: TRIP_FARE, CASH_COLLECTED, DEPOSIT,
-     * BONUS, TRANSFER_IN, TRANSFER_OUT, PROMOTION, … {@code counterpartId}: the other driver of a transfer.
+     * BONUS, CARD_TOP_UP, TRANSFER_IN, TRANSFER_OUT, PROMOTION, … {@code counterpartId}: the other driver of a
+     * transfer.
      */
     record Entry(UUID id, OffsetDateTime at, String kind, String currency, long amountMinor, String reason,
                  UUID orderId, UUID counterpartId) {

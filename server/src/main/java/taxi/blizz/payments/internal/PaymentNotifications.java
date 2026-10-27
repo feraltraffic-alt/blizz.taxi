@@ -36,10 +36,12 @@ class PaymentNotifications {
     private final JsonMapper json;
     private final Clock clock;
     private final JdbcCardPayments payments;
+    private final JdbcCardTopUps topUps;
 
     PaymentNotifications(JdbcClient jdbc, Merchants merchants, Providers providers, JsonMapper json, Clock clock,
-                         JdbcCardPayments payments) {
+                         JdbcCardPayments payments, JdbcCardTopUps topUps) {
         this.payments = payments;
+        this.topUps = topUps;
         this.jdbc = jdbc;
         this.merchants = merchants;
         this.providers = providers;
@@ -80,7 +82,7 @@ class PaymentNotifications {
         return new Answer(true, provider.acknowledge(merchant, n.reference()));
     }
 
-    /** A hold or charge of ours (by its own reference), else a card binding. */
+    /** A hold or charge of ours (by its own reference), a top-up, else a card binding. */
     private String apply(Merchant merchant, PaymentProvider.Notification n) {
         Optional<UUID> operation = jdbc.sql("""
                         select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
@@ -89,6 +91,11 @@ class PaymentNotifications {
         if (operation.isPresent()) {
             payments.apply(operation.get(), n.outcome(), n.status(), n.reasonCode(), n.reason());
             return "OPERATION_" + n.outcome();
+        }
+        Optional<String> topUp = topUps.apply(merchant.id(), n.reference(), n.outcome(), n.amountMinor(),
+                n.currency(), n.maskedPan(), n.reason());
+        if (topUp.isPresent()) {
+            return topUp.get();
         }
         record Pending(UUID id, UUID clientId, String state) {
         }

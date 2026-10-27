@@ -41,6 +41,11 @@ class FakeProvider extends WayForPayProvider {
             return List.copyOf(requests);
         }
 
+        /** What the bank now knows about {@code reference}, e.g. a payment made on the FAKE payment page. */
+        synchronized void record(String reference, String status) {
+            statusOf.put(reference, status);
+        }
+
         synchronized void reset() {
             script.clear();
             requests.clear();
@@ -100,11 +105,13 @@ class FakeProvider extends WayForPayProvider {
 
     private final Gateway gateway;
     private final String verifyUrl;
+    private final String payUrl;
 
     FakeProvider(Gateway gateway, Clock clock, String publicBaseUrl) {
         super(gateway, clock, 172800);
         this.gateway = gateway;
         this.verifyUrl = publicBaseUrl + "/payments/v1/fake/verify";
+        this.payUrl = publicBaseUrl + "/payments/v1/fake/pay";
     }
 
     @Override
@@ -115,6 +122,11 @@ class FakeProvider extends WayForPayProvider {
     @Override
     String verifyUrl() {
         return verifyUrl;
+    }
+
+    @Override
+    String payUrl() {
+        return payUrl;
     }
 
     Gateway gateway() {

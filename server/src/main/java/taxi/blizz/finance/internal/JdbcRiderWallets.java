@@ -161,6 +161,17 @@ class JdbcRiderWallets implements RiderWallets {
                         Line.credit(Account.RIDER_WALLET, clientId, amountMinor))));
     }
 
+    /**
+     * Money the rider paid by card on the provider's page (ADR 0009 p. 1), in the caller's transaction: what the
+     * provider now holds for the service is owed to the rider as bonuses. Once per top-up.
+     */
+    boolean creditCardTopUp(UUID clientId, UUID topUpId, String currency, long amountMinor) {
+        ensureAccount(clientId, currency, now());
+        return ledger.post(new Ledger.Posting("card-top-up:" + topUpId, "CARD_TOP_UP", topUpId, currency,
+                "Top-up by card", List.of(Line.debit(Account.PROVIDER_CLEARING, null, amountMinor),
+                        Line.credit(Account.RIDER_WALLET, clientId, amountMinor))));
+    }
+
     private long reserved(UUID clientId, String currency) {
         return jdbc.sql("""
                         select coalesce(sum(amount_minor), 0) from rider_wallet_hold
@@ -199,7 +210,8 @@ class JdbcRiderWallets implements RiderWallets {
                     UUID basisId = rs.getObject("basis_id", UUID.class);
                     return new Entry(rs.getObject("id", UUID.class), rs.getObject("occurred_at", OffsetDateTime.class),
                             kind, rs.getString("currency"), rs.getLong("amount"), rs.getString("reason"),
-                            rs.getObject("staff_id", UUID.class), "WALLET_TOP_UP".equals(basis) ? null : basisId);
+                            rs.getObject("staff_id", UUID.class),
+                            "WALLET_TOP_UP".equals(basis) || "CARD_TOP_UP".equals(basis) ? null : basisId);
                 })
                 .list();
         return new Wallet(clientId, balances, entries);

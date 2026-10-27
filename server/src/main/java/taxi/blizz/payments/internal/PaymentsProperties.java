@@ -14,6 +14,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param timeout            how long to wait for the provider before the result counts as UNKNOWN
  * @param fakeMerchantsAllowed whether the admin panel may add FAKE merchants (they confirm any payment): only in
  *                           development, tests and the sandbox
+ * @param topUpMinMinor      the smallest card top-up of a rider's account or a driver's balance, minor units
+ * @param topUpMaxMinor      the largest card top-up, minor units
  */
 @ConfigurationProperties("blizz.payments")
 record PaymentsProperties(
@@ -22,7 +24,9 @@ record PaymentsProperties(
         @DefaultValue("PT30M") Duration bindingTtl,
         @DefaultValue("172800") long holdTimeoutSeconds,
         @DefaultValue("PT20S") Duration timeout,
-        @DefaultValue("false") boolean fakeMerchantsAllowed) {
+        @DefaultValue("false") boolean fakeMerchantsAllowed,
+        @DefaultValue("100") long topUpMinMinor,
+        @DefaultValue("1000000") long topUpMaxMinor) {
 
     PaymentsProperties {
         secrets = secrets == null ? Map.of() : Map.copyOf(secrets);

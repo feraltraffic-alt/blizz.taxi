@@ -96,9 +96,11 @@ class JdbcDriverBalances implements DriverBalances {
                         case "DRIVER_TRANSFER" -> amount < 0 ? "TRANSFER_OUT" : "TRANSFER_IN";
                         case "DRIVER_PAYMENT" -> "DEPOSIT";
                         case "DRIVER_PROMOTION" -> "PROMOTION";
+                        case "DRIVER_CARD_TOP_UP" -> "CARD_TOP_UP";
                         default -> basis;
                     };
-                    boolean ownBasis = Stream.of("DRIVER_TOP_UP", "DRIVER_TRANSFER", "DRIVER_PAYMENT", "DRIVER_PROMOTION")
+                    boolean ownBasis = Stream.of("DRIVER_TOP_UP", "DRIVER_TRANSFER", "DRIVER_PAYMENT", "DRIVER_PROMOTION",
+                            "DRIVER_CARD_TOP_UP")
                             .anyMatch(basis::equals);
                     return new Entry(rs.getObject("id", UUID.class), rs.getObject("occurred_at", OffsetDateTime.class),
                             kind, rs.getString("currency"), amount, rs.getString("reason"),
@@ -244,6 +246,20 @@ class JdbcDriverBalances implements DriverBalances {
         boolean posted = ledger.post(new Ledger.Posting("driver-promotion:" + promotionId + ":" + driverId + ":"
                 + periodIndex, "DRIVER_PROMOTION", promotionId, currency, promotionName,
                 List.of(Line.debit(Account.PROMO_EXPENSE, null, amountMinor),
+                        Line.credit(Account.DRIVER_PAYABLE, driverId, amountMinor))));
+        if (posted) {
+            debts.refresh(driverId, currency);
+        }
+        return posted;
+    }
+
+    /**
+     * Money the driver paid by card on the provider's page (ADR 0010 p. 1), in the caller's transaction: what the
+     * provider now holds for the service goes to the driver's balance. Once per top-up.
+     */
+    boolean creditCardTopUp(UUID driverId, UUID topUpId, String currency, long amountMinor) {
+        boolean posted = ledger.post(new Ledger.Posting("driver-card-top-up:" + topUpId, "DRIVER_CARD_TOP_UP",
+                topUpId, currency, "Top-up by card", List.of(Line.debit(Account.PROVIDER_CLEARING, null, amountMinor),
                         Line.credit(Account.DRIVER_PAYABLE, driverId, amountMinor))));
         if (posted) {
             debts.refresh(driverId, currency);

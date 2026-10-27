@@ -41,6 +41,13 @@ interface PaymentProvider {
     Form cardVerifyForm(Merchant merchant, String reference, String returnUrl, String serviceUrl, String clientPhone);
 
     /**
+     * The provider's payment page for a one-time payment of {@code amountMinor} (a top-up): the card is entered
+     * there; the result comes to {@code serviceUrl}. The page stops taking the payment after {@code lifetimeSeconds}.
+     */
+    Form purchaseForm(Merchant merchant, String reference, long amountMinor, String description, String returnUrl,
+                      String serviceUrl, String clientPhone, String language, long lifetimeSeconds);
+
+    /**
      * A hold of {@code amountMinor} on a saved card, kept {@code holdSeconds}; the provider reports late results to
      * {@code serviceUrl}.
      */

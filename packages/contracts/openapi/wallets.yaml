@@ -97,3 +97,63 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+
+    StartCardTopUp:
+      type: object
+      additionalProperties: false
+      required: [command_id, city_id, amount_minor]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          description: The city whose merchant takes the money; the currency is that merchant's.
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          description: Within the service's limits (by default 100 … 1 000 000 minor units).
+          type: integer
+          format: int64
+          minimum: 1
+
+    CardTopUp:
+      description: >-
+        A top-up on the provider's payment page (ADR 0009, ADR 0010). The app POSTs `fields` to `url` in a web view;
+        when it reaches `return_url` the app reads the top-up until it is no longer PENDING. Money the provider took
+        is credited even when it reports late: a FAILED or EXPIRED top-up can still become COMPLETED.
+      type: object
+      additionalProperties: false
+      required: [id, state, amount_minor, currency, created_at, expires_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED, EXPIRED]
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        url:
+          description: Where the web view POSTs the form; only in the answer to the start.
+          type: [string, "null"]
+        fields:
+          description: Form fields to POST as application/x-www-form-urlencoded; only in the answer to the start.
+          type: [object, "null"]
+          additionalProperties:
+            type: string
+        return_url:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        expires_at:
+          description: The payment page stops taking the payment.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        completed_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        masked_pan:
+          type: [string, "null"]
+        failure_reason:
+          type: [string, "null"]
