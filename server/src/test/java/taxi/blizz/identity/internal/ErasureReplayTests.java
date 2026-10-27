@@ -1,0 +1,86 @@
+package taxi.blizz.identity.internal;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import taxi.blizz.TestcontainersConfiguration;
+import taxi.blizz.platform.internal.OutboxRelay;
+
+/**
+ * T-39, REQ-PRV-05: a deletion made after a backup is applied again when that backup is restored — the erasure
+ * journal lives outside the database.
+ */
+@SpringBootTest
+@Import(TestcontainersConfiguration.class)
+class ErasureReplayTests {
+
+    @Autowired JdbcClientDeletions deletions;
+    @Autowired ErasureReplay replay;
+    @Autowired ErasureJournal journal;
+    @Autowired OutboxRelay relay;
+    @Autowired JdbcClient jdbc;
+
+    @Test
+    void aRestoredClientIsAnonymizedAgainAndTheOtherModulesAreToldAgain() {
+        UUID client = UUID.randomUUID();
+        String phone = "+48" + String.format("%09d", Math.floorMod(client.hashCode(), 1_000_000_000));
+        jdbc.sql("""
+                        insert into client (id, phone_normalized, name, account_state, deletion_previous_state,
+                                            deletion_requested_at, has_app, created_at, updated_at)
+                        values (:id, :phone, 'Olena', 'DELETION_PENDING', 'ACTIVE', now(), true, now(), now())""")
+                .param("id", client).param("phone", phone).update();
+        deletions.anonymize(client);
+        drain();
+        assertThat(journal.subjects(ErasureReplay.CLIENT)).as("journaled after the commit").contains(client);
+
+        // The database is restored from a backup made before the deletion.
+        jdbc.sql("""
+                        update client set account_state = 'ACTIVE', phone_normalized = :phone, name = 'Olena',
+                                          deletion_previous_state = null, deletion_requested_at = null
+                        where id = :id""")
+                .param("id", client).param("phone", phone).update();
+
+        assertThat(replay.replay()).isGreaterThanOrEqualTo(1);
+        Map<String, Object> row = jdbc.sql("select account_state, phone_normalized, name from client where id = :id")
+                .param("id", client).query().singleRow();
+        assertThat(row).containsEntry("account_state", "ANONYMIZED");
+        assertThat(row.get("phone_normalized")).isNull();
+        assertThat(row.get("name")).isNull();
+        assertThat(anonymizedEvents(client)).as("the other modules are told again").isEqualTo(2);
+        assertThat(jdbc.sql("""
+                        select count(*) from audit_log where action = 'client_deletion.reapply' and resource_id = :id""")
+                .param("id", client.toString()).query(Long.class).single()).isEqualTo(1);
+
+        replay.replay();
+        assertThat(anonymizedEvents(client)).as("nothing more once it is anonymized").isEqualTo(2);
+    }
+
+    @Test
+    void theJournalIsWrittenOnceAndUnknownClientsAreSkipped() {
+        UUID ghost = UUID.randomUUID();
+        journal.record(ErasureReplay.CLIENT, ghost, "2026-10-27T10:00:00Z");
+        journal.record(ErasureReplay.CLIENT, ghost, "2026-10-27T11:00:00Z");
+        assertThat(journal.subjects(ErasureReplay.CLIENT)).containsOnlyOnce(ghost);
+        // A client created after the backup does not exist in the restored database: nothing to do, no failure.
+        replay.replay();
+        assertThat(jdbc.sql("select count(*) from client where id = :id").param("id", ghost).query(Long.class)
+                .single()).isZero();
+    }
+
+    private long anonymizedEvents(UUID client) {
+        return jdbc.sql("select count(*) from outbox where event_type = 'ClientAnonymized' and aggregate_id = :id")
+                .param("id", client).query(Long.class).single();
+    }
+
+    private void drain() {
+        while (relay.runOnce() > 0) {
+            // deliver everything published so far
+        }
+    }
+}

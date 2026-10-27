@@ -38,6 +38,10 @@ blizz:
   auth:
     instance-id: ${INSTANCE_ID:}
     access-token-secret: ${ACCESS_TOKEN_SECRET:}
+  privacy:
+    # The erasure journal (REQ-PRV-05, ADR 0013): a directory on durable storage of its own, NOT backed up together
+    # with the database, so deletions made after a backup are applied again when that backup is restored.
+    erasure-journal-dir: ${ERASURE_JOURNAL_DIR:${java.io.tmpdir}/blizz-erasure-journal}
   secrets:
     # Encrypts the keys entered in the admin panel; 32 bytes in Base64 (openssl rand -base64 32). Keep it with the
     # backups of the database: without it the stored keys cannot be read.

@@ -148,6 +148,28 @@ class JdbcClientDeletions implements ClientDeletions {
     @Transactional
     public void anonymize(UUID clientId) {
         lockPending(clientId);
+        erase(clientId);
+    }
+
+    /**
+     * After a backup was restored (REQ-PRV-05): a client the erasure journal lists, found here again with personal
+     * data, is anonymized again, in the caller's transaction. Returns whether anything had to be done.
+     */
+    boolean reapply(UUID clientId) {
+        Optional<String> state = jdbc.sql("select account_state from client where id = :id for update")
+                .param("id", clientId).query(String.class).optional();
+        if (state.isEmpty() || "ANONYMIZED".equals(state.get())) {
+            return false;
+        }
+        erase(clientId);
+        audit.record(new AuditEntry(Actor.system(), "client_deletion.reapply", "client", clientId.toString(),
+                "The erasure journal lists the client, found again after a restore", Map.of("account_state",
+                        state.get()), Map.of("account_state", "ANONYMIZED")));
+        return true;
+    }
+
+    /** Personal data off, sessions revoked, the other modules told (ClientAnonymized). */
+    private void erase(UUID clientId) {
         long version = jdbc.sql("""
                         update client set account_state = 'ANONYMIZED', phone_normalized = null,
                                           phone_verified_at = null, name = null, language = null,
