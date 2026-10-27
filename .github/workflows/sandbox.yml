@@ -101,21 +101,11 @@ jobs:
           sleep $(( minutes * 60 ))
       - name: Publish results to the sandbox-runs branch
         if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          dir="runs/${GITHUB_RUN_ID}"
-          git fetch -q origin +refs/heads/sandbox-runs:refs/remotes/origin/sandbox-runs || true
-          git worktree add -q /tmp/results 2>/dev/null origin/sandbox-runs || {
-            git worktree add -q --detach /tmp/results && cd /tmp/results && git checkout -q --orphan sandbox-runs \
-              && git rm -rq . 2>/dev/null; cd - >/dev/null; }
-          mkdir -p "/tmp/results/$dir"
-          cp transcript.md results.txt "/tmp/results/$dir/" 2>/dev/null || true
-          tail -n 3000 server.log > "/tmp/results/$dir/server.log" 2>/dev/null || true
-          printf '%s %s %s\n' "$GITHUB_RUN_ID" "${GITHUB_SHA::7}" "$GITHUB_REF_NAME" > "/tmp/results/$dir/run.txt"
-          cd /tmp/results
-          git config user.name "sandbox-bot"; git config user.email "sandbox-bot@users.noreply.github.com"
-          git add -A && git commit -qm "Sandbox run ${GITHUB_RUN_ID} (${GITHUB_SHA::7})" \
-            && { git push -q origin HEAD:sandbox-runs || { git pull -q --rebase origin sandbox-runs && git push -q origin HEAD:sandbox-runs; }; }
-          echo "Results: branch sandbox-runs, $dir" >> "$GITHUB_STEP_SUMMARY"
+          scripts/sandbox/publish.sh
+          echo "Results: branch **sandbox-runs**, runs/${GITHUB_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4

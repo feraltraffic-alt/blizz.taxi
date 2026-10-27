@@ -28,19 +28,19 @@ insert into tariff_version (id, city_id, class_id, currency, effective_from, sta
     ('5a000000-0000-4000-8000-000000000301', '5a000000-0000-4000-8000-000000000001',
      '5a000000-0000-4000-8000-000000000101', 'UAH', now() - interval '1 day', 'PUBLISHED',
      4000, 1400, 200, 7000, 3, 300, 0, 0.15, 60, 'UP', 6000, 1800, '[]',
-     '{"mode": "FIXED", "amount_minor": 3000}', now(), now()),
+     '{"mode": "FIXED", "amount_minor": 3000, "coefficient": null}', now(), now()),
     ('5a000000-0000-4000-8000-000000000302', '5a000000-0000-4000-8000-000000000001',
      '5a000000-0000-4000-8000-000000000102', 'UAH', now() - interval '1 day', 'PUBLISHED',
      6000, 2000, 300, 10000, 3, 400, 0, 0.15, 60, 'UP', 8000, 2500, '[]',
-     '{"mode": "FIXED", "amount_minor": 3000}', now(), now()),
+     '{"mode": "FIXED", "amount_minor": 3000, "coefficient": null}', now(), now()),
     ('5a000000-0000-4000-8000-000000000303', '5a000000-0000-4000-8000-000000000002',
      '5a000000-0000-4000-8000-000000000201', 'PLN', now() - interval '1 day', 'PUBLISHED',
      800, 300, 50, 1500, 3, 60, 0, 0.15, 60, 'UP', 1000, 400, '[]',
-     '{"mode": "COEFFICIENT", "coefficient": 1.10}', now(), now()),
+     '{"mode": "COEFFICIENT", "amount_minor": 0, "coefficient": 1.10}', now(), now()),
     ('5a000000-0000-4000-8000-000000000304', '5a000000-0000-4000-8000-000000000002',
      '5a000000-0000-4000-8000-000000000202', 'PLN', now() - interval '1 day', 'PUBLISHED',
      1200, 400, 70, 2000, 3, 80, 0, 0.15, 60, 'UP', 1500, 500, '[]',
-     '{"mode": "COEFFICIENT", "coefficient": 1.10}', now(), now())
+     '{"mode": "COEFFICIENT", "amount_minor": 0, "coefficient": 1.10}', now(), now())
 on conflict (id) do nothing;
 
 -- Approved drivers with approved cars (both classes). They sign in by OTP with these phones.
