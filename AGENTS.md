@@ -37,6 +37,8 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - Tests touching the database use Testcontainers PostgreSQL/PostGIS, never H2 or mocks of the database.
 - No secrets, keys or real personal data in the repository.
 - Do not change `docs/spec/` or `docs/decisions/` without an explicit request in the issue.
+- Change only what the issue needs: do not delete or reword comments, Javadoc or code outside its scope.
+- Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 
 ## Commits
 
