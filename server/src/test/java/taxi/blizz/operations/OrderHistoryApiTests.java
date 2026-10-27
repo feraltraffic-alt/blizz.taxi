@@ -40,8 +40,8 @@ class OrderHistoryApiTests {
 
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 120.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 120.55);
-    static final GeoPoint OTHER_PICKUP = new GeoPoint(-39.5, 130.5);
-    static final GeoPoint OTHER_DROPOFF = new GeoPoint(-39.45, 130.55);
+    static final GeoPoint OTHER_PICKUP = new GeoPoint(-39.5, 171.5);
+    static final GeoPoint OTHER_DROPOFF = new GeoPoint(-39.45, 171.55);
 
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
@@ -144,7 +144,7 @@ class OrderHistoryApiTests {
 
         assertThat(array(getAuth("/api/rider/v1/orders", token(stranger)))).isEmpty();
 
-        UUID otherCity = rides.city("history-other-" + UUID.randomUUID().toString().substring(0, 8), "UAH", 130.0);
+        UUID otherCity = rides.city("history-other-" + UUID.randomUUID().toString().substring(0, 8), "UAH", 171.0);
         TestRides.Driver otherDriver = rides.driverNear(OTHER_PICKUP);
         TestRides.Ride otherRide = rides.started(otherCity, otherDriver, OTHER_PICKUP, OTHER_DROPOFF);
         TripView otherCompleted = rides.complete(otherRide, true);
