@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,6 @@ class DriverEarningsTests {
     private static final String AREA = "SRID=4326;MULTIPOLYGON(((105 -40,106 -40,106 -39,105 -39,105 -40)))";
 
     @Autowired DriverEarnings earnings;
-    @Autowired Ledger ledger;
     @Autowired TransactionTemplate tx;
     @Autowired JdbcClient jdbc;
 
@@ -135,12 +133,27 @@ class DriverEarningsTests {
                 LocalDate.of(2026, 2, 1)).total().netMinor()).isZero();
     }
 
+    /** A balanced posting at a chosen moment, written as the ledger writes it (the journal is append-only). */
     private void post(String at, String key, String basis, UUID basisId, Line... lines) {
-        String businessKey = key + ":" + driver.id();
-        tx.executeWithoutResult(s -> ledger.post(new Ledger.Posting(businessKey, basis, basisId, "UAH", "Test",
-                List.of(lines))));
-        jdbc.sql("update journal_transaction set occurred_at = :at where business_key = :key")
-                .param("at", OffsetDateTime.parse(at)).param("key", businessKey).update();
+        UUID id = UUID.randomUUID();
+        tx.executeWithoutResult(s -> {
+            jdbc.sql("""
+                            insert into journal_transaction (id, business_key, basis_type, basis_id, currency, reason,
+                                                             occurred_at)
+                            values (:id, :key, :basis, :basisId, 'UAH', 'Test', :at)""")
+                    .param("id", id).param("key", key + ":" + driver.id()).param("basis", basis)
+                    .param("basisId", basisId).param("at", OffsetDateTime.parse(at)).update();
+            int no = 1;
+            for (Line line : lines) {
+                jdbc.sql("""
+                                insert into journal_line (transaction_id, line_no, account, party_id, debit_minor,
+                                                          credit_minor)
+                                values (:tx, :no, :account, :party, :debit, :credit)""")
+                        .param("tx", id).param("no", no++).param("account", line.account().name())
+                        .param("party", line.partyId()).param("debit", line.debitMinor())
+                        .param("credit", line.creditMinor()).update();
+            }
+        });
     }
 
     private static void assertCode(Runnable call, ErrorCode code) {
