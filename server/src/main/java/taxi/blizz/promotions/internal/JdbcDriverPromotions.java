@@ -33,7 +33,8 @@ class JdbcDriverPromotions implements DriverPromotions {
 
     static final String COLUMNS = """
             id, name, reward_minor, currency, city_id, period_days, orders_required, days_of_week, time_from, time_to,
-            payment_method, repeat, starts_at, ends_at, state, version, created_by, created_at, updated_at""";
+            payment_method, repeat, starts_at, ends_at, state, version, created_by, created_at, updated_at
+            """;
     private static final Set<String> PAYMENT_METHODS = Set.of("CASH", "CARD", "TERMINAL");
 
     private final JdbcClient jdbc;
