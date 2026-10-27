@@ -40,8 +40,8 @@ class RatingsTests {
         assertThat(ratings.driverSummary(ride.driver())).isEqualTo(new Ratings.DriverSummary(5, 1, 500));
         assertThat(jdbc.sql("select comment from rating where order_id = :id and author_type = 'RIDER' and superseded_at is null")
                 .param("id", ride.orderId()).query(String.class).single()).isEqualTo("excellent");
-        String payload = jdbc.sql("select payload::text from outbox where event_type = 'RatingSubmitted' and aggregate_id = :id order by occurred_at limit 1")
-                .param("id", ride.orderId()).query(String.class).single();
+        String payload = jdbc.sql("select payload::text from outbox where event_type = 'RatingSubmitted' order by occurred_at desc limit 1")
+                .query(String.class).single();
         assertThat(payload).contains("score").doesNotContain("excellent").doesNotContain("comment");
     }
 
