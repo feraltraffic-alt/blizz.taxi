@@ -32,6 +32,9 @@ public interface SessionService {
     /** Revokes every open session of the subject, e.g. when the account is blocked. Returns the count. */
     int revokeAll(Actor subject, String reason);
 
+    /** Revokes every open session of the subject except {@code keep}; returns how many were revoked. */
+    int revokeOthers(Actor subject, java.util.UUID keep, String reason);
+
     /** Checks signature, expiry, audience and that the session is still open. */
     Optional<AccessClaims> verifyAccess(String accessToken, ApiAudience expectedAudience);
 

@@ -16,6 +16,24 @@ public interface ClientDeletions {
     record Pending(UUID clientId, String previousState, OffsetDateTime requestedAt) {
     }
 
+    /** The rider's account after a request or a cancellation; {@code requestedAt} only while pending. */
+    record Status(UUID clientId, String accountState, OffsetDateTime requestedAt) {
+    }
+
+    /** Step one: a code of purpose ACCOUNT_DELETION to the rider's current phone. */
+    ChallengeIssued requestCode(taxi.blizz.platform.Actor rider, String deviceRef, String clientIp);
+
+    /**
+     * Step two, a command: with a correct code, ACTIVE or BLOCKED → DELETION_PENDING. Every other session of the
+     * rider is revoked; {@code currentSessionId} stays, so the app can show the request and offer to cancel it.
+     * {@code OTP_INVALID} for a wrong code, {@code STATE_CONFLICT} from any other state.
+     */
+    Status request(taxi.blizz.platform.Actor rider, UUID currentSessionId, UUID commandId, UUID challengeId,
+                   String otpCode);
+
+    /** A command: DELETION_PENDING → the state before the request, while staff have not completed it. */
+    Status cancel(taxi.blizz.platform.Actor rider, UUID commandId);
+
     /** Pending requests, oldest first, after {@code after} (exclusive) when given. */
     List<Pending> pending(OffsetDateTime after, int limit);
 

@@ -37,6 +37,8 @@ class JdbcSessionService implements SessionService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Set<String> ACTIVE_STATES = Set.of("ACTIVE");
+    /** A rider who asked to delete the account still signs in, to see the request and cancel it (issue #56). */
+    private static final Set<String> CLIENT_STATES = Set.of("ACTIVE", "DELETION_PENDING");
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -73,7 +75,7 @@ class JdbcSessionService implements SessionService {
 
     private IssuedSession open(VerifiedSubject subject, ApiAudience audience, String deviceRef,
                                java.time.Duration maxAge) {
-        if (!ACTIVE_STATES.contains(subject.accountState())) {
+        if (!maySignIn(subject.actor(), subject.accountState())) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "The account cannot sign in");
         }
         Actor actor = subject.actor();
@@ -188,6 +190,21 @@ class JdbcSessionService implements SessionService {
     }
 
     @Override
+    public int revokeOthers(Actor subject, UUID keep, String reason) {
+        Integer count = tx.execute(status -> jdbc.sql("""
+                        update device_session set revoked_at = :now, revoke_reason = :reason
+                        where subject_type = :type and subject_id = :id and revoked_at is null and id <> :keep
+                        """)
+                .param("now", now())
+                .param("reason", reason)
+                .param("type", subject.type().name())
+                .param("id", subject.id())
+                .param("keep", keep)
+                .update());
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public Optional<AccessClaims> verifyAccess(String accessToken, ApiAudience expectedAudience) {
         return codec.verify(accessToken, expectedAudience).filter(claims -> jdbc.sql("""
                         select count(*) from device_session
@@ -231,7 +248,11 @@ class JdbcSessionService implements SessionService {
                 .query(String.class)
                 .optional()
                 .orElse(null);
-        return state != null && ACTIVE_STATES.contains(state);
+        return state != null && maySignIn(actor, state);
+    }
+
+    private static boolean maySignIn(Actor actor, String state) {
+        return (actor.type() == SubjectType.CLIENT ? CLIENT_STATES : ACTIVE_STATES).contains(state);
     }
 
     private void revoke(UUID sessionId, String reason, OffsetDateTime now) {

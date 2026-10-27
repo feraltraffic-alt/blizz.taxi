@@ -7,3 +7,8 @@ alter table client add column deletion_requested_at timestamptz;
 alter table client add constraint client_deletion_pending_has_previous
     check ((account_state = 'DELETION_PENDING') = (deletion_previous_state is not null));
 create index client_deletion_pending_idx on client (deletion_requested_at) where account_state = 'DELETION_PENDING';
+
+-- What a one-time code is for: a sign-in code never confirms a deletion and the other way round. Existing
+-- challenges are sign-in codes; the purpose of new non-sign-in codes is part of their HMAC.
+alter table otp_challenge add column purpose text not null default 'SIGN_IN'
+    check (purpose in ('SIGN_IN', 'ACCOUNT_DELETION'));
