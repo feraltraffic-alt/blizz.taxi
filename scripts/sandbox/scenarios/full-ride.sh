@@ -105,7 +105,12 @@ TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
 TIP=$(api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(uuid)\",
   \"amount_minor\":$(jq '.presets[0].amount_minor' <<<"$TIPS")}"); expect 201
 [[ "$(jq -r .state <<<"$TIP")" == "RECORDED" && "$(jq -r .method <<<"$TIP")" == "CASH" ]]
-admin_token >/dev/null
+ADMIN=$(admin_token)
+api GET "/api/admin/v1/reports/orders?city_id=5a000000-0000-4000-8000-000000000001&from=$TODAY&to=$TODAY" \
+  "$ADMIN" >/dev/null; expect 200
+REPORT=$(api GET "/api/admin/v1/reports/finance?city_id=5a000000-0000-4000-8000-000000000001&from=$TODAY&to=$TODAY" \
+  "$ADMIN"); expect 200
+(( $(jq .total.trips <<<"$REPORT") >= 1 ))
 OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR" >/dev/null; expect 200
 api GET "/api/operator/v1/drivers/live?city_id=5a000000-0000-4000-8000-000000000001" "$OPERATOR" >/dev/null; expect 200

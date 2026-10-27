@@ -131,8 +131,8 @@ class ReportsTests {
                             pickup, pickup_label, dropoff, dropoff_label, payment_method, status, cancelled_by,
                             cancel_reason_code, created_at, updated_at, version)
                         values (:id, :channel, 'STAFF', :creator, :city, 'STANDARD',
-                            ST_SetSRID(ST_MakePoint(95.5, -39.5), 4326), 'A', ST_SetSRID(ST_MakePoint(95.6, -39.6), 4326),
-                            'B', :payment, :status, :by, :reason, :created, :created, 1)""")
+                            ST_SetSRID(ST_MakePoint(95.5, -39.5), 4326), 'A',
+                            ST_SetSRID(ST_MakePoint(95.6, -39.6), 4326), 'B', :payment, :status, :by, :reason, :created, :created, 1)""")
                 .param("id", id).param("channel", channel).param("creator", UUID.randomUUID()).param("city", city)
                 .param("payment", payment).param("status", status).param("by", cancelledBy).param("reason", reason)
                 .param("created", OffsetDateTime.parse(createdAt)).update();
