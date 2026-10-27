@@ -98,6 +98,14 @@ jobs:
             echo "- Drivers: +380500000001…3 (Kyiv), +48500000001…2 (Warsaw); riders: any phone"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Sandbox: $url"
+          for i in $(seq 1 30); do
+            curl -fsS "$url/actuator/health" >/dev/null 2>&1 && break; sleep 2
+          done
+          if curl -fsS "$url/actuator/health" >/dev/null 2>&1; then
+            echo "::notice title=Sandbox is up for $minutes minutes::$url (admin / Sandbox-Admin-2026-ok)"
+          else
+            echo "::error title=Sandbox address does not answer::$url"; exit 1
+          fi
           sleep $(( minutes * 60 ))
       - name: Publish results to the sandbox-runs branch
         if: always()
