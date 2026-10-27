@@ -23,11 +23,6 @@ record TelephonyProperties(
         @DefaultValue("PT4H") Duration callStaleAfter,
         @DefaultValue("true") boolean callSweepEnabled) {
 
-    /** For tests of the senders, which do not care about calls. */
-    TelephonyProperties(String otpProvider, String turbosmsBaseUrl, Duration callTimeout) {
-        this(otpProvider, turbosmsBaseUrl, callTimeout, true, Duration.ofHours(4), true);
-    }
-
     boolean fake() {
         return "FAKE".equalsIgnoreCase(otpProvider);
     }
