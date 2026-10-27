@@ -47,8 +47,12 @@ class SettingsController {
     }
 
     /** No secrets, no staff data: what an app needs before sign in (REQ-TEN-07, section 22 bootstrap). */
+    /** What the rider app needs to offer "order for later". */
+    record PublicPreorders(int thresholdMinutes, int maxDaysAhead) {
+    }
+
     record Bootstrap(long settingsVersion, ServiceSettings.Brand brand, ServiceSettings.Languages languages,
-                     PublicCalls calls, List<CityItem> cities) {
+                     PublicCalls calls, PublicPreorders preorders, List<CityItem> cities) {
     }
 
     @GetMapping("/api/admin/v1/settings")
@@ -74,6 +78,8 @@ class SettingsController {
         Bootstrap body = new Bootstrap(current.version(), current.settings().brand(), current.settings().languages(),
                 new PublicCalls(calls.mode(), calls.mode() == ServiceSettings.CallMode.VIA_SERVICE_NUMBERS
                         ? calls.servicePhone() : null),
+                new PublicPreorders(current.settings().preorders().thresholdMinutes(),
+                        current.settings().preorders().maxDaysAhead()),
                 cities.published().stream().map(c -> new CityItem(c.id(), c.code(), c.name(), c.currency(),
                         c.timezone())).toList());
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(1)).cachePublic()).body(body);

@@ -69,6 +69,6 @@ Build logic lives in Maven, npm and `scripts/`, so every step can be run locally
 
 ## Decisions and working rules
 
-- Architecture decisions: [`docs/decisions/`](docs/decisions/) — stack versions (0001), outbox and idempotency (0002), pending payments (0003), module data ownership (0004), staff sign-in by login and password (0005).
+- Architecture decisions: [`docs/decisions/`](docs/decisions/) — stack versions (0001), outbox and idempotency (0002), pending payments (0003), module data ownership (0004), staff sign-in by login and password (0005), zone surcharges and pre-orders (0006).
 - Rules for contributors, human or AI: [`AGENTS.md`](AGENTS.md); review checklist: [`CLAUDE.md`](CLAUDE.md).
 - API contracts: [`packages/contracts/openapi/`](packages/contracts/openapi/) — `auth`, `rider` and `driver` v1; the server implements exactly these paths.

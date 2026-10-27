@@ -43,7 +43,27 @@ public interface ServiceSettings {
     record Calls(CallMode mode, String servicePhone) {
     }
 
-    record Settings(Brand brand, Languages languages, Calls calls) {
+    /** How pre-orders reach drivers (ADR 0006). */
+    enum PreorderDispatch {
+        /** Shown to drivers at once; a driver reserves it and confirms "On my way" before the pickup. */
+        RESERVATION,
+        /** Released into the normal search a set time before the pickup. */
+        BROADCAST_BEFORE
+    }
+
+    /**
+     * Pre-orders (owner decision 27.10.2026, ADR 0006). An order with a pickup time at least
+     * {@code thresholdMinutes} ahead is a pre-order; at most {@code maxDaysAhead} days ahead.
+     * BROADCAST_BEFORE: the search starts {@code releaseMinutesBefore} before the pickup. RESERVATION: the driver
+     * confirms between {@code confirmMinutesBefore} and {@code confirmMinutesBefore − confirmWindowMinutes}
+     * before the pickup or loses the reservation; he may drop it himself until
+     * {@code driverCancelUntilMinutesBefore} before the pickup, later only a dispatcher can.
+     */
+    record Preorders(int thresholdMinutes, int maxDaysAhead, PreorderDispatch dispatch, int releaseMinutesBefore,
+                     int confirmMinutesBefore, int confirmWindowMinutes, int driverCancelUntilMinutesBefore) {
+    }
+
+    record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
     }
 
     record Version(long version, Settings settings, UUID changedBy, String reason, java.time.OffsetDateTime changedAt) {

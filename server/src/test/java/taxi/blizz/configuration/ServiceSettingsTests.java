@@ -59,7 +59,7 @@ class ServiceSettingsTests {
                                   String defaultLanguage, List<String> languages) {
         return new Settings(new Brand("Blizz Kyiv", primary, onPrimary, "#ffc300", "https://cdn.example.invalid/logo.png",
                 "+380 44 123 45 67", "Support@Example.invalid", "blizz_support", "https://example.invalid/privacy",
-                "https://example.invalid/terms"), new Languages(defaultLanguage, languages), new Calls(mode, servicePhone));
+                "https://example.invalid/terms"), new Languages(defaultLanguage, languages), new Calls(mode, servicePhone), null);
     }
 
     private static void assertCode(ThrowingCallable call, ErrorCode code) {
@@ -95,6 +95,7 @@ class ServiceSettingsTests {
         assertThat(body.get("brand")).asString().contains("Blizz Kyiv");
         assertThat(body.get("calls")).asString().contains("VIA_SERVICE_NUMBERS").contains("+380440000001");
         assertThat(body).containsKey("cities");
+        assertThat(body.get("preorders")).asString().contains("threshold_minutes=60");
         assertThat(result.getResponse().getHeader("Cache-Control")).contains("max-age=60");
 
         ServiceSettings.Version direct = settings.change(admin, UUID.randomUUID(), saved.version(),
@@ -126,6 +127,11 @@ class ServiceSettingsTests {
         assertCode(() -> settings.history(staff(), 5), ErrorCode.ACCESS_DENIED);
         settings.change(admin, UUID.randomUUID(), version,
                 brand("#000000", "#ffffff", CallMode.DIRECT, null, "uk", List.of("uk")), "A version to protect");
+        assertCode(() -> settings.change(admin, UUID.randomUUID(), version, new Settings(
+                brand("#000000", "#ffffff", CallMode.DIRECT, null, "uk", List.of("uk")).brand(),
+                new Languages("uk", List.of("uk")), new Calls(CallMode.DIRECT, null),
+                new ServiceSettings.Preorders(10, 7, ServiceSettings.PreorderDispatch.RESERVATION, 30, 30, 10, 60)), "x"),
+                ErrorCode.VALIDATION_FAILED);
         assertThatThrownBy(() -> jdbc.sql("delete from service_settings").update())
                 .rootCause().hasMessageContaining("append-only");
     }

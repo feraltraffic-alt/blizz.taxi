@@ -12,6 +12,7 @@ import taxi.blizz.pricing.QuoteService.Breakdown;
 import taxi.blizz.pricing.QuoteService.Component;
 import taxi.blizz.pricing.QuoteService.ZoneFee;
 import taxi.blizz.pricing.RouteEstimator.Estimate;
+import taxi.blizz.pricing.TariffService;
 import taxi.blizz.pricing.TariffService.SurchargeMode;
 import taxi.blizz.pricing.TariffService.Terms;
 import taxi.blizz.pricing.TariffService.ZoneSurcharge;
@@ -33,9 +34,14 @@ final class FareCalculator {
      * splits by the city limits (used as the share of the route outside), and the zones of both points.
      */
     record Facts(boolean pickupOutside, long straightInsideMetres, long straightOutsideMetres,
-                 Set<UUID> pickupZones, Set<UUID> dropoffZones) {
+                 Set<UUID> pickupZones, Set<UUID> dropoffZones, boolean preorder) {
+        Facts(boolean pickupOutside, long straightInsideMetres, long straightOutsideMetres, Set<UUID> pickupZones,
+              Set<UUID> dropoffZones) {
+            this(pickupOutside, straightInsideMetres, straightOutsideMetres, pickupZones, dropoffZones, false);
+        }
+
         static Facts inCity() {
-            return new Facts(false, 1, 0, Set.of(), Set.of());
+            return new Facts(false, 1, 0, Set.of(), Set.of(), false);
         }
     }
 
@@ -78,12 +84,22 @@ final class FareCalculator {
                 fees.add(new ZoneFee(z.zoneId(), z.mode().name(), z.amountMinor(), null));
             }
         }
+        TariffService.PreorderSurcharge pre = terms.preorderSurcharge();
+        if (facts.preorder() && pre != null) {
+            if (pre.mode() == SurchargeMode.COEFFICIENT) {
+                factor = factor.multiply(pre.coefficient());
+                fees.add(new ZoneFee(null, "PREORDER_COEFFICIENT", 0, pre.coefficient()));
+            } else {
+                fixed = Math.addExact(fixed, pre.amountMinor());
+                fees.add(new ZoneFee(null, "PREORDER_FIXED", pre.amountMinor(), null));
+            }
+        }
         try {
             long total = Math.addExact(numerator.multiply(factor)
                     .divide(BigDecimal.valueOf(3000), 0, RoundingMode.HALF_UP).longValueExact(), fixed);
             return new Result(total, new Breakdown(pickup, new Component(distance, 1000), new Component(duration, 60),
                     terms.minimumMinor(), factor, fixed, new Component(distanceOutside, 1000), facts.pickupOutside(),
-                    fees));
+                    fees, facts.preorder()));
         } catch (ArithmeticException overflow) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Quoted amount exceeds supported minor-unit range");
         }

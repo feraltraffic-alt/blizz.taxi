@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.geo.GeoZones;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
@@ -35,10 +36,12 @@ class JdbcQuoteService implements QuoteService {
     private final Clock clock;
     private final ObjectProvider<RouteEstimator> estimators;
     private final GeoZones zones;
+    private final ServiceSettings settings;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
-                     Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones) {
+                     Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings) {
         this.zones = zones;
+        this.settings = settings;
         this.jdbc = jdbc;
         this.commands = commands;
         this.json = json;
@@ -64,13 +67,13 @@ class JdbcQuoteService implements QuoteService {
         FareCalculator.Facts facts = new FareCalculator.Facts(
                 !zones.insideCityLimits(request.cityId(), request.pickup()), split.insideMetres(), split.outsideMetres(),
                 Set.copyOf(zones.zonesAt(request.cityId(), request.pickup())),
-                Set.copyOf(zones.zonesAt(request.cityId(), request.dropOff())));
+                Set.copyOf(zones.zonesAt(request.cityId(), request.dropOff())), preorder(request));
         return commands.execute(new CommandKey(request.payer(), "quote.create", commandId), request, Quote.class, () -> {
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
             record Tariff(UUID id, String currency, Terms terms) {
             }
             Tariff tariff = jdbc.sql("""
-                    select t.*, t.zone_surcharges::text as zone_surcharges from tariff_version t join city on city.id = t.city_id
+                    select t.*, t.zone_surcharges::text as zone_surcharges, t.preorder_surcharge::text as preorder_surcharge from tariff_version t join city on city.id = t.city_id
                     join vehicle_class vc on vc.id = t.class_id and vc.city_id = t.city_id
                     where t.city_id = :city and t.class_id = :class and t.state = 'PUBLISHED'
                     and city.state = 'PUBLISHED' and vc.active and t.currency = city.currency
@@ -85,7 +88,10 @@ class JdbcQuoteService implements QuoteService {
                                     WaitingRounding.valueOf(rs.getString("waiting_rounding")),
                                     rs.getLong("pickup_outside_minor"), rs.getBigDecimal("per_km_outside_minor"),
                                     List.of(json.readValue(rs.getString("zone_surcharges"),
-                                            TariffService.ZoneSurcharge[].class)))))
+                                            TariffService.ZoneSurcharge[].class)),
+                                    rs.getString("preorder_surcharge") == null ? null
+                                            : json.readValue(rs.getString("preorder_surcharge"),
+                                                    TariffService.PreorderSurcharge.class))))
                     .optional().orElseThrow(() -> error(ErrorCode.NOT_FOUND, "No effective published tariff"));
             FareCalculator.Result fare = FareCalculator.calculate(tariff.terms(), route, facts);
             Quote quote = new Quote(UUID.randomUUID(), request, tariff.id(), 1, tariff.terms(), route,
@@ -127,6 +133,25 @@ class JdbcQuoteService implements QuoteService {
         jdbc.sql("update quote set consumed_at = :now where id = :id")
                 .param("id", quoteId).param("now", at(now)).update();
         return quote;
+    }
+
+    /**
+     * A pickup time at least the threshold ahead makes a pre-order (ADR 0006); in the past or beyond the horizon
+     * is refused. A time nearer than the threshold is an ordinary order.
+     */
+    private boolean preorder(Request request) {
+        if (request.pickupAt() == null) {
+            return false;
+        }
+        ServiceSettings.Preorders rules = settings.current().settings().preorders();
+        Instant now = clock.instant();
+        if (request.pickupAt().isBefore(now)) {
+            throw error(ErrorCode.VALIDATION_FAILED, "The pickup time is in the past");
+        }
+        if (request.pickupAt().isAfter(now.plus(java.time.Duration.ofDays(rules.maxDaysAhead())))) {
+            throw error(ErrorCode.VALIDATION_FAILED, "Orders can be placed at most " + rules.maxDaysAhead() + " days ahead");
+        }
+        return !request.pickupAt().isBefore(now.plus(java.time.Duration.ofMinutes(rules.thresholdMinutes())));
     }
 
     private static void payer(Actor payer) {

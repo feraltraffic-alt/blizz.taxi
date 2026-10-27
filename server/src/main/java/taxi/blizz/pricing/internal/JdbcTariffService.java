@@ -76,6 +76,7 @@ class JdbcTariffService implements TariffService {
             initial(c.expectedVersion());
             validate(c);
             validateZones(c);
+            validatePreorder(c);
             String currency = lockClass(c.classId(), c.cityId());
             if (!currency.equals(c.currency())) {
                 throw error(ErrorCode.VALIDATION_FAILED, "Tariff currency must match its city");
@@ -87,10 +88,10 @@ class JdbcTariffService implements TariffService {
                         state, pickup_minor, per_km_minor, per_minute_minor, minimum_minor, free_waiting_minutes,
                         waiting_per_minute_minor, cancellation_fee_minor, commission_rate, waiting_step_seconds,
                         waiting_rounding, pickup_outside_minor, per_km_outside_minor, zone_surcharges,
-                        created_at, updated_at)
+                        preorder_surcharge, created_at, updated_at)
                     values (:id, :city, :class, :currency, :from, :to, 'DRAFT', :pickup, :km, :minute, :minimum,
                         :free, :waiting, :cancellation, :commission, :step, :rounding, :pickupOutside, :kmOutside,
-                        cast(:zones as jsonb), :now, :now)
+                        cast(:zones as jsonb), cast(:preorder as jsonb), :now, :now)
                     """).param("id", id).param("city", c.cityId()).param("class", c.classId())
                     .param("currency", c.currency()).param("from", at(c.effectiveFrom()))
                     .param("to", at(c.effectiveTo())).param("pickup", t.pickupMinor()).param("km", t.perKmMinor())
@@ -100,6 +101,7 @@ class JdbcTariffService implements TariffService {
                     .param("step", t.waitingStepSeconds()).param("rounding", t.waitingRounding().name())
                     .param("pickupOutside", t.pickupOutsideMinor()).param("kmOutside", t.perKmOutsideMinor())
                     .param("zones", json.writeValueAsString(t.zoneSurcharges()))
+                    .param("preorder", t.preorderSurcharge() == null ? null : json.writeValueAsString(t.preorderSurcharge()))
                     .param("now", now()).update();
             audit.record(new AuditEntry(c.actor(), "tariff.createDraft", "tariff_version", id.toString(),
                     c.reason(), null, c));
@@ -181,6 +183,19 @@ class JdbcTariffService implements TariffService {
     }
 
     /** Zone surcharges name published-or-draft zones of the tariff's city, never the city limits themselves. */
+    private static void validatePreorder(Draft c) {
+        TariffService.PreorderSurcharge p = c.terms().preorderSurcharge();
+        if (p == null) {
+            return;
+        }
+        boolean ok = p.mode() == TariffService.SurchargeMode.FIXED ? p.amountMinor() > 0
+                : p.mode() == TariffService.SurchargeMode.COEFFICIENT && p.coefficient() != null
+                        && p.coefficient().compareTo(BigDecimal.ONE) >= 0 && p.coefficient().compareTo(BigDecimal.TEN) <= 0;
+        if (!ok) {
+            throw error(ErrorCode.VALIDATION_FAILED, "A pre-order surcharge is a positive amount or a coefficient 1..10");
+        }
+    }
+
     private void validateZones(Draft c) {
         java.util.Set<UUID> seen = new java.util.HashSet<>();
         for (TariffService.ZoneSurcharge z : c.terms().zoneSurcharges()) {

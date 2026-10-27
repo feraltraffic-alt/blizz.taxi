@@ -41,7 +41,7 @@ components:
     Bootstrap:
       type: object
       additionalProperties: false
-      required: [settings_version, brand, languages, calls, cities]
+      required: [settings_version, brand, languages, calls, preorders, cities]
       properties:
         settings_version:
           type: integer
@@ -61,6 +61,16 @@ components:
               enum: [DIRECT, VIA_SERVICE_NUMBERS]
             service_phone:
               type: [string, "null"]
+        preorders:
+          description: What the rider app needs to offer "order for later".
+          type: object
+          additionalProperties: false
+          required: [threshold_minutes, max_days_ahead]
+          properties:
+            threshold_minutes:
+              type: integer
+            max_days_ahead:
+              type: integer
         cities:
           type: array
           items:
@@ -128,3 +138,40 @@ components:
           items:
             type: string
             enum: [uk, pl, ru, en]
+
+    Preorders:
+      description: |
+        Pre-orders (ADR 0006). A pickup time at least threshold_minutes ahead makes a pre-order; at most
+        max_days_ahead days ahead. BROADCAST_BEFORE — the search starts release_minutes_before the pickup.
+        RESERVATION — drivers see it at once and reserve it; the driver confirms "On my way" from
+        confirm_minutes_before the pickup, within confirm_window_minutes, or loses it; he may drop it himself
+        until driver_cancel_until_minutes_before the pickup, later only a dispatcher can.
+      type: object
+      additionalProperties: false
+      required: [threshold_minutes, max_days_ahead, dispatch, release_minutes_before, confirm_minutes_before,
+                 confirm_window_minutes, driver_cancel_until_minutes_before]
+      properties:
+        threshold_minutes:
+          type: integer
+          minimum: 15
+          maximum: 1440
+        max_days_ahead:
+          type: integer
+          minimum: 1
+          maximum: 30
+        dispatch:
+          type: string
+          enum: [RESERVATION, BROADCAST_BEFORE]
+        release_minutes_before:
+          type: integer
+          minimum: 5
+        confirm_minutes_before:
+          type: integer
+          minimum: 5
+        confirm_window_minutes:
+          type: integer
+          minimum: 1
+        driver_cancel_until_minutes_before:
+          type: integer
+          minimum: 5
+          maximum: 10080
