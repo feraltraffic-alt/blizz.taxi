@@ -38,9 +38,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class PlaceSearchApiTests {
 
-    /** Longitude 145…146: no other test city is there. */
-    private static final String AREA = "SRID=4326;MULTIPOLYGON(((145 -40,146 -40,146 -39,145 -39,145 -40)))";
-    private static final GeoPoint CENTRE = new GeoPoint(-39.5, 145.5);
+    /** Longitude 165…166: no other test city is there. */
+    private static final String AREA = "SRID=4326;MULTIPOLYGON(((165 -40,166 -40,166 -39,165 -39,165 -40)))";
+    private static final GeoPoint CENTRE = new GeoPoint(-39.5, 165.5);
 
     @Autowired SessionService auth;
     @Autowired AddressBook addresses;
@@ -70,7 +70,7 @@ class PlaceSearchApiTests {
                     Actor manager = staffActor("SUPER_ADMIN", new String[0]);
                     addresses.create(new AddressBook.Create(UUID.randomUUID(), manager, 0, new AddressBook.Data(id,
                             AddressBook.Kind.HOUSE, "Хрещатик 1", "uk", "Хрещатик", "1", null,
-                            new GeoPoint(-39.5, 145.5), "Біля арки", null), "Test own address"));
+                            new GeoPoint(-39.5, 165.5), "Біля арки", null), "Test own address"));
                     return id;
                 });
         UUID clientId = UUID.randomUUID();
@@ -87,7 +87,7 @@ class PlaceSearchApiTests {
     @Test
     @SuppressWarnings("unchecked")
     void historyComesFirstThenOwnAddressesThenTheProvider() throws Exception {
-        Map<String, Object> body = body(getAuth("/api/rider/v1/places?query=Хрещ&lat=-39.5&lon=145.5&limit=6",
+        Map<String, Object> body = body(getAuth("/api/rider/v1/places?query=Хрещ&lat=-39.5&lon=165.5&limit=6",
                 token(rider)));
         assertThat(body.get("provider")).isEqualTo("FAKE");
         List<Map<String, Object>> places = (List<Map<String, Object>>) body.get("places");
@@ -98,7 +98,7 @@ class PlaceSearchApiTests {
 
         // Without a query: the latest places of the history only, no provider call.
         List<Map<String, Object>> recent = (List<Map<String, Object>>) body(getAuth(
-                "/api/rider/v1/places?lat=-39.5&lon=145.5", token(rider))).get("places");
+                "/api/rider/v1/places?lat=-39.5&lon=165.5", token(rider))).get("places");
         assertThat(recent).extracting(p -> p.get("label")).containsExactly("Хрещатик 22", "Аеропорт", "Хрещатик 1",
                 "Вокзал");
         assertThat(recent).allSatisfy(p -> assertThat(p.get("source")).isEqualTo("HISTORY"));
@@ -115,13 +115,13 @@ class PlaceSearchApiTests {
                 .param("phone", "+48" + String.format("%09d", Math.floorMod(other.id().hashCode(), 1_000_000_000)))
                 .update();
         List<Map<String, Object>> places = (List<Map<String, Object>>) body(getAuth(
-                "/api/rider/v1/places?query=Хрещатик&lat=-39.5&lon=145.5", token(other))).get("places");
+                "/api/rider/v1/places?query=Хрещатик&lat=-39.5&lon=165.5", token(other))).get("places");
         assertThat(places).extracting(p -> p.get("source")).doesNotContain("HISTORY");
         assertThat(places.getFirst()).containsEntry("source", "OWN").containsEntry("label", "Хрещатик 1")
                 .containsEntry("instructions", "Біля арки");
 
         List<Map<String, Object>> failing = (List<Map<String, Object>>) body(getAuth(
-                "/api/rider/v1/places?query=fail&lat=-39.5&lon=145.5", token(other))).get("places");
+                "/api/rider/v1/places?query=fail&lat=-39.5&lon=165.5", token(other))).get("places");
         assertThat(failing).isEmpty();
         assertThat(getAuth("/api/rider/v1/places?query=x&lat=50&lon=10", token(other)).getResponse().getStatus())
                 .as("outside the service area").isEqualTo(422);
@@ -130,9 +130,9 @@ class PlaceSearchApiTests {
     @Test
     @SuppressWarnings("unchecked")
     void reverseFindsAnOwnAddressNearbyElseTheProvidersOne() throws Exception {
-        Map<String, Object> own = body(getAuth("/api/rider/v1/places/reverse?lat=-39.5003&lon=145.5", token(rider)));
+        Map<String, Object> own = body(getAuth("/api/rider/v1/places/reverse?lat=-39.5003&lon=165.5", token(rider)));
         assertThat(own).containsEntry("source", "OWN").containsEntry("label", "Хрещатик 1");
-        Map<String, Object> far = body(getAuth("/api/rider/v1/places/reverse?lat=-39.3&lon=145.2", token(rider)));
+        Map<String, Object> far = body(getAuth("/api/rider/v1/places/reverse?lat=-39.3&lon=165.2", token(rider)));
         assertThat(far).containsEntry("source", "FAKE").containsEntry("label", "Fake street 1");
     }
 
@@ -141,17 +141,17 @@ class PlaceSearchApiTests {
     void theOperatorGetsTheCallersHistoryAndNeedsTheRightForTheCity() throws Exception {
         String operator = staffToken(new String[]{Orders.CREATE_PERMISSION}, city);
         List<Map<String, Object>> places = (List<Map<String, Object>>) body(mvc.perform(
-                get("/api/operator/v1/places").param("query", "Аеро").param("lat", "-39.5").param("lon", "145.5")
+                get("/api/operator/v1/places").param("query", "Аеро").param("lat", "-39.5").param("lon", "165.5")
                         .param("caller_phone", phone).header(HttpHeaders.AUTHORIZATION, "Bearer " + operator))
                 .andReturn()).get("places");
         assertThat(places.getFirst()).containsEntry("source", "HISTORY").containsEntry("label", "Аеропорт");
 
         List<Map<String, Object>> stranger = (List<Map<String, Object>>) body(getAuth(
-                "/api/operator/v1/places?query=Аеро&lat=-39.5&lon=145.5", operator)).get("places");
+                "/api/operator/v1/places?query=Аеро&lat=-39.5&lon=165.5", operator)).get("places");
         assertThat(stranger).extracting(p -> p.get("source")).doesNotContain("HISTORY");
 
         String otherCity = staffToken(new String[]{Orders.CREATE_PERMISSION}, UUID.randomUUID());
-        assertThat(getAuth("/api/operator/v1/places?query=Аеро&lat=-39.5&lon=145.5", otherCity).getResponse()
+        assertThat(getAuth("/api/operator/v1/places?query=Аеро&lat=-39.5&lon=165.5", otherCity).getResponse()
                 .getStatus()).isEqualTo(403);
     }
 
@@ -164,8 +164,8 @@ class PlaceSearchApiTests {
                             vehicle_class, pickup, pickup_label, dropoff, dropoff_label, payment_method, status,
                             created_at, updated_at, version)
                         values (:id, 'APP', 'CLIENT', :payer, :payer, :city, 'STANDARD',
-                            ST_SetSRID(ST_MakePoint(145.5, -39.5), 4326), :pickup,
-                            ST_SetSRID(ST_MakePoint(145.6, -39.6), 4326), :dropoff, 'CASH', 'FULFILLED',
+                            ST_SetSRID(ST_MakePoint(165.5, -39.5), 4326), :pickup,
+                            ST_SetSRID(ST_MakePoint(165.6, -39.6), 4326), :dropoff, 'CASH', 'FULFILLED',
                             now() - make_interval(days => :days), now(), 1)""")
                 .param("id", UUID.randomUUID()).param("payer", payer).param("city", city)
                 .param("pickup", pickupLabel).param("dropoff", dropoffLabel).param("days", daysAgo).update();
