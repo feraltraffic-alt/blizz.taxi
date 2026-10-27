@@ -5,12 +5,15 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.geo.GeoZones;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
@@ -19,6 +22,7 @@ import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.SubjectType;
 import taxi.blizz.pricing.QuoteService;
 import taxi.blizz.pricing.RouteEstimator;
+import taxi.blizz.pricing.TariffService;
 import taxi.blizz.pricing.TariffService.Terms;
 import taxi.blizz.pricing.TariffService.WaitingRounding;
 import tools.jackson.databind.json.JsonMapper;
@@ -30,9 +34,11 @@ class JdbcQuoteService implements QuoteService {
     private final JsonMapper json;
     private final Clock clock;
     private final ObjectProvider<RouteEstimator> estimators;
+    private final GeoZones zones;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
-                     Clock clock, ObjectProvider<RouteEstimator> estimators) {
+                     Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones) {
+        this.zones = zones;
         this.jdbc = jdbc;
         this.commands = commands;
         this.json = json;
@@ -53,12 +59,18 @@ class JdbcQuoteService implements QuoteService {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
         }
         RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
+        // Where the trip is, for in-city / out-of-city rates and zone surcharges (owner decision 27.10.2026).
+        GeoZones.Split split = zones.splitByCityLimits(request.cityId(), request.pickup(), request.dropOff());
+        FareCalculator.Facts facts = new FareCalculator.Facts(
+                !zones.insideCityLimits(request.cityId(), request.pickup()), split.insideMetres(), split.outsideMetres(),
+                Set.copyOf(zones.zonesAt(request.cityId(), request.pickup())),
+                Set.copyOf(zones.zonesAt(request.cityId(), request.dropOff())));
         return commands.execute(new CommandKey(request.payer(), "quote.create", commandId), request, Quote.class, () -> {
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
             record Tariff(UUID id, String currency, Terms terms) {
             }
             Tariff tariff = jdbc.sql("""
-                    select t.* from tariff_version t join city on city.id = t.city_id
+                    select t.*, t.zone_surcharges::text as zone_surcharges from tariff_version t join city on city.id = t.city_id
                     join vehicle_class vc on vc.id = t.class_id and vc.city_id = t.city_id
                     where t.city_id = :city and t.class_id = :class and t.state = 'PUBLISHED'
                     and city.state = 'PUBLISHED' and vc.active and t.currency = city.currency
@@ -70,9 +82,12 @@ class JdbcQuoteService implements QuoteService {
                                     rs.getInt("free_waiting_minutes"), rs.getBigDecimal("waiting_per_minute_minor"),
                                     rs.getLong("cancellation_fee_minor"), rs.getBigDecimal("commission_rate"),
                                     rs.getInt("waiting_step_seconds"),
-                                    WaitingRounding.valueOf(rs.getString("waiting_rounding")))))
+                                    WaitingRounding.valueOf(rs.getString("waiting_rounding")),
+                                    rs.getLong("pickup_outside_minor"), rs.getBigDecimal("per_km_outside_minor"),
+                                    List.of(json.readValue(rs.getString("zone_surcharges"),
+                                            TariffService.ZoneSurcharge[].class)))))
                     .optional().orElseThrow(() -> error(ErrorCode.NOT_FOUND, "No effective published tariff"));
-            FareCalculator.Result fare = FareCalculator.calculate(tariff.terms(), route);
+            FareCalculator.Result fare = FareCalculator.calculate(tariff.terms(), route, facts);
             Quote quote = new Quote(UUID.randomUUID(), request, tariff.id(), 1, tariff.terms(), route,
                     fare.breakdown(), fare.amountMinor(), tariff.currency(), now, now.plusSeconds(300),
                     request.fingerprint());

@@ -43,9 +43,10 @@ public final class TestQuotes {
                                                         pickup_minor, per_km_minor, per_minute_minor, minimum_minor,
                                                         free_waiting_minutes, waiting_per_minute_minor,
                                                         cancellation_fee_minor, commission_rate, waiting_step_seconds,
-                                                        waiting_rounding, created_at, updated_at)
+                                                        waiting_rounding, pickup_outside_minor,
+                                                        per_km_outside_minor, zone_surcharges, created_at, updated_at)
                             select :id, :city, :class, currency, now() - interval '1 day', 'PUBLISHED',
-                                   3000, 1200, 200, 6000, 3, 200, 0, 0.15, 60, 'UP', now(), now()
+                                   3000, 1200, 200, 6000, 3, 200, 0, 0.15, 60, 'UP', 3000, 1200, '[]', now(), now()
                             from city where id = :city""")
                     .param("id", UUID.randomUUID()).param("city", cityId).param("class", classId).update();
         }

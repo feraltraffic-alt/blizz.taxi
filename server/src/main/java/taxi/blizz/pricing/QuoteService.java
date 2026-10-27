@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.platform.Actor;
@@ -38,8 +39,22 @@ public interface QuoteService {
     record Component(BigDecimal numerator, int denominator) {
     }
 
+    /**
+     * {@code distance} is the in-city part, {@code distanceOutside} the out-of-city part; {@code demandFactor}
+     * includes the zone coefficients; {@code approvedFeesMinor} is the sum of the fixed zone surcharges, listed
+     * in {@code zoneFees} (REQ-PRC-03: round_half_up(max(minimum, pickup + distance + duration) × factor) + fees).
+     */
     record Breakdown(long pickupMinor, Component distance, Component duration, long minimumMinor,
-                     BigDecimal demandFactor, long approvedFeesMinor) {
+                     BigDecimal demandFactor, long approvedFeesMinor, Component distanceOutside, boolean pickupOutside,
+                     List<ZoneFee> zoneFees) {
+
+        public Breakdown {
+            zoneFees = zoneFees == null ? List.of() : List.copyOf(zoneFees);
+        }
+    }
+
+    /** One applied zone surcharge: a fixed amount or a coefficient. */
+    record ZoneFee(UUID zoneId, String mode, long amountMinor, BigDecimal coefficient) {
     }
 
     record Quote(UUID id, Request request, UUID tariffVersionId, int pricingPolicyVersion,
