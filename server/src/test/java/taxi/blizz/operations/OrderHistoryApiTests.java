@@ -38,8 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class OrderHistoryApiTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.5, 120.5);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 120.55);
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, 60.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 60.55);
     static final GeoPoint OTHER_PICKUP = new GeoPoint(-39.5, 171.5);
     static final GeoPoint OTHER_DROPOFF = new GeoPoint(-39.45, 171.55);
 
@@ -63,7 +63,7 @@ class OrderHistoryApiTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         rides = new TestRides(jdbc, orders, dispatch, trips, workSessions, auth, quoteService);
-        city = rides.city("history-" + UUID.randomUUID().toString().substring(0, 8), "UAH", 120.0);
+        city = rides.city("test-order-history", "UAH", 60.0);
     }
 
     @Test
@@ -144,7 +144,7 @@ class OrderHistoryApiTests {
 
         assertThat(array(getAuth("/api/rider/v1/orders", token(stranger)))).isEmpty();
 
-        UUID otherCity = rides.city("history-other-" + UUID.randomUUID().toString().substring(0, 8), "UAH", 171.0);
+        UUID otherCity = rides.city("test-order-history-other", "UAH", 171.0);
         TestRides.Driver otherDriver = rides.driverNear(OTHER_PICKUP);
         TestRides.Ride otherRide = rides.started(otherCity, otherDriver, OTHER_PICKUP, OTHER_DROPOFF);
         TripView otherCompleted = rides.complete(otherRide, true);
