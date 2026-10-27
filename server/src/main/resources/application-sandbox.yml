@@ -1,0 +1,26 @@
+# Sandbox: a throw-away instance for trying the system by hand (deploy/sandbox, .github/workflows/sandbox.yml).
+# Seeds fictional data and shows SMS codes at /sandbox/v1/otp. Never use these values or this profile for real data.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/blizz}
+    username: ${DB_USER:blizz}
+    password: ${DB_PASSWORD:blizz-sandbox}
+blizz:
+  otp:
+    secret: ${OTP_SECRET:sandbox-only-otp-secret-not-for-real-use-0123}
+    # Scripts and testers share one address; the SMS budget does not matter here.
+    max-per-phone-per-hour: 100
+    max-per-ip-per-hour: 5000
+    max-per-device-per-hour: 500
+  auth:
+    instance-id: ${INSTANCE_ID:00000000-0000-4000-8000-00000000005a}
+    access-token-secret: ${ACCESS_TOKEN_SECRET:sandbox-only-access-token-secret-not-for-real-use}
+  staff:
+    # The first super admin; the password must be changed at the first sign-in.
+    bootstrap-login: ${STAFF_BOOTSTRAP_LOGIN:admin}
+    bootstrap-password: ${STAFF_BOOTSTRAP_PASSWORD:Sandbox-Admin-2026}
+  preorders:
+    poll-interval: PT5S
+logging:
+  level:
+    taxi.blizz: INFO

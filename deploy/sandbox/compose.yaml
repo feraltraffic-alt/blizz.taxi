@@ -1,0 +1,35 @@
+# Sandbox on your own computer: the whole system with fictional data, for trying it by hand.
+#   docker compose -f deploy/sandbox/compose.yaml up --build
+# API at http://localhost:8080, SMS codes at http://localhost:8080/sandbox/v1/otp?phone=+380501234567
+# Not a production profile: fixed secrets, readable SMS codes.
+name: blizz-taxi-sandbox
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: blizz
+      POSTGRES_USER: blizz
+      POSTGRES_PASSWORD: blizz-sandbox
+    volumes:
+      - sandbox-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blizz -d blizz"]
+      interval: 5s
+      retries: 20
+
+  server:
+    build: ../../server
+    environment:
+      SPRING_PROFILES_ACTIVE: sandbox
+      DB_URL: jdbc:postgresql://postgres:5432/blizz
+      DB_USER: blizz
+      DB_PASSWORD: blizz-sandbox
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  sandbox-data:
