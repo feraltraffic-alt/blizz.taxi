@@ -30,6 +30,6 @@ class StaffPermissionCatalogTests {
                 StaffPermissions.REPORTS_VIEW,
                 ServiceSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION,
                 RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION, OperatorBonuses.MANAGE_PERMISSION,
-                ClientDeletionReview.DELETE_PERMISSION));
+                ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION));
     }
 }

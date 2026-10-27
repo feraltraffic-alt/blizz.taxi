@@ -35,6 +35,7 @@ public final class StaffPermissions {
             new Permission("wallets.manage", "Finance", "Riders' bonus accounts: view and top up"),
             new Permission("promotions.manage", "Finance", "Promotions for riders: discounts and bonuses"),
             new Permission("support.manage", "Support", "Support cases and problem queues"),
+            new Permission("clients.manage", "Support", "Riders: find, see the card, block and unblock"),
             new Permission("clients.delete", "Clients", "Riders' deletion requests: check, complete or reject"),
             new Permission("operator-bonuses.manage", "Operators", "Operator bonus settings, balances and history"),
             new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),

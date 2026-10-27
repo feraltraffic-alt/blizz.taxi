@@ -1398,7 +1398,13 @@ components:
         session_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
+          description: ACTIVE, BLOCKED (may follow a trip, cannot order) or DELETION_PENDING.
           type: string
+        blocked_until:
+          description: When a block ends; null without an end or when not blocked. Riders only.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
 
     RiderAddress:
       type: object

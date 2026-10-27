@@ -1737,6 +1737,145 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/clients:
+    get:
+      operationId: searchClients
+      summary: Find riders
+      description: >-
+        By at least 4 digits of the phone or 2 letters of the name, newest first; anonymized riders never appear.
+        Requires clients.manage.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./clients.yaml#/components/schemas/ClientList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/clients/{client_id}:
+    get:
+      operationId: getClientCard
+      summary: The rider's card
+      description: The account, orders in progress and the latest, bonuses, debt and support cases. Requires clients.manage.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./clients.yaml#/components/schemas/ClientCard"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/clients/{client_id}/block:
+    post:
+      operationId: blockClient
+      summary: Block a rider
+      description: >-
+        ACTIVE → BLOCKED with a reason and an optional end; the rider cannot order but may follow a trip in progress. Audited.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./clients.yaml#/components/schemas/BlockClient"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./clients.yaml#/components/schemas/Client"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/clients/{client_id}/unblock:
+    post:
+      operationId: unblockClient
+      summary: Unblock a rider
+      description: >-
+        BLOCKED → ACTIVE; a debt or a dispute stays. Audited.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./clients.yaml#/components/schemas/UnblockClient"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./clients.yaml#/components/schemas/Client"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity

@@ -18,7 +18,9 @@ class MeController {
         this.jdbc = jdbc;
     }
 
-    record Me(String subjectType, UUID subjectId, UUID sessionId, String accountState) {
+    /** {@code blockedUntil}: a blocked rider's block end, null when it has none or the rider is not blocked. */
+    record Me(String subjectType, UUID subjectId, UUID sessionId, String accountState,
+              java.time.OffsetDateTime blockedUntil) {
     }
 
     @GetMapping("/api/rider/v1/me")
@@ -37,6 +39,10 @@ class MeController {
                 .query(String.class)
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.UNAUTHENTICATED, "Account not found"));
-        return new Me(claims.actor().type().name(), claims.actor().id(), claims.sessionId(), state);
+        java.time.OffsetDateTime blockedUntil = "client".equals(table) && "BLOCKED".equals(state)
+                ? jdbc.sql("select blocked_until from client where id = :id").param("id", claims.actor().id())
+                        .query(java.time.OffsetDateTime.class).optional().orElse(null)
+                : null;
+        return new Me(claims.actor().type().name(), claims.actor().id(), claims.sessionId(), state, blockedUntil);
     }
 }
