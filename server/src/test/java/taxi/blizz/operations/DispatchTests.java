@@ -456,11 +456,16 @@ class DispatchTests {
     // ------------------------------------------------------------ order rules
 
     @Test
-    void oneActiveOrderPerPayer() {
+    void aPayerMayHoldSeveralOrders() {
+        // ADR 0012 Q-03: no longer one order per payer; the limit itself is tested in MultipleOrdersTests.
         Actor payer = client();
-        order(payer);
+        OrderView first = order(payer);
+        OrderView second = order(payer);
 
-        assertCode(() -> order(payer), ErrorCode.ORDER_ALREADY_ACTIVE);
+        assertThat(second.id()).isNotEqualTo(first.id());
+        for (OrderView order : List.of(first, second)) {
+            orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
+        }
     }
 
     @Test

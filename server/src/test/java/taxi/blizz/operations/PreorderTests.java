@@ -144,11 +144,13 @@ class PreorderTests {
         assertCode(() -> new TestQuotes(jdbc, quotes).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF,
                 Instant.now().plus(rules().maxDaysAhead() + 1L, ChronoUnit.DAYS)), ErrorCode.VALIDATION_FAILED);
 
+        // Pre-orders count toward the payer's limit of active orders (ADR 0012 Q-03).
         Actor busy = rides.client();
-        for (int i = 0; i < 5; i++) {
+        int limit = settings.current().settings().orders().activePerPayer();
+        for (int i = 0; i < limit; i++) {
             order(busy, pickupAt.plus(i, ChronoUnit.HOURS));
         }
-        assertCode(() -> order(busy, pickupAt.plus(6, ChronoUnit.HOURS)), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> order(busy, pickupAt.plus(limit + 1L, ChronoUnit.HOURS)), ErrorCode.ACTIVE_ORDER_LIMIT);
 
         OrderView first = orders.history(busy, null, 10).stream()
                 .filter(item -> "SCHEDULED".equals(item.status())).findFirst()
