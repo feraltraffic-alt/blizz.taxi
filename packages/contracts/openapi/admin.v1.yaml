@@ -67,7 +67,8 @@ paths:
     get:
       operationId: listPermissions
       summary: Functions that can be ticked
-      description: The checkbox list for admins and operators.
+      description: |
+        The checkbox list for admins and operators.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -85,7 +86,8 @@ paths:
     get:
       operationId: listStaff
       summary: All staff
-      description: Super admin only.
+      description: |
+        Super admin only.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -137,7 +139,8 @@ paths:
     get:
       operationId: getStaff
       summary: One staff member
-      description: A super admin reads anyone; others only themselves.
+      description: |
+        A super admin reads anyone; others only themselves.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -164,7 +167,8 @@ paths:
     post:
       operationId: updateStaff
       summary: Change names, contacts, role, functions or cities
-      description: Super admin only. The last active super admin cannot lose the role.
+      description: |
+        Super admin only. The last active super admin cannot lose the role.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -203,7 +207,8 @@ paths:
     post:
       operationId: suspendStaff
       summary: Suspend
-      description: Signs the member out everywhere. The last active super admin cannot be suspended.
+      description: |
+        Signs the member out everywhere. The last active super admin cannot be suspended.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -242,7 +247,8 @@ paths:
     post:
       operationId: restoreStaff
       summary: Restore a suspended member
-      description: Super admin only.
+      description: |
+        Super admin only.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -281,7 +287,8 @@ paths:
     post:
       operationId: resetStaffPassword
       summary: Set a temporary password
-      description: Unlocks the account and signs it out everywhere; the member must change the password at the next sign-in.
+      description: |
+        Unlocks the account and signs it out everywhere; the member must change the password at the next sign-in.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -403,11 +410,17 @@ paths:
           description: The file.
           content:
             image/jpeg:
-              schema: {type: string, format: binary}
+              schema:
+                type: string
+                format: binary
             image/png:
-              schema: {type: string, format: binary}
+              schema:
+                type: string
+                format: binary
             application/pdf:
-              schema: {type: string, format: binary}
+              schema:
+                type: string
+                format: binary
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
@@ -588,7 +601,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/cities/{city_id}/publish:
     post:
       operationId: publishCity
@@ -627,7 +639,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/cities/{city_id}/archive:
     post:
       operationId: archiveCity
@@ -666,7 +677,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/zones/{zone_id}/publish:
     post:
       operationId: publishZone
@@ -705,7 +715,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/zones/{zone_id}/archive:
     post:
       operationId: archiveZone
@@ -744,7 +753,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/cities/{city_id}/zones:
     get:
       operationId: listZones
@@ -805,7 +813,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/cities/{city_id}/addresses:
     get:
       operationId: listOwnAddresses
@@ -821,13 +828,20 @@ paths:
             $ref: "./common.yaml#/components/schemas/Uuid"
         - name: text
           in: query
-          schema: {type: string}
+          schema:
+            type: string
         - name: include_hidden
           in: query
-          schema: {type: boolean, default: false}
+          schema:
+            type: boolean
+            default: false
         - name: limit
           in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
       responses:
         "200":
           description: OK
@@ -839,7 +853,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
-
   /api/admin/v1/addresses:
     post:
       operationId: createOwnAddress
@@ -873,7 +886,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/addresses/{address_id}:
     get:
       operationId: getOwnAddress
@@ -899,7 +911,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
-
   /api/admin/v1/addresses/{address_id}/update:
     post:
       operationId: updateOwnAddress
@@ -938,7 +949,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/addresses/{address_id}/aliases:
     post:
       operationId: addOwnAddressAlias
@@ -977,7 +987,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/addresses/{address_id}/hide:
     post:
       operationId: hideOwnAddress
@@ -1016,7 +1025,6 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
   /api/admin/v1/addresses/{address_id}/restore:
     post:
       operationId: restoreOwnAddress
@@ -1118,7 +1126,11 @@ paths:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
         - name: limit
           in: query
-          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         "200":
           description: Newest first.
@@ -1153,7 +1165,9 @@ paths:
     post:
       operationId: createCancelReason
       summary: Add a reason to one side's list
-      description: A label in the service's default language is required. A driver's reason needs driver_outcome, others must not have it. The code is unique within the side and never changes. Audited.
+      description: >-
+        A label in the service's default language is required. A driver's reason needs driver_outcome, others must
+        not have it. The code is unique within the side and never changes. Audited.
       tags: [Settings]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1229,6 +1243,7 @@ paths:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
         - name: role
           in: query
+          description: Staff role at the moment of the action.
           schema:
             $ref: "#/components/schemas/Role"
         - name: staff_id
@@ -1245,14 +1260,21 @@ paths:
             $ref: "./common.yaml#/components/schemas/Timestamp"
         - name: before
           in: query
+          description: Next page — occurred_at of the last entry of the previous page.
           schema:
             $ref: "./common.yaml#/components/schemas/Timestamp"
         - name: limit
           in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
         - name: kind
           in: query
-          schema: {type: string, enum: [REQUEST, SIGN_IN]}
+          schema:
+            type: string
+            enum: [REQUEST, SIGN_IN]
       responses:
         "200":
           description: OK
@@ -1271,37 +1293,54 @@ paths:
     get:
       operationId: listStaffChanges
       summary: What staff changed, by role
-      description: The audit log of staff changes with before/after, reason and the role at that moment, newest first. Needs audit.view.
+      description: |
+        The audit log of staff changes (orders, drivers, cities, addresses, tariffs, finance, staff, chat reads)
+        with before/after, reason and the role at that moment, newest first. Needs audit.view.
       tags: [Logs]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
         - name: role
           in: query
-          schema: {$ref: "#/components/schemas/Role"}
+          description: Staff role at the moment of the action.
+          schema:
+            $ref: "#/components/schemas/Role"
         - name: staff_id
           in: query
-          schema: {$ref: "./common.yaml#/components/schemas/Uuid"}
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
         - name: from
           in: query
-          schema: {$ref: "./common.yaml#/components/schemas/Timestamp"}
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
         - name: to
           in: query
-          schema: {$ref: "./common.yaml#/components/schemas/Timestamp"}
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
         - name: before
           in: query
-          schema: {$ref: "./common.yaml#/components/schemas/Timestamp"}
+          description: Next page — occurred_at of the last entry of the previous page.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
         - name: limit
           in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
         - name: action
           in: query
-          schema: {type: string}
+          schema:
+            type: string
+            examples: [order.cancel]
         - name: resource_type
           in: query
-          schema: {type: string}
+          schema:
+            type: string
         - name: resource_id
           in: query
-          schema: {type: string}
+          schema:
+            type: string
       responses:
         "200":
           description: OK
@@ -1315,6 +1354,315 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/support/cases:
+    get:
+      operationId: listAdminSupportQueue
+      summary: Support queue
+      description: Urgent first, then newest. Needs support.manage for the city. Problem queues (CASH_DISPUTE, TRIP_REVIEW) come from events.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          description: The queue of one city; without it, the cases without a city.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: state
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/State"
+        - name: priority
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/Priority"
+        - name: category
+          in: query
+          schema:
+            $ref: "./support.yaml#/components/schemas/Category"
+        - name: assigned_staff_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: unassigned
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: before
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/CaseList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+  /api/admin/v1/support/cases/{case_id}:
+    get:
+      operationId: getAdminSupportCase
+      summary: A case with INTERNAL comments
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/support/cases/{case_id}/assign:
+    post:
+      operationId: assignAdminSupportCase
+      summary: Assign or return to the queue
+      description: OPEN → IN_PROGRESS on assignment.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Assign"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/priority:
+    post:
+      operationId: priorityAdminSupportCase
+      summary: Change the priority
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Prioritize"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/comments:
+    post:
+      operationId: commentAdminSupportCase
+      summary: Write to the requester or an internal comment
+      description: INTERNAL comments are never shown to the requester.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Comment"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/resolve:
+    post:
+      operationId: resolveAdminSupportCase
+      summary: Resolve with a resolution
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/reopen:
+    post:
+      operationId: reopenAdminSupportCase
+      summary: Reopen a resolved case
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/support/cases/{case_id}/close:
+    post:
+      operationId: closeAdminSupportCase
+      summary: Close
+      description: A reason is required; it becomes the resolution when there is none.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Decision"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
   /api/admin/v1/support/uploads:
     post:
@@ -1381,315 +1729,6 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
-
-  /api/admin/v1/support/cases:
-    get:
-      operationId: listAdminSupportQueue
-      summary: Support queue
-      description: Urgent first, then newest. Needs support.manage for the city. Problem queues (CASH_DISPUTE, TRIP_REVIEW) come from events.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: city_id
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-        - name: state
-          in: query
-          schema:
-            $ref: "./support.yaml#/components/schemas/State"
-        - name: priority
-          in: query
-          schema:
-            $ref: "./support.yaml#/components/schemas/Priority"
-        - name: category
-          in: query
-          schema:
-            $ref: "./support.yaml#/components/schemas/Category"
-        - name: assigned_staff_id
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-        - name: unassigned
-          in: query
-          schema: {type: boolean, default: false}
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/CaseList"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-
-  /api/admin/v1/support/cases/{case_id}:
-    get:
-      operationId: getAdminSupportCase
-      summary: A case with INTERNAL comments
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-
-  /api/admin/v1/support/cases/{case_id}/assign:
-    post:
-      operationId: assignAdminSupportCase
-      summary: Assign or return to the queue
-      description: OPEN → IN_PROGRESS on assignment.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Assign"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/admin/v1/support/cases/{case_id}/priority:
-    post:
-      operationId: priorityAdminSupportCase
-      summary: Change the priority
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Prioritize"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/admin/v1/support/cases/{case_id}/comments:
-    post:
-      operationId: commentAdminSupportCase
-      summary: Write to the requester or an internal comment
-      description: INTERNAL comments are never shown to the requester.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Comment"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/admin/v1/support/cases/{case_id}/resolve:
-    post:
-      operationId: resolveAdminSupportCase
-      summary: Resolve with a resolution
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Decision"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/admin/v1/support/cases/{case_id}/reopen:
-    post:
-      operationId: reopenAdminSupportCase
-      summary: Reopen a resolved case
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Decision"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/admin/v1/support/cases/{case_id}/close:
-    post:
-      operationId: closeAdminSupportCase
-      summary: Close
-      description: A reason is required; it becomes the resolution when there is none.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Decision"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
   /api/admin/v1/support/cases/{case_id}/attachments/{file_id}:
     get:
@@ -1859,14 +1898,26 @@ components:
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
-        code: {type: string}
-        name: {type: string}
-        currency: {type: string, pattern: "^[A-Z]{3}$"}
-        timezone: {type: string, examples: [Europe/Warsaw]}
-        priority: {type: integer}
-        state: {type: string, enum: [DRAFT, PUBLISHED, ARCHIVED]}
-        version: {type: integer, format: int64}
-        polygon: {$ref: "#/components/schemas/GeoJsonPolygon"}
+        code:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+          examples: [Europe/Warsaw]
+        priority:
+          type: integer
+        state:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
 
     CityList:
       type: object
@@ -1875,34 +1926,54 @@ components:
       properties:
         cities:
           type: array
-          items: {$ref: "#/components/schemas/City"}
+          items:
+            $ref: "#/components/schemas/City"
 
     CreateCity:
       type: object
       additionalProperties: false
       required: [command_id, code, name, currency, timezone, polygon, priority, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        code: {type: string}
-        name: {type: string}
-        currency: {type: string, pattern: "^[A-Z]{3}$"}
-        timezone: {type: string}
-        polygon: {$ref: "#/components/schemas/GeoJsonPolygon"}
-        priority: {type: integer}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+        priority:
+          description: Higher wins where cities overlap.
+          type: integer
+        reason:
+          type: string
 
     Zone:
       type: object
       additionalProperties: false
       required: [id, city_id, type, priority, state, version, polygon]
       properties:
-        id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        city_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        type: {type: string}
-        priority: {type: integer}
-        state: {type: string, enum: [DRAFT, PUBLISHED, ARCHIVED]}
-        version: {type: integer, format: int64}
-        polygon: {$ref: "#/components/schemas/GeoJsonPolygon"}
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          type: string
+        priority:
+          type: integer
+        state:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
 
     ZoneList:
       type: object
@@ -1911,56 +1982,88 @@ components:
       properties:
         zones:
           type: array
-          items: {$ref: "#/components/schemas/Zone"}
+          items:
+            $ref: "#/components/schemas/Zone"
 
     CreateZone:
       type: object
       additionalProperties: false
       required: [command_id, type, polygon, priority, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        type: {type: string}
-        polygon: {$ref: "#/components/schemas/GeoJsonPolygon"}
-        priority: {type: integer}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          type: string
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+        priority:
+          type: integer
+        reason:
+          type: string
 
     AddressData:
       type: object
       additionalProperties: false
       required: [city_id, kind, label, language, pickup]
       properties:
-        city_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        kind: {type: string, enum: [HOUSE, PLACE, ENTRANCE]}
-        label: {type: string}
-        language: {type: string, examples: [uk]}
-        street: {type: [string, "null"]}
-        house_raw: {type: [string, "null"], examples: ["2А"]}
-        building: {type: [string, "null"]}
-        pickup: {$ref: "./common.yaml#/components/schemas/GeoPoint"}
-        instructions: {type: [string, "null"]}
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [HOUSE, PLACE, ENTRANCE]
+        label:
+          type: string
+        language:
+          type: string
+          examples: [uk]
+        street:
+          type: [string, "null"]
+        house_raw:
+          type: [string, "null"]
+          examples: ["2А"]
+        building:
+          type: [string, "null"]
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        instructions:
+          type: [string, "null"]
         override:
+          description: Opaque link to a provider object this own address replaces (Q-08); no provider content.
           type: [object, "null"]
           properties:
-            provider: {type: string}
-            object_id: {type: string}
+            provider:
+              type: string
+            object_id:
+              type: string
 
     OwnAddress:
       type: object
       required: [id, data, source, visibility, version, aliases]
       properties:
-        id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        data: {$ref: "#/components/schemas/AddressData"}
-        house: {type: object}
-        source: {type: string}
-        visibility: {type: string, enum: [ACTIVE, HIDDEN]}
-        version: {type: integer, format: int64}
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        data:
+          $ref: "#/components/schemas/AddressData"
+        house:
+          type: object
+          description: Parsed house number, suffix and building.
+        source:
+          type: string
+        visibility:
+          type: string
+          enum: [ACTIVE, HIDDEN]
+        version:
+          type: integer
+          format: int64
         aliases:
           type: array
           items:
             type: object
             properties:
-              label: {type: string}
-              language: {type: string}
+              label:
+                type: string
+              language:
+                type: string
 
     AddressList:
       type: object
@@ -1969,53 +2072,77 @@ components:
       properties:
         addresses:
           type: array
-          items: {$ref: "#/components/schemas/OwnAddress"}
+          items:
+            $ref: "#/components/schemas/OwnAddress"
 
     CreateAddress:
       type: object
       additionalProperties: false
       required: [command_id, data, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        data: {$ref: "#/components/schemas/AddressData"}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        data:
+          $ref: "#/components/schemas/AddressData"
+        reason:
+          type: string
 
     UpdateAddress:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, data, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        data: {$ref: "#/components/schemas/AddressData"}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        data:
+          $ref: "#/components/schemas/AddressData"
+        reason:
+          type: string
 
     AddAlias:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, alias, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
         alias:
           type: object
           required: [label, language]
           properties:
-            label: {type: string}
-            language: {type: string}
-        reason: {type: string}
+            label:
+              type: string
+            language:
+              type: string
+        reason:
+          type: string
 
     ReviewItem:
       type: object
       additionalProperties: false
       required: [driver_id, status, since, version]
       properties:
-        driver_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        name: {type: [string, "null"]}
-        phone: {type: [string, "null"]}
-        status: {type: string}
-        since: {$ref: "./common.yaml#/components/schemas/Timestamp"}
-        version: {type: integer, format: int64}
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        phone:
+          type: [string, "null"]
+        status:
+          type: string
+        since:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        version:
+          type: integer
+          format: int64
 
     ReviewQueue:
       type: object
@@ -2024,78 +2151,130 @@ components:
       properties:
         drivers:
           type: array
-          items: {$ref: "#/components/schemas/ReviewItem"}
+          items:
+            $ref: "#/components/schemas/ReviewItem"
 
     ReviewEvent:
       type: object
       additionalProperties: false
       required: [from, to, actor_type, reason, at]
       properties:
-        from: {type: string}
-        to: {type: string}
-        actor_type: {type: string}
-        actor_id: {type: [string, "null"], format: uuid}
-        reason: {type: string}
-        at: {$ref: "./common.yaml#/components/schemas/Timestamp"}
+        from:
+          type: string
+        to:
+          type: string
+        actor_type:
+          type: string
+        actor_id:
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: string
+        at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     ReviewCase:
       type: object
       additionalProperties: false
       required: [profile, history]
       properties:
-        profile: {$ref: "./driver.v1.yaml#/components/schemas/DriverProfile"}
-        phone: {type: [string, "null"]}
+        profile:
+          $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        phone:
+          type: [string, "null"]
         history:
           type: array
-          items: {$ref: "#/components/schemas/ReviewEvent"}
+          items:
+            $ref: "#/components/schemas/ReviewEvent"
 
     ReviewDecisionCommand:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, decision, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        decision: {type: string, enum: [APPROVE, REQUEST_CHANGES, REJECT]}
-        reason: {type: string, maxLength: 1000}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        decision:
+          type: string
+          enum: [APPROVE, REQUEST_CHANGES, REJECT]
+        reason:
+          type: string
+          maxLength: 1000
         vehicle_classes:
+          description: Classes granted to the submitted vehicles on APPROVE, e.g. STANDARD.
           type: array
-          items: {type: string}
+          items:
+            type: string
         rejected_documents:
           type: array
-          items: {$ref: "./common.yaml#/components/schemas/Uuid"}
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
 
     ReviewChange:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        reason: {type: string, maxLength: 1000}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          maxLength: 1000
 
     ActivityEntry:
       type: object
       additionalProperties: false
       required: [id, occurred_at, kind, audience]
       properties:
-        id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        occurred_at: {$ref: "./common.yaml#/components/schemas/Timestamp"}
-        kind: {type: string, enum: [REQUEST, SIGN_IN]}
-        staff_id: {type: [string, "null"], format: uuid}
-        staff_login: {type: [string, "null"]}
-        role: {type: [string, "null"], enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]}
-        audience: {type: string, enum: [admin, operator]}
-        method: {type: [string, "null"]}
-        path: {type: [string, "null"]}
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        occurred_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        kind:
+          type: string
+          enum: [REQUEST, SIGN_IN]
+        staff_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null for a request without a valid staff token or a sign-in with an unknown login.
+        staff_login:
+          type: [string, "null"]
+        role:
+          type: [string, "null"]
+          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+        audience:
+          type: string
+          enum: [admin, operator]
+        method:
+          type: [string, "null"]
+        path:
+          description: Path template, e.g. /api/admin/v1/staff/{staff_id}/suspend.
+          type: [string, "null"]
         resource_ids:
+          description: "Values of the path template, e.g. staff_id."
           type: object
-          additionalProperties: {type: string}
-        status: {type: [integer, "null"]}
-        outcome: {type: [string, "null"]}
-        duration_ms: {type: [integer, "null"]}
-        client_ip: {type: [string, "null"]}
-        correlation_id: {type: [string, "null"], format: uuid}
+          additionalProperties:
+            type: string
+        status:
+          type: [integer, "null"]
+        outcome:
+          description: OK / HTTP_4xx for requests; SUCCESS, BAD_CREDENTIALS, LOCKED, NOT_ACTIVE for sign-ins.
+          type: [string, "null"]
+        duration_ms:
+          type: [integer, "null"]
+        client_ip:
+          type: [string, "null"]
+        correlation_id:
+          type: [string, "null"]
+          format: uuid
 
     ActivityPage:
       type: object
@@ -2104,25 +2283,43 @@ components:
       properties:
         entries:
           type: array
-          items: {$ref: "#/components/schemas/ActivityEntry"}
+          items:
+            $ref: "#/components/schemas/ActivityEntry"
 
     Change:
       type: object
       additionalProperties: false
       required: [id, occurred_at, actor_type, action, resource_type, correlation_id]
       properties:
-        id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        occurred_at: {$ref: "./common.yaml#/components/schemas/Timestamp"}
-        actor_type: {type: string}
-        actor_id: {type: [string, "null"], format: uuid}
-        actor_role: {type: [string, "null"], enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]}
-        action: {type: string}
-        resource_type: {type: string}
-        resource_id: {type: [string, "null"]}
-        reason: {type: [string, "null"]}
-        before: {type: [string, "null"]}
-        after: {type: [string, "null"]}
-        correlation_id: {type: string, format: uuid}
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        occurred_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        actor_type:
+          type: string
+        actor_id:
+          type: [string, "null"]
+          format: uuid
+        actor_role:
+          type: [string, "null"]
+          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: [string, "null"]
+        reason:
+          type: [string, "null"]
+        before:
+          description: JSON snapshot before the change, as text.
+          type: [string, "null"]
+        after:
+          description: JSON snapshot after the change, as text.
+          type: [string, "null"]
+        correlation_id:
+          type: string
+          format: uuid
 
     ChangesPage:
       type: object
@@ -2131,48 +2328,77 @@ components:
       properties:
         changes:
           type: array
-          items: {$ref: "#/components/schemas/Change"}
+          items:
+            $ref: "#/components/schemas/Change"
 
     Role:
       type: string
       enum: [SUPER_ADMIN, ADMIN, OPERATOR]
 
     Contacts:
+      description: At least one of phone, e-mail, Telegram.
       type: object
       additionalProperties: false
       properties:
-        phone: {type: [string, "null"]}
-        email: {type: [string, "null"], format: email}
-        telegram: {type: [string, "null"], pattern: "^@?[A-Za-z0-9_]{5,32}$"}
+        phone:
+          type: [string, "null"]
+          description: E.164 after normalization.
+        email:
+          type: [string, "null"]
+          format: email
+        telegram:
+          type: [string, "null"]
+          description: Telegram username, stored with a leading @.
+          pattern: "^@?[A-Za-z0-9_]{5,32}$"
 
     Profile:
       type: object
       additionalProperties: false
       required: [first_name, last_name, contacts, role]
       properties:
-        first_name: {type: string, minLength: 1}
-        last_name: {type: string, minLength: 1}
-        contacts: {$ref: "#/components/schemas/Contacts"}
-        role: {$ref: "#/components/schemas/Role"}
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        contacts:
+          $ref: "#/components/schemas/Contacts"
+        role:
+          $ref: "#/components/schemas/Role"
         permissions:
+          description: Ticked function codes from listPermissions; ignored (empty) for a super admin.
           type: array
-          items: {type: string}
-        all_cities: {type: boolean}
+          items:
+            type: string
+        all_cities:
+          description: Every city, including ones added later; always true for a super admin.
+          type: boolean
         city_ids:
+          description: The cities the member works in when all_cities is false.
           type: array
-          items: {$ref: "./common.yaml#/components/schemas/Uuid"}
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
 
     StaffMember:
       type: object
       additionalProperties: false
       required: [id, login, profile, state, password_change_required, version]
       properties:
-        id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        login: {type: string}
-        profile: {$ref: "#/components/schemas/Profile"}
-        state: {type: string, enum: [INVITED, ACTIVE, SUSPENDED, DISABLED]}
-        password_change_required: {type: boolean}
-        version: {type: integer, format: int64}
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        login:
+          type: string
+        profile:
+          $ref: "#/components/schemas/Profile"
+        state:
+          type: string
+          enum: [INVITED, ACTIVE, SUSPENDED, DISABLED]
+        password_change_required:
+          type: boolean
+        version:
+          type: integer
+          format: int64
 
     StaffList:
       type: object
@@ -2181,34 +2407,48 @@ components:
       properties:
         staff:
           type: array
-          items: {$ref: "#/components/schemas/StaffMember"}
+          items:
+            $ref: "#/components/schemas/StaffMember"
 
     Me:
       type: object
       additionalProperties: false
       required: [member, effective_permissions]
       properties:
-        member: {$ref: "#/components/schemas/StaffMember"}
+        member:
+          $ref: "#/components/schemas/StaffMember"
         effective_permissions:
           type: array
-          items: {type: string}
+          items:
+            type: string
 
     ChangePassword:
       type: object
       additionalProperties: false
       required: [current_password, new_password]
       properties:
-        current_password: {type: string, format: password, maxLength: 128}
-        new_password: {type: string, format: password, maxLength: 128}
+        current_password:
+          type: string
+          format: password
+          maxLength: 128
+        new_password:
+          description: 12 to 128 characters by default, not equal to the login.
+          type: string
+          format: password
+          maxLength: 128
 
     Permission:
       type: object
       additionalProperties: false
       required: [code, group, description]
       properties:
-        code: {type: string, examples: [orders.create]}
-        group: {type: string}
-        description: {type: string}
+        code:
+          type: string
+          examples: [orders.create]
+        group:
+          type: string
+        description:
+          type: string
 
     PermissionCatalog:
       type: object
@@ -2217,44 +2457,72 @@ components:
       properties:
         permissions:
           type: array
-          items: {$ref: "#/components/schemas/Permission"}
+          items:
+            $ref: "#/components/schemas/Permission"
 
     CreateStaff:
       type: object
       additionalProperties: false
       required: [command_id, login, initial_password, profile, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        login: {type: string}
-        initial_password: {type: string, format: password, maxLength: 128}
-        profile: {$ref: "#/components/schemas/Profile"}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        login:
+          description: 3 to 64 letters, digits, dots, dashes or underscores; case-insensitive.
+          type: string
+        initial_password:
+          type: string
+          format: password
+          maxLength: 128
+        profile:
+          $ref: "#/components/schemas/Profile"
+        reason:
+          type: string
 
     UpdateStaff:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, profile, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        profile: {$ref: "#/components/schemas/Profile"}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        profile:
+          $ref: "#/components/schemas/Profile"
+        reason:
+          type: string
 
     ChangeStaff:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
 
     ResetPassword:
       type: object
       additionalProperties: false
       required: [command_id, expected_version, temporary_password, reason]
       properties:
-        command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
-        expected_version: {type: integer, format: int64, minimum: 0}
-        temporary_password: {type: string, format: password, maxLength: 128}
-        reason: {type: string}
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        temporary_password:
+          type: string
+          format: password
+          maxLength: 128
+        reason:
+          type: string

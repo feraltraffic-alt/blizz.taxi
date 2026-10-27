@@ -253,8 +253,8 @@ paths:
       description: |
         Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
         the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED. The
-        price is the quote's, never the client's. A repeat of the same command returns the same order. One
-        active order per payer → 409 ORDER_ALREADY_ACTIVE.
+        price is the quote's, never the client's. A repeat of the same command returns the same order. Card
+        payment is not available yet (S-09). One active order per payer → 409 ORDER_ALREADY_ACTIVE.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -266,7 +266,7 @@ paths:
               $ref: "#/components/schemas/CreateOrder"
       responses:
         "201":
-          description: The order.
+          description: The order, already searching for a driver.
           content:
             application/json:
               schema:
@@ -585,6 +585,129 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/rider/v1/support/cases:
+    get:
+      operationId: listRiderSupportCases
+      summary: My support cases
+      description: Newest first.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: before
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/CaseList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+    post:
+      operationId: openRiderSupportCase
+      summary: Open a support case
+      description: About one of my orders or in general; the first message is PUBLIC.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/OpenCase"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/rider/v1/support/cases/{case_id}:
+    get:
+      operationId: getRiderSupportCase
+      summary: One of my cases
+      description: PUBLIC messages only.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/rider/v1/support/cases/{case_id}/messages:
+    post:
+      operationId: replyRiderSupportCase
+      summary: Answer support
+      description: A case waiting for me goes back to work; a resolved one is reopened; a closed one → 409.
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/Reply"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/Case"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/rider/v1/support/uploads:
     post:
       operationId: openRiderSupportAttachmentUpload
@@ -648,131 +771,6 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
-
-  /api/rider/v1/support/cases:
-    get:
-      operationId: listRiderSupportCases
-      summary: My support cases
-      description: Newest first.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/CaseList"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-    post:
-      operationId: openRiderSupportCase
-      summary: Open a support case
-      description: About one of my orders or in general; the first message is PUBLIC.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/OpenCase"
-      responses:
-        "201":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
-
-  /api/rider/v1/support/cases/{case_id}:
-    get:
-      operationId: getRiderSupportCase
-      summary: One of my cases
-      description: PUBLIC messages only.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-
-  /api/rider/v1/support/cases/{case_id}/messages:
-    post:
-      operationId: replyRiderSupportCase
-      summary: Answer support
-      description: A case waiting for me goes back to work; a resolved one is reopened; a closed one → 409.
-      tags: [Support]
-      parameters:
-        - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: case_id
-          in: path
-          required: true
-          schema:
-            $ref: "./common.yaml#/components/schemas/Uuid"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "./support.yaml#/components/schemas/Reply"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "./support.yaml#/components/schemas/Case"
-        "400":
-          $ref: "./common.yaml#/components/responses/BadRequest"
-        "401":
-          $ref: "./common.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "./common.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "./common.yaml#/components/responses/NotFound"
-        "409":
-          $ref: "./common.yaml#/components/responses/Conflict"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
   /api/rider/v1/support/cases/{case_id}/attachments/{file_id}:
     get:

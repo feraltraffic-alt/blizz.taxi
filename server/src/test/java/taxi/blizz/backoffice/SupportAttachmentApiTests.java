@@ -88,11 +88,24 @@ class SupportAttachmentApiTests {
                 .accessToken();
 
         UUID riderFile = uploadOverHttp("/api/rider/v1/support/uploads", riderToken, "image/png", PNG);
-        Map<String, Object> opened = jsonBody(postJson("/api/rider/v1/support/cases", riderToken, Map.of(
-                "command_id", UUID.randomUUID(), "category", "APP_PROBLEM", "order_id", ride.order().id(),
-                "subject", "Screenshot", "message", "See the screenshot", "attachment_ids", List.of(riderFile))), 201);
+        UUID openCommand = UUID.randomUUID();
+        Map<String, Object> openBody = Map.of("command_id", openCommand, "category", "APP_PROBLEM",
+                "order_id", ride.order().id(), "subject", "Screenshot", "message", "See the screenshot",
+                "attachment_ids", List.of(riderFile));
+        Map<String, Object> opened = jsonBody(postJson("/api/rider/v1/support/cases", riderToken, openBody), 201);
         UUID caseId = UUID.fromString((String) opened.get("id"));
         assertThat(opened.toString()).contains(riderFile.toString()).contains("image/png");
+
+        // A repeat is the same case; a repeat with other files must not add them to the old message.
+        assertThat(jsonBody(postJson("/api/rider/v1/support/cases", riderToken, openBody), 201).get("id"))
+                .isEqualTo(opened.get("id"));
+        UUID lateFile = uploadOverHttp("/api/rider/v1/support/uploads", riderToken, "image/png", PNG);
+        Map<String, Object> sneaky = new java.util.HashMap<>(openBody);
+        sneaky.put("attachment_ids", List.of(riderFile, lateFile));
+        assertThat(postJson("/api/rider/v1/support/cases", riderToken, sneaky).getResponse().getStatus())
+                .isEqualTo(409);
+        assertThat(jdbc.sql("select count(*) from support_message_attachment where file_id = :f")
+                .param("f", lateFile).query(Long.class).single()).isZero();
 
         MvcResult staffDownload = getAuth("/api/operator/v1/support/cases/" + caseId + "/attachments/" + riderFile,
                 operatorToken);

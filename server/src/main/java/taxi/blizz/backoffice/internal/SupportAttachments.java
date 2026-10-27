@@ -1,5 +1,6 @@
 package taxi.blizz.backoffice.internal;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -17,8 +18,10 @@ import taxi.blizz.files.FilePurpose;
 import taxi.blizz.files.FileService;
 import taxi.blizz.files.StoredFile;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.IdempotentCommands;
 
 @Service
 class SupportAttachments {
@@ -40,39 +43,56 @@ class SupportAttachments {
     private final SupportCases cases;
     private final FileService files;
     private final AuditLog audit;
+    private final IdempotentCommands commands;
+    private final Clock clock;
 
-    SupportAttachments(JdbcClient jdbc, SupportCases cases, FileService files, AuditLog audit) {
+    SupportAttachments(JdbcClient jdbc, SupportCases cases, FileService files, AuditLog audit,
+                       IdempotentCommands commands, Clock clock) {
         this.jdbc = jdbc;
         this.cases = cases;
         this.files = files;
         this.audit = audit;
+        this.commands = commands;
+        this.clock = clock;
+    }
+
+    /**
+     * The attachments are part of the command: a repeat with other files is a conflict, not a way to add files to an
+     * old message. The support command inside keeps its own receipt for the text.
+     */
+    record AttachedCommand(String operation, UUID caseId, List<UUID> attachmentIds) {
+    }
+
+    private Case once(Actor actor, String operation, UUID commandId, UUID caseId, List<UUID> attachmentIds,
+                      java.util.function.Supplier<SupportCases.Case> command) {
+        List<UUID> ids = attachmentIds == null ? List.of() : attachmentIds;
+        return commands.execute(new CommandKey(actor, "support.attachments." + operation, commandId),
+                new AttachedCommand(operation, caseId, ids), Case.class, () -> {
+                    List<StoredFile> attachments = validate(actor, ids);
+                    SupportCases.Case result = command.get();
+                    attach(lastMessage(result), attachments);
+                    return view(result);
+                });
     }
 
     @Transactional
     Case open(Actor requester, UUID commandId, SupportCases.Category category, UUID orderId, String subject,
               String message, List<UUID> attachmentIds) {
-        List<StoredFile> attachments = validate(requester, attachmentIds);
-        SupportCases.Case result = cases.open(requester, commandId, category, orderId, subject, message);
-        attach(lastMessage(result), attachments);
-        return view(result);
+        return once(requester, "open", commandId, null, attachmentIds,
+                () -> cases.open(requester, commandId, category, orderId, subject, message));
     }
 
     @Transactional
     Case reply(Actor requester, UUID commandId, UUID caseId, String message, List<UUID> attachmentIds) {
-        List<StoredFile> attachments = validate(requester, attachmentIds);
-        SupportCases.Case result = cases.reply(requester, commandId, caseId, message);
-        attach(lastMessage(result), attachments);
-        return view(result);
+        return once(requester, "reply", commandId, caseId, attachmentIds,
+                () -> cases.reply(requester, commandId, caseId, message));
     }
 
     @Transactional
     Case comment(Actor staff, UUID commandId, UUID caseId, long expectedVersion, SupportCases.Visibility visibility,
                  String body, boolean waitForRequester, List<UUID> attachmentIds) {
-        List<StoredFile> attachments = validate(staff, attachmentIds);
-        SupportCases.Case result = cases.comment(staff, commandId, caseId, expectedVersion, visibility, body,
-                waitForRequester);
-        attach(lastMessage(result), attachments);
-        return view(result);
+        return once(staff, "comment", commandId, caseId, attachmentIds,
+                () -> cases.comment(staff, commandId, caseId, expectedVersion, visibility, body, waitForRequester));
     }
 
     @Transactional(readOnly = true)
@@ -124,7 +144,7 @@ class SupportAttachments {
         if (attachments.isEmpty()) {
             return;
         }
-        OffsetDateTime now = OffsetDateTime.now().withOffsetSameInstant(java.time.ZoneOffset.UTC);
+        OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(java.time.ZoneOffset.UTC);
         for (StoredFile file : attachments) {
             UUID existing = jdbc.sql("select message_id from support_message_attachment where file_id = :file")
                     .param("file", file.fileId()).query(UUID.class).optional().orElse(null);
