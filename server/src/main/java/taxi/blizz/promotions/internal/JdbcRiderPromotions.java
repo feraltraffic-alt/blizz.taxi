@@ -33,7 +33,8 @@ class JdbcRiderPromotions implements RiderPromotions {
     private static final String COLUMNS = """
             id, name, kind, value_type, value, currency, city_id, vehicle_class, every_nth_trip, days_of_week,
             time_from, time_to, pickup_zone_id, dropoff_zone_id, starts_at, ends_at, state, version, created_by,
-            created_at, updated_at""";
+            created_at, updated_at
+            """;
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
