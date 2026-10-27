@@ -7,7 +7,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.SessionService;
 
-/** {@code /ws/v1/rider} and {@code /ws/v1/driver}: one live channel per app audience. */
+/** {@code /ws/v1/rider}, {@code /ws/v1/driver} and {@code /ws/v1/operator}: one live channel per audience. */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSocket
 class LiveConfiguration implements WebSocketConfigurer {
@@ -26,6 +26,9 @@ class LiveConfiguration implements WebSocketConfigurer {
         registry.addHandler(handler, "/ws/v1/rider").addInterceptors(new LiveHandshake(auth, ApiAudience.RIDER))
                 .setAllowedOriginPatterns("*");
         registry.addHandler(handler, "/ws/v1/driver").addInterceptors(new LiveHandshake(auth, ApiAudience.DRIVER))
+                .setAllowedOriginPatterns("*");
+        // The operator workstation: card-pop of incoming calls (issue #64).
+        registry.addHandler(handler, "/ws/v1/operator").addInterceptors(new LiveHandshake(auth, ApiAudience.OPERATOR))
                 .setAllowedOriginPatterns("*");
     }
 }
