@@ -25,16 +25,18 @@ import taxi.blizz.identity.AccessClaims;
 class SupportController {
 
     private final SupportCases cases;
+    private final SupportAttachments attachments;
 
-    SupportController(SupportCases cases) {
+    SupportController(SupportCases cases, SupportAttachments attachments) {
         this.cases = cases;
+        this.attachments = attachments;
     }
 
     record OpenCase(@NotNull UUID commandId, @NotNull SupportCases.Category category, UUID orderId,
-                    @NotBlank String subject, @NotBlank String message) {
+                    @NotBlank String subject, @NotBlank String message, List<UUID> attachmentIds) {
     }
 
-    record Reply(@NotNull UUID commandId, @NotBlank String message) {
+    record Reply(@NotNull UUID commandId, @NotBlank String message, List<UUID> attachmentIds) {
     }
 
     record Cases(List<Case> cases) {
@@ -48,7 +50,8 @@ class SupportController {
     }
 
     record Comment(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
-                   @NotNull SupportCases.Visibility visibility, @NotBlank String body, boolean waitForRequester) {
+                   @NotNull SupportCases.Visibility visibility, @NotBlank String body, boolean waitForRequester,
+                   List<UUID> attachmentIds) {
     }
 
     record Decision(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String text) {
@@ -58,9 +61,9 @@ class SupportController {
 
     @PostMapping({"/api/rider/v1/support/cases", "/api/driver/v1/support/cases"})
     @ResponseStatus(HttpStatus.CREATED)
-    Case open(AccessClaims claims, @Valid @RequestBody OpenCase body) {
-        return cases.open(claims.actor(), body.commandId(), body.category(), body.orderId(), body.subject(),
-                body.message());
+    SupportAttachments.Case open(AccessClaims claims, @Valid @RequestBody OpenCase body) {
+        return attachments.open(claims.actor(), body.commandId(), body.category(), body.orderId(), body.subject(),
+                body.message(), body.attachmentIds());
     }
 
     @GetMapping({"/api/rider/v1/support/cases", "/api/driver/v1/support/cases"})
@@ -71,13 +74,13 @@ class SupportController {
     }
 
     @GetMapping({"/api/rider/v1/support/cases/{caseId}", "/api/driver/v1/support/cases/{caseId}"})
-    Case mineOne(AccessClaims claims, @PathVariable UUID caseId) {
-        return cases.mineOne(claims.actor(), caseId);
+    SupportAttachments.Case mineOne(AccessClaims claims, @PathVariable UUID caseId) {
+        return attachments.view(cases.mineOne(claims.actor(), caseId));
     }
 
     @PostMapping({"/api/rider/v1/support/cases/{caseId}/messages", "/api/driver/v1/support/cases/{caseId}/messages"})
-    Case reply(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Reply body) {
-        return cases.reply(claims.actor(), body.commandId(), caseId, body.message());
+    SupportAttachments.Case reply(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Reply body) {
+        return attachments.reply(claims.actor(), body.commandId(), caseId, body.message(), body.attachmentIds());
     }
 
     // ---------------------------------------------------------------- staff
@@ -96,40 +99,45 @@ class SupportController {
     }
 
     @GetMapping({"/api/admin/v1/support/cases/{caseId}", "/api/operator/v1/support/cases/{caseId}"})
-    Case get(AccessClaims claims, @PathVariable UUID caseId) {
-        return cases.get(claims.actor(), caseId);
+    SupportAttachments.Case get(AccessClaims claims, @PathVariable UUID caseId) {
+        return attachments.view(cases.get(claims.actor(), caseId));
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/assign", "/api/operator/v1/support/cases/{caseId}/assign"})
-    Case assign(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Assign body) {
-        return cases.assign(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.assigneeId(),
-                body.reason());
+    SupportAttachments.Case assign(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Assign body) {
+        return attachments.view(cases.assign(claims.actor(), body.commandId(), caseId, body.expectedVersion(),
+                body.assigneeId(), body.reason()));
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/priority", "/api/operator/v1/support/cases/{caseId}/priority"})
-    Case prioritize(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Prioritize body) {
-        return cases.prioritize(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.priority(),
-                body.reason());
+    SupportAttachments.Case prioritize(AccessClaims claims, @PathVariable UUID caseId,
+                                       @Valid @RequestBody Prioritize body) {
+        return attachments.view(cases.prioritize(claims.actor(), body.commandId(), caseId, body.expectedVersion(),
+                body.priority(), body.reason()));
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/comments", "/api/operator/v1/support/cases/{caseId}/comments"})
-    Case comment(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Comment body) {
-        return cases.comment(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.visibility(),
-                body.body(), body.waitForRequester());
+    SupportAttachments.Case comment(AccessClaims claims, @PathVariable UUID caseId,
+                                    @Valid @RequestBody Comment body) {
+        return attachments.comment(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.visibility(),
+                body.body(), body.waitForRequester(), body.attachmentIds());
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/resolve", "/api/operator/v1/support/cases/{caseId}/resolve"})
-    Case resolve(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
-        return cases.resolve(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.text());
+    SupportAttachments.Case resolve(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
+        return attachments.view(cases.resolve(claims.actor(), body.commandId(), caseId, body.expectedVersion(),
+                body.text()));
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/reopen", "/api/operator/v1/support/cases/{caseId}/reopen"})
-    Case reopen(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
-        return cases.reopen(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.text());
+    SupportAttachments.Case reopen(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
+        return attachments.view(cases.reopen(claims.actor(), body.commandId(), caseId, body.expectedVersion(),
+                body.text()));
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/close", "/api/operator/v1/support/cases/{caseId}/close"})
-    Case close(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
-        return cases.close(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.text());
+    SupportAttachments.Case close(AccessClaims claims, @PathVariable UUID caseId, @Valid @RequestBody Decision body) {
+        return attachments.view(cases.close(claims.actor(), body.commandId(), caseId, body.expectedVersion(),
+                body.text()));
     }
 }

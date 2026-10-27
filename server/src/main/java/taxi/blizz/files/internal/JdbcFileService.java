@@ -69,7 +69,7 @@ class JdbcFileService implements FileService {
     public UploadSession openUpload(Actor owner, UUID commandId, FilePurpose purpose, String contentType,
                                     long sizeBytes) {
         String type = normalize(contentType);
-        if (purpose == null || !properties.allowedTypes().contains(type)) {
+        if (purpose == null || !allowedFor(purpose, type)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Unsupported file type");
         }
         if (sizeBytes <= 0 || sizeBytes > properties.maxBytes()) {
@@ -199,13 +199,15 @@ class JdbcFileService implements FileService {
     }
 
     @Override
-    public void requireAttachable(Actor owner, UUID fileId, FilePurpose purpose) {
-        record Row(String ownerType, UUID ownerId, String purpose, String state) {
+    public StoredFile requireAttachable(Actor owner, UUID fileId, FilePurpose purpose) {
+        record Row(String ownerType, UUID ownerId, String purpose, String state, String type, Long size) {
         }
-        Row row = jdbc.sql("select owner_type, owner_id, purpose, state from file_object where id = :id")
+        Row row = jdbc.sql("""
+                        select owner_type, owner_id, purpose, state, detected_content_type, size_bytes
+                        from file_object where id = :id""")
                 .param("id", fileId)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
-                        rs.getString(4)))
+                        rs.getString(4), rs.getString(5), (Long) rs.getObject(6)))
                 .optional()
                 .filter(r -> r.ownerType().equals(owner.type().name()) && r.ownerId().equals(owner.id()))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
@@ -215,6 +217,7 @@ class JdbcFileService implements FileService {
         if (!FileState.SAFE.name().equals(row.state())) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "The file has not passed the checks");
         }
+        return new StoredFile(fileId, FileState.SAFE, row.type(), row.size() == null ? 0 : row.size(), null);
     }
 
     @Override
@@ -230,11 +233,37 @@ class JdbcFileService implements FileService {
                 .optional()
                 .filter(r -> r.ownerType().equals(requester.type().name()) && r.ownerId().equals(requester.id()))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
+        return content(fileId, row.type(), row.size(), row.key());
+    }
+
+    @Override
+    public FileContent openAttached(UUID fileId, FilePurpose purpose) {
+        record Row(String type, long size, String key) {
+        }
+        Row row = jdbc.sql("""
+                        select detected_content_type, size_bytes, storage_key
+                        from file_object where id = :id and purpose = :purpose and state = 'SAFE'""")
+                .param("id", fileId)
+                .param("purpose", purpose.name())
+                .query((rs, i) -> new Row(rs.getString(1), rs.getLong(2), rs.getString(3)))
+                .optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
+        return content(fileId, row.type(), row.size(), row.key());
+    }
+
+    private FileContent content(UUID fileId, String type, long size, String key) {
         try {
-            return new FileContent(fileId, row.type(), row.size(), storage.open(row.key()));
+            return new FileContent(fileId, type, size, storage.open(key));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private boolean allowedFor(FilePurpose purpose, String type) {
+        if (purpose == FilePurpose.SUPPORT_ATTACHMENT && "image/webp".equals(type)) {
+            return true;
+        }
+        return properties.allowedTypes().contains(type);
     }
 
     private static String uploadPath(Actor owner, UUID fileId) {
