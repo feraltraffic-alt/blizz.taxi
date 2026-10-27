@@ -682,6 +682,38 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/trips:
+    get:
+      operationId: listDriverTripHistory
+      summary: Own completed and aborted trips
+      description: Completed and aborted trips of the signed-in driver, newest first. Use created_at of the last item as before.
+      tags: [Trip]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: before
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Trip history.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items:
+                  $ref: "#/components/schemas/TripHistoryItem"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/driver/v1/trips/current:
     get:
       operationId: getCurrentTrip
@@ -1650,6 +1682,38 @@ components:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         cash_received:
           type: boolean
+
+    TripHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, order_short_number, created_at, pickup_label, dropoff_label,
+                 final_price_minor, currency, payment_method, phase]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_short_number:
+          description: For support conversations; not a secret (REQ-DATA-03).
+          type: integer
+          format: int64
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        pickup_label:
+          type: string
+        dropoff_label:
+          type: string
+        final_price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+        phase:
+          type: string
+          enum: [COMPLETED, ABORTED]
 
     Trip:
       type: object
