@@ -967,6 +967,34 @@ paths:
         "404": {$ref: "./common.yaml#/components/responses/NotFound"}
         "409": {$ref: "./common.yaml#/components/responses/Conflict"}
 
+  /api/rider/v1/safety-contacts:
+    get:
+      operationId: getRiderSafetyContacts
+      summary: Support and emergency contacts for the safety button
+      description: >-
+        For city_id, or without it for the city of the rider's active order; neither → 400. A city without
+        configured contacts gets 112 and no support phone. Labels in the rider's language. Nothing is sent to
+        emergency services automatically (REQ-RID-09).
+      tags: [Safety]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: false
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./safety.yaml#/components/schemas/SafetyContacts"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/rider/v1/wallet:
     get:
       operationId: getRiderWallet
@@ -993,6 +1021,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
 tags:
+  - name: Safety
+    description: The safety button — support and emergency contacts (REQ-RID-09)
   - name: Wallet
     description: The bonus account (ADR 0009)
   - name: Push
