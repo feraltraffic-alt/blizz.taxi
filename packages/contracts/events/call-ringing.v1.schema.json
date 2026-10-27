@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/call-ringing.v1.schema.json",
+  "title": "CallRinging v1 payload",
+  "description": "Published by telephony when an incoming call to a service number starts ringing (REQ-OPS-01/08, issue #64). Aggregate Call. Only identifiers: notification reads the call and the caller's open orders and pushes the card-pop to the operators of the city on /ws/v1/operator, so no phone or name sits in the outbox.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["call_id", "city_id"],
+  "properties": {
+    "call_id": { "type": "string", "format": "uuid" },
+    "city_id": { "type": ["string", "null"], "format": "uuid" }
+  },
+  "examples": [
+    { "call_id": "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d", "city_id": "5a000000-0000-4000-8000-000000000001" }
+  ]
+}

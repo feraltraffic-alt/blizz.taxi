@@ -3132,6 +3132,64 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/call-lines:
+    get:
+      operationId: listCallLines
+      summary: The service numbers of the call centre and their cities
+      description: An incoming call to a number goes to the operators of its city (card-pop). Needs settings.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/CallLineList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/call-lines/{number}:
+    post:
+      operationId: changeCallLine
+      summary: Set or remove the city of a service number
+      description: >-
+        number in E.164 (URL-encode the +). city_id null removes the number. Needs settings.manage for the new city
+        and for the old one; audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: string
+            examples: ["+380441234567"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./calls.yaml#/components/schemas/ChangeCallLine"
+      responses:
+        "200":
+          description: The line as it is now; for a removal the last version with city_id of the removed line.
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/CallLine"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Clients
     description: Riders' accounts — deletion requests (REQ-RID-10)
