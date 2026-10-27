@@ -45,6 +45,9 @@ blizz:
     # The erasure journal (REQ-PRV-05, ADR 0013): a directory on durable storage of its own, NOT backed up together
     # with the database, so deletions made after a backup are applied again when that backup is restored.
     erasure-journal-dir: ${ERASURE_JOURNAL_DIR:${java.io.tmpdir}/blizz-erasure-journal}
+  files:
+    # Call recordings on a disk of their own (own backup and access rights); empty: below the files directory.
+    call-recordings-dir: ${CALL_RECORDINGS_DIR:}
   secrets:
     # Encrypts the keys entered in the admin panel; 32 bytes in Base64 (openssl rand -base64 32). Keep it with the
     # backups of the database: without it the stored keys cannot be read.

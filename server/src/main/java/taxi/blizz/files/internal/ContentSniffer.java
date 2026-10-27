@@ -15,6 +15,7 @@ final class ContentSniffer {
     private static final byte[] PDF = {'%', 'P', 'D', 'F', '-'};
     private static final byte[] RIFF = {'R', 'I', 'F', 'F'};
     private static final byte[] WEBP = {'W', 'E', 'B', 'P'};
+    private static final byte[] WAVE = {'W', 'A', 'V', 'E'};
 
     private ContentSniffer() {
     }
@@ -37,6 +38,10 @@ final class ContentSniffer {
         if (read >= 12 && startsWith(head, read, RIFF)
                 && Arrays.equals(Arrays.copyOfRange(head, 8, 12), WEBP)) {
             return Optional.of("image/webp");
+        }
+        if (read >= 12 && startsWith(head, read, RIFF)
+                && Arrays.equals(Arrays.copyOfRange(head, 8, 12), WAVE)) {
+            return Optional.of("audio/wav");
         }
         return Optional.empty();
     }

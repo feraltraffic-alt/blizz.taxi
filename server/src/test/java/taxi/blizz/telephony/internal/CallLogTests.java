@@ -345,12 +345,12 @@ class CallLogTests {
         assertThat(pops(elsewhereInbox, call(known).id())).as("another city").isEmpty();
 
         // The call log follows the same rule.
-        assertThat(calls.recent(mine, null, 100)).extracting(Calls.Call::id)
+        assertThat(calls.recent(mine, null, null, 100)).extracting(Calls.Call::id)
                 .contains(call(known).id(), call(unknown).id());
-        assertThat(calls.recent(elsewhere, null, 100)).extracting(Calls.Call::cityId).doesNotContain(cityId);
-        assertThat(calls.recent(mine, Calls.State.ENDED, 100)).extracting(Calls.Call::id)
+        assertThat(calls.recent(elsewhere, null, null, 100)).extracting(Calls.Call::cityId).doesNotContain(cityId);
+        assertThat(calls.recent(mine, Calls.State.ENDED, null, 100)).extracting(Calls.Call::id)
                 .doesNotContain(call(known).id());
-        assertCode(() -> calls.recent(withoutTheRight, null, 10), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> calls.recent(withoutTheRight, null, null, 10), ErrorCode.ACCESS_DENIED);
         assertCode(() -> calls.answer(elsewhere, UUID.randomUUID(), call(known).id()), ErrorCode.ACCESS_DENIED);
 
         // The right is taken away during the shift: the next call does not pop for him.
@@ -420,7 +420,7 @@ class CallLogTests {
         Actor anna = callOperator(cityId);
         // A server that listens to a real Asterisk which is not there: it keeps retrying in the background.
         TelephonyProperties live = new TelephonyProperties("LIVE", "https://turbosms.test", Duration.ofSeconds(30),
-                true, Duration.ofHours(4), false);
+                true, Duration.ofHours(4), false, false, Duration.ofHours(1), 268_435_456L);
         AriEventStream stream = new AriEventStream(new UnreachableAsterisk(), live, new AriCallEvents(log, json));
         long started = System.nanoTime();
         stream.start();
