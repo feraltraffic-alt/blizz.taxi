@@ -97,8 +97,14 @@ public interface Orders {
     /** For live updates (section 20); empty when the order does not exist. */
     java.util.Optional<Participants> participants(UUID orderId);
 
-    /** The payer's order that is not yet finished, if any. */
+    /**
+     * The payer's most recent order that is not yet finished, if any (an order for now before an order for later);
+     * kept for the clients that know one active order. A rider may now hold several: {@link #current}.
+     */
     Optional<OrderView> active(UUID payerClientId);
+
+    /** Every order of the payer not in a final state, pre-orders included, newest first (ADR 0012 Q-03). */
+    List<OrderView> current(UUID payerClientId);
 
     /** Order creation facts exposed to other modules without leaking the operations tables (ADR 0004). */
     record Origin(UUID orderId, OrderChannel channel, SubjectType createdByType, UUID createdById,

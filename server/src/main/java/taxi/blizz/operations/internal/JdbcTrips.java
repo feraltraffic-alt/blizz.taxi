@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.configuration.CancelReasons;
+import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.operations.PaymentMethod;
 import taxi.blizz.operations.TripView;
@@ -31,6 +32,7 @@ import taxi.blizz.pricing.FinalFares;
 class JdbcTrips implements Trips {
 
     private final JdbcClient jdbc;
+    private final ServiceSettings settings;
     private final IdempotentCommands commands;
     private final OrderCore core;
     private final DispatchEngine engine;
@@ -40,7 +42,9 @@ class JdbcTrips implements Trips {
     private final CancelReasons reasons;
 
     JdbcTrips(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
-              DispatchProperties properties, PresenceProperties presence, FinalFares fares, CancelReasons reasons) {
+              DispatchProperties properties, PresenceProperties presence, FinalFares fares, CancelReasons reasons,
+              ServiceSettings settings) {
+        this.settings = settings;
         this.reasons = reasons;
         this.fares = fares;
         this.jdbc = jdbc;
@@ -442,8 +446,11 @@ class JdbcTrips implements Trips {
                         select t.id, t.order_id, t.assignment_id, t.phase, t.version, ST_Y(o.pickup) as plat,
                                ST_X(o.pickup) as plon, o.pickup_label, ST_Y(o.dropoff) as dlat, ST_X(o.dropoff) as dlon,
                                o.dropoff_label, o.payment_method, o.price_minor, o.currency, t.arrived_at, t.started_at,
-                               t.completed_at, t.needs_review, o.wallet_minor, o.discount_minor
-                        from trip t join ride_order o on o.id = t.order_id where t.id = :id""")
+                               t.completed_at, t.needs_review, o.wallet_minor, o.discount_minor,
+                               c.name as contact_name, c.phone as contact_phone
+                        from trip t join ride_order o on o.id = t.order_id
+                        left join order_contact c on c.order_id = o.id
+                        where t.id = :id""")
                 .param("id", tripId)
                 .query((rs, i) -> new TripView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
                         rs.getObject("assignment_id", UUID.class), rs.getString("phase"), rs.getLong("version"),
@@ -453,8 +460,19 @@ class JdbcTrips implements Trips {
                         rs.getString("currency"), rs.getObject("arrived_at", OffsetDateTime.class),
                         rs.getObject("started_at", OffsetDateTime.class),
                         rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review"),
-                        rs.getLong("wallet_minor"), rs.getLong("discount_minor")))
+                        rs.getLong("wallet_minor"), rs.getLong("discount_minor"),
+                        recipient(rs.getString("contact_name"), rs.getString("contact_phone"),
+                                rs.getObject("completed_at", OffsetDateTime.class))))
                 .single();
+    }
+
+    /** Shown while the trip is on; the phone only when the call mode lets the driver dial it directly. */
+    private TripView.Recipient recipient(String name, String phone, OffsetDateTime completedAt) {
+        if (phone == null || completedAt != null) {
+            return null;
+        }
+        boolean direct = settings.current().settings().calls().mode() == ServiceSettings.CallMode.DIRECT;
+        return new TripView.Recipient(name, direct ? phone : null);
     }
 
     private static String blankToNull(String value) {

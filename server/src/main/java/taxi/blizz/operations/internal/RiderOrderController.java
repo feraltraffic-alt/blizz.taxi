@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.operations.CallerContact;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.OrderChannel;
 import taxi.blizz.operations.OrderView;
@@ -49,7 +51,14 @@ class RiderOrderController {
                          @NotNull GeoPoint pickup, @Size(max = 300) String pickupLabel,
                          @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                          @NotNull PaymentMethod paymentMethod, OrderChannel channel, java.time.Instant pickupAt,
-                         @Min(0) Long walletMinor) {
+                         @Min(0) Long walletMinor, @Valid Recipient recipient) {
+    }
+
+    /** The person the taxi is for, when it is not the rider (ADR 0012 Q-03); the rider still pays. */
+    record Recipient(@Size(max = 120) String name, @NotBlank String phone) {
+    }
+
+    record CurrentOrders(List<OrderView> orders) {
     }
 
     @GetMapping
@@ -64,8 +73,22 @@ class RiderOrderController {
     OrderView create(AccessClaims claims, @Valid @RequestBody CreateRequest body) {
         return orders.create(claims.actor(), body.commandId(), new CreateOrder(claims.actor().id(),
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
-                body.paymentMethod(), body.quoteId(), body.channel(), null, null, body.pickupAt(), false,
-                body.walletMinor()));
+                body.paymentMethod(), body.quoteId(), body.channel(), null, recipient(body.recipient()),
+                body.pickupAt(), false, body.walletMinor()));
+    }
+
+    private static CallerContact recipient(Recipient recipient) {
+        if (recipient == null) {
+            return null;
+        }
+        String name = recipient.name() == null || recipient.name().isBlank() ? null : recipient.name().strip();
+        return new CallerContact(name, PhoneNumber.parse(recipient.phone()).e164());
+    }
+
+    /** Every order of the rider not yet finished, pre-orders included, newest first (ADR 0012 Q-03). */
+    @GetMapping("/current")
+    CurrentOrders current(AccessClaims claims) {
+        return new CurrentOrders(orders.current(claims.actor().id()));
     }
 
     @GetMapping("/active")

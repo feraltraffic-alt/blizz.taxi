@@ -3011,6 +3011,19 @@ components:
               maximum: 720
               default: 24
               description: Hours after trip completion during which the rider may leave a tip (ADR 0012).
+        orders:
+          type: object
+          additionalProperties: false
+          required: [active_per_payer]
+          properties:
+            active_per_payer:
+              type: integer
+              minimum: 1
+              maximum: 10
+              default: 3
+              description: >-
+                How many orders not in a final state (pre-orders included) one paying rider may have at once
+                (active_orders_per_payer, ADR 0012 Q-03); one more is refused with 409 ACTIVE_ORDER_LIMIT.
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

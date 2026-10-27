@@ -205,6 +205,14 @@ class ClientDeletionTests {
                 .param("id", ordering.id()).update();
         assertThat(request(ordering).blockers().activeOrderId()).isEqualTo(order.id());
         assertCode(() -> review.complete(staff, UUID.randomUUID(), ordering.id(), "Done"), ErrorCode.STATE_CONFLICT);
+        // A pre-order still waiting for its time blocks as well.
+        jdbc.sql("""
+                        update ride_order set status = 'SCHEDULED', preorder = true,
+                            pickup_at = now() + interval '3 hours', release_at = now() + interval '150 minutes'
+                        where id = :id""").param("id", order.id()).update();
+        assertThat(request(ordering).blockers().activeOrderId()).isEqualTo(order.id());
+        jdbc.sql("update ride_order set status = 'SEARCHING', preorder = false, pickup_at = null, release_at = null "
+                + "where id = :id").param("id", order.id()).update();
         orders.cancel(ordering, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
         assertThat(request(ordering).blockers().blocked()).isFalse();
 

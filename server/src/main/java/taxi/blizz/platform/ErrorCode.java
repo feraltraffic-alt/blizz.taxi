@@ -8,7 +8,10 @@ public enum ErrorCode {
     VALIDATION_FAILED(400),
     QUOTE_EXPIRED(409),
     QUOTE_MISMATCH(409),
+    /** No longer returned: a rider may hold several orders (ADR 0012); kept in the contract for old clients. */
     ORDER_ALREADY_ACTIVE(409),
+    /** The payer already has active_orders_per_payer orders not in a final state (ADR 0012 Q-03, issue #57). */
+    ACTIVE_ORDER_LIMIT(409),
     OFFER_EXPIRED(409),
     OFFER_REVOKED(409),
     ORDER_ALREADY_ASSIGNED(409),

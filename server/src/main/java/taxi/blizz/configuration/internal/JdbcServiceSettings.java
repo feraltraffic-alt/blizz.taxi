@@ -37,7 +37,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Calls(CallMode.DIRECT, null),
             new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60),
             new Ratings(24),
-            new Tips(24));
+            new Tips(24),
+            new Orders(3));
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -168,7 +169,12 @@ class JdbcServiceSettings implements ServiceSettings {
         if (tips.windowHours() < 1 || tips.windowHours() > 720) {
             throw invalid("Tips: window_hours must be between 1 and 720");
         }
-        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips);
+        Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
+        if (orders.activePerPayer() < 1 || orders.activePerPayer() > 10) {
+            throw invalid("Orders: active_per_payer must be between 1 and 10");
+        }
+        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
+                orders);
     }
 
     /** Versions saved before a section existed get its defaults. */
@@ -176,7 +182,8 @@ class JdbcServiceSettings implements ServiceSettings {
         Preorders preorders = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
         Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
         Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips);
+        Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders);
     }
 
     private static String color(String value, boolean required) {

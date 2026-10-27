@@ -2658,3 +2658,16 @@ components:
           description: The rider's promotions' discount (ADR 0009), paid by the service; not collected from the rider.
           type: integer
           format: int64
+        recipient:
+          description: >-
+            Whom to pick up when it is not the payer: the person a rider ordered for, or the caller of a phone order
+            (ADR 0012, REQ-OPS-02). Only on the trip, i.e. after assignment (REQ-DRV-08), and only until it ends; the
+            phone only when calls are DIRECT, otherwise call through the order's call endpoint.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [name, phone]
+          properties:
+            name:
+              type: [string, "null"]
+            phone:
+              type: [string, "null"]
