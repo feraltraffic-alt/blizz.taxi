@@ -32,6 +32,9 @@ recording is listened to in the panel with the permission `calls.listen`, each t
 recordings until their retention is decided (Q-19), so plan the disk: WAV at 8 kHz takes about 58 MB an hour of
 talk.
 
+The recordings' key is derived from `SECRETS_MASTER_KEY`: changing or losing the master key makes every stored
+recording unreadable. Never rotate it without re-encrypting the recordings first (there is no tool for that yet).
+
 ## Push notifications
 
 Each service sends pushes from its own Firebase project (REQ-TEN-08), so the apps of one service never receive
