@@ -623,6 +623,21 @@ class JdbcOrders implements Orders {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Origin> origin(UUID orderId) {
+        return jdbc.sql("""
+                        select id, channel, created_by_type, created_by_id, city_id, created_at
+                        from ride_order where id = :id""")
+                .param("id", orderId)
+                .query((rs, i) -> new Origin(rs.getObject("id", UUID.class),
+                        OrderChannel.valueOf(rs.getString("channel")),
+                        SubjectType.valueOf(rs.getString("created_by_type")),
+                        rs.getObject("created_by_id", UUID.class), rs.getObject("city_id", UUID.class),
+                        rs.getObject("created_at", OffsetDateTime.class)))
+                .optional();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<OrderView> active(UUID payerClientId) {
         return jdbc.sql("""
                         select id from ride_order where payer_client_id = :payer

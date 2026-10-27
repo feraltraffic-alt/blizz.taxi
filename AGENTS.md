@@ -1,4 +1,4 @@
-# Instructions for Codex
+# Instructions for contributors (Codex, second Claude)
 
 You are a **contributor** on this repository. Claude is the **lead and reviewer**: it assigns work, reviews every pull request and decides what is merged. The product owner has the final word.
 
@@ -11,7 +11,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 ## How to work
 
 1. Take only work from a GitHub issue assigned to you. If something is unclear, ask in the issue instead of guessing.
-2. Branch from `main` as `codex/<issue-number>-<short-name>`. Never push to `main`.
+2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex and `claude2` for the second Claude. Never push to `main`.
 3. Keep a pull request to one concern and under ~400 changed lines where possible.
 4. Before opening the PR, run what CI runs:
    - `scripts/server-build.sh` (needs JDK 25, Maven, Docker)
@@ -25,7 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
 - Schema changes only as new Flyway migrations; never edit an applied migration; Hibernate stays `ddl-auto=validate`.
-- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for Claude and `2` for Codex (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, check that your migration sorts **after** every migration already on `main`; if not, rename it to the current UTC time (Flyway refuses an older migration on a database that already has newer ones).
+- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex and `3` for the second Claude (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, check that your migration sorts **after** every migration already on `main`; if not, rename it to the current UTC time (Flyway refuses an older migration on a database that already has newer ones).
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.
@@ -40,6 +40,12 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - Change only what the issue needs: do not delete or reword comments, Javadoc or code outside its scope.
 - Edit contract and other shared files **in place** (insert your paths and schemas into the current file). Never write a whole file from your own copy or re-serialize it with a YAML tool: that reformats everything and silently drops the descriptions others added since (PR #44 lost ~20). Before opening the PR, `git diff origin/main...HEAD -- packages/contracts` must show only your additions.
 - Everything a command takes goes into its idempotency request. When you wrap an existing command with extra input (e.g. `attachment_ids` around a support message), give the extra input its own `IdempotentCommands` receipt around the call, so a repeat with different input is a 409 and not a change of the old result.
+- Change a module's interface or its implementation directly. Do not add an `@Primary` wrapper that delegates every method of another bean to add one: it hides the real implementation from the next change and breaks the moment the interface grows.
+- Spring configuration of a module lives in its `internal` package and is package-private; only the module's API is public.
+- Do not make an existing request field required. A new field in a request is optional with a default, so current clients keep working.
+- JSON in tests (request bodies, `jsonb` literals read through the application's mapper) uses `snake_case`: the global mapper reads nothing else, and a camelCase key is silently ignored.
+- A test of time-based behaviour sets the state it depends on (e.g. backdates a period start); it never assumes "now" is far enough from the boundary.
+- Push a commit only after the build of step 4 passes locally. A series of tiny commits each waiting for CI is slower than one green one.
 - Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 
 ## Trying the system by hand
