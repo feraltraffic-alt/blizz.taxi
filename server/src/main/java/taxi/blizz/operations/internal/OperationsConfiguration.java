@@ -18,14 +18,22 @@ class OperationsConfiguration {
     static class DeadlineScheduler {
 
         private final DispatchWorker worker;
+        private final PreorderWorker preorders;
 
-        DeadlineScheduler(DispatchWorker worker) {
+        DeadlineScheduler(DispatchWorker worker, PreorderWorker preorders) {
             this.worker = worker;
+            this.preorders = preorders;
         }
 
         @Scheduled(fixedDelayString = "${blizz.dispatch.poll-interval:PT1S}")
         void poll() {
             worker.runOnce();
+        }
+
+        /** Pre-orders due for the search (ADR 0006). */
+        @Scheduled(fixedDelayString = "${blizz.preorders.poll-interval:PT15S}")
+        void releasePreorders() {
+            preorders.runOnce();
         }
     }
 }

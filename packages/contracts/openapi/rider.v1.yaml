@@ -662,11 +662,18 @@ components:
           $ref: "./common.yaml#/components/schemas/GeoPoint"
         dropoff:
           $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_at:
+          description: >-
+            Pickup time for an order for later. At least threshold_minutes ahead (config bootstrap) it is a
+            pre-order that waits as SCHEDULED (ADR 0006); nearer, it is an ordinary order searched for at once. At
+            most max_days_ahead days ahead; in the past → 400.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     Quote:
       type: object
       additionalProperties: false
-      required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at, waiting]
+      required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, expires_at, waiting,
+                 pickup_at, preorder]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -692,6 +699,13 @@ components:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         waiting:
           $ref: "#/components/schemas/WaitingTerms"
+        pickup_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        preorder:
+          description: True when the order will be a pre-order; the price includes the pre-order surcharge.
+          type: boolean
 
     WaitingTerms:
       description: |
@@ -748,6 +762,9 @@ components:
           description: APP (default) or WEB; where the rider ordered from.
           type: string
           enum: [APP, WEB]
+        pickup_at:
+          description: The quote's pickup time; must be the same as in CreateQuote, otherwise QUOTE_MISMATCH.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     ChatMessage:
       type: object
@@ -853,7 +870,8 @@ components:
       type: object
       additionalProperties: false
       required: [id, short_number, status, created_at, pickup_label, dropoff_label, vehicle_class,
-                 price_minor, final_price_minor, currency, payment_method, driver, chat_available, cancellation]
+                 price_minor, final_price_minor, currency, payment_method, driver, chat_available, cancellation,
+                 pickup_at]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -863,7 +881,7 @@ components:
           format: int64
         status:
           type: string
-          enum: [AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED, UNFULFILLED]
+          enum: [SCHEDULED, AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED, UNFULFILLED]
         created_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         pickup_label:
@@ -892,6 +910,10 @@ components:
           type: boolean
         cancellation:
           $ref: "./cancellation.yaml#/components/schemas/Cancellation"
+        pickup_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
 
     Order:
       type: object
@@ -905,7 +927,7 @@ components:
           format: int64
         status:
           type: string
-          enum: [AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED, UNFULFILLED]
+          enum: [SCHEDULED, AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED, UNFULFILLED]
         status_reason:
           type: [string, "null"]
         version:
@@ -954,3 +976,13 @@ components:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         cancellation:
           $ref: "./cancellation.yaml#/components/schemas/Cancellation"
+        pickup_at:
+          description: Requested pickup time of an order for later; null for an order for now.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        preorder:
+          description: >-
+            A pre-order (ADR 0006): SCHEDULED until it is released into the search before pickup_at. It does not
+            count as the rider's active order, so the rider can order a ride now as well.
+          type: boolean

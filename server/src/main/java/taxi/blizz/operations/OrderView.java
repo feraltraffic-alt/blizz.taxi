@@ -7,7 +7,9 @@ import taxi.blizz.geo.GeoPoint;
 
 /**
  * Canonical snapshot of an order (REQ-RID-* "GET /orders/active"). {@code priceMinor} is the agreed
- * price of the quote; {@code finalPriceMinor} is set when the trip is completed (REQ-PRC-10).
+ * price of the quote; {@code finalPriceMinor} is set when the trip is completed (REQ-PRC-10). {@code pickupAt} is
+ * the requested pickup time of an order for later; {@code preorder} says it waits as SCHEDULED until released
+ * (ADR 0006).
  */
 public record OrderView(
         UUID id,
@@ -31,7 +33,9 @@ public record OrderView(
         String searchPhase,
         AssignmentView assignment,
         OffsetDateTime createdAt,
-        Cancellation cancellation) {
+        Cancellation cancellation,
+        OffsetDateTime pickupAt,
+        boolean preorder) {
 
     /**
      * Who cancelled the order (RIDER, STAFF, DRIVER) and why: the reason's code and its labels as they were at the

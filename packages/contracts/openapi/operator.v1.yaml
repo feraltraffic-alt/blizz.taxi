@@ -696,6 +696,12 @@ components:
           $ref: "./common.yaml#/components/schemas/GeoPoint"
         dropoff:
           $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_at:
+          description: >-
+            Pickup time for an order for later. At least threshold_minutes ahead (config bootstrap) it is a
+            pre-order that waits as SCHEDULED (ADR 0006); nearer, it is an ordinary order searched for at once. At
+            most max_days_ahead days ahead; in the past → 400.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     Caller:
       type: object
@@ -742,6 +748,9 @@ components:
           maxLength: 200
         caller:
           $ref: "#/components/schemas/Caller"
+        pickup_at:
+          description: The quote's pickup time; must be the same as in CreateQuote, otherwise QUOTE_MISMATCH.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     OperatorOrder:
       allOf:

@@ -220,7 +220,7 @@ class OrderCore {
                                ST_X(o.pickup) as pickup_lon, o.pickup_label, ST_Y(o.dropoff) as dropoff_lat,
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
                                o.final_price_minor, o.currency, o.created_at, o.cancelled_by, o.cancel_reason_code,
-                               o.cancel_reason_labels::text as cancel_reason_labels,
+                               o.cancel_reason_labels::text as cancel_reason_labels, o.pickup_at, o.preorder,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
                         from ride_order o where o.id = :id""")
@@ -234,7 +234,8 @@ class OrderCore {
                         rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),
                         rs.getString("payment_state"), (Long) rs.getObject("price_minor"),
                         (Long) rs.getObject("final_price_minor"), rs.getString("currency"), rs.getString("search_phase"),
-                        null, rs.getObject("created_at", OffsetDateTime.class), cancellation(rs)))
+                        null, rs.getObject("created_at", OffsetDateTime.class), cancellation(rs),
+                        rs.getObject("pickup_at", OffsetDateTime.class), rs.getBoolean("preorder")))
                 .optional()
                 .map(order -> withAssignment(order, assignmentOfOrder(order.id())))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
@@ -245,7 +246,7 @@ class OrderCore {
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
                 o.searchPhase(),
-                assignment.orElse(null), o.createdAt(), o.cancellation());
+                assignment.orElse(null), o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder());
     }
 
     @SuppressWarnings("unchecked")

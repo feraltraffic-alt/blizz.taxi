@@ -43,8 +43,9 @@ class RiderQuoteController {
     record ClassOption(String code, String name) {
     }
 
+    /** {@code pickupAt}: for an order for later; at least the threshold ahead it is a pre-order (ADR 0006). */
     record QuoteCommand(@NotNull UUID commandId, @NotBlank @Size(max = 64) String vehicleClass,
-                        @NotNull GeoPoint pickup, @NotNull GeoPoint dropoff) {
+                        @NotNull GeoPoint pickup, @NotNull GeoPoint dropoff, Instant pickupAt) {
     }
 
     /** What waiting at the pickup will cost, from the quote's tariff (REQ-PRC-05, REQ-PRC-09). */
@@ -52,7 +53,8 @@ class RiderQuoteController {
     }
 
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
-                     long distanceM, long durationS, Instant expiresAt, WaitingTerms waiting) {
+                     long distanceM, long durationS, Instant expiresAt, WaitingTerms waiting, Instant pickupAt,
+                     boolean preorder) {
     }
 
     @GetMapping("/api/rider/v1/vehicle-classes")
@@ -68,11 +70,11 @@ class RiderQuoteController {
         VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), body.vehicleClass())
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
-                vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor()));
+                vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor(), body.pickupAt()));
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
                 quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
-                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()));
+                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(), quote.breakdown().preorder());
     }
 
     private City city(GeoPoint point) {

@@ -62,14 +62,15 @@ class OperatorOrderController {
     }
 
     record QuoteRequest(@NotNull UUID commandId, @NotBlank @Size(max = 64) String vehicleClass,
-                        @NotNull GeoPoint pickup, @NotNull GeoPoint dropoff) {
+                        @NotNull GeoPoint pickup, @NotNull GeoPoint dropoff, java.time.Instant pickupAt) {
     }
 
     record WaitingTerms(int freeMinutes, java.math.BigDecimal perMinuteMinor, int stepSeconds, String rounding) {
     }
 
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
-                     long distanceM, long durationS, java.time.Instant expiresAt, WaitingTerms waiting) {
+                     long distanceM, long durationS, java.time.Instant expiresAt, WaitingTerms waiting,
+                     java.time.Instant pickupAt, boolean preorder) {
     }
 
     record CallerInput(@Size(max = 120) String name, @NotBlank String phone) {
@@ -80,7 +81,7 @@ class OperatorOrderController {
                             @NotNull GeoPoint pickup, @Size(max = 300) String pickupLabel,
                             @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                             @NotNull PaymentMethod paymentMethod, @Size(max = 200) String callRef,
-                            @NotNull @Valid CallerInput caller) {
+                            @NotNull @Valid CallerInput caller, java.time.Instant pickupAt) {
     }
 
     record CancelRequest(@NotNull UUID commandId, @NotNull Long expectedVersion,
@@ -100,7 +101,7 @@ class OperatorOrderController {
                              PaymentMethod paymentMethod, String paymentState, Long priceMinor,
                              Long finalPriceMinor, String currency, String searchPhase,
                              AssignmentView assignment, OffsetDateTime createdAt, CallerView caller,
-                             OrderView.Cancellation cancellation) {
+                             OrderView.Cancellation cancellation, OffsetDateTime pickupAt, boolean preorder) {
     }
 
     record Timeline(List<Orders.TimelineEntry> events) {
@@ -117,11 +118,11 @@ class OperatorOrderController {
         VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), body.vehicleClass())
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
-                vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor()));
+                vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor(), body.pickupAt()));
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
                 quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
-                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()));
+                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(), quote.breakdown().preorder());
     }
 
     @PostMapping("/orders")
@@ -134,7 +135,7 @@ class OperatorOrderController {
         CallerContact caller = new CallerContact(body.caller().name(), phone.e164());
         OrderView order = orders.create(claims.actor(), body.commandId(), new CreateOrder(null,
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
-                body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller));
+                body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller, body.pickupAt()));
         return view(order);
     }
 
@@ -200,7 +201,8 @@ class OperatorOrderController {
                 order.version(), order.channel(), order.payerClientId(), order.cityId(), order.vehicleClass(),
                 order.pickup(), order.pickupLabel(), order.dropoff(), order.dropoffLabel(), order.paymentMethod(),
                 order.paymentState(), order.priceMinor(), order.finalPriceMinor(), order.currency(), order.searchPhase(),
-                order.assignment(), order.createdAt(), contact(order.id()), order.cancellation());
+                order.assignment(), order.createdAt(), contact(order.id()), order.cancellation(), order.pickupAt(),
+                order.preorder());
     }
 
     private CallerView contact(UUID orderId) {

@@ -57,4 +57,12 @@ public final class TestQuotes {
         UUID classId = ensureClass(cityId, code);
         return quotes.create(UUID.randomUUID(), new QuoteService.Request(cityId, classId, pickup, dropoff, payer));
     }
+
+    /** A quote for a pickup at {@code pickupAt}; far enough ahead it is a pre-order. */
+    public QuoteService.Quote quote(Actor payer, UUID cityId, String code, GeoPoint pickup, GeoPoint dropoff,
+                                    java.time.Instant pickupAt) {
+        UUID classId = ensureClass(cityId, code);
+        return quotes.create(UUID.randomUUID(), new QuoteService.Request(cityId, classId, pickup, dropoff, payer,
+                pickupAt));
+    }
 }

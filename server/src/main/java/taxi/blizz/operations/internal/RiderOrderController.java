@@ -48,7 +48,7 @@ class RiderOrderController {
     record CreateRequest(@NotNull UUID commandId, @NotNull UUID quoteId, @NotBlank @Size(max = 64) String vehicleClass,
                          @NotNull GeoPoint pickup, @Size(max = 300) String pickupLabel,
                          @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
-                         @NotNull PaymentMethod paymentMethod, OrderChannel channel) {
+                         @NotNull PaymentMethod paymentMethod, OrderChannel channel, java.time.Instant pickupAt) {
     }
 
     @GetMapping
@@ -63,7 +63,7 @@ class RiderOrderController {
     OrderView create(AccessClaims claims, @Valid @RequestBody CreateRequest body) {
         return orders.create(claims.actor(), body.commandId(), new CreateOrder(claims.actor().id(),
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
-                body.paymentMethod(), body.quoteId(), body.channel(), null));
+                body.paymentMethod(), body.quoteId(), body.channel(), null, null, body.pickupAt()));
     }
 
     @GetMapping("/active")

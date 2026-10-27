@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.CancelReasons;
+import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.identity.StaffAccess;
@@ -48,10 +49,16 @@ class JdbcOrders implements Orders {
     private final CancelReasons reasons;
     private final StaffDirectory directory;
     private final JsonMapper json;
+    private final ServiceSettings settings;
+
+    /** Pre-orders a rider may have waiting at a time; keeps a single account from booking the fleet. */
+    static final int MAX_SCHEDULED_PER_PAYER = 5;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
-               AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json) {
+               AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
+               ServiceSettings settings) {
+        this.settings = settings;
         this.reasons = reasons;
         this.directory = directory;
         this.json = json;
@@ -83,21 +90,46 @@ class JdbcOrders implements Orders {
         VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), order.vehicleClass())
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         String fingerprint = new QuoteService.Request(city.id(), vehicleClass.id(), order.pickup(), order.dropoff(),
-                actor).fingerprint();
+                actor, order.pickupAt()).fingerprint();
         return commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
             OffsetDateTime now = core.now();
+            // The quote decided whether this is a pre-order, with the settings in force then (ADR 0006).
+            boolean preorder = quote.breakdown().preorder();
+            OffsetDateTime pickupAt = order.pickupAt() == null ? null : order.pickupAt().atOffset(java.time.ZoneOffset.UTC);
+            OffsetDateTime releaseAt = null;
+            if (preorder) {
+                if (!pickupAt.isAfter(now)) {
+                    throw new DomainException(ErrorCode.VALIDATION_FAILED, "The pickup time is in the past");
+                }
+                if (order.payerClientId() != null && jdbc.sql("""
+                                select count(*) from ride_order
+                                where payer_client_id = :payer and status = 'SCHEDULED'""")
+                        .param("payer", order.payerClientId()).query(Long.class).single() >= MAX_SCHEDULED_PER_PAYER) {
+                    throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                            "At most " + MAX_SCHEDULED_PER_PAYER + " orders for later at a time");
+                }
+                OffsetDateTime release = pickupAt.minusMinutes(
+                        settings.current().settings().preorders().releaseMinutesBefore());
+                releaseAt = release.isBefore(now) ? now : release;
+            }
             try {
                 jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
-                                                        quote_id, source_ref, status, created_at, updated_at)
+                                                        quote_id, source_ref, status, pickup_at, preorder, release_at,
+                                                        created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
-                                        :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, 'READY', :now, :now)""")
+                                        :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
+                                        :releaseAt, :now, :now)""")
+                        .param("status", preorder ? "SCHEDULED" : "READY")
+                        .param("pickupAt", pickupAt)
+                        .param("preorder", preorder)
+                        .param("releaseAt", releaseAt)
                         .param("id", id)
                         .param("channel", channel)
                         .param("payer", order.payerClientId())
@@ -137,10 +169,17 @@ class JdbcOrders implements Orders {
                 audit.record(new AuditEntry(actor, "order.create", "ride_order", id.toString(), "Phone order",
                         null, Map.of("channel", channel, "city_id", city.id().toString())));
             }
-            core.recordEvent(id, 0, "OrderCreated", actor, null, Map.of("channel", channel,
+            Map<String, Object> created = new java.util.LinkedHashMap<>(Map.of("channel", channel,
                     "city_id", city.id().toString(), "payment_method", order.paymentMethod().name(),
                     "quote_id", quote.id().toString(), "price_minor", quote.amountMinor()));
-            engine.startSearch(core.lockOrder(id));
+            if (pickupAt != null) {
+                created.put("pickup_at", pickupAt.toString());
+                created.put("preorder", preorder);
+            }
+            core.recordEvent(id, 0, preorder ? "OrderScheduled" : "OrderCreated", actor, null, created);
+            if (!preorder) {
+                engine.startSearch(core.lockOrder(id));
+            }
             return core.view(id);
         });
     }
@@ -201,7 +240,7 @@ class JdbcOrders implements Orders {
                     CancelReasons.Reason reason = reasons.require(actor.type() == SubjectType.STAFF
                             ? CancelReasons.Audience.STAFF : CancelReasons.Audience.RIDER, reasonCode);
                     switch (order.status()) {
-                        case "AWAITING_PAYMENT", "READY", "SEARCHING" -> {
+                        case "SCHEDULED", "AWAITING_PAYMENT", "READY", "SEARCHING" -> {
                             engine.stop(orderId, "STOPPED");
                             core.closeOpenOffers(orderId, "REVOKED");
                         }
@@ -276,7 +315,7 @@ class JdbcOrders implements Orders {
         requireStaff(staffActor, VIEW_PERMISSION, cityId);
         int size = Math.max(1, Math.min(limit, 100));
         String active = activeOnly
-                ? " and status in ('AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')"
+                ? " and status in ('SCHEDULED', 'AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')"
                 : "";
         String cursor = before == null ? "" : " and created_at < :before";
         JdbcClient.StatementSpec query = jdbc.sql("select id from ride_order where city_id = :city" + active + cursor
@@ -302,6 +341,7 @@ class JdbcOrders implements Orders {
                                o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
                                a.id as assignment_id, a.state as assignment_state, a.close_reason,
                                o.cancelled_by, o.cancel_reason_code, o.cancel_reason_labels::text as cancel_reason_labels,
+                               o.pickup_at,
                                d.name as driver_name, v.make, v.model, v.color, v.registration_number
                         from ride_order o
                         left join lateral (
@@ -332,7 +372,8 @@ class JdbcOrders implements Orders {
                     (Long) rs.getObject("price_minor"), (Long) rs.getObject("final_price_minor"),
                     rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")), driver,
                     assignmentId != null && !driverLeft, cancellation(rs.getString("cancelled_by"),
-                            rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels")));
+                            rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels")),
+                    rs.getObject("pickup_at", OffsetDateTime.class));
         }).list();
     }
 
@@ -397,7 +438,8 @@ class JdbcOrders implements Orders {
     public Optional<OrderView> active(UUID payerClientId) {
         return jdbc.sql("""
                         select id from ride_order where payer_client_id = :payer
-                          and status in ('AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')""")
+                          and status in ('AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')
+                        order by preorder, coalesce(pickup_at, created_at) limit 1""")
                 .param("payer", payerClientId)
                 .query(UUID.class)
                 .optional()

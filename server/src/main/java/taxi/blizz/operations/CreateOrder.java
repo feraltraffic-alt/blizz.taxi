@@ -1,5 +1,6 @@
 package taxi.blizz.operations;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import taxi.blizz.geo.GeoPoint;
@@ -11,7 +12,8 @@ import taxi.blizz.geo.GeoPoint;
  * {@code payerClientId} is the client account paying; for a phone order without an account it is
  * null and the caller is the staff member. The price is never taken from the request: the order
  * consumes {@code quoteId}, a quote issued to the same caller for the same city, class and points
- * (REQ-PRC-05, REQ-PRC-06).
+ * (REQ-PRC-05, REQ-PRC-06). {@code pickupAt} asks for a pickup time; it must be the time the quote was made for,
+ * and far enough ahead it makes a pre-order (ADR 0006).
  */
 public record CreateOrder(
         UUID payerClientId,
@@ -24,7 +26,16 @@ public record CreateOrder(
         UUID quoteId,
         OrderChannel channel,
         String sourceRef,
-        CallerContact caller) {
+        CallerContact caller,
+        Instant pickupAt) {
+
+    /** An order for now; {@code pickupAt} is null. */
+    public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
+                       String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
+                       String sourceRef, CallerContact caller) {
+        this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
+                channel, sourceRef, caller, null);
+    }
 
     /** A request without an explicit source; the channel is derived from the actor. */
     public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,

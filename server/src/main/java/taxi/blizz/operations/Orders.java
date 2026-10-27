@@ -23,7 +23,7 @@ public interface Orders {
     record HistoryItem(UUID id, long shortNumber, String status, OffsetDateTime createdAt, String pickupLabel,
                        String dropoffLabel, String vehicleClass, Long priceMinor, Long finalPriceMinor,
                        String currency, PaymentMethod paymentMethod, HistoryDriver driver, boolean chatAvailable,
-                       OrderView.Cancellation cancellation) {
+                       OrderView.Cancellation cancellation, OffsetDateTime pickupAt) {
     }
 
     /**
