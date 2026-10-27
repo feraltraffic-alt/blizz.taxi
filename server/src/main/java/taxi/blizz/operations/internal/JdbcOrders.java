@@ -14,6 +14,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.configuration.ServiceSettings;
+import taxi.blizz.payments.CardPayments;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.geo.GeoPoint;
@@ -52,6 +53,7 @@ class JdbcOrders implements Orders {
     private final StaffDirectory directory;
     private final JsonMapper json;
     private final ServiceSettings settings;
+    private final CardPayments cardPayments;
 
     /** Pre-orders a rider may have waiting at a time; keeps a single account from booking the fleet. */
     static final int MAX_SCHEDULED_PER_PAYER = 5;
@@ -59,7 +61,8 @@ class JdbcOrders implements Orders {
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
-               ServiceSettings settings) {
+               ServiceSettings settings, CardPayments cardPayments) {
+        this.cardPayments = cardPayments;
         this.settings = settings;
         this.reasons = reasons;
         this.directory = directory;
@@ -86,8 +89,10 @@ class JdbcOrders implements Orders {
         if (order.paymentMethod() == PaymentMethod.SERVICE) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "SERVICE is set only for a follow-up order");
         }
-        if (order.paymentMethod() == PaymentMethod.CARD) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Card payment is not available yet");
+        boolean card = order.paymentMethod() == PaymentMethod.CARD;
+        if (card && (actor.type() != SubjectType.CLIENT || order.payerClientId() == null)) {
+            // A phone order is paid in cash or by a payment link (REQ-PAY-17, later).
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Only a rider pays by a saved card");
         }
         if (order.quoteId() == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "An order needs a quote");
@@ -96,7 +101,7 @@ class JdbcOrders implements Orders {
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         String fingerprint = new QuoteService.Request(city.id(), vehicleClass.id(), order.pickup(), order.dropoff(),
                 actor, order.pickupAt()).fingerprint();
-        return commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
+        OrderView created = commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class, () -> {
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
             UUID id = UUID.randomUUID();
             OffsetDateTime now = core.now();
@@ -131,7 +136,8 @@ class JdbcOrders implements Orders {
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
                                         :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
                                         :releaseAt, :now, :now)""")
-                        .param("status", preorder ? "SCHEDULED" : "READY")
+                        // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
+                        .param("status", card ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
                         .param("pickupAt", pickupAt)
                         .param("preorder", preorder)
                         .param("releaseAt", releaseAt)
@@ -149,7 +155,7 @@ class JdbcOrders implements Orders {
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", order.paymentMethod().name())
-                        .param("paymentState", order.paymentMethod() == PaymentMethod.CASH ? "CASH_EXPECTED" : null)
+                        .param("paymentState", card ? "AUTH_PENDING" : "CASH_EXPECTED")
                         .param("price", quote.amountMinor())
                         .param("currency", quote.currency())
                         .param("quoteId", quote.id())
@@ -182,11 +188,19 @@ class JdbcOrders implements Orders {
                 created.put("preorder", preorder);
             }
             core.recordEvent(id, 0, preorder ? "OrderScheduled" : "OrderCreated", actor, null, created);
-            if (!preorder) {
+            if (card) {
+                cardPayments.requestHold(id, order.payerClientId(), city.id(), quote.amountMinor(), quote.currency(),
+                        preorder ? pickupAt.plusDays(1) : null);
+            } else if (!preorder) {
                 engine.startSearch(core.lockOrder(id));
             }
             return core.view(id);
         });
+        if (card) {
+            // The hold is asked for outside the transaction; the worker retries if this attempt fails.
+            cardPayments.processNow(created.id());
+        }
+        return created;
     }
 
     /** Decides the channel from who is asking; the requested channel is accepted only where it fits. */

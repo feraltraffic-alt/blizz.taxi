@@ -83,18 +83,20 @@ class WayForPayProvider implements PaymentProvider {
 
     @Override
     public Result authorize(Merchant merchant, String reference, String token, long amountMinor, Customer customer,
-                            String description) {
-        return chargeRequest(merchant, reference, token, amountMinor, customer, description, "AUTH");
+                            String description, long holdSeconds, String serviceUrl) {
+        return chargeRequest(merchant, reference, token, amountMinor, customer, description, "AUTH",
+                Math.max(60, Math.min(holdSeconds, 1_728_000)), serviceUrl);
     }
 
     @Override
     public Result charge(Merchant merchant, String reference, String token, long amountMinor, Customer customer,
-                         String description) {
-        return chargeRequest(merchant, reference, token, amountMinor, customer, description, "SALE");
+                         String description, String serviceUrl) {
+        return chargeRequest(merchant, reference, token, amountMinor, customer, description, "SALE", 0, serviceUrl);
     }
 
     private Result chargeRequest(Merchant merchant, String reference, String token, long amountMinor,
-                                 Customer customer, String description, String type) {
+                                 Customer customer, String description, String type, long holdSeconds,
+                                 String serviceUrl) {
         String amount = amount(amountMinor);
         String orderDate = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> body = new LinkedHashMap<>();
@@ -110,7 +112,10 @@ class WayForPayProvider implements PaymentProvider {
         body.put("amount", amount);
         body.put("currency", merchant.currency());
         if ("AUTH".equals(type)) {
-            body.put("holdTimeout", holdTimeoutSeconds);
+            body.put("holdTimeout", holdSeconds > 0 ? holdSeconds : holdTimeoutSeconds);
+        }
+        if (serviceUrl != null) {
+            body.put("serviceUrl", serviceUrl);
         }
         body.put("recToken", token);
         body.put("productName", List.of(description));

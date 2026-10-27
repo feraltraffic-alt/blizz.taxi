@@ -886,6 +886,10 @@ components:
           type: string
           maxLength: 300
         payment_method:
+          description: >-
+            CARD — the rider's saved card for the city (GET /api/rider/v1/cards; no card → 400). The order is created
+            AWAITING_PAYMENT; the agreed price is held on the card and only then the search starts (or a pre-order
+            waits SCHEDULED). A declined hold ends the order UNFULFILLED with status_reason PAYMENT_DECLINED.
           type: string
           enum: [CASH, CARD]
         channel:
@@ -1170,7 +1174,11 @@ components:
           enum: [CASH, CARD, SERVICE]
         payment_state:
           type: [string, "null"]
-          enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, null]
+          description: >-
+            Cash — what the driver reported. Card (ADR 0008) — AUTH_PENDING while the hold is asked for (the order is
+            AWAITING_PAYMENT and no search runs), AUTHORIZED once it is held, PAYMENT_DECLINED when the bank refused.
+          enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, AUTH_PENDING, AUTHORIZED, PAYMENT_DECLINED,
+                 HOLD_RELEASED, CAPTURE_PENDING, PAID, PARTIALLY_PAID, null]
         price_minor:
           description: Agreed price from the quote.
           type: [integer, "null"]

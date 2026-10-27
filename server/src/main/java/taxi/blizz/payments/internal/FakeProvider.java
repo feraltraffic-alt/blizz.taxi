@@ -29,7 +29,10 @@ class FakeProvider extends WayForPayProvider {
             this.secretOfAccount = secretOfAccount;
         }
 
-        /** Queue "Declined", "Approved", "WaitingAuthComplete", "TIMEOUT", ... for the next calls. */
+        /**
+         * Queue answers for the next calls: a status ("Declined", "Approved", ...), "TIMEOUT" (the request never
+         * arrives) or "LOST_ANSWER" (the bank does it but the answer is lost).
+         */
         synchronized void next(String... answers) {
             script.addAll(List.of(answers));
         }
@@ -50,7 +53,12 @@ class FakeProvider extends WayForPayProvider {
             String reference = (String) body.get("orderReference");
             String scripted = script.poll();
             if ("TIMEOUT".equals(scripted)) {
+                // The request never reached the bank.
                 throw new java.net.SocketTimeoutException("fake gateway timeout");
+            }
+            boolean answerLost = "LOST_ANSWER".equals(scripted);
+            if (answerLost) {
+                scripted = null; // the bank does it, but the answer never comes back
             }
             String status = scripted != null ? scripted : switch (type) {
                 case "CHARGE" -> "AUTH".equals(body.get("merchantTransactionType")) ? "WaitingAuthComplete" : "Approved";
@@ -61,6 +69,9 @@ class FakeProvider extends WayForPayProvider {
             };
             if (!"CHECK_STATUS".equals(type)) {
                 statusOf.put(reference, status);
+            }
+            if (answerLost) {
+                throw new java.net.SocketTimeoutException("fake gateway: answer lost");
             }
             String account = (String) body.get("merchantAccount");
             Merchant merchant = new Merchant(null, "FAKE", account, "", secretOfAccount.apply(account), "");

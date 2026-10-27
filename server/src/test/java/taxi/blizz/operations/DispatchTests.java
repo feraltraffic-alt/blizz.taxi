@@ -470,8 +470,9 @@ class DispatchTests {
 
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD",
                 new GeoPoint(10, 10), "x", DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID())), ErrorCode.OUTSIDE_SERVICE_AREA);
+        // No card merchant in this city (ADR 0008).
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP, "x",
-                DROPOFF, "y", PaymentMethod.CARD, UUID.randomUUID())), ErrorCode.VALIDATION_FAILED);
+                DROPOFF, "y", PaymentMethod.CARD, quote(payer))), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> orders.create(payer, UUID.randomUUID(), new CreateOrder(other.id(), "STANDARD", PICKUP, "x",
                 DROPOFF, "y", PaymentMethod.CASH, UUID.randomUUID())), ErrorCode.ACCESS_DENIED);
         assertCode(() -> orders.cancel(other, UUID.randomUUID(), order(payer).id(), 0, "x"), ErrorCode.NOT_FOUND);

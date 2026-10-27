@@ -40,16 +40,19 @@ interface PaymentProvider {
 
     Form cardVerifyForm(Merchant merchant, String reference, String returnUrl, String serviceUrl, String clientPhone);
 
-    /** A hold of {@code amountMinor} on a saved card. */
+    /**
+     * A hold of {@code amountMinor} on a saved card, kept {@code holdSeconds}; the provider reports late results to
+     * {@code serviceUrl}.
+     */
     Result authorize(Merchant merchant, String reference, String token, long amountMinor, Customer customer,
-                     String description);
+                     String description, long holdSeconds, String serviceUrl);
 
     /** Takes {@code amountMinor} of an earlier hold (at most the hold). */
     Result settle(Merchant merchant, String reference, long amountMinor);
 
     /** A one-step charge of a saved card, e.g. the part of a fare above the hold. */
     Result charge(Merchant merchant, String reference, String token, long amountMinor, Customer customer,
-                  String description);
+                  String description, String serviceUrl);
 
     /** Releases a hold or returns money taken under {@code reference}. */
     Result refund(Merchant merchant, String reference, long amountMinor, String comment);

@@ -15,6 +15,26 @@ import tools.jackson.databind.json.JsonMapper;
 @EnableConfigurationProperties(PaymentsProperties.class)
 class PaymentsConfiguration {
 
+    /** Sends and reconciles provider operations; off with {@code blizz.payments.worker-enabled=false} (tests). */
+    @Configuration(proxyBeanMethods = false)
+    @org.springframework.scheduling.annotation.EnableScheduling
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "blizz.payments",
+            name = "worker-enabled", havingValue = "true", matchIfMissing = true)
+    static class WorkerSchedule {
+
+        private final PaymentWorker worker;
+
+        WorkerSchedule(PaymentWorker worker) {
+            this.worker = worker;
+        }
+
+        @org.springframework.scheduling.annotation.Scheduled(
+                fixedDelayString = "${blizz.payments.poll-interval:PT2S}")
+        void poll() {
+            worker.runOnce();
+        }
+    }
+
     /** Provider answers keep amounts as written (BigDecimal), so signatures are checked on the exact text. */
     static final JsonMapper PROVIDER_JSON = JsonMapper.builder()
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();

@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import taxi.blizz.configuration.CancelReasons;
+import taxi.blizz.payments.CardPayments;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.OrderView;
@@ -37,9 +38,11 @@ class OrderCore {
     private final DispatchProperties properties;
     private final PresenceProperties presence;
     private final Clock clock;
+    private final CardPayments payments;
 
     OrderCore(JdbcClient jdbc, Outbox outbox, JsonMapper json, DispatchProperties properties,
-              PresenceProperties presence, Clock clock) {
+              PresenceProperties presence, Clock clock, CardPayments payments) {
+        this.payments = payments;
         this.jdbc = jdbc;
         this.outbox = outbox;
         this.json = json;
@@ -70,6 +73,21 @@ class OrderCore {
     }
 
     /** Changes the status, bumps the version and writes the history row and the outbox event. */
+    void setPaymentState(UUID orderId, String state) {
+        jdbc.sql("update ride_order set payment_state = :state where id = :id")
+                .param("state", state).param("id", orderId).update();
+    }
+
+    boolean isPreorder(UUID orderId) {
+        return jdbc.sql("select preorder from ride_order where id = :id").param("id", orderId)
+                .query(Boolean.class).single();
+    }
+
+    /** The order ended without a ride: a card hold is released (REQ-PAY-06). */
+    void releaseCardHold(UUID orderId, String reason) {
+        payments.releaseHold(orderId, reason);
+    }
+
     long changeStatus(LockedOrder order, String status, String reason, String eventType, Actor actor,
                       Map<String, Object> payload) {
         long version = jdbc.sql("""
@@ -273,6 +291,8 @@ class OrderCore {
         body.put("reason_code", reason.code());
         body.put("reason_labels", reason.labels());
         long version = changeStatus(order, "CANCELLED", reason.code(), eventType, actor, body);
+        // A card hold is released with the order (REQ-PAY-06); no fee until the cancellation policy exists (Q-07).
+        payments.releaseHold(order.id(), "Order cancelled: " + reason.code());
         jdbc.sql("""
                         update ride_order set cancelled_by = :by, cancel_reason_code = :code,
                                               cancel_reason_labels = cast(:labels as jsonb)

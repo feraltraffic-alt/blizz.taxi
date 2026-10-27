@@ -39,7 +39,8 @@ class WayForPayProviderTests {
             return signedAnswer("DH1415379863", "1547.36", "WaitingAuthComplete", "1100");
         }, CLOCK, 3600);
         PaymentProvider.Result result = provider.authorize(MERCHANT, "DH1415379863", "rec-token-1", 154736,
-                new PaymentProvider.Customer("+380501234567", null, null, null, null), "Samsung Galaxy S");
+                new PaymentProvider.Customer("+380501234567", null, null, null, null), "Samsung Galaxy S", 3600,
+                "https://blizz.test/payments/v1/callbacks/m");
         assertThat(result.outcome()).isEqualTo(Outcome.SUCCEEDED);
         Map<String, Object> body = sent.getFirst();
         assertThat(body).containsEntry("transactionType", "CHARGE").containsEntry("merchantTransactionType", "AUTH")
@@ -65,7 +66,7 @@ class WayForPayProviderTests {
         WayForPayProvider declining = new WayForPayProvider((url, body) -> signedAnswer("DH1", "1.00", "Declined",
                 "1105"), CLOCK, 3600);
         assertThat(declining.charge(MERCHANT, "DH1", "t", 100, new PaymentProvider.Customer(null, null, null, null,
-                null), "Fare").outcome()).isEqualTo(Outcome.DECLINED);
+                null), "Fare", null).outcome()).isEqualTo(Outcome.DECLINED);
     }
 
     @Test

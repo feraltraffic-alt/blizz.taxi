@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/card-hold.v1.schema.json",
+  "title": "CardHoldAuthorized / CardHoldDeclined v1",
+  "description": "The card hold of an order is decided (ADR 0008). Published by payments, consumed by operations. An unknown result publishes nothing until it is reconciled.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "intent_id"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "reason": { "description": "CardHoldDeclined only: the bank's reason.", "type": "string" }
+  },
+  "examples": [
+    { "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f", "intent_id": "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b" }
+  ]
+}

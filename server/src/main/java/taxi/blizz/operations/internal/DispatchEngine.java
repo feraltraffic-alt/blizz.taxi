@@ -175,6 +175,7 @@ class DispatchEngine {
         stop(attempt.orderId(), "EXHAUSTED");
         OrderCore.LockedOrder order = core.lockOrder(attempt.orderId());
         core.changeStatus(order, "UNFULFILLED", "NO_DRIVER", "OrderUnfulfilled", OrderCore.system(), Map.of());
+        core.releaseCardHold(order.id(), "No driver found");
     }
 
     /** Ends the live attempt of the order, if any; stale worker tasks then find nothing to do. */
