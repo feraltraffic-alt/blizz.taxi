@@ -164,6 +164,31 @@ class CardCaptureTests {
                 .param("order", order.id()).query(Long.class).single()).isEqualTo(paid.finalPriceMinor());
     }
 
+    /** T-27: the driver reports cash on a card order — the card pays, the cash is not counted a second time. */
+    @Test
+    void cashReportedOnACardOrderIsNotCountedTwice() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        deliverEvents();
+        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        TripView trip = trips.current(driver.actor()).orElseThrow();
+        rides.moveTo(driver, TestRides.north(PICKUP, 20));
+        TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
+        TripView started = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
+        trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(), OffsetDateTime.now(), true);
+        deliverEvents();
+        settlePayments();
+
+        OrderView paid = orders.get(order.id());
+        assertThat(paid.paymentState()).isEqualTo("PAID");
+        assertThat(receivable(rider)).as("the fare is paid once, by the card").isZero();
+        assertThat(jdbc.sql("""
+                        select count(*) from journal_transaction
+                        where basis_id = :order and basis_type in ('CASH_COLLECTED', 'TERMINAL_COLLECTED')""")
+                .param("order", order.id()).query(Long.class).single()).as("no cash posting").isZero();
+    }
+
     @Test
     void aboveTheHoldTheRestIsChargedToTheSavedCard() {
         Actor rider = riderWithCard();
