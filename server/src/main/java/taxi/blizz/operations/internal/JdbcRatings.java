@@ -127,7 +127,8 @@ class JdbcRatings implements Ratings {
                 .query((rs, i) -> {
                     long sum = rs.getLong("score_sum");
                     long count = rs.getLong("count");
-                    long average = count == 0 ? 0 : Math.round((double) sum * 100 / count);
+                    // Integer hundredths, rounded half up; no floating point anywhere in the figure.
+                    long average = count == 0 ? 0 : (sum * 100 + count / 2) / count;
                     return new DriverSummary(sum, count, average);
                 }).single();
     }
