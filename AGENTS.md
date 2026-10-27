@@ -48,6 +48,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - Push a commit only after the build of step 4 passes locally. A series of tiny commits each waiting for CI is slower than one green one.
 - Simple class names of Spring beans are unique across the whole application, not only within a module: Spring names a bean after its simple class name, so two `AnonymizedClients` in different modules break the context. Prefix them with what they handle (`AnonymizedClientCards`, `AnonymizedClientWallet`).
 - When you change what a shared method means (e.g. `Orders.active()` once multiple orders exist), grep every caller and check that each still wants the new meaning; fix or switch the ones that do not.
+- Texts a person receives (SMS, pushes, voice, e-mails) are in that person's language, or the language of their number's country when the person is not known; never one string for everybody — the markets are Poland and Ukraine.
 - Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 
 ## Trying the system by hand
