@@ -191,6 +191,13 @@ components:
           description: Stable installation id of the app; used for limits and the session record.
           type: string
           maxLength: 128
+        channel:
+          description: >-
+            "Call me instead" (ADR 0012 Q-18): VOICE asks for a call that speaks the code, SMS for a text. Omitted —
+            the channel set in the admin panel. If the asked channel fails, the other configured one is tried. Same
+            resend delay and limits either way.
+          type: [string, "null"]
+          enum: [SMS, VOICE, null]
 
     OtpChallenge:
       type: object
