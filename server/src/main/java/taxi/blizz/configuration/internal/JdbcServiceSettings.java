@@ -27,10 +27,13 @@ class JdbcServiceSettings implements ServiceSettings {
 
     private static final Pattern COLOR = Pattern.compile("^#[0-9A-Fa-f]{6}$");
 
-    /** Until the admin saves settings: a neutral brand, every language, direct calls. */
+    /**
+     * Until the admin saves settings: a neutral brand, every language with Russian by default (owner decision
+     * 27.10.2026), direct calls.
+     */
     static final Settings DEFAULTS = new Settings(
             new Brand("Blizz Taxi", "#111111", "#FFFFFF", null, null, null, null, null, null, null),
-            new Languages("en", SUPPORTED_LANGUAGES),
+            new Languages("ru", SUPPORTED_LANGUAGES),
             new Calls(CallMode.DIRECT, null));
 
     private final JdbcClient jdbc;
