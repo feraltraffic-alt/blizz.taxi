@@ -20,6 +20,7 @@ import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.telephony.Calls;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.CallerContact;
@@ -56,6 +57,7 @@ class JdbcOrders implements Orders {
     private final JsonMapper json;
     private final ServiceSettings settings;
     private final AccountDirectory accounts;
+    private final Calls calls;
     private final CardPayments cardPayments;
     private final taxi.blizz.finance.RiderWallets wallets;
 
@@ -66,7 +68,8 @@ class JdbcOrders implements Orders {
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
-               AccountDirectory accounts) {
+               AccountDirectory accounts, Calls calls) {
+        this.calls = calls;
         this.accounts = accounts;
         this.cardPayments = cardPayments;
         this.wallets = wallets;
@@ -245,6 +248,24 @@ class JdbcOrders implements Orders {
             cardPayments.processNow(result.id());
         }
         return result;
+    }
+
+    /** The call and the link are part of the request, apart from the order's own receipt (AGENTS.md). */
+    record DuringCall(UUID callId, boolean linkAgain, CreateOrder order) {
+    }
+
+    @Override
+    public OrderView createDuringCall(Actor actor, UUID commandId, CreateOrder order, UUID callId, boolean linkAgain) {
+        Calls.Call call = calls.find(callId)
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Call not found"));
+        // Before the receipts, so a stored outcome is never given to someone who lost access.
+        requireStaff(actor, Calls.ANSWER_PERMISSION, call.cityId());
+        return commands.execute(new CommandKey(actor, "order.create-during-call", commandId),
+                new DuringCall(callId, linkAgain, order), OrderView.class, () -> {
+                    OrderView created = create(actor, commandId, order);
+                    calls.link(actor, callId, created.id(), linkAgain);
+                    return created;
+                });
     }
 
     /**
