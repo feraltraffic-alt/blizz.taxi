@@ -27,7 +27,6 @@ import taxi.blizz.identity.StaffAccess;
 @RestController
 class CancelReasonsController {
 
-    /** The operator's list is for those who may cancel; the operations constant is not visible from here. */
     private static final String STAFF_CANCEL_PERMISSION = "orders.cancel";
 
     private final CancelReasons reasons;
@@ -38,7 +37,6 @@ class CancelReasonsController {
         this.staff = staff;
     }
 
-    /** What an app shows: the code, the labels by language and, for drivers, what the reason does. */
     record Item(String code, Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome) {
     }
 
@@ -50,13 +48,13 @@ class CancelReasonsController {
 
     record Create(@NotNull UUID commandId, @NotNull Audience audience, @NotBlank @Size(max = 40) String code,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
-                  @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
+                  @NotNull Boolean operatorFault, @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
                   @NotBlank @Size(max = 500) String reason) {
     }
 
     record Update(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
-                  @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
+                  @NotNull Boolean operatorFault, @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
                   @NotBlank @Size(max = 500) String reason) {
     }
 
@@ -85,14 +83,14 @@ class CancelReasonsController {
     @ResponseStatus(HttpStatus.CREATED)
     CancelReasons.Reason create(AccessClaims claims, @Valid @RequestBody Create body) {
         return reasons.create(claims.actor(), body.commandId(), new CancelReasons.Draft(body.audience(), body.code(),
-                body.labels(), body.driverOutcome(), body.active(), body.sortOrder()), body.reason());
+                body.labels(), body.driverOutcome(), body.operatorFault(), body.active(), body.sortOrder()), body.reason());
     }
 
     @PostMapping("/api/admin/v1/settings/cancel-reasons/{reasonId}")
     CancelReasons.Reason update(AccessClaims claims, @PathVariable UUID reasonId, @Valid @RequestBody Update body) {
         return reasons.update(claims.actor(), body.commandId(), reasonId, body.expectedVersion(),
-                new CancelReasons.Draft(null, null, body.labels(), body.driverOutcome(), body.active(),
-                        body.sortOrder()), body.reason());
+                new CancelReasons.Draft(null, null, body.labels(), body.driverOutcome(), body.operatorFault(),
+                        body.active(), body.sortOrder()), body.reason());
     }
 
     private Items items(Audience audience) {
