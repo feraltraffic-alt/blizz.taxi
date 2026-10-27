@@ -22,8 +22,8 @@ CODE=$(api GET "/sandbox/v1/otp?phone=$(jq -rn --arg p "$RIDER_PHONE" '$p|@uri')
 
 say "Step two: the request; this session stays, the account is DELETION_PENDING"
 REQUEST="{\"command_id\":\"$(uuid)\",\"challenge_id\":\"$CHALLENGE\",\"otp_code\":\"$CODE\"}"
-STATUS=$(api POST /api/rider/v1/me/deletion-request "$RIDER" "$REQUEST"); expect 200
-[[ "$(jq -r .account_state <<<"$STATUS")" == DELETION_PENDING ]]
+PENDING=$(api POST /api/rider/v1/me/deletion-request "$RIDER" "$REQUEST"); expect 200
+[[ "$(jq -r .account_state <<<"$PENDING")" == DELETION_PENDING ]]
 
 say "While it is pending the rider cannot order"
 api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
