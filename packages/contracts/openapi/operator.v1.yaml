@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     API of the dispatcher / call-centre workstation (/api/operator/v1, REQ-API-02); tokens of the operator
-    audience only, from /auth/v1/staff/sign-in. Order operations arrive slice by slice.
+    audience only, from /auth/v1/staff/sign-in.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -19,8 +19,7 @@ paths:
     get:
       operationId: getOperatorMe
       summary: The signed-in staff member
-      description: |
-        Same shape as in the admin API.
+      description: Same shape as in the admin API.
       tags: [Me]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -38,8 +37,7 @@ paths:
     post:
       operationId: changeOperatorPassword
       summary: Change the own password
-      description: |
-        Required after the first sign-in and after a reset.
+      description: Required after the first sign-in and after a reset.
       tags: [Me]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -61,11 +59,372 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/operator/v1/quotes:
+    post:
+      operationId: createOperatorQuote
+      summary: Price a phone order
+      description: |
+        The pickup determines the service city. The operator needs orders.create for that city. The quote
+        belongs to the signed-in operator, expires after the normal quote lifetime and can be consumed once
+        by the matching phone order (REQ-OPS-03, REQ-PRC-06).
+      tags: [Pricing]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuote"
+      responses:
+        "201":
+          description: The quote.
+          content:
+            application/json:
+              schema:
+                $ref: "./rider.v1.yaml#/components/schemas/Quote"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "./common.yaml#/components/responses/ServiceUnavailable"
+
+  /api/operator/v1/orders:
+    post:
+      operationId: createOperatorOrder
+      summary: Create a phone order from a quote
+      description: |
+        The order is created as channel PHONE by the signed-in employee. The quote must belong to that
+        operator and match the class and points. CASH is the only payment method until S-09. The caller is
+        contact data for this order only and is not linked to or turned into a client account (REQ-OPS-02,
+        REQ-OPS-03, REQ-PRC-06).
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePhoneOrder"
+      responses:
+        "201":
+          description: The order, already searching for a driver.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+    get:
+      operationId: listOperatorOrders
+      summary: Orders of one city
+      description: Newest first. The operator needs orders.view for the requested city.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, all]
+            default: active
+        - name: before
+          in: query
+          required: false
+          description: Exclusive created_at cursor; returns older orders.
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Orders of the requested city, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/operator/v1/orders/{order_id}:
+    get:
+      operationId: getOperatorOrder
+      summary: One order with its caller contact
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: The order and caller contact when it is a phone order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/operator/v1/orders/{order_id}/cancel:
+    post:
+      operationId: cancelOperatorOrder
+      summary: Cancel an order before the trip starts
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrder"
+      responses:
+        "200":
+          description: Cancelled order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/operator/v1/orders/{order_id}/revoke-assignment:
+    post:
+      operationId: revokeOperatorOrderAssignment
+      summary: Take the driver off an order and search again
+      description: Requires orders.reassign for the order city; reason is mandatory (REQ-OPS-05).
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeAssignment"
+      responses:
+        "200":
+          description: Order after the assignment was revoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/operator/v1/orders/{order_id}/messages:
+    get:
+      operationId: getOperatorOrderConversation
+      summary: Read the order conversation for support
+      description: This access is audited and requires orders.view for the order city.
+      tags: [Chat]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+        - name: reason
+          in: query
+          required: true
+          description: Why the operator opened the conversation; written to audit.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+      responses:
+        "200":
+          description: Complete conversation, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "./rider.v1.yaml#/components/schemas/ChatMessages"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 tags:
   - name: Me
     description: The signed-in staff member
+  - name: Pricing
+    description: Pricing a phone order
+  - name: Orders
+    description: Phone orders and city order monitoring
+  - name: Chat
+    description: Audited support access to rider-driver conversations
 
 components:
+  parameters:
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
   securitySchemes:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
+  schemas:
+    CreateQuote:
+      type: object
+      additionalProperties: false
+      required: [command_id, vehicle_class, pickup, dropoff]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+          maxLength: 64
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+
+    Caller:
+      type: object
+      additionalProperties: false
+      required: [phone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        phone:
+          description: Caller phone in E.164 form.
+          type: string
+          pattern: "^\\+[1-9][0-9]{7,14}$"
+
+    CreatePhoneOrder:
+      type: object
+      additionalProperties: false
+      required: [command_id, quote_id, vehicle_class, pickup, dropoff, payment_method, caller]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        quote_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        vehicle_class:
+          type: string
+          maxLength: 64
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+          maxLength: 300
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff_label:
+          type: string
+          maxLength: 300
+        payment_method:
+          type: string
+          enum: [CASH]
+        call_ref:
+          description: Optional telephony/call reference stored as the order source_ref; no telephony integration is implied.
+          type: string
+          maxLength: 200
+        caller:
+          $ref: "#/components/schemas/Caller"
+
+    OperatorOrder:
+      allOf:
+        - $ref: "./rider.v1.yaml#/components/schemas/Order"
+        - type: object
+          properties:
+            caller:
+              oneOf:
+                - $ref: "#/components/schemas/Caller"
+                - type: "null"
+
+    CancelOrder:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    RevokeAssignment:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
