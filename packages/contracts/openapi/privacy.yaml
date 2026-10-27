@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — account deletion components
+  version: 1.0.0
+  description: >-
+    Shared schemas of a rider's request to delete the account (REQ-RID-10, REQ-PRV-04, section 36.4): the rider asks,
+    staff check what blocks it and complete it by hand. Completion anonymizes the profile; orders, the journal,
+    ratings and the audit log stay. Referenced by the rider and admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Amount:
+      type: object
+      additionalProperties: false
+      required: [currency, amount_minor]
+      properties:
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+
+    DeletionBlockers:
+      description: >-
+        What stops staff from completing the request. blocked is true while there is an active order, an unpaid
+        debt or an open support case of the rider. bonuses_to_burn never blocks: the rider's bonuses burn on
+        completion (owner decision 27.10.2026).
+      type: object
+      additionalProperties: false
+      required: [active_order_id, debt, open_support_cases, bonuses_to_burn, blocked]
+      properties:
+        active_order_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        debt:
+          description: Unpaid debt per currency (RIDER_RECEIVABLE).
+          type: array
+          items:
+            $ref: "#/components/schemas/Amount"
+        open_support_cases:
+          type: integer
+          minimum: 0
+        bonuses_to_burn:
+          type: array
+          items:
+            $ref: "#/components/schemas/Amount"
+        blocked:
+          type: boolean
+
+    DeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [client_id, previous_state, requested_at, blockers]
+      properties:
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        previous_state:
+          description: The state the account returns to if the request is cancelled or rejected.
+          type: string
+          enum: [ACTIVE, BLOCKED]
+        requested_at:
+          type: string
+          format: date-time
+        blockers:
+          $ref: "#/components/schemas/DeletionBlockers"
+
+    DeletionRequestList:
+      type: object
+      additionalProperties: false
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeletionRequest"
+
+    DeletionDecisionCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          description: Why; goes to the audit log.
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    DeletionDecision:
+      type: object
+      additionalProperties: false
+      required: [client_id, account_state]
+      properties:
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: ANONYMIZED after completion; after a rejection the state the account had before the request.
+          type: string
+          enum: [ANONYMIZED, ACTIVE, BLOCKED]
