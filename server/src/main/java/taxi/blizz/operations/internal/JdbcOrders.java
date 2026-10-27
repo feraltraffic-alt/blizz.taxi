@@ -595,6 +595,19 @@ class JdbcOrders implements Orders {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Participants> participants(UUID orderId) {
+        return jdbc.sql("""
+                        select o.payer_client_id,
+                               (select a.driver_id from assignment a where a.order_id = o.id
+                                order by a.created_at desc limit 1) as driver_id
+                        from ride_order o where o.id = :id""")
+                .param("id", orderId)
+                .query((rs, i) -> new Participants(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
+                .optional();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<OrderView> active(UUID payerClientId) {
         return jdbc.sql("""
                         select id from ride_order where payer_client_id = :payer

@@ -15,6 +15,32 @@ security:
   - SubjectBearer: []
 
 paths:
+  /ws/v1/rider:
+    get:
+      operationId: openRiderLiveChannel
+      summary: Live channel (WebSocket)
+      description: >-
+        Upgrade to a WebSocket with the rider access token — the `Authorization: Bearer` header, or `access_token` in
+        the query where headers cannot be set. The server pushes a message for every change of an order the rider
+        takes part in (section 20, REQ-NTF-04): `{"event_id", "type", "schema_version", "aggregate_type": "Order",
+        "aggregate_id", "aggregate_version", "occurred_at", "correlation_id", "payload": {}}`. It carries no personal
+        data: on a message the app reads the order over REST; duplicates and older versions are dropped, a gap in
+        versions means read the snapshot (REQ-NTF-01). The first message is `{"type": "Connected"}`; the client may
+        send `ping` (answer `{"type": "Pong"}`). Closed with code 4401 when the access token expires — reconnect with
+        a fresh one. Commands stay REST (REQ-NTF-06).
+      tags: [Live]
+      parameters:
+        - name: access_token
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching to WebSocket.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/rider/v1/me:
     get:
       operationId: getRiderMe
@@ -709,6 +735,8 @@ paths:
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
 tags:
+  - name: Live
+    description: Live updates over WebSocket (section 20)
   - name: Cards
     description: Saved cards for paying by card (ADR 0008)
   - name: Support

@@ -89,6 +89,13 @@ public interface Orders {
      */
     Interrupted interrupt(Actor staff, UUID commandId, UUID orderId, long expectedVersion, Interruption interruption);
 
+    /** Who takes part in an order now: the paying rider and the driver of the current or last assignment. */
+    record Participants(UUID payerClientId, UUID driverId) {
+    }
+
+    /** For live updates (section 20); empty when the order does not exist. */
+    java.util.Optional<Participants> participants(UUID orderId);
+
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);
 }
