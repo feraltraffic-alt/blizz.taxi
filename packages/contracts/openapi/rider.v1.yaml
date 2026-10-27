@@ -354,6 +354,104 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/rider/v1/cards:
+    get:
+      operationId: listCards
+      summary: The rider's saved cards
+      description: Only the masked number and type; the provider's token never leaves the server (REQ-PAY-08, ADR 0008).
+      tags: [Cards]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/card-bindings:
+    post:
+      operationId: startCardBinding
+      summary: Start adding a card
+      description: >-
+        For the merchant of the city (404 when the city takes no cards). The app POSTs `fields` to `url` in a web view
+        (the provider's page with 3-D Secure); when the web view reaches `return_url` the app reads the binding.
+      tags: [Cards]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartCardBinding"
+      responses:
+        "201":
+          description: Started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardBinding"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/rider/v1/card-bindings/{binding_id}:
+    get:
+      operationId: getCardBinding
+      summary: Result of adding a card
+      tags: [Cards]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: binding_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: PENDING until the provider reports; then COMPLETED with the card, FAILED or EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardBinding"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/rider/v1/cards/{card_id}/remove:
+    post:
+      operationId: removeCard
+      summary: Remove a saved card
+      tags: [Cards]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: card_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CardCommand"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/rider/v1/cancel-reasons:
     get:
       operationId: listRiderCancelReasons
@@ -611,6 +709,8 @@ paths:
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
 tags:
+  - name: Cards
+    description: Saved cards for paying by card (ADR 0008)
   - name: Support
     description: Support cases (REQ-ADM-09)
   - name: Chat
@@ -840,6 +940,80 @@ components:
           type: string
           minLength: 1
           maxLength: 1000
+
+    Card:
+      type: object
+      additionalProperties: false
+      required: [id, merchant_id, masked_pan, card_type, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        merchant_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        masked_pan:
+          type: string
+          examples: ["41****1111"]
+        card_type:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    CardList:
+      type: object
+      additionalProperties: false
+      required: [cards]
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Card"
+
+    StartCardBinding:
+      type: object
+      additionalProperties: false
+      required: [command_id, city_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+
+    CardBinding:
+      type: object
+      additionalProperties: false
+      required: [id, state, expires_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED, EXPIRED]
+        url:
+          description: Where the web view POSTs the form; only in the answer to the start.
+          type: [string, "null"]
+        fields:
+          description: Form fields to POST as application/x-www-form-urlencoded.
+          type: [object, "null"]
+          additionalProperties:
+            type: string
+        return_url:
+          type: [string, "null"]
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        card:
+          oneOf:
+            - $ref: "#/components/schemas/Card"
+            - type: "null"
+        failure_reason:
+          type: [string, "null"]
+
+    CardCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
 
     CancelOrder:
       type: object

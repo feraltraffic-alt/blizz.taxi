@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — payment provider endpoints
+  version: 1.0.0
+  description: >
+    Endpoints the payment provider calls (ADR 0008). No bearer token: a notification is trusted only by the
+    provider's signature with the merchant secret, the merchant account and the expected amount (REQ-PAY-11…12).
+    The body format is the provider's (WayForPay serviceUrl).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security: []
+tags:
+  - name: Provider
+    description: Called by the payment provider or the rider's web view
+paths:
+  /payments/v1/callbacks/{merchant_id}:
+    post:
+      operationId: receivePaymentNotification
+      summary: Provider notification (serviceUrl)
+      description: >-
+        Stored once per fingerprint before it is applied; a result already reached is never rolled back. A trusted
+        notification is answered with the provider's acknowledgement (WayForPay — orderReference, status "accept",
+        time, signature) so the provider stops repeating it.
+      tags: [Provider]
+      parameters:
+        - name: merchant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Not trusted (signature, merchant or account does not match); nothing changed.
+  /payments/v1/return:
+    get:
+      operationId: paymentReturnPage
+      summary: Page the rider's web view lands on when the provider is done
+      description: The app closes the web view when it reaches this address and reads the binding or the payment.
+      tags: [Provider]
+      responses:
+        "200":
+          description: A short page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "405":
+          description: Only GET and POST are served.

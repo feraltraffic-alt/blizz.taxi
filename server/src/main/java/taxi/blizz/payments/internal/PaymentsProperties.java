@@ -1,0 +1,34 @@
+package taxi.blizz.payments.internal;
+
+import java.time.Duration;
+import java.util.Map;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+/**
+ * @param publicBaseUrl      the address providers and the rider's web view reach this instance at (callbacks,
+ *                           return page)
+ * @param secrets            merchant secrets by {@code payment_merchant.secret_ref}; from the environment only
+ * @param bindingTtl         how long a started "add a card" stays open
+ * @param holdTimeoutSeconds how long the provider keeps a hold (WayForPay: up to 20 days)
+ * @param timeout            how long to wait for the provider before the result counts as UNKNOWN
+ */
+@ConfigurationProperties("blizz.payments")
+record PaymentsProperties(
+        @DefaultValue("http://localhost:8080") String publicBaseUrl,
+        Map<String, String> secrets,
+        @DefaultValue("PT30M") Duration bindingTtl,
+        @DefaultValue("172800") long holdTimeoutSeconds,
+        @DefaultValue("PT20S") Duration timeout) {
+
+    PaymentsProperties {
+        secrets = secrets == null ? Map.of() : Map.copyOf(secrets);
+        publicBaseUrl = publicBaseUrl.endsWith("/") ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
+                : publicBaseUrl;
+    }
+
+    @Override
+    public String toString() {
+        return "PaymentsProperties[publicBaseUrl=" + publicBaseUrl + ", secrets=" + secrets.keySet() + "]";
+    }
+}

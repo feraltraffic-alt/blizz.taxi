@@ -60,3 +60,13 @@ insert into vehicle (id, driver_id, registration_number, make, model, color, pro
     ('5a000000-0000-4000-8000-000000000504', '5a000000-0000-4000-8000-000000000404', 'WA0001T', 'Toyota', 'Camry', 'black', 2022, 'APPROVED', '{STANDARD,COMFORT}', now(), now()),
     ('5a000000-0000-4000-8000-000000000505', '5a000000-0000-4000-8000-000000000405', 'WA0002T', 'Kia', 'Ceed', 'blue', 2021, 'APPROVED', '{STANDARD}', now(), now())
 on conflict (id) do nothing;
+
+-- A FAKE payment merchant per city: cards are "added" on /payments/v1/fake/verify, holds and charges are simulated.
+insert into payment_merchant (id, provider, account, domain, secret_ref, currency, created_at) values
+    ('5a000000-0000-4000-8000-000000000601', 'FAKE', 'sandbox_kyiv', 'sandbox.blizz.invalid', 'sandbox', 'UAH', now()),
+    ('5a000000-0000-4000-8000-000000000602', 'FAKE', 'sandbox_warszawa', 'sandbox.blizz.invalid', 'sandbox', 'PLN', now())
+on conflict (id) do nothing;
+insert into payment_merchant_city (city_id, merchant_id) values
+    ('5a000000-0000-4000-8000-000000000001', '5a000000-0000-4000-8000-000000000601'),
+    ('5a000000-0000-4000-8000-000000000002', '5a000000-0000-4000-8000-000000000602')
+on conflict (city_id) do nothing;
