@@ -1737,6 +1737,120 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/reports/exports:
+    post:
+      operationId: requestReportExport
+      summary: Export a report to CSV
+      description: >-
+        A background job builds the file (REQ-ADM-07); poll the export until READY. Requires reports.view for the city, checked again when building and when downloading. Audited.
+      tags: [Reports]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./reports.yaml#/components/schemas/RequestReportExport"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: "./reports.yaml#/components/schemas/ReportExport"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+    get:
+      operationId: listReportExports
+      summary: My report exports
+      description: The staff member's own exports, newest first.
+      tags: [Reports]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./reports.yaml#/components/schemas/ReportExportList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/reports/exports/{export_id}:
+    get:
+      operationId: getReportExport
+      summary: A report export
+      description: Only the staff member who asked for it.
+      tags: [Reports]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./reports.yaml#/components/schemas/ReportExport"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/reports/exports/{export_id}/file:
+    get:
+      operationId: downloadReportExport
+      summary: Download the CSV
+      description: >-
+        UTF-8 with a byte order mark, comma-separated; text that a spreadsheet would take for a formula is prefixed with an apostrophe; money in major units of the city's currency. Only the staff member who asked, with reports.view for the city at the moment of the download, while the export is READY and not expired (409 otherwise). Audited.
+      tags: [Reports]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The file
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/clients:
     get:
       operationId: searchClients

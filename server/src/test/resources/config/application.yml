@@ -23,6 +23,9 @@ blizz:
     secrets:
       test: test-merchant-secret-0123456789
     worker-enabled: false
+  reports:
+    # Tests build exports themselves (ReportExports.buildPending), the scheduled worker stays out of their way.
+    export-poll: PT1H
   geocoding:
     # Address search through the fake provider; real keys never reach the tests.
     provider: FAKE
