@@ -14,7 +14,8 @@ class OperatorBonusResetWorker {
         this.bonuses = bonuses;
     }
 
-    @Scheduled(fixedDelayString = "${blizz.operator-bonus.reset-check-ms:3600000}")
+    @Scheduled(fixedDelayString = "${blizz.operator-bonus.reset-check-ms:3600000}",
+            initialDelayString = "${blizz.operator-bonus.reset-check-ms:3600000}")
     void reset() {
         bonuses.resetDueAccounts();
     }

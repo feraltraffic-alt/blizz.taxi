@@ -87,7 +87,7 @@ class OperatorBonusTests {
     void firstMatchingTimeRuleUsesOrderCreationTimeAndOtherCancellationsDoNothing() {
         jdbc.sql("""
                 update operator_bonus_settings set m = 1, g = 10,
-                    time_rules = '[{"key":"weekday-8","daysOfWeek":[1,2,3,4,5],"startHour":8,"endHour":9,"m":5,"g":1}]'::jsonb
+                    time_rules = '[{"key":"weekday-8","days_of_week":[1,2,3,4,5],"start_hour":8,"end_hour":9,"m":5,"g":1}]'::jsonb
                 where version = 0
                 """).update();
         OffsetDateTime mondayInside = OffsetDateTime.of(2026, 10, 26, 8, 30, 0, 0, ZoneOffset.UTC);
@@ -116,6 +116,9 @@ class OperatorBonusTests {
         UUID order = phoneOrder(operator.id(), created);
         bonuses.handle(event("TripCompleted", order, null));
         assertThat(bonuses.mine(operator, 10).balance()).isEqualTo(1);
+        // The account's period began before the last reset day (reset_day = 1).
+        jdbc.sql("update operator_bonus_account set period_started_at = :started where staff_id = :staff")
+                .param("started", created).param("staff", operator.id()).update();
 
         bonuses.resetDueAccounts();
         bonuses.resetDueAccounts();

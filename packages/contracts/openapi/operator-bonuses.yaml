@@ -1,0 +1,190 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — operator bonus components
+  version: 1.0.0
+  description: >-
+    Bonus points of staff who create phone orders (ADR 0011): +m for a created order that is fulfilled, −g for one
+    cancelled for a reason marked operator_fault; reset on reset_day; time rules with their own m and g.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    OperatorBonusTimeRule:
+      type: object
+      required: [key, days_of_week, start_hour, end_hour, m, g]
+      properties:
+        key:
+          type: string
+        days_of_week:
+          description: ISO days, 1 = Monday … 7 = Sunday.
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        start_hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        end_hour:
+          description: Exclusive; city time of the order's creation.
+          type: integer
+          minimum: 1
+          maximum: 24
+        m:
+          type: integer
+          minimum: 0
+        g:
+          type: integer
+          minimum: 0
+
+    OperatorBonusSettings:
+      type: object
+      required: [m, g, count_cancellations, reset_day, time_rules]
+      properties:
+        m:
+          type: integer
+          minimum: 0
+        g:
+          type: integer
+          minimum: 0
+        count_cancellations:
+          type: boolean
+        reset_day:
+          type: integer
+          minimum: 1
+          maximum: 28
+        time_rules:
+          description: The first rule that matches wins; otherwise m and g.
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorBonusTimeRule"
+
+    OperatorBonusSettingsVersion:
+      type: object
+      required: [version, settings, effective_at, reason]
+      properties:
+        version:
+          type: integer
+          format: int64
+        settings:
+          $ref: "#/components/schemas/OperatorBonusSettings"
+        effective_at:
+          type: string
+          format: date-time
+        changed_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        reason:
+          type: string
+
+    OperatorBonusEntry:
+      type: object
+      required: [order_id, kind, rule_key, settings_version, points, occurred_at]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [FULFILLED, OPERATOR_FAULT_CANCELLATION]
+        rule_key:
+          description: The key of the matching time rule, or "default".
+          type: string
+        settings_version:
+          type: integer
+          format: int64
+        points:
+          type: integer
+        occurred_at:
+          type: string
+          format: date-time
+
+    OperatorBonusAccount:
+      type: object
+      required: [staff_id, balance, fulfilled_count, cancelled_count, period_started_at, last_entries]
+      properties:
+        staff_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        balance:
+          type: integer
+        fulfilled_count:
+          type: integer
+        cancelled_count:
+          type: integer
+        period_started_at:
+          type: string
+          format: date-time
+        last_entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorBonusEntry"
+
+    OperatorBonusPeriod:
+      type: object
+      required: [staff_id, period_key, period_started_at, period_ended_at, points, fulfilled_count, cancelled_count,
+                 closed_at]
+      properties:
+        staff_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        period_key:
+          description: The reset day that closed the period.
+          type: string
+          format: date
+        period_started_at:
+          type: string
+          format: date-time
+        period_ended_at:
+          type: string
+          format: date-time
+        points:
+          type: integer
+        fulfilled_count:
+          type: integer
+        cancelled_count:
+          type: integer
+        closed_at:
+          type: string
+          format: date-time
+
+    ChangeSettings:
+      allOf:
+        - $ref: "./common.yaml#/components/schemas/Command"
+        - type: object
+          required: [expected_version, settings, reason]
+          properties:
+            settings:
+              $ref: "#/components/schemas/OperatorBonusSettings"
+            reason:
+              type: string
+              minLength: 1
+              maxLength: 500
+
+    Accounts:
+      type: object
+      required: [accounts]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorBonusAccount"
+
+    Entries:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorBonusEntry"
+
+    Periods:
+      type: object
+      required: [periods]
+      properties:
+        periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorBonusPeriod"

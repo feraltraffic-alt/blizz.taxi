@@ -164,6 +164,8 @@ class JdbcCancelReasons implements CancelReasons {
                 .param("audience", audience.name()).param("code", code.trim()).query((rs, i) -> map(rs)).optional();
     }
 
+    // ---------------------------------------------------------------- helpers
+
     private Draft validate(Draft d) {
         if (d == null || d.audience() == null) {
             throw invalid("The side (RIDER, DRIVER, STAFF) is required");

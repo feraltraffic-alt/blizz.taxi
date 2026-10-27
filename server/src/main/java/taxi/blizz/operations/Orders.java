@@ -106,7 +106,5 @@ public interface Orders {
     }
 
     /** Empty when the order does not exist. */
-    default Optional<Origin> origin(UUID orderId) {
-        return Optional.empty();
-    }
+    Optional<Origin> origin(UUID orderId);
 }

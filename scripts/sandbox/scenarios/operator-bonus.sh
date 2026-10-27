@@ -30,6 +30,9 @@ phone_order() {
   expect 201
 }
 
+# Other scenarios use the same operator: compare with the balance before.
+BEFORE=$(api GET /api/operator/v1/me/bonus "$OPERATOR"); expect 200
+
 say "First phone order is fulfilled"
 FIRST=$(phone_order)
 OFFER=$(api GET /api/driver/v1/offers "$DRIVER" | jq -r '.[0].id')
@@ -54,7 +57,12 @@ expect 200
 say "Operator reads own bonus account"
 sleep 2
 BONUS=$(api GET /api/operator/v1/me/bonus "$OPERATOR"); expect 200
-[[ "$(jq -r .balance <<<"$BONUS")" == "-1" ]]
-[[ "$(jq -r .fulfilled_count <<<"$BONUS")" == "1" ]]
-[[ "$(jq -r .cancelled_count <<<"$BONUS")" == "1" ]]
+(( $(jq -r .balance <<<"$BONUS") - $(jq -r .balance <<<"$BEFORE") == -1 ))      # +2 −3
+(( $(jq -r .fulfilled_count <<<"$BONUS") - $(jq -r .fulfilled_count <<<"$BEFORE") == 1 ))
+(( $(jq -r .cancelled_count <<<"$BONUS") - $(jq -r .cancelled_count <<<"$BEFORE") == 1 ))
+# The next scenario starts without this driver online.
+CURRENT=$(api GET /api/driver/v1/work-sessions/current "$DRIVER")
+api POST "/api/driver/v1/work-sessions/$(jq -r .session_id <<<"$CURRENT")/close" "$DRIVER" \
+  "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$CURRENT")}" >/dev/null
+expect 200
 note "Done: operator bonus for fulfilled $FIRST and operator-fault cancellation $SECOND."
