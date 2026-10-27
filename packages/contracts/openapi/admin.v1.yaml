@@ -2843,7 +2843,118 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/client-deletions:
+    get:
+      operationId: listClientDeletions
+      summary: Riders' pending deletion requests with what blocks them
+      description: Oldest first; at most 100 per page. Needs clients.delete.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: after
+          in: query
+          required: false
+          description: Only requests made after this moment (the last requested_at of the previous page).
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DeletionRequestList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/client-deletions/{client_id}/complete:
+    post:
+      operationId: completeClientDeletion
+      summary: Complete a rider's deletion request
+      description: >-
+        Anonymizes the client: phone, name and language are cleared, every session ends, the bonuses burn, the
+        saved cards, push devices and the address-search log are removed; orders, the journal, ratings and the audit
+        log stay (REQ-PRV-04, AC-24). The phone becomes free: signing in with it creates a new client. 409 while a
+        blocker exists or without a pending request. Needs clients.delete; audited.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionDecisionCommand"
+      responses:
+        "200":
+          description: Completed.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DeletionDecision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/client-deletions/{client_id}/reject:
+    post:
+      operationId: rejectClientDeletion
+      summary: Reject a rider's deletion request
+      description: The account returns to the state it had before the request. Needs clients.delete; audited.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionDecisionCommand"
+      responses:
+        "200":
+          description: Rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DeletionDecision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
+  - name: Clients
+    description: Riders' accounts — deletion requests (REQ-RID-10)
   - name: Promotions
     description: Discounts and bonuses for riders (ADR 0009)
   - name: Wallets

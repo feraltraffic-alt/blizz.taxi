@@ -280,7 +280,8 @@ paths:
         Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
         the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED. The
         price is the quote's, never the client's. A repeat of the same command returns the same order. Card
-        payment is not available yet (S-09). One active order per payer → 409 ORDER_ALREADY_ACTIVE.
+        payment is not available yet (S-09). One active order per payer → 409 ORDER_ALREADY_ACTIVE. A rider whose
+        account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -301,6 +302,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
@@ -1132,6 +1135,93 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/rider/v1/me/deletion-request/challenge:
+    post:
+      operationId: requestAccountDeletionCode
+      summary: Send a code to confirm the account deletion
+      description: >-
+        Step one of deleting the account (REQ-RID-10): a code of purpose ACCOUNT_DELETION goes to the rider's current
+        phone, with the same resend delay and budgets as sign-in. A sign-in code does not confirm a deletion.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "201":
+          description: Code sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DeletionCodeChallenge"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+  /api/rider/v1/me/deletion-request:
+    post:
+      operationId: requestAccountDeletion
+      summary: Ask to delete the account
+      description: >-
+        Step two, a command: with the code of step one, ACTIVE or BLOCKED → DELETION_PENDING. Every other session
+        of the rider ends; this one stays, so the app can show the request and offer to cancel it. While the
+        request is pending the rider can sign in but not order (403 ACCOUNT_NOT_ACTIVE). Staff complete it by
+        hand: the profile is anonymized, the bonuses burn; orders, payments and the journal stay. Wrong or used
+        code → 422 OTP_INVALID; from another state → 409 STATE_CONFLICT.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionRequestCommand"
+      responses:
+        "200":
+          description: Requested.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/AccountDeletionStatus"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/rider/v1/me/deletion-request/cancel:
+    post:
+      operationId: cancelAccountDeletion
+      summary: Withdraw the deletion request
+      description: >-
+        A command: DELETION_PENDING → the state the account had before, as long as staff have not completed the
+        request; otherwise 409 STATE_CONFLICT.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionCancelCommand"
+      responses:
+        "200":
+          description: Withdrawn.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/AccountDeletionStatus"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
 
 tags:
   - name: Tips

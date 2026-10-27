@@ -106,6 +106,8 @@ components:
       description: |
         Domain error codes (section 22.4). VALIDATION_FAILED, UNAUTHENTICATED, OTP_INVALID, PICKUP_TOO_FAR and
         INTERNAL_ERROR are additions to the list in 22.4.
+        ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
+        pending), from the app or by an operator; a caller without an account is not affected.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
         payment still in progress. A command whose own payment is pending answers 202 with AcceptedOperation,
         never with a Problem (docs/decisions/0003).
@@ -133,6 +135,7 @@ components:
         - RATE_LIMITED
         - UNAUTHENTICATED
         - ACCESS_DENIED
+        - ACCOUNT_NOT_ACTIVE
         - NOT_FOUND
         - PROVIDER_UNAVAILABLE
         - OTP_INVALID

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/client-anonymized.v1.schema.json",
+  "title": "ClientAnonymized v1 payload",
+  "description": "Published by identity when staff complete a rider's deletion request and the client is anonymized (REQ-RID-10, REQ-PRV-04, section 36.4). Aggregate Client. Each module removes the rider's personal data it owns: notification the push devices and pending notifications, geo the address-search log, payments the saved cards and their tokens. Orders, the journal, ratings and the audit log stay (AC-24). Consumers are idempotent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["client_id"],
+  "properties": {
+    "client_id": { "type": "string", "format": "uuid" }
+  },
+  "examples": [
+    { "client_id": "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d" }
+  ]
+}
