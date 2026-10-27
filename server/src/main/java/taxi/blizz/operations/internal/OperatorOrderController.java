@@ -135,7 +135,7 @@ class OperatorOrderController {
     }
 
     @GetMapping("/orders")
-    List<OperatorOrderView> list(AccessClaims claims, @RequestParam UUID cityId,
+    List<OperatorOrderView> list(AccessClaims claims, @RequestParam(name = "city_id") UUID cityId,
                                  @RequestParam(defaultValue = "active") String status,
                                  @RequestParam(required = false)
                                  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
@@ -178,8 +178,10 @@ class OperatorOrderController {
     }
 
     @GetMapping("/orders/{orderId}/messages")
-    ChatMessages messages(AccessClaims claims, @PathVariable UUID orderId,
-                          @RequestParam @Size(min = 1, max = 500) String reason) {
+    ChatMessages messages(AccessClaims claims, @PathVariable UUID orderId, @RequestParam String reason) {
+        if (reason == null || reason.isBlank() || reason.length() > 500) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "reason must have 1 to 500 characters");
+        }
         return new ChatMessages(chat.conversation(claims.actor(), orderId, reason));
     }
 
