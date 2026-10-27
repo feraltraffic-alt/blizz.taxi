@@ -545,6 +545,525 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/cities:
+    get:
+      operationId: listCities
+      summary: Cities
+      description: All states; the boundary as GeoJSON. Needs geo.manage.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, PUBLISHED, ARCHIVED]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createCity
+      summary: Create a city draft
+      description: Boundary as a GeoJSON Polygon or MultiPolygon (WGS84). Publish it to put it in service.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCity"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/publish:
+    post:
+      operationId: publishCity
+      summary: Publish a city
+      description: Versioned; reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/archive:
+    post:
+      operationId: archiveCity
+      summary: Archive a city
+      description: Versioned; reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/zones/{zone_id}/publish:
+    post:
+      operationId: publishZone
+      summary: Publish a zone
+      description: Versioned; reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: zone_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/zones/{zone_id}/archive:
+    post:
+      operationId: archiveZone
+      summary: Archive a zone
+      description: Versioned; reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: zone_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/zones:
+    get:
+      operationId: listZones
+      summary: Zones of a city
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createZone
+      summary: Create a zone draft
+      description: Boundary as GeoJSON; type e.g. AIRPORT, STATION.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateZone"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/addresses:
+    get:
+      operationId: listOwnAddresses
+      summary: Own addresses of a city
+      description: Text fragment match; hidden ones when include_hidden. Needs geo.manage for the city.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: text
+          in: query
+          schema:
+            type: string
+        - name: include_hidden
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+  /api/admin/v1/addresses:
+    post:
+      operationId: createOwnAddress
+      summary: Add an own address
+      description: House number parsed structurally (2 ≠ 26); entrances are separate records.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAddress"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/addresses/{address_id}:
+    get:
+      operationId: getOwnAddress
+      summary: One own address, hidden included
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/addresses/{address_id}/update:
+    post:
+      operationId: updateOwnAddress
+      summary: Change an own address
+      description: Versioned; history and audit.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAddress"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/addresses/{address_id}/aliases:
+    post:
+      operationId: addOwnAddressAlias
+      summary: Add an alias
+      description: An alias in another language finds the same address.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddAlias"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/addresses/{address_id}/hide:
+    post:
+      operationId: hideOwnAddress
+      summary: Hide an address
+      description: Hidden addresses are not offered to riders.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/addresses/{address_id}/restore:
+    post:
+      operationId: restoreOwnAddress
+      summary: Restore a hidden address
+      description: Back in search.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnAddress"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/admin/v1/logs/activity:
     get:
       operationId: listStaffActivity
@@ -671,6 +1190,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
 
 tags:
+  - name: Geography
+    description: Cities, zones and own addresses (section 14), geo.manage
   - name: Drivers
     description: Driver review (section 6), driver.review
   - name: Logs
@@ -685,6 +1206,279 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    GeoJsonPolygon:
+      description: GeoJSON Polygon or MultiPolygon, WGS84 (longitude, latitude).
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [Polygon, MultiPolygon]
+        coordinates:
+          type: array
+
+    GeoRevision:
+      type: object
+      additionalProperties: false
+      required: [id, state, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+
+    GeoChange:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+
+    City:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, currency, timezone, priority, state, version, polygon]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+          examples: [Europe/Warsaw]
+        priority:
+          type: integer
+        state:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+
+    CityList:
+      type: object
+      additionalProperties: false
+      required: [cities]
+      properties:
+        cities:
+          type: array
+          items:
+            $ref: "#/components/schemas/City"
+
+    CreateCity:
+      type: object
+      additionalProperties: false
+      required: [command_id, code, name, currency, timezone, polygon, priority, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+        priority:
+          description: Higher wins where cities overlap.
+          type: integer
+        reason:
+          type: string
+
+    Zone:
+      type: object
+      additionalProperties: false
+      required: [id, city_id, type, priority, state, version, polygon]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          type: string
+        priority:
+          type: integer
+        state:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        version:
+          type: integer
+          format: int64
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+
+    ZoneList:
+      type: object
+      additionalProperties: false
+      required: [zones]
+      properties:
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Zone"
+
+    CreateZone:
+      type: object
+      additionalProperties: false
+      required: [command_id, type, polygon, priority, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          type: string
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+        priority:
+          type: integer
+        reason:
+          type: string
+
+    AddressData:
+      type: object
+      additionalProperties: false
+      required: [city_id, kind, label, language, pickup]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [HOUSE, PLACE, ENTRANCE]
+        label:
+          type: string
+        language:
+          type: string
+          examples: [uk]
+        street:
+          type: [string, "null"]
+        house_raw:
+          type: [string, "null"]
+          examples: ["2А"]
+        building:
+          type: [string, "null"]
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        instructions:
+          type: [string, "null"]
+        override:
+          description: Opaque link to a provider object this own address replaces (Q-08); no provider content.
+          type: [object, "null"]
+          properties:
+            provider:
+              type: string
+            object_id:
+              type: string
+
+    OwnAddress:
+      type: object
+      required: [id, data, source, visibility, version, aliases]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        data:
+          $ref: "#/components/schemas/AddressData"
+        house:
+          type: object
+          description: Parsed house number, suffix and building.
+        source:
+          type: string
+        visibility:
+          type: string
+          enum: [ACTIVE, HIDDEN]
+        version:
+          type: integer
+          format: int64
+        aliases:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              language:
+                type: string
+
+    AddressList:
+      type: object
+      additionalProperties: false
+      required: [addresses]
+      properties:
+        addresses:
+          type: array
+          items:
+            $ref: "#/components/schemas/OwnAddress"
+
+    CreateAddress:
+      type: object
+      additionalProperties: false
+      required: [command_id, data, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        data:
+          $ref: "#/components/schemas/AddressData"
+        reason:
+          type: string
+
+    UpdateAddress:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, data, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        data:
+          $ref: "#/components/schemas/AddressData"
+        reason:
+          type: string
+
+    AddAlias:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, alias, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        alias:
+          type: object
+          required: [label, language]
+          properties:
+            label:
+              type: string
+            language:
+              type: string
+        reason:
+          type: string
+
     ReviewItem:
       type: object
       additionalProperties: false

@@ -155,6 +155,31 @@ class JdbcAddressBook implements AddressBook {
     }
 
     @Override
+    public List<Address> listForStaff(Actor actor, UUID cityId, String text, boolean includeHidden, int limit) {
+        staff.require(actor, MANAGE_PERMISSION, cityId);
+        String fragment = text == null ? "" : AddressText.normalize(text);
+        return read(jdbc.sql(READ + """
+                where a.city_id = :city and (:hidden or a.visibility = 'ACTIVE')
+                  and (:text = '' or a.search_text like :contains
+                       or exists(select 1 from address_alias x where x.address_id = a.id and x.search_text like :contains))
+                order by a.updated_at desc, a.id limit :limit
+                """).param("city", cityId).param("hidden", includeHidden).param("text", fragment)
+                .param("contains", "%" + fragment.replace(" ", "%") + "%")
+                .param("limit", Math.max(1, Math.min(limit, 200)))).list();
+    }
+
+    @Override
+    public Address getForStaff(Actor actor, UUID id) {
+        UUID city = currentCity(id);
+        if (city == null) {
+            staff.require(actor, MANAGE_PERMISSION);
+            throw error(ErrorCode.NOT_FOUND, "Address not found");
+        }
+        staff.require(actor, MANAGE_PERMISSION, city);
+        return get(id, false).orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Address not found"));
+    }
+
+    @Override
     public Optional<Address> find(UUID id) {
         return read(jdbc.sql(READ + " where a.id = :id and a.visibility = 'ACTIVE'").param("id", id)).optional();
     }
