@@ -129,6 +129,10 @@ public class PaymentWorker {
 
     private PaymentProvider.Result send(Claimed op) {
         Context c = context(op.intentId());
+        if (c.token() == null && java.util.Set.of("AUTH", "CHARGE", "TIP").contains(op.type())) {
+            // The card was removed with its token (an anonymized rider): nothing is sent to the provider.
+            return new PaymentProvider.Result(PaymentProvider.Outcome.DECLINED, null, null, "The card was removed");
+        }
         PaymentProvider provider = providers.of(c.merchant());
         String serviceUrl = properties.publicBaseUrl() + "/payments/v1/callbacks/" + c.merchant().id();
         PaymentProvider.Customer customer = new PaymentProvider.Customer(
