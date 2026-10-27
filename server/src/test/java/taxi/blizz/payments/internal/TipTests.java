@@ -41,8 +41,8 @@ import taxi.blizz.pricing.QuoteService;
 @Import(TestcontainersConfiguration.class)
 class TipTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.5, 125.5);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 125.55);
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, 135.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 135.55);
 
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
@@ -67,7 +67,7 @@ class TipTests {
     @BeforeEach
     void setUp() {
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
-        cityId = rides.city("test-tips", "UAH", 125);
+        cityId = rides.city("test-tips", "UAH", 135);
         merchantId = jdbc.sql("select merchant_id from payment_merchant_city where city_id = :city")
                 .param("city", cityId).query(UUID.class).optional().orElseGet(() -> {
                     UUID id = UUID.randomUUID();
