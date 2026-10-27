@@ -100,7 +100,8 @@ class JdbcClientDeletionReview implements ClientDeletionReview {
     }
 
     Blockers blockers(UUID clientId) {
-        UUID activeOrder = orders.active(clientId).map(OrderView::id).orElse(null);
+        // Any open order blocks, a scheduled pre-order included (orders.active() leaves those out).
+        UUID activeOrder = orders.current(clientId).stream().map(OrderView::id).findFirst().orElse(null);
         List<Amount> debt = ledger.balances(Ledger.Account.RIDER_RECEIVABLE, clientId).stream()
                 .filter(b -> b.debitMinor() - b.creditMinor() > 0)
                 .map(b -> new Amount(b.currency(), b.debitMinor() - b.creditMinor())).toList();
