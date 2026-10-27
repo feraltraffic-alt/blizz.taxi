@@ -230,6 +230,8 @@ class OtpDeliveryTests {
         assertThat(body.get("recipients")).isEqualTo(List.of("380631234567"));
         assertThat((Map<String, Object>) body.get("sms")).containsEntry("sender", "Blizz")
                 .hasEntrySatisfying("text", text -> assertThat((String) text).startsWith("Код 123456. "));
+        assertThat(sms.text("123456", new PhoneNumber("+48512345678"))).as("a Polish number")
+                .startsWith("Kod 123456. ");
 
         http.answer = r -> new HttpTransport.Response(200, """
                 {"response_code":0,"response_status":"OK","response_result":[{"phone":"380631234567",

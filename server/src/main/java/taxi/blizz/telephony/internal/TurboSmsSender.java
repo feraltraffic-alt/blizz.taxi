@@ -53,7 +53,7 @@ class TurboSmsSender implements OtpSender {
         }
         String body = json.writeValueAsString(Map.of(
                 "recipients", List.of(phone.e164().substring(1)),
-                "sms", Map.of("sender", sender, "text", text(code))));
+                "sms", Map.of("sender", sender, "text", text(code, phone))));
         HttpTransport.Response response;
         try {
             response = http.send("POST", properties.turbosmsBaseUrl() + "/message/send.json",
@@ -64,9 +64,13 @@ class TurboSmsSender implements OtpSender {
         return result(response);
     }
 
-    /** Short and the same in uk and ru: "Код 123456. <service>". */
-    String text(String code) {
-        return "Код " + code + ". " + settings.current().settings().brand().serviceName();
+    /**
+     * Short, in the language of the number's country: "Kod 123456. <service>" for Poland, "Код 123456. <service>"
+     * otherwise (the same word in Ukrainian and Russian).
+     */
+    String text(String code, PhoneNumber phone) {
+        String word = phone.e164().startsWith("+48") ? "Kod " : "Код ";
+        return word + code + ". " + settings.current().settings().brand().serviceName();
     }
 
     @SuppressWarnings("unchecked")

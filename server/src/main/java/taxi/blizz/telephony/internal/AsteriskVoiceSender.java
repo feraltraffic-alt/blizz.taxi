@@ -63,7 +63,8 @@ class AsteriskVoiceSender implements OtpSender {
         try {
             response = http.send("POST", originate,
                     Map.of("Authorization", "Basic " + auth, "Content-Type", "application/json"),
-                    json.writeValueAsString(Map.of("variables", Map.of("OTP_CODE", code))));
+                    json.writeValueAsString(Map.of("variables", Map.of("OTP_CODE", code,
+                            "OTP_LANGUAGE", phone.e164().startsWith("+48") ? "pl" : "uk"))));
         } catch (UncheckedIOException e) {
             return Result.unknown("No answer from Asterisk");
         }
