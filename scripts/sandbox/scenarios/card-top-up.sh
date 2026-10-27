@@ -52,8 +52,8 @@ wait_for "$DRIVER" "/api/driver/v1/balance/card-top-ups/$(jq -r .id <<<"$TOP_UP"
 wait_for "$DRIVER" /api/driver/v1/balance/history \
   "([.balances[] | select(.currency == \"UAH\") | .balance_minor] | add // 0) - $BEFORE" 50000
 
-say "A rider cannot use the driver's path"
+say "A rider's token does not open the driver's path"
 api POST /api/driver/v1/balance/card-top-ups "$RIDER" \
   "{\"command_id\":\"$(uuid)\",\"city_id\":\"$KYIV\",\"amount_minor\":50000}" >/dev/null
-expect 403
+expect 401
 note "Done: the rider's account and the driver's balance were topped up by card."
