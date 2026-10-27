@@ -14,12 +14,12 @@ import tools.jackson.databind.json.JsonMapper;
  * addresses are not the rider's and stay. A repeat finds nothing to delete.
  */
 @Component
-class AnonymizedClientCleanup implements OutboxHandler {
+class AnonymizedClientSearches implements OutboxHandler {
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
 
-    AnonymizedClientCleanup(JdbcClient jdbc, JsonMapper json) {
+    AnonymizedClientSearches(JdbcClient jdbc, JsonMapper json) {
         this.jdbc = jdbc;
         this.json = json;
     }
