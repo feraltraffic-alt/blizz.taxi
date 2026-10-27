@@ -19,6 +19,6 @@ class StaffPermissionCatalogTests {
         assertThat(StaffPermissions.CODES).containsExactlyInAnyOrderElementsOf(Set.of(
                 Orders.CREATE_PERMISSION, Orders.CANCEL_PERMISSION, Orders.REASSIGN_PERMISSION,
                 OrderChat.VIEW_PERMISSION, DriverAdmission.REVIEW_PERMISSION, GeoConfiguration.MANAGE_PERMISSION,
-                TariffService.MANAGE_PERMISSION, DriverDebts.MANAGE_PERMISSION));
+                TariffService.MANAGE_PERMISSION, DriverDebts.MANAGE_PERMISSION, StaffPermissions.AUDIT_VIEW));
     }
 }

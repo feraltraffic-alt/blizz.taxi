@@ -92,8 +92,9 @@ class AuthController {
 
     /** Staff sign in by login and password (owner decision 27.10.2026). */
     @PostMapping("/staff/sign-in")
-    SessionResponse staffSignIn(@Valid @RequestBody StaffSignInRequest body) {
-        StaffSignIn.Result result = staffSignIn.signIn(body.login(), body.password(), body.audience(), body.deviceRef());
+    SessionResponse staffSignIn(@Valid @RequestBody StaffSignInRequest body, HttpServletRequest request) {
+        StaffSignIn.Result result = staffSignIn.signIn(body.login(), body.password(), body.audience(), body.deviceRef(),
+                request.getRemoteAddr());
         return SessionResponse.of(result.session(), null, result.passwordChangeRequired());
     }
 

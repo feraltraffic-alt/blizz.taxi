@@ -16,6 +16,9 @@ public final class StaffPermissions {
     public record Permission(String code, String group, String description) {
     }
 
+    /** Reading the staff logs; checked in identity itself. */
+    public static final String AUDIT_VIEW = "audit.view";
+
     public static final List<Permission> CATALOG = List.of(
             new Permission("orders.create", "Orders", "Create orders (phone orders)"),
             new Permission("orders.cancel", "Orders", "Cancel orders"),
@@ -24,7 +27,8 @@ public final class StaffPermissions {
             new Permission("driver.review", "Drivers", "Review drivers, vehicles and documents"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
-            new Permission("finance.manage", "Finance", "Driver debt limits and payments"));
+            new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
+            new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"));
 
     public static final Set<String> CODES = CATALOG.stream().map(Permission::code).collect(Collectors.toUnmodifiableSet());
 

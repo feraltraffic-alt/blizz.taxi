@@ -30,10 +30,12 @@ class JdbcStaffSignIn implements StaffSignIn {
     private final StaffProperties properties;
     private final SessionService sessions;
     private final AuditLog audit;
+    private final StaffActivityLog activity;
     private final Clock clock;
 
     JdbcStaffSignIn(JdbcClient jdbc, TransactionTemplate tx, StaffPasswords passwords, StaffProperties properties,
-                    SessionService sessions, AuditLog audit, Clock clock) {
+                    SessionService sessions, AuditLog audit, StaffActivityLog activity, Clock clock) {
+        this.activity = activity;
         this.jdbc = jdbc;
         this.tx = tx;
         this.passwords = passwords;
@@ -55,13 +57,15 @@ class JdbcStaffSignIn implements StaffSignIn {
     }
 
     @Override
-    public Result signIn(String login, String password, ApiAudience audience, String deviceRef) {
+    public Result signIn(String login, String password, ApiAudience audience, String deviceRef, String clientIp) {
         if (audience != ApiAudience.ADMIN && audience != ApiAudience.OPERATOR) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Staff sign in to ADMIN or OPERATOR");
         }
         String normalized = login == null ? "" : login.strip().toLowerCase(Locale.ROOT);
         // The attempt and its counters commit even when the sign-in fails.
         Attempt attempt = tx.execute(status -> attempt(normalized, password, audience));
+        activity.signIn(attempt.account() == null ? null : attempt.account().id(), normalized, audience.value(),
+                attempt.outcome().name(), clientIp);
         switch (attempt.outcome()) {
             case LOCKED -> throw new RateLimitedException("Too many wrong passwords; try again later",
                     attempt.retryAfter());

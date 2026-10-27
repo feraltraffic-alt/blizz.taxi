@@ -188,35 +188,35 @@ class StaffSignInTests {
     void wrongLoginAndWrongPasswordLookTheSameAndTooManyLockTheAccount() {
         String login = uniqueLogin("lock");
         operator(login, "lock-password-123");
-        assertCode(() -> signIn.signIn("nobody-" + login, "whatever-123", ApiAudience.ADMIN, null),
+        assertCode(() -> signIn.signIn("nobody-" + login, "whatever-123", ApiAudience.ADMIN, null, null),
                 ErrorCode.UNAUTHENTICATED);
         for (int i = 0; i < 4; i++) {
-            assertCode(() -> signIn.signIn(login, "wrong-password-0", ApiAudience.ADMIN, null), ErrorCode.UNAUTHENTICATED);
+            assertCode(() -> signIn.signIn(login, "wrong-password-0", ApiAudience.ADMIN, null, null), ErrorCode.UNAUTHENTICATED);
         }
-        assertCode(() -> signIn.signIn(login, "wrong-password-0", ApiAudience.ADMIN, null), ErrorCode.RATE_LIMITED);
-        assertCode(() -> signIn.signIn(login, "lock-password-123", ApiAudience.ADMIN, null), ErrorCode.RATE_LIMITED);
+        assertCode(() -> signIn.signIn(login, "wrong-password-0", ApiAudience.ADMIN, null, null), ErrorCode.RATE_LIMITED);
+        assertCode(() -> signIn.signIn(login, "lock-password-123", ApiAudience.ADMIN, null, null), ErrorCode.RATE_LIMITED);
         assertThat(jdbc.sql("select count(*) from staff_sign_in where login = :login and outcome = 'LOCKED'")
                 .param("login", login).query(Long.class).single()).isEqualTo(2);
-        assertCode(() -> signIn.signIn(login, "lock-password-123", ApiAudience.RIDER, null), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> signIn.signIn(login, "lock-password-123", ApiAudience.RIDER, null, null), ErrorCode.VALIDATION_FAILED);
     }
 
     @Test
     void suspendingSignsOutAndBlocksSignInAndResetUnlocks() {
         String login = uniqueLogin("susp");
         StaffMember member = operator(login, "susp-password-123", "orders.view");
-        StaffSignIn.Result session = signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null);
+        StaffSignIn.Result session = signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null);
 
         StaffMember suspended = directory.suspend(superAdmin, UUID.randomUUID(), member.id(), member.version(), "Left");
         assertThat(suspended.state()).isEqualTo("SUSPENDED");
         assertCode(() -> sessions.refresh(session.session().refreshToken()), ErrorCode.UNAUTHENTICATED);
-        assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null), ErrorCode.ACCESS_DENIED);
 
         StaffMember restored = directory.restore(superAdmin, UUID.randomUUID(), member.id(), suspended.version(), "Back");
         StaffMember reset = directory.resetPassword(superAdmin, UUID.randomUUID(), member.id(), restored.version(),
                 "temporary-pass-789", "Forgot the password");
         assertThat(reset.passwordChangeRequired()).isTrue();
-        assertThat(signIn.signIn(login, "temporary-pass-789", ApiAudience.OPERATOR, null).passwordChangeRequired()).isTrue();
-        assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null), ErrorCode.UNAUTHENTICATED);
+        assertThat(signIn.signIn(login, "temporary-pass-789", ApiAudience.OPERATOR, null, null).passwordChangeRequired()).isTrue();
+        assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null), ErrorCode.UNAUTHENTICATED);
     }
 
     // ------------------------------------------------------------ the super admin's rules
@@ -267,5 +267,61 @@ class StaffSignInTests {
             directory.update(superAdmin, UUID.randomUUID(), superAdmin.id(), self.version(), operatorProfile(), "t");
         })).isInstanceOf(DomainException.class).hasMessageContaining("super admin must remain");
         assertThat(directory.get(superAdmin, superAdmin.id()).state()).isEqualTo("ACTIVE");
+    }
+
+    // ------------------------------------------------------------ logs of all staff, by role
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void everyStaffActionIsLoggedWithTheRoleAndOnlyLogReadersSeeIt() throws Exception {
+        String login = uniqueLogin("logop");
+        StaffMember op = operator(login, "log-operator-123", "orders.view");
+        signIn.changePassword(new Actor(SubjectType.STAFF, op.id()), "log-operator-123", "log-operator-456");
+        assertThat(postJson("/auth/v1/staff/sign-in", null, Map.of("login", login, "password", "wrong-password-9",
+                "audience", "OPERATOR")).getResponse().getStatus()).isEqualTo(401);
+        String opToken = (String) body(postJson("/auth/v1/staff/sign-in", null,
+                Map.of("login", login, "password", "log-operator-456", "audience", "OPERATOR"))).get("access_token");
+        mvc.perform(get("/api/operator/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + opToken)).andReturn();
+        mvc.perform(get("/api/admin/v1/staff")).andReturn(); // no token: logged without a staff id
+
+        String rootToken = (String) body(postJson("/auth/v1/staff/sign-in", null,
+                Map.of("login", superLogin, "password", SUPER_PASSWORD, "audience", "ADMIN"))).get("access_token");
+        mvc.perform(get("/api/admin/v1/staff/" + op.id()).header(HttpHeaders.AUTHORIZATION, "Bearer " + rootToken))
+                .andReturn();
+
+        MvcResult operators = mvc.perform(get("/api/admin/v1/logs/activity").param("staff_id", op.id().toString())
+                .param("role", "OPERATOR").header(HttpHeaders.AUTHORIZATION, "Bearer " + rootToken)).andReturn();
+        assertThat(operators.getResponse().getStatus()).isEqualTo(200);
+        List<Map<String, Object>> entries = (List<Map<String, Object>>) body(operators).get("entries");
+        assertThat(entries).extracting(e -> e.get("kind") + " " + e.get("outcome") + " " + e.get("path"))
+                .contains("SIGN_IN BAD_CREDENTIALS /auth/v1/staff/sign-in", "SIGN_IN SUCCESS /auth/v1/staff/sign-in",
+                        "REQUEST OK /api/operator/v1/me");
+        assertThat(entries).allSatisfy(e -> assertThat(e).containsEntry("role", "OPERATOR"));
+
+        List<Map<String, Object>> supers = (List<Map<String, Object>>) body(mvc.perform(get("/api/admin/v1/logs/activity")
+                .param("staff_id", superAdmin.id().toString()).param("kind", "REQUEST")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rootToken)).andReturn()).get("entries");
+        assertThat(supers).anySatisfy(e -> {
+            assertThat(e).containsEntry("path", "/api/admin/v1/staff/{staff_id}").containsEntry("role", "SUPER_ADMIN");
+            assertThat((Map<String, Object>) e.get("resource_ids")).containsEntry("staff_id", op.id().toString());
+        });
+        assertThat(jdbc.sql("""
+                        select count(*) from staff_activity
+                        where staff_id is null and path = '/api/admin/v1/staff' and status = 401""")
+                .query(Long.class).single()).isPositive();
+        assertThat(jdbc.sql("select count(*) from staff_activity where cast(staff_activity.* as text) like '%log-operator%'")
+                .query(Long.class).single()).as("no passwords in the log").isZero();
+
+        List<Map<String, Object>> changes = (List<Map<String, Object>>) body(mvc.perform(get("/api/admin/v1/logs/changes")
+                .param("role", "SUPER_ADMIN").param("resource_id", op.id().toString())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rootToken)).andReturn()).get("changes");
+        assertThat(changes).extracting(c -> c.get("action")).contains("staff.create");
+
+        assertThat(mvc.perform(get("/api/admin/v1/logs/activity").header(HttpHeaders.AUTHORIZATION,
+                "Bearer " + body(postJson("/auth/v1/staff/sign-in", null, Map.of("login", login, "password",
+                        "log-operator-456", "audience", "ADMIN"))).get("access_token"))).andReturn()
+                .getResponse().getStatus()).as("without audit.view").isEqualTo(403);
+        assertThatThrownBy(() -> jdbc.sql("update staff_activity set outcome = 'x'").update())
+                .rootCause().hasMessageContaining("append-only");
     }
 }
