@@ -18,9 +18,12 @@ import taxi.blizz.payments.CardPayments;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.identity.AccountDirectory;
+import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.operations.AssignmentView;
+import taxi.blizz.operations.CallerContact;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.OrderChannel;
 import taxi.blizz.operations.OrderView;
@@ -53,6 +56,7 @@ class JdbcOrders implements Orders {
     private final StaffDirectory directory;
     private final JsonMapper json;
     private final ServiceSettings settings;
+    private final AccountDirectory accounts;
     private final CardPayments cardPayments;
     private final taxi.blizz.finance.RiderWallets wallets;
 
@@ -62,7 +66,9 @@ class JdbcOrders implements Orders {
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
-               ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets) {
+               ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
+               AccountDirectory accounts) {
+        this.accounts = accounts;
         this.cardPayments = cardPayments;
         this.wallets = wallets;
         this.settings = settings;
@@ -254,6 +260,11 @@ class JdbcOrders implements Orders {
                 if (requested != null && requested != OrderChannel.APP && requested != OrderChannel.WEB) {
                     throw new DomainException(ErrorCode.VALIDATION_FAILED, "A client orders from the app or the website");
                 }
+                // E.g. a deletion request is pending (issue #56): the rider may still sign in, not order.
+                String state = accounts.accountState(actor).orElse("MISSING");
+                if (!"ACTIVE".equals(state)) {
+                    throw new DomainException(ErrorCode.ACCOUNT_NOT_ACTIVE, "The account is " + state);
+                }
                 return (requested == null ? OrderChannel.APP : requested).name();
             }
             case STAFF -> {
@@ -261,12 +272,30 @@ class JdbcOrders implements Orders {
                     throw new DomainException(ErrorCode.VALIDATION_FAILED, "Staff orders are phone orders");
                 }
                 requireStaff(actor, CREATE_PERMISSION, city.id());
+                requireCallerMayOrder(order.caller());
                 return OrderChannel.PHONE.name();
             }
             case PARTNER -> throw new DomainException(ErrorCode.ACCESS_DENIED,
                     "Partner orders arrive through the exchange protocol (M2)");
             default -> throw new DomainException(ErrorCode.ACCESS_DENIED, "Not allowed to create orders");
         }
+    }
+
+    /**
+     * A phone order for a caller whose rider account is BLOCKED or has a pending deletion request is refused with
+     * a reason the operator can tell the caller (issue #56). A caller without an account, or with a record staff
+     * created for earlier phone orders (UNVERIFIED), is not affected.
+     */
+    private void requireCallerMayOrder(CallerContact caller) {
+        if (caller == null || caller.phone() == null) {
+            return;
+        }
+        accounts.clientByPhone(PhoneNumber.parse(caller.phone()))
+                .flatMap(client -> accounts.accountState(new Actor(SubjectType.CLIENT, client)))
+                .filter(state -> !"ACTIVE".equals(state) && !"UNVERIFIED".equals(state))
+                .ifPresent(state -> {
+                    throw new DomainException(ErrorCode.ACCOUNT_NOT_ACTIVE, "The caller's account is " + state);
+                });
     }
 
     record CancelRequest(UUID orderId, long expectedVersion, String reasonCode) {

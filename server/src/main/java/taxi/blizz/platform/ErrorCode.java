@@ -35,6 +35,8 @@ public enum ErrorCode {
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),
     ACCESS_DENIED(403),
+    /** A new order for a rider whose account is not ACTIVE, e.g. with a pending deletion request (issue #56). */
+    ACCOUNT_NOT_ACTIVE(403),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),
     /** Wrong, expired, used or exhausted one-time code; deliberately not more specific. */
