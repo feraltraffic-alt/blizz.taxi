@@ -340,7 +340,8 @@ class OrderCore {
      * Drivers that may get this order now, nearest first, within {@code radius} metres: open
      * accepting session in the order's city with a fresh heartbeat and location, active account,
      * admission, an approved vehicle with the class, free capacity, and no earlier offer for this
-     * order (REQ-DSP-01). The final check repeats under locks when the offer is made.
+     * order (REQ-DSP-01); for payment at the terminal only drivers with one (personal offers never fall back to cash).
+     * The final check repeats under locks when the offer is made.
      */
     List<Candidate> candidates(UUID orderId, int radius, Integer limit, boolean includeOffered) {
         OffsetDateTime now = now();
@@ -359,6 +360,7 @@ class OrderCore {
                           and d.review_status = 'APPROVED'
                           and v.state = 'APPROVED'
                           and o.vehicle_class = any(v.class_approvals)
+                          and (o.payment_method <> 'TERMINAL' or d.has_payment_terminal)
                           and (coalesce(c.occupancy, 'FREE') = 'FREE'
                                or (:includeOffered and c.occupancy = 'OFFERED'))
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)

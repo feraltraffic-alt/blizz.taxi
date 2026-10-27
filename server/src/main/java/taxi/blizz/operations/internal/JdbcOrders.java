@@ -94,6 +94,14 @@ class JdbcOrders implements Orders {
             // A phone order is paid in cash or by a payment link (REQ-PAY-17, later).
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Only a rider pays by a saved card");
         }
+        boolean terminal = order.paymentMethod() == PaymentMethod.TERMINAL;
+        if (terminal && actor.type() != SubjectType.STAFF) {
+            // Card at the driver's terminal is arranged by the operator on the phone (owner decision 27.10.2026).
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Payment at the driver's terminal is for phone orders");
+        }
+        if (order.terminalFallbackToCash() && !terminal) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The cash fallback is only for terminal payment");
+        }
         if (order.quoteId() == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "An order needs a quote");
         }
@@ -131,12 +139,12 @@ class JdbcOrders implements Orders {
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
                                                         dropoff_label, payment_method, payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
-                                                        created_at, updated_at)
+                                                        terminal_fallback_cash, created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
                                         :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
-                                        :releaseAt, :now, :now)""")
+                                        :releaseAt, :fallback, :now, :now)""")
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
                         .param("status", card ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
                         .param("pickupAt", pickupAt)
@@ -156,7 +164,8 @@ class JdbcOrders implements Orders {
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", order.paymentMethod().name())
-                        .param("paymentState", card ? "AUTH_PENDING" : "CASH_EXPECTED")
+                        .param("paymentState", card ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
+                        .param("fallback", order.terminalFallbackToCash())
                         .param("price", quote.amountMinor())
                         .param("currency", quote.currency())
                         .param("quoteId", quote.id())

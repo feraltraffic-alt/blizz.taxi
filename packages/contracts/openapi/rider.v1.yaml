@@ -1315,7 +1315,7 @@ components:
           type: [string, "null"]
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         driver:
           oneOf:
             - $ref: "#/components/schemas/HistoryDriver"
@@ -1366,14 +1366,17 @@ components:
           type: string
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          description: TERMINAL — a card at the driver's own terminal, only in phone orders.
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         payment_state:
           type: [string, "null"]
           description: >-
             Cash — what the driver reported. Card (ADR 0008) — AUTH_PENDING while the hold is asked for (the order is
             AWAITING_PAYMENT and no search runs), AUTHORIZED once it is held, PAYMENT_DECLINED when the bank refused.
+            Terminal — what the driver reported, like cash.
           enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, AUTH_PENDING, AUTHORIZED, PAYMENT_DECLINED,
-                 HOLD_RELEASED, CAPTURE_PENDING, PAID, PARTIALLY_PAID, null]
+                 HOLD_RELEASED, CAPTURE_PENDING, PAID, PARTIALLY_PAID, TERMINAL_EXPECTED, TERMINAL_REPORTED,
+                 TERMINAL_NOT_RECEIVED, null]
         price_minor:
           description: Agreed price from the quote.
           type: [integer, "null"]

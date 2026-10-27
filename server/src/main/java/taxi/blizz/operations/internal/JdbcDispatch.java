@@ -158,9 +158,11 @@ class JdbcDispatch implements Dispatch {
                         join dispatch_attempt a on a.order_id = o.id and a.phase = 'BROADCAST'
                         join work_session ws on ws.driver_id = :driver and ws.state = 'OPEN'
                         join vehicle v on v.id = ws.vehicle_id
+                        join driver d on d.id = ws.driver_id
                         where o.status = 'SEARCHING'
                           and o.city_id = ws.city_id
                           and o.vehicle_class = any(v.class_approvals)
+                          and (o.payment_method <> 'TERMINAL' or d.has_payment_terminal or o.terminal_fallback_cash)
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
                           and not exists (select 1 from assignment x where x.order_id = o.id and x.driver_id = :driver)
                         order by distance_m, o.created_at

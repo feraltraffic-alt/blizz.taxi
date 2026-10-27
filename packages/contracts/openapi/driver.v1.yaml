@@ -1029,7 +1029,7 @@ paths:
     post:
       operationId: completeTrip
       summary: Complete the trip
-      description: IN_PROGRESS → COMPLETED; the driver is free at once. reported_at is the device time; a large difference from server time is flagged. For cash, cash_received is required — the driver's statement, not proof (REQ-PAY-15).
+      description: IN_PROGRESS → COMPLETED; the driver is free at once. reported_at is the device time; a large difference from server time is flagged. For CASH and TERMINAL (a card at the driver's own terminal), cash_received is required — the driver's statement that the money came, not proof (REQ-PAY-15).
       tags: [Trip]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1709,7 +1709,7 @@ components:
     DriverProfile:
       type: object
       additionalProperties: false
-      required: [id, review_status, version, vehicles, documents]
+      required: [id, review_status, has_payment_terminal, version, vehicles, documents]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -1719,6 +1719,11 @@ components:
           type: [string, "null"]
         review_status:
           $ref: "#/components/schemas/ReviewStatus"
+        has_payment_terminal:
+          description: >-
+            The driver takes cards at an own terminal (as a sole trader). Phone orders paid at a terminal are offered
+            to such drivers; the money stays with the driver like cash, the commission comes from the balance.
+          type: boolean
         version:
           description: Pass as expected_version to commands.
           type: integer
@@ -2028,7 +2033,7 @@ components:
           type: [string, "null"]
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
 
     PreorderList:
       type: object
@@ -2107,7 +2112,7 @@ components:
           type: string
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         price_minor:
           type: [integer, "null"]
           format: int64
@@ -2133,7 +2138,7 @@ components:
           type: string
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         price_minor:
           type: [integer, "null"]
           format: int64
@@ -2276,6 +2281,7 @@ components:
         reported_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         cash_received:
+          description: CASH — the cash was received; TERMINAL — the card payment at the driver's terminal went through.
           type: boolean
 
     TripHistoryItem:
@@ -2305,7 +2311,7 @@ components:
           type: [string, "null"]
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         phase:
           type: string
           enum: [COMPLETED, ABORTED]
@@ -2338,7 +2344,7 @@ components:
           type: string
         payment_method:
           type: string
-          enum: [CASH, CARD, SERVICE]
+          enum: [CASH, CARD, SERVICE, TERMINAL]
         price_minor:
           type: [integer, "null"]
           format: int64

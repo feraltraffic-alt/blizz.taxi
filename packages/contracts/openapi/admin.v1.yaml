@@ -506,6 +506,60 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/drivers/{driver_id}/payment-terminal:
+    post:
+      operationId: setDriverPaymentTerminal
+      summary: Mark whether the driver has an own card terminal
+      description: >-
+        Needs driver.review; the reason is required and the change is audited. Phone orders paid at a terminal are
+        offered to drivers marked here (owner decision 27.10.2026).
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, has_terminal, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                has_terminal:
+                  type: boolean
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+      responses:
+        "200":
+          description: The driver after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/drivers/{driver_id}/reinstate:
     post:
       operationId: reinstateDriver

@@ -104,7 +104,10 @@ paths:
       summary: Create a phone order from a quote
       description: |
         The order is created as channel PHONE by the signed-in employee. The quote must belong to that
-        operator and match the class and points. CASH is the only payment method until S-09. The caller is
+        operator and match the class and points. Paid in CASH or by a card at the driver's own TERMINAL (owner
+        decision 27.10.2026; a payment link comes later). A TERMINAL order is offered only to drivers with a terminal;
+        with terminal_fallback_to_cash, drivers without one may take it from the broadcast phase and it becomes a
+        CASH order on assignment (event PaymentMethodChanged). The caller is
         contact data for this order only and is not linked to or turned into a client account (REQ-OPS-02,
         REQ-OPS-03, REQ-PRC-06).
       tags: [Orders]
@@ -914,7 +917,10 @@ components:
           maxLength: 300
         payment_method:
           type: string
-          enum: [CASH]
+          enum: [CASH, TERMINAL]
+        terminal_fallback_to_cash:
+          description: Only with TERMINAL — the caller agreed to pay cash if no car with a terminal takes the order.
+          type: [boolean, "null"]
         call_ref:
           description: Optional telephony/call reference stored as the order source_ref; no telephony integration is implied.
           type: string

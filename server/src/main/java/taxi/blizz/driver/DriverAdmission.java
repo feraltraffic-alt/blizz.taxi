@@ -65,6 +65,13 @@ public interface DriverAdmission {
     /** SUSPENDED → APPROVED with a reason, when the cause of the suspension is gone. */
     DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
 
+    /**
+     * Marks that the driver has (or no longer has) an own card terminal, with a reason; audited. Phone orders paid at
+     * a terminal are offered only to such drivers (owner decision 27.10.2026).
+     */
+    DriverProfile setPaymentTerminal(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
+                                     boolean hasTerminal, String reason);
+
     // ---------------------------------------------------------------- the reviewer's views (admin panel)
 
     /** One line of the review queue; {@code since} is when the driver entered the status. */

@@ -13,7 +13,8 @@ import taxi.blizz.geo.GeoPoint;
  * null and the caller is the staff member. The price is never taken from the request: the order
  * consumes {@code quoteId}, a quote issued to the same caller for the same city, class and points
  * (REQ-PRC-05, REQ-PRC-06). {@code pickupAt} asks for a pickup time; it must be the time the quote was made for,
- * and far enough ahead it makes a pre-order (ADR 0006).
+ * and far enough ahead it makes a pre-order (ADR 0006). {@code terminalFallbackToCash}: with TERMINAL, the caller
+ * agreed to pay cash if no car with a terminal takes the order (owner decision 27.10.2026).
  */
 public record CreateOrder(
         UUID payerClientId,
@@ -27,7 +28,15 @@ public record CreateOrder(
         OrderChannel channel,
         String sourceRef,
         CallerContact caller,
-        Instant pickupAt) {
+        Instant pickupAt,
+        boolean terminalFallbackToCash) {
+
+    public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
+                       String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
+                       String sourceRef, CallerContact caller, Instant pickupAt) {
+        this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
+                channel, sourceRef, caller, pickupAt, false);
+    }
 
     /** An order for now; {@code pickupAt} is null. */
     public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,

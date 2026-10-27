@@ -89,6 +89,16 @@ class AdminDriverReviewController {
         return admission.suspend(claims.actor(), body.commandId(), driverId, body.expectedVersion(), body.reason());
     }
 
+    record Terminal(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull Boolean hasTerminal,
+                    @NotBlank @Size(max = 1000) String reason) {
+    }
+
+    @PostMapping("/{driverId}/payment-terminal")
+    DriverProfile paymentTerminal(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Terminal body) {
+        return admission.setPaymentTerminal(claims.actor(), body.commandId(), driverId, body.expectedVersion(),
+                body.hasTerminal(), body.reason());
+    }
+
     @PostMapping("/{driverId}/reinstate")
     DriverProfile reinstate(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Change body) {
         return admission.reinstate(claims.actor(), body.commandId(), driverId, body.expectedVersion(), body.reason());

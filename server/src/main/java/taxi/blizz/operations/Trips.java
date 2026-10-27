@@ -38,7 +38,8 @@ public interface Trips {
     /**
      * IN_PROGRESS → COMPLETED, order FULFILLED, driver free (REQ-ORD-04/05). {@code reportedAt} is the
      * device time of completion; the server time is recorded too and a large difference is flagged.
-     * For cash, {@code cashReceived} is the driver's statement, not proof (REQ-PAY-15).
+     * For cash and for a card at the driver's own terminal, {@code cashReceived} is the driver's statement that the
+     * money came, not proof (REQ-PAY-15).
      */
     /**
      * The driver gives up the order before the start (REQ-ASG-04, REQ-CAN-05): the assignment is

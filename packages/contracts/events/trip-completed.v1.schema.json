@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.blizz.taxi/events/trip-completed.v1.schema.json",
   "title": "TripCompleted v1 payload",
-  "description": "Payload of TripCompleted (aggregate Order). Published in the same transaction as the fact of completion and the final fare; finance posts the ledger from it exactly once per final_fare_id (REQ-LED-05, AC-16). Amounts are minor units of currency. cash_received is the driver's statement for cash orders (REQ-PAY-15).",
+  "description": "Payload of TripCompleted (aggregate Order). Published in the same transaction as the fact of completion and the final fare; finance posts the ledger from it exactly once per final_fare_id (REQ-LED-05, AC-16). Amounts are minor units of currency. cash_received is the driver's statement for cash orders and for a card at the driver's own terminal (REQ-PAY-15).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,8 +18,8 @@
       "type": ["string", "null"],
       "format": "uuid"
     },
-    "payment_method": { "description": "SERVICE: a follow-up the service pays for (T-22).", "type": "string", "enum": ["CASH", "CARD", "SERVICE"] },
-    "cash_received": { "description": "Present for CASH only.", "type": "boolean" },
+    "payment_method": { "description": "SERVICE: a follow-up the service pays for (T-22). TERMINAL: a card at the driver's own terminal; the money is with the driver like cash.", "type": "string", "enum": ["CASH", "CARD", "SERVICE", "TERMINAL"] },
+    "cash_received": { "description": "Present for CASH and TERMINAL: the money (cash, or the card payment at the terminal) came.", "type": "boolean" },
     "reported_at": { "description": "Device time of completion.", "type": "string", "format": "date-time" },
     "needs_review": { "description": "The trip needs review for any reason: an arrival or start confirmed with an exception, or a completion time far from server time.", "type": "boolean" },
     "final_fare_id": { "type": "string", "format": "uuid" },

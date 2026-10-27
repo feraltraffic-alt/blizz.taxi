@@ -77,6 +77,8 @@ class JdbcPreorders implements Preorders {
                         where o.status = 'SCHEDULED' and o.city_id = :city and o.pickup_at > :now
                           and exists (select 1 from vehicle v
                                       where v.id = :vehicle and o.vehicle_class = any(v.class_approvals))
+                          and (o.payment_method <> 'TERMINAL'
+                               or exists (select 1 from driver d where d.id = :driver and d.has_payment_terminal))
                           and not exists (select 1 from preorder_reservation r
                                           where r.order_id = o.id and r.state = 'RESERVED')
                           and not exists (select 1 from preorder_reservation r
@@ -135,12 +137,16 @@ class JdbcPreorders implements Preorders {
                     boolean fits = jdbc.sql("""
                                     select count(*) from vehicle v, ride_order o
                                     where v.id = :vehicle and o.id = :order and o.vehicle_class = any(v.class_approvals)
-                                      and o.city_id = :city and o.pickup_at > :now""")
+                                      and o.city_id = :city and o.pickup_at > :now
+                                      and (o.payment_method <> 'TERMINAL' or exists (
+                                            select 1 from driver d where d.id = :driver and d.has_payment_terminal))""")
+                            .param("driver", driver.id())
                             .param("vehicle", availability.vehicleId()).param("order", orderId)
                             .param("city", availability.cityId()).param("now", core.now())
                             .query(Integer.class).single() == 1;
                     if (!fits) {
-                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "Class, city or time does not match");
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE,
+                                "Class, city, time or payment terminal does not match");
                     }
                     long earlier = jdbc.sql("""
                                     select count(*) from preorder_reservation where order_id = :order and driver_id = :driver""")

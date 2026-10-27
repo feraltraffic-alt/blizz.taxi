@@ -62,6 +62,13 @@ class ProblemQueues implements OutboxHandler {
                     "Cash trip completed with CASH_NOT_RECEIVED; fare " + trip.amountMinor() + " " + trip.currency()
                             + " minor units. Contact the rider; financial changes only through the dispute decision.");
         }
+        if ("TERMINAL".equals(trip.paymentMethod()) && Boolean.FALSE.equals(trip.cashReceived())) {
+            cases.openFromSystem("terminal-not-received:" + trip.orderId(), cityId, Category.PAYMENT, trip.orderId(),
+                    "Driver reports the terminal payment did not go through", Priority.HIGH,
+                    "Phone order paid at the driver's terminal completed with TERMINAL_NOT_RECEIVED; fare "
+                            + trip.amountMinor() + " " + trip.currency()
+                            + " minor units. Contact the caller; financial changes only through the dispute decision.");
+        }
         if (Boolean.TRUE.equals(trip.needsReview())) {
             cases.openFromSystem("trip-review:" + trip.orderId(), cityId, Category.TRIP_REVIEW, trip.orderId(),
                     "Trip flagged for review", Priority.NORMAL,

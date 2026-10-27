@@ -74,9 +74,14 @@ class TripFarePosting implements OutboxHandler {
         }
         ledger.post(new Ledger.Posting("trip-fare:" + trip.finalFareId(), "TRIP_FARE", trip.orderId(),
                 trip.currency(), "Fare of a completed trip, final fare v" + trip.finalFareVersion(), fare));
-        if ("CASH".equals(trip.paymentMethod()) && Boolean.TRUE.equals(trip.cashReceived())) {
-            ledger.post(new Ledger.Posting("trip-cash:" + trip.orderId(), "CASH_COLLECTED", trip.orderId(),
-                    trip.currency(), "Cash the driver reported as received",
+        // Cash, or a card at the driver's own terminal: the money is with the driver, who owes the service its
+        // commission from the balance (owner decision 27.10.2026).
+        boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
+        if (collectedByDriver && Boolean.TRUE.equals(trip.cashReceived())) {
+            boolean cash = "CASH".equals(trip.paymentMethod());
+            ledger.post(new Ledger.Posting("trip-cash:" + trip.orderId(), cash ? "CASH_COLLECTED" : "TERMINAL_COLLECTED",
+                    trip.orderId(), trip.currency(), cash ? "Cash the driver reported as received"
+                            : "Card payment at the driver's own terminal, as the driver reported",
                     List.of(Line.debit(Account.DRIVER_PAYABLE, trip.driverId(), trip.amountMinor()),
                             Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()))));
         }

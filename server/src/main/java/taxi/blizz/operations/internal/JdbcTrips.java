@@ -276,8 +276,11 @@ class JdbcTrips implements Trips {
                                     rs.getObject(2, UUID.class), rs.getObject(3, UUID.class)))
                             .single();
                     PaymentMethod payment = facts.payment();
-                    if (payment == PaymentMethod.CASH && cashReceived == null) {
-                        throw new DomainException(ErrorCode.VALIDATION_FAILED, "State whether the cash was received");
+                    // At the driver's own terminal the money reaches the driver just like cash (owner decision 27.10.2026).
+                    boolean collectedByDriver = payment == PaymentMethod.CASH || payment == PaymentMethod.TERMINAL;
+                    if (collectedByDriver && cashReceived == null) {
+                        throw new DomainException(ErrorCode.VALIDATION_FAILED, payment == PaymentMethod.CASH
+                                ? "State whether the cash was received" : "State whether the terminal payment went through");
                     }
                     OffsetDateTime now = core.now();
                     boolean suspiciousTime = Duration.between(reportedAt, now).abs()
@@ -298,9 +301,10 @@ class JdbcTrips implements Trips {
                             .param("now", now)
                             .param("id", trip.assignmentId())
                             .update();
-                    if (payment == PaymentMethod.CASH) {
+                    if (collectedByDriver) {
+                        String prefix = payment == PaymentMethod.CASH ? "CASH" : "TERMINAL";
                         jdbc.sql("update ride_order set payment_state = :state where id = :id")
-                                .param("state", Boolean.TRUE.equals(cashReceived) ? "CASH_REPORTED" : "CASH_NOT_RECEIVED")
+                                .param("state", prefix + (Boolean.TRUE.equals(cashReceived) ? "_REPORTED" : "_NOT_RECEIVED"))
                                 .param("id", trip.orderId())
                                 .update();
                     } else if (payment == PaymentMethod.CARD) {
@@ -329,8 +333,8 @@ class JdbcTrips implements Trips {
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("trip_id", tripId.toString());
                     payload.put("payment_method", payment.name());
-                    if (payment == PaymentMethod.CASH) {
-                        payload.put("cash_received", cashReceived);
+                    if (collectedByDriver) {
+                        payload.put("cash_received", cashReceived); // for TERMINAL: the card payment went through
                     }
                     payload.put("reported_at", reportedAt.toString());
                     // Any reason: an arrival or start with an exception earlier, or the completion time now.

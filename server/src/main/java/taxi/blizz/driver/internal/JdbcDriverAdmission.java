@@ -79,11 +79,12 @@ class JdbcDriverAdmission implements DriverAdmission {
     @Override
     @Transactional(readOnly = true)
     public DriverProfile profile(UUID driverId) {
-        record Row(String name, String language, String status, long version) {
+        record Row(String name, String language, String status, long version, boolean terminal) {
         }
-        Row row = jdbc.sql("select name, language, review_status, version from driver where id = :id")
+        Row row = jdbc.sql("select name, language, review_status, version, has_payment_terminal from driver where id = :id")
                 .param("id", driverId)
-                .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getLong(4)))
+                .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getLong(4),
+                        rs.getBoolean(5)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Driver not found"));
 
@@ -111,7 +112,7 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .list();
 
         return new DriverProfile(driverId, row.name(), row.language(), ReviewStatus.valueOf(row.status()),
-                row.version(), vehicles, documents);
+                row.version(), row.terminal(), vehicles, documents);
     }
 
     @Override
@@ -363,6 +364,32 @@ class JdbcDriverAdmission implements DriverAdmission {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a suspended driver can be reinstated");
                     }
                     transition(driverId, ReviewStatus.SUSPENDED, ReviewStatus.APPROVED, reviewer, reason);
+                    return profile(driverId);
+                });
+    }
+
+    record TerminalRequest(UUID driverId, long expectedVersion, boolean hasTerminal, String reason) {
+    }
+
+    @Override
+    public DriverProfile setPaymentTerminal(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
+                                            boolean hasTerminal, String reason) {
+        requireReviewer(reviewer);
+        requireReason(reason);
+        return commands.execute(new CommandKey(reviewer, "driver.payment-terminal", commandId),
+                new TerminalRequest(driverId, expectedVersion, hasTerminal, reason), DriverProfile.class, () -> {
+                    lockVersion(driverId, expectedVersion);
+                    boolean before = jdbc.sql("select has_payment_terminal from driver where id = :id")
+                            .param("id", driverId).query(Boolean.class).single();
+                    jdbc.sql("""
+                                    update driver set has_payment_terminal = :terminal, updated_at = :now,
+                                                      version = version + 1
+                                    where id = :id""")
+                            .param("terminal", hasTerminal).param("now", now())
+                            .param("id", driverId).update();
+                    auditLog.record(new AuditEntry(reviewer, "driver.payment_terminal", "driver", driverId.toString(),
+                            reason, java.util.Map.of("has_payment_terminal", before),
+                            java.util.Map.of("has_payment_terminal", hasTerminal)));
                     return profile(driverId);
                 });
     }

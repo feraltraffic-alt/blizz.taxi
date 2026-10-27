@@ -84,7 +84,8 @@ class OperatorOrderController {
                             @NotNull GeoPoint pickup, @Size(max = 300) String pickupLabel,
                             @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                             @NotNull PaymentMethod paymentMethod, @Size(max = 200) String callRef,
-                            @NotNull @Valid CallerInput caller, java.time.Instant pickupAt) {
+                            @NotNull @Valid CallerInput caller, java.time.Instant pickupAt,
+                            Boolean terminalFallbackToCash) {
     }
 
     record CancelRequest(@NotNull UUID commandId, @NotNull Long expectedVersion,
@@ -132,14 +133,16 @@ class OperatorOrderController {
     @PostMapping("/orders")
     @ResponseStatus(HttpStatus.CREATED)
     OperatorOrderView create(AccessClaims claims, @Valid @RequestBody CreatePhoneOrder body) {
-        if (body.paymentMethod() != PaymentMethod.CASH) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Phone orders support cash only");
+        // Cash, or a card at the driver's own terminal (owner decision 27.10.2026); a payment link comes later (#46).
+        if (body.paymentMethod() != PaymentMethod.CASH && body.paymentMethod() != PaymentMethod.TERMINAL) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Phone orders are paid in cash or at the terminal");
         }
         PhoneNumber phone = PhoneNumber.parse(body.caller().phone());
         CallerContact caller = new CallerContact(body.caller().name(), phone.e164());
         OrderView order = orders.create(claims.actor(), body.commandId(), new CreateOrder(null,
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
-                body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller, body.pickupAt()));
+                body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller, body.pickupAt(),
+                Boolean.TRUE.equals(body.terminalFallbackToCash())));
         return view(order);
     }
 
