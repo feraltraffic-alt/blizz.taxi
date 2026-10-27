@@ -93,6 +93,15 @@ class RatingsTests {
         assertCode(() -> ratings.submit(ride.rider(), UUID.randomUUID(), ride.orderId(), 5, null), ErrorCode.NOT_FOUND);
     }
 
+    @Test
+    void staffWithoutOrdersViewForCityCannotReadComments() {
+        Ride ride = fulfilledRide();
+        ratings.submit(ride.rider(), UUID.randomUUID(), ride.orderId(), 5, "staff only");
+        Actor unauthorizedStaff = new Actor(SubjectType.STAFF, UUID.randomUUID());
+
+        assertCode(() -> ratings.forStaff(unauthorizedStaff, ride.orderId()), ErrorCode.ACCESS_DENIED);
+    }
+
     private Ride fulfilledRide() {
         UUID city = UUID.randomUUID();
         jdbc.sql("""
