@@ -1,0 +1,108 @@
+package taxi.blizz.pricing.internal;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.pricing.RouteEstimator;
+import tools.jackson.databind.json.JsonMapper;
+
+/** GraphHopper's /route API, and the straight-line fallback when it cannot help. */
+class GraphHopperRouteEstimatorTests {
+
+    static final GeoPoint MAIDAN = new GeoPoint(50.4501, 30.5234);
+    static final GeoPoint STATION = new GeoPoint(50.4405, 30.489);
+    static final RouteEstimator.Estimate FALLBACK = new RouteEstimator.Estimate(1, 1);
+
+    HttpServer server;
+    final AtomicReference<String> lastQuery = new AtomicReference<>();
+    volatile int status = 200;
+    volatile String body = "";
+    volatile long delayMillis;
+
+    @BeforeEach
+    void start() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/route", exchange -> {
+            lastQuery.set(exchange.getRequestURI().getRawQuery());
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
+            if (bytes.length > 0) {
+                exchange.getResponseBody().write(bytes);
+            }
+            exchange.close();
+        });
+        server.start();
+    }
+
+    @AfterEach
+    void stop() {
+        server.stop(0);
+    }
+
+    private GraphHopperRouteEstimator estimator(String apiKey) {
+        GraphHopperProperties properties = new GraphHopperProperties(true,
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/", apiKey, "car", Duration.ofMillis(500));
+        return new GraphHopperRouteEstimator(properties, (a, b) -> FALLBACK, JsonMapper.builder().build());
+    }
+
+    @Test
+    void theRoadRouteGivesDistanceAndTime() {
+        body = """
+                {"paths":[{"distance":3456.6,"time":512400,"weight":600.1}],"info":{"took":3}}""";
+        RouteEstimator.Estimate estimate = estimator(null).estimate(MAIDAN, STATION);
+        assertThat(estimate).isEqualTo(new RouteEstimator.Estimate(3457, 512));
+        assertThat(lastQuery.get()).isEqualTo("point=50.4501%2C30.5234&point=50.4405%2C30.489&profile=car"
+                + "&calc_points=false&instructions=false");
+
+        estimator("secret-key").estimate(MAIDAN, STATION);
+        assertThat(lastQuery.get()).endsWith("&key=secret-key");
+    }
+
+    @Test
+    void withoutARouteTheStraightLineEstimateIsUsed() {
+        status = 400;
+        body = """
+                {"message":"Cannot find point 0: 50.4501,30.5234","hints":[]}""";
+        assertThat(estimator(null).estimate(MAIDAN, STATION)).isEqualTo(FALLBACK);
+
+        status = 200;
+        body = """
+                {"paths":[]}""";
+        assertThat(estimator(null).estimate(MAIDAN, STATION)).isEqualTo(FALLBACK);
+
+        body = "not json";
+        assertThat(estimator(null).estimate(MAIDAN, STATION)).isEqualTo(FALLBACK);
+
+        body = """
+                {"paths":[{"distance":10,"time":1000}]}""";
+        delayMillis = 1500;
+        assertThat(estimator(null).estimate(MAIDAN, STATION)).as("too slow").isEqualTo(FALLBACK);
+
+        assertThat(unreachable().estimate(MAIDAN, STATION)).as("not reachable").isEqualTo(FALLBACK);
+    }
+
+    private GraphHopperRouteEstimator unreachable() {
+        int closedPort;
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            closedPort = socket.getLocalPort();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return new GraphHopperRouteEstimator(new GraphHopperProperties(true, "http://127.0.0.1:" + closedPort, null,
+                "car", Duration.ofMillis(500)), (a, b) -> FALLBACK, JsonMapper.builder().build());
+    }
+}
