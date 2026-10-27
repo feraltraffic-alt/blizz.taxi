@@ -88,25 +88,30 @@ admin_token() {
     echo "$token"
 }
 
-location() { # LAT LON SEQUENCE
-    echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$3}"
+location() { # LAT LON — the sequence grows across scenarios, so a later point is never taken as an old one (T-14)
+    echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$(date +%s%3N)}"
 }
 
-# go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id; an earlier open session of this
-# driver (another scenario in the same sandbox) is closed first.
+# go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id. When the driver still has an open
+# session from an earlier scenario (another phone, T-16), this device takes it over and moves to LAT LON instead.
 go_online() {
-    local current
+    local current id
     current=$(api GET /api/driver/v1/work-sessions/current "$1")
-    if [[ "$(cat /tmp/sandbox-status)" == 200 && "$(jq -r '.session_id // empty' <<<"$current")" != "" ]]; then
-        api POST "/api/driver/v1/work-sessions/$(jq -r .session_id <<<"$current")/close" "$1" \
+    id=$(jq -r '.session_id // empty' <<<"$current" 2>/dev/null || true)
+    if [[ "$(cat /tmp/sandbox-status)" == 200 && -n "$id" ]]; then
+        api POST "/api/driver/v1/work-sessions/$id/handover" "$1" \
             "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
+        expect 200
+        move "$1" "$id" "$3" "$4"
+        echo "$id"
+        return
     fi
     api POST /api/driver/v1/work-sessions "$1" \
-        "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$2\",\"location\":$(location "$3" "$4" 1)}" | jq -r .session_id
+        "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$2\",\"location\":$(location "$3" "$4")}" | jq -r .session_id
     expect 201
 }
 
-# move TOKEN SESSION_ID LAT LON SEQUENCE — a heartbeat with a new position.
+# move TOKEN SESSION_ID LAT LON — a heartbeat with a new position.
 move() {
-    api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4" "$5")}" >/dev/null
+    api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
 }
