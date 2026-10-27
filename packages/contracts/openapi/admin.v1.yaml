@@ -3443,6 +3443,66 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/staff-extensions:
+    get:
+      operationId: listStaffExtensions
+      summary: The staff's internal numbers on the service's Asterisk
+      description: >-
+        Asterisk's answers on an extension name who took a call; click-to-call rings it. Needs settings.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/StaffExtensionList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/staff-extensions/{staff_id}:
+    post:
+      operationId: changeStaffExtension
+      summary: Set or remove a staff member's extension
+      description: >-
+        extension null removes it. One extension — one staff member (another's → 409 STATE_CONFLICT). Needs
+        settings.manage; audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./calls.yaml#/components/schemas/ChangeStaffExtension"
+      responses:
+        "200":
+          description: The extension as it is now; for a removal the last version with the removed extension.
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/StaffExtension"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Clients
     description: Riders' accounts — deletion requests (REQ-RID-10)

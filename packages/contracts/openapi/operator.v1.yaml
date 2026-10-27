@@ -1278,9 +1278,121 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/operator/v1/orders/{order_id}/calls:
+    post:
+      operationId: placeOrderCall
+      summary: Call the order's rider, driver or caller from my phone (click-to-call)
+      description: >-
+        Asterisk rings my own phone (my extension) and then the other side; the number never reaches the panel, the
+        response or the log (REQ-PRV-03). Needs orders.view for the order's city and an extension (409 without one, or
+        when the order has no such side, e.g. no driver yet). The call is logged as OUTBOUND, linked to the order and
+        recorded like incoming ones. A repeat of the command returns the first call and does not ring again; Asterisk
+        unreachable → 503 PROVIDER_UNAVAILABLE (nothing logged, a retry rings).
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./calls.yaml#/components/schemas/PlaceCall"
+      responses:
+        "201":
+          description: Ringing my phone.
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/Call"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "503":
+          $ref: "./common.yaml#/components/responses/ServiceUnavailable"
+
+  /api/operator/v1/me/call-status:
+    get:
+      operationId: getMyCallStatus
+      summary: My status for incoming calls and my extension
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/MyCallStatus"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: changeMyCallStatus
+      summary: Set my status — available, on a break, offline
+      description: >-
+        Needs calls.answer. The card-pop goes to the AVAILABLE operators of the city when there is one, else to all;
+        calls are not routed by it. A repeat of the command returns the first result.
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./calls.yaml#/components/schemas/ChangeMyCallStatus"
+      responses:
+        "200":
+          description: My status now.
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/MyCallStatus"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/operator/v1/operators:
+    get:
+      operationId: listCallOperators
+      summary: The operators of a city and their status (supervisor)
+      description: Staff with calls.answer in the city. Needs calls.supervise for the city.
+      tags: [Calls]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./calls.yaml#/components/schemas/CallOperatorList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
 tags:
   - name: Calls
-    description: Incoming calls of the call centre — card-pop, the call log and recordings (REQ-OPS-01/08/09)
+    description: Calls of the call centre — card-pop, the call log, recordings, click-to-call, operator status (REQ-OPS-01/08/09)
   - name: Support
     description: Support cases (REQ-ADM-09)
   - name: Me

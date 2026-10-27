@@ -3,9 +3,10 @@ info:
   title: Blizz Taxi — incoming calls components
   version: 1.0.0
   description: >-
-    Shared schemas of the call centre's incoming calls through the service's Asterisk (REQ-OPS-01/07/08/10, ADR 0012
-    Q-18): the call log, the card-pop to operators, and the service numbers of each city. A call and an order made
-    during it are linked but have their own lifecycles. Referenced by the operator and admin APIs.
+    Shared schemas of the call centre's calls through the service's Asterisk (REQ-OPS-01/07/08/10, ADR 0012 Q-18):
+    the call log of incoming and outgoing calls, the card-pop to operators, the service numbers of each city, the
+    staff's extensions and the operators' status. A call and an order made during it are linked but have their own
+    lifecycles. Referenced by the operator and admin APIs.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -22,26 +23,37 @@ components:
     Call:
       type: object
       additionalProperties: false
-      required: [id, state, caller_phone, called_number, city_id, answered_by, order_ids, started_at, answered_at,
-                 ended_at, recording]
+      required: [id, direction, party, state, caller_phone, called_number, city_id, answered_by, order_ids,
+                 started_at, answered_at, ended_at, recording]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        direction:
+          $ref: "#/components/schemas/CallDirection"
+        party:
+          description: Whom an outgoing call was to (its number is never shown); null for an incoming call.
+          oneOf:
+            - $ref: "#/components/schemas/CallParty"
+            - type: "null"
         state:
           $ref: "#/components/schemas/CallState"
         caller_phone:
-          description: The caller's number in E.164; null when the network gave none or it could not be read.
+          description: >-
+            The caller's number in E.164; null when the network gave none or it could not be read, and always null
+            for an outgoing call (REQ-PRV-03).
           type: [string, "null"]
         called_number:
-          description: The service number that was called.
-          type: string
+          description: The service number that was called; null for an outgoing call.
+          type: [string, "null"]
         city_id:
           description: The city of the called number (call lines); null for a number without a line.
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
         answered_by:
-          description: The staff member who took the call in the panel.
+          description: >-
+            Who took an incoming call — from the operator's phone (their extension) or "I took this call", whichever
+            came first; for an outgoing call, who placed it.
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
@@ -64,6 +76,146 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CallRecording"
             - type: "null"
+
+    CallDirection:
+      description: INBOUND — to a service number; OUTBOUND — placed from an order in the panel (click-to-call).
+      type: string
+      enum: [INBOUND, OUTBOUND]
+
+    CallParty:
+      description: >-
+        The other side of an outgoing call: RIDER — the order's rider (account phone); DRIVER — its assigned driver;
+        CALLER — the person who phoned the order in (its caller contact).
+      type: string
+      enum: [RIDER, DRIVER, CALLER]
+
+    PlaceCall:
+      description: >-
+        Rings the operator's own phone (their extension) and then the other side. The number is never part of the
+        request or the response. A repeat of the command returns the first call and does not ring again.
+      type: object
+      additionalProperties: false
+      required: [command_id, to]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        to:
+          $ref: "#/components/schemas/CallParty"
+
+    OperatorCallStatus:
+      description: >-
+        Set by the operator. Only shown and used for the card-pop (it goes to the AVAILABLE operators of the city when
+        there is one, else to all); calls are not routed by it. OFFLINE when never set.
+      type: string
+      enum: [AVAILABLE, BREAK, OFFLINE]
+
+    MyCallStatus:
+      type: object
+      additionalProperties: false
+      required: [status, changed_at, extension]
+      properties:
+        status:
+          $ref: "#/components/schemas/OperatorCallStatus"
+        changed_at:
+          description: Null when never set.
+          type: [string, "null"]
+          format: date-time
+        extension:
+          description: My internal number, set by the admin; null without one (no click-to-call then).
+          type: [string, "null"]
+
+    ChangeMyCallStatus:
+      type: object
+      additionalProperties: false
+      required: [command_id, status]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        status:
+          $ref: "#/components/schemas/OperatorCallStatus"
+
+    CallOperator:
+      description: An operator of the city (calls.answer) as a supervisor sees them.
+      type: object
+      additionalProperties: false
+      required: [staff_id, name, status, changed_at, extension]
+      properties:
+        staff_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/OperatorCallStatus"
+        changed_at:
+          type: [string, "null"]
+          format: date-time
+        extension:
+          type: [string, "null"]
+
+    CallOperatorList:
+      type: object
+      additionalProperties: false
+      required: [operators]
+      properties:
+        operators:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallOperator"
+
+    StaffExtension:
+      description: >-
+        A staff member's internal number on the service's Asterisk; one extension — one staff member. Asterisk's
+        answers on it name who took a call; click-to-call rings it.
+      type: object
+      additionalProperties: false
+      required: [staff_id, extension, version]
+      properties:
+        staff_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        extension:
+          $ref: "#/components/schemas/Extension"
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    Extension:
+      type: string
+      pattern: "^[0-9]{2,6}$"
+      examples: ["101"]
+
+    StaffExtensionList:
+      type: object
+      additionalProperties: false
+      required: [extensions]
+      properties:
+        extensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffExtension"
+
+    ChangeStaffExtension:
+      description: >-
+        Sets a staff member's extension, or removes it with extension null. A command: expected_version is 0 when
+        they have none; audited with the reason. An extension another staff member has → 409.
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, extension, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        extension:
+          oneOf:
+            - $ref: "#/components/schemas/Extension"
+            - type: "null"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
 
     CallRecordingState:
       description: >-
