@@ -1,0 +1,215 @@
+package taxi.blizz.configuration.internal;
+
+import java.time.Clock;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.audit.AuditEntry;
+import taxi.blizz.audit.AuditLog;
+import taxi.blizz.configuration.ServiceSettings;
+import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.IdempotentCommands;
+import tools.jackson.databind.json.JsonMapper;
+
+@Service
+class JdbcServiceSettings implements ServiceSettings {
+
+    private static final Pattern COLOR = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+
+    /**
+     * Until the admin saves settings: a neutral brand, every language with Russian by default (owner decision
+     * 27.10.2026), direct calls.
+     */
+    static final Settings DEFAULTS = new Settings(
+            new Brand("Blizz Taxi", "#111111", "#FFFFFF", null, null, null, null, null, null, null),
+            new Languages("ru", SUPPORTED_LANGUAGES),
+            new Calls(CallMode.DIRECT, null));
+
+    private final JdbcClient jdbc;
+    private final IdempotentCommands commands;
+    private final StaffAccess staff;
+    private final AuditLog audit;
+    private final JsonMapper json;
+    private final Clock clock;
+
+    JdbcServiceSettings(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit, JsonMapper json,
+                        Clock clock) {
+        this.jdbc = jdbc;
+        this.commands = commands;
+        this.staff = staff;
+        this.audit = audit;
+        this.json = json;
+        this.clock = clock;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Version current() {
+        return jdbc.sql("""
+                        select version, settings::text, changed_by, reason, changed_at
+                        from service_settings order by version desc limit 1""")
+                .query((rs, i) -> new Version(rs.getLong(1), json.readValue(rs.getString(2), Settings.class),
+                        rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
+                .optional()
+                .orElse(new Version(0, DEFAULTS, null, null, null));
+    }
+
+    record ChangeRequest(long expectedVersion, Settings settings, String reason) {
+    }
+
+    @Override
+    public Version change(Actor actor, UUID commandId, long expectedVersion, Settings settings, String reason) {
+        staff.require(actor, MANAGE_PERMISSION);
+        Settings clean = validate(settings);
+        if (reason == null || reason.isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+        }
+        return commands.execute(new CommandKey(actor, "settings.change", commandId),
+                new ChangeRequest(expectedVersion, clean, reason), Version.class, () -> {
+                    jdbc.sql("select pg_advisory_xact_lock(hashtext('service-settings'))").query().singleRow();
+                    Version before = current();
+                    if (before.version() != expectedVersion) {
+                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The settings changed");
+                    }
+                    OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
+                    long version = before.version() + 1;
+                    jdbc.sql("""
+                                    insert into service_settings (version, settings, changed_by, reason, changed_at)
+                                    values (:version, cast(:settings as jsonb), :by, :reason, :now)""")
+                            .param("version", version).param("settings", json.writeValueAsString(clean))
+                            .param("by", actor.id()).param("reason", reason).param("now", now).update();
+                    audit.record(new AuditEntry(actor, "settings.change", "service_settings", Long.toString(version),
+                            reason, before.settings(), clean));
+                    return new Version(version, clean, actor.id(), reason, now);
+                });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Version> history(Actor actor, int limit) {
+        staff.require(actor, MANAGE_PERMISSION);
+        return jdbc.sql("""
+                        select version, settings::text, changed_by, reason, changed_at
+                        from service_settings order by version desc limit :limit""")
+                .param("limit", Math.max(1, Math.min(limit, 100)))
+                .query((rs, i) -> new Version(rs.getLong(1), json.readValue(rs.getString(2), Settings.class),
+                        rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
+                .list();
+    }
+
+    // ---------------------------------------------------------------- validation (REQ-TEN-07)
+
+    private static Settings validate(Settings s) {
+        if (s == null || s.brand() == null || s.languages() == null || s.calls() == null) {
+            throw invalid("Brand, languages and calls are required");
+        }
+        Brand b = s.brand();
+        String name = text(b.serviceName());
+        if (name == null || name.length() > 60) {
+            throw invalid("The service name has 1 to 60 characters");
+        }
+        String primary = color(b.primaryColor(), true);
+        String onPrimary = color(b.onPrimaryColor(), true);
+        if (contrast(primary, onPrimary) < 4.5) {
+            throw invalid("The text colour on the primary colour must contrast at least 4.5:1 (now "
+                    + String.format(Locale.ROOT, "%.2f", contrast(primary, onPrimary)) + ")");
+        }
+        Brand brand = new Brand(name, primary, onPrimary, color(b.accentColor(), false), https(b.logoUrl()),
+                text(b.supportPhone()) == null ? null : PhoneNumber.parse(b.supportPhone()).e164(),
+                email(b.supportEmail()), telegram(b.supportTelegram()), https(b.privacyPolicyUrl()), https(b.termsUrl()));
+
+        List<String> enabled = s.languages().enabled().stream().map(l -> l.strip().toLowerCase(Locale.ROOT))
+                .distinct().toList();
+        String def = text(s.languages().defaultLanguage());
+        def = def == null ? null : def.toLowerCase(Locale.ROOT);
+        if (enabled.isEmpty() || !SUPPORTED_LANGUAGES.containsAll(enabled) || def == null || !enabled.contains(def)) {
+            throw invalid("Languages come from " + SUPPORTED_LANGUAGES + "; the default one must be enabled");
+        }
+
+        Calls c = s.calls();
+        if (c.mode() == null) {
+            throw invalid("The call mode is required");
+        }
+        String servicePhone = text(c.servicePhone()) == null ? null : PhoneNumber.parse(c.servicePhone()).e164();
+        if (c.mode() == CallMode.VIA_SERVICE_NUMBERS && servicePhone == null) {
+            throw invalid("Calls through the service need the service phone number");
+        }
+        return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone));
+    }
+
+    private static String color(String value, boolean required) {
+        String v = text(value);
+        if (v == null) {
+            if (required) {
+                throw invalid("Colours are #RRGGBB");
+            }
+            return null;
+        }
+        if (!COLOR.matcher(v).matches()) {
+            throw invalid("Colours are #RRGGBB: " + v);
+        }
+        return v.toUpperCase(Locale.ROOT);
+    }
+
+    /** WCAG 2.x contrast ratio of two sRGB colours. */
+    static double contrast(String a, String b) {
+        double la = luminance(a);
+        double lb = luminance(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    private static double luminance(String hex) {
+        double[] c = new double[3];
+        for (int i = 0; i < 3; i++) {
+            double v = Integer.parseInt(hex.substring(1 + 2 * i, 3 + 2 * i), 16) / 255.0;
+            c[i] = v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    }
+
+    private static String https(String value) {
+        String v = text(value);
+        if (v != null && !v.matches("^https://[^\\s]+$")) {
+            throw invalid("Links must be https: " + v);
+        }
+        return v;
+    }
+
+    private static String email(String value) {
+        String v = text(value);
+        if (v != null && !v.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
+            throw invalid("Invalid support e-mail");
+        }
+        return v == null ? null : v.toLowerCase(Locale.ROOT);
+    }
+
+    private static String telegram(String value) {
+        String v = text(value);
+        if (v == null) {
+            return null;
+        }
+        if (!v.matches("@?[A-Za-z0-9_]{5,32}")) {
+            throw invalid("Invalid Telegram username");
+        }
+        return v.startsWith("@") ? v : "@" + v;
+    }
+
+    private static String text(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static DomainException invalid(String message) {
+        return new DomainException(ErrorCode.VALIDATION_FAILED, message);
+    }
+}

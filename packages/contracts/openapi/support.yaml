@@ -1,0 +1,202 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — support components
+  version: 1.0.0
+  description: Shared schemas of support cases, referenced by the rider, driver, admin and operator APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Category:
+      type: string
+      enum: [LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER]
+    Priority:
+      type: string
+      enum: [LOW, NORMAL, HIGH, URGENT]
+    State:
+      type: string
+      enum: [OPEN, IN_PROGRESS, WAITING_REQUESTER, RESOLVED, CLOSED]
+    Message:
+      type: object
+      additionalProperties: false
+      required: [id, sequence, author_type, visibility, body, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        sequence:
+          type: integer
+          format: int64
+        author_type:
+          type: string
+          enum: [CLIENT, DRIVER, STAFF, SYSTEM]
+        author_id:
+          description: Hidden (null) for staff authors in the rider and driver APIs.
+          type: [string, "null"]
+          format: uuid
+        visibility:
+          description: INTERNAL comments are never shown to the requester (REQ-ADM-09).
+          type: string
+          enum: [PUBLIC, INTERNAL]
+        body:
+          type: string
+          maxLength: 4000
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+    Case:
+      type: object
+      additionalProperties: false
+      required: [id, number, category, requester_type, subject, priority, state, version, created_at, updated_at, messages]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        number:
+          description: For conversations with support.
+          type: integer
+          format: int64
+        city_id:
+          type: [string, "null"]
+          format: uuid
+        category:
+          $ref: "#/components/schemas/Category"
+        order_id:
+          type: [string, "null"]
+          format: uuid
+        requester_type:
+          type: string
+          enum: [CLIENT, DRIVER, STAFF, SYSTEM]
+        requester_id:
+          type: [string, "null"]
+          format: uuid
+        subject:
+          type: string
+          maxLength: 200
+        priority:
+          $ref: "#/components/schemas/Priority"
+        state:
+          $ref: "#/components/schemas/State"
+        assigned_staff_id:
+          description: Null in the rider and driver APIs.
+          type: [string, "null"]
+          format: uuid
+        resolution:
+          type: [string, "null"]
+        version:
+          type: integer
+          format: int64
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        messages:
+          description: Empty in lists; filled when one case is read.
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+    CaseList:
+      type: object
+      additionalProperties: false
+      required: [cases]
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/Case"
+    OpenCase:
+      type: object
+      additionalProperties: false
+      required: [command_id, category, subject, message]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        category:
+          description: Any category except TRIP_REVIEW (system only). SAFETY cases start URGENT.
+          $ref: "#/components/schemas/Category"
+        order_id:
+          description: One of the requester's own orders (rider) or trips (driver).
+          type: [string, "null"]
+          format: uuid
+        subject:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+          maxLength: 4000
+    Reply:
+      type: object
+      additionalProperties: false
+      required: [command_id, message]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        message:
+          type: string
+          maxLength: 4000
+    Assign:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        assignee_id:
+          description: A staff member with support.manage for the case's city; null puts the case back into the queue.
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: [string, "null"]
+    Prioritize:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, priority]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        priority:
+          $ref: "#/components/schemas/Priority"
+        reason:
+          type: [string, "null"]
+    Comment:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, visibility, body]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        visibility:
+          type: string
+          enum: [PUBLIC, INTERNAL]
+        body:
+          type: string
+          maxLength: 4000
+        wait_for_requester:
+          description: With a PUBLIC message — the case waits for the requester's answer.
+          type: boolean
+    Decision:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, text]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        text:
+          description: The resolution, or the reason to reopen / close.
+          type: string
+          maxLength: 2000

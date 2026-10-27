@@ -28,6 +28,8 @@ public final class StaffPermissions {
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
+            new Permission("support.manage", "Support", "Support cases and problem queues"),
+            new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),
             new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"));
 
     public static final Set<String> CODES = CATALOG.stream().map(Permission::code).collect(Collectors.toUnmodifiableSet());

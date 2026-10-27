@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — Public configuration API
+  version: 1.0.0
+  description: |
+    Start-up data of the rider and driver apps (/api/config/v1), needed before sign in: brand, languages,
+    how "Call" works and the cities in service. Public, no token, no secrets (section 22).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security: []
+
+paths:
+  /api/config/v1/bootstrap:
+    get:
+      operationId: getBootstrap
+      summary: Brand, languages, call mode and cities
+      description: Cacheable for a minute. settings_version grows with every change in the admin panel.
+      tags: [Config]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bootstrap"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+tags:
+  - name: Config
+    description: Public start-up data
+
+components:
+  schemas:
+    Bootstrap:
+      type: object
+      additionalProperties: false
+      required: [settings_version, brand, languages, calls, cities]
+      properties:
+        settings_version:
+          type: integer
+          format: int64
+        brand:
+          $ref: "#/components/schemas/Brand"
+        languages:
+          $ref: "#/components/schemas/Languages"
+        calls:
+          type: object
+          additionalProperties: false
+          required: [mode]
+          properties:
+            mode:
+              description: DIRECT — the app dials the other party; VIA_SERVICE_NUMBERS — through service_phone.
+              type: string
+              enum: [DIRECT, VIA_SERVICE_NUMBERS]
+            service_phone:
+              type: [string, "null"]
+        cities:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, code, name, currency, timezone]
+            properties:
+              id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              code:
+                type: string
+              name:
+                type: string
+              currency:
+                type: string
+              timezone:
+                type: string
+
+    Brand:
+      description: Shown by the apps; never changes business rules (REQ-TEN-07).
+      type: object
+      additionalProperties: false
+      required: [service_name, primary_color, on_primary_color]
+      properties:
+        service_name:
+          type: string
+          maxLength: 60
+        primary_color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        on_primary_color:
+          description: Text on the primary colour; contrast with it at least 4.5:1.
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        accent_color:
+          type: [string, "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        logo_url:
+          type: [string, "null"]
+          format: uri
+        support_phone:
+          type: [string, "null"]
+        support_email:
+          type: [string, "null"]
+          format: email
+        support_telegram:
+          type: [string, "null"]
+        privacy_policy_url:
+          type: [string, "null"]
+          format: uri
+        terms_url:
+          type: [string, "null"]
+          format: uri
+
+    Languages:
+      type: object
+      additionalProperties: false
+      required: [default_language, enabled]
+      properties:
+        default_language:
+          type: string
+          enum: [uk, pl, ru, en]
+        enabled:
+          type: array
+          items:
+            type: string
+            enum: [uk, pl, ru, en]

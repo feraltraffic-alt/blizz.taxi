@@ -23,7 +23,9 @@ class AuthWebConfiguration implements WebMvcConfigurer {
         // First, so that requests refused by the bearer check are logged too.
         registry.addInterceptor(new StaffActivityInterceptor(activity))
                 .addPathPatterns("/api/admin/**", "/api/operator/**");
-        registry.addInterceptor(new BearerAuthenticationInterceptor(sessions)).addPathPatterns("/api/**");
+        // /api/config/v1 is public start-up data of the apps (brand, languages, cities): no token.
+        registry.addInterceptor(new BearerAuthenticationInterceptor(sessions)).addPathPatterns("/api/**")
+                .excludePathPatterns("/api/config/**");
     }
 
     @Override

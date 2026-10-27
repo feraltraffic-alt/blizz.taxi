@@ -25,6 +25,8 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.Outbox;
+import taxi.blizz.platform.OutboxEvent;
 import taxi.blizz.platform.SubjectType;
 
 @Service
@@ -41,10 +43,12 @@ class JdbcStaffDirectory implements StaffDirectory {
     private final StaffPasswords passwords;
     private final SessionService sessions;
     private final AuditLog audit;
+    private final Outbox outbox;
     private final Clock clock;
 
     JdbcStaffDirectory(JdbcClient jdbc, IdempotentCommands commands, StaffPasswords passwords, SessionService sessions,
-                       AuditLog audit, Clock clock) {
+                       AuditLog audit, Outbox outbox, Clock clock) {
+        this.outbox = outbox;
         this.jdbc = jdbc;
         this.commands = commands;
         this.passwords = passwords;
@@ -167,6 +171,9 @@ class JdbcStaffDirectory implements StaffDirectory {
                             .param("state", target).param("now", now()).param("id", staffId).update();
                     if ("SUSPENDED".equals(target)) {
                         sessions.revokeAll(new Actor(SubjectType.STAFF, staffId), "staff suspended");
+                        // Their open work goes back to the queues (REQ-USR-18).
+                        outbox.publish(new OutboxEvent("StaffSuspended", 1, "Staff", staffId, before.version() + 1,
+                                java.util.Map.of("staff_id", staffId.toString())));
                     }
                     StaffMember after = read(staffId);
                     audit.record(new AuditEntry(superAdmin, action, "staff_user", staffId.toString(), reason, before,
