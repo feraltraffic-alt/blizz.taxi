@@ -33,8 +33,8 @@ import taxi.blizz.pricing.QuoteService;
 @Import(TestcontainersConfiguration.class)
 class TerminalPaymentTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.5, -30.5);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.45, -30.45);
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, -39.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, -39.45);
 
     @Autowired
     Orders orders;
@@ -64,7 +64,7 @@ class TerminalPaymentTests {
     @BeforeEach
     void setUp() {
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
-        cityId = rides.city("test-terminal-payment", "UAH", -30);
+        cityId = rides.city("test-terminal-payment", "UAH", -40);
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
