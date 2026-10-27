@@ -1,0 +1,180 @@
+package taxi.blizz.location.internal;
+
+import java.sql.Array;
+import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import taxi.blizz.location.TrackService;
+import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.SubjectType;
+
+@Service
+class JdbcTrackService implements TrackService {
+
+    private static final double EARTH_RADIUS_M = 6_371_000.0;
+
+    private final JdbcClient jdbc;
+    private final IdempotentCommands commands;
+    private final LocationBatchRateLimiter rateLimiter;
+    private final LocationProperties properties;
+    private final Clock clock;
+
+    JdbcTrackService(JdbcClient jdbc, IdempotentCommands commands, LocationBatchRateLimiter rateLimiter,
+                     LocationProperties properties, Clock clock) {
+        this.jdbc = jdbc;
+        this.commands = commands;
+        this.rateLimiter = rateLimiter;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    private record StoreRequest(UUID deviceSessionId, List<InputPoint> points) {
+        StoreRequest {
+            points = List.copyOf(points);
+        }
+    }
+
+    private record Previous(OffsetDateTime recordedAt, double lat, double lon) {
+    }
+
+    @Override
+    public BatchResult store(Actor driver, UUID deviceSessionId, UUID commandId, List<InputPoint> points) {
+        if (driver == null || driver.type() != SubjectType.DRIVER || driver.id() == null) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a driver uploads a track");
+        }
+        if (deviceSessionId == null || commandId == null || points == null || points.isEmpty() || points.size() > 100) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A batch has 1 to 100 points");
+        }
+        StoreRequest request = new StoreRequest(deviceSessionId, points);
+        return commands.execute(new CommandKey(driver, "location.store-batch", commandId), request, BatchResult.class,
+                () -> storeNew(driver.id(), deviceSessionId, points));
+    }
+
+    private BatchResult storeNew(UUID driverId, UUID deviceSessionId, List<InputPoint> input) {
+        rateLimiter.acquire(driverId);
+        OffsetDateTime receivedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        List<InputPoint> ordered = new ArrayList<>(input);
+        ordered.sort(Comparator.comparing(InputPoint::recordedAt).thenComparingLong(InputPoint::sequence));
+
+        int accepted = 0;
+        int duplicates = 0;
+        int flagged = 0;
+        for (InputPoint point : ordered) {
+            Set<Flag> flags = flagsFor(deviceSessionId, point, receivedAt);
+            int inserted = jdbc.sql("""
+                    insert into track_point(id, driver_id, device_session_id, sequence, recorded_at, received_at,
+                                            point, accuracy_m, speed_mps, heading_deg, flags)
+                    values (:id, :driver, :session, :sequence, :recorded, :received,
+                            ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :accuracy, :speed, :heading,
+                            case when :flags = '' then ARRAY[]::text[] else string_to_array(:flags, ',') end)
+                    on conflict (device_session_id, sequence) do nothing
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("driver", driverId)
+                    .param("session", deviceSessionId)
+                    .param("sequence", point.sequence())
+                    .param("recorded", point.recordedAt())
+                    .param("received", receivedAt)
+                    .param("lon", point.lon())
+                    .param("lat", point.lat())
+                    .param("accuracy", point.accuracyM())
+                    .param("speed", point.speedMps())
+                    .param("heading", point.headingDeg())
+                    .param("flags", flags.stream().map(Enum::name).sorted().reduce((a, b) -> a + "," + b).orElse(""))
+                    .update();
+            if (inserted == 0) {
+                duplicates++;
+            } else {
+                accepted++;
+                if (!flags.isEmpty()) flagged++;
+            }
+        }
+        return new BatchResult(accepted, duplicates, flagged);
+    }
+
+    private Set<Flag> flagsFor(UUID deviceSessionId, InputPoint point, OffsetDateTime receivedAt) {
+        EnumSet<Flag> flags = EnumSet.noneOf(Flag.class);
+        if (point.recordedAt().isAfter(receivedAt.plus(properties.futureTolerance()))) {
+            flags.add(Flag.FUTURE);
+        }
+        if (point.accuracyM() > properties.poorAccuracyMeters()) {
+            flags.add(Flag.POOR_ACCURACY);
+        }
+        jdbc.sql("""
+                select recorded_at, ST_Y(point) as lat, ST_X(point) as lon
+                from track_point
+                where device_session_id = :session
+                  and (recorded_at < :recorded or (recorded_at = :recorded and sequence < :sequence))
+                order by recorded_at desc, sequence desc
+                limit 1
+                """)
+                .param("session", deviceSessionId)
+                .param("recorded", point.recordedAt())
+                .param("sequence", point.sequence())
+                .query((rs, i) -> new Previous(rs.getObject("recorded_at", OffsetDateTime.class),
+                        rs.getDouble("lat"), rs.getDouble("lon")))
+                .optional()
+                .ifPresent(previous -> {
+                    double seconds = Duration.between(previous.recordedAt(), point.recordedAt()).toMillis() / 1000.0;
+                    if (seconds > 0) {
+                        double kph = haversineMeters(previous.lat(), previous.lon(), point.lat(), point.lon()) / seconds * 3.6;
+                        if (kph > properties.jumpKph()) flags.add(Flag.JUMP);
+                    }
+                });
+        return flags;
+    }
+
+    @Override
+    public List<TrackPoint> points(UUID driverId, OffsetDateTime from, OffsetDateTime to) {
+        return jdbc.sql("""
+                select driver_id, device_session_id, sequence, recorded_at, received_at,
+                       ST_Y(point) as lat, ST_X(point) as lon, accuracy_m, speed_mps, heading_deg, flags
+                from track_point
+                where driver_id = :driver and recorded_at >= :from and recorded_at <= :to
+                order by recorded_at, sequence
+                """)
+                .param("driver", driverId)
+                .param("from", from)
+                .param("to", to)
+                .query((rs, i) -> new TrackPoint(
+                        rs.getObject("driver_id", UUID.class),
+                        rs.getObject("device_session_id", UUID.class),
+                        rs.getLong("sequence"), rs.getDouble("lat"), rs.getDouble("lon"),
+                        rs.getDouble("accuracy_m"), (Double) rs.getObject("speed_mps"),
+                        (Double) rs.getObject("heading_deg"),
+                        rs.getObject("recorded_at", OffsetDateTime.class),
+                        rs.getObject("received_at", OffsetDateTime.class), flags(rs.getArray("flags"))))
+                .list();
+    }
+
+    private static Set<Flag> flags(Array array) throws SQLException {
+        EnumSet<Flag> result = EnumSet.noneOf(Flag.class);
+        if (array == null) return result;
+        for (String value : (String[]) array.getArray()) result.add(Flag.valueOf(value));
+        return result;
+    }
+
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        double p1 = Math.toRadians(lat1);
+        double p2 = Math.toRadians(lat2);
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+}
