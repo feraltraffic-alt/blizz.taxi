@@ -8,10 +8,11 @@ import taxi.blizz.pricing.RouteEstimator;
 
 /**
  * Default estimate without a routing provider: the geodesic distance (PostGIS) times a detour
- * factor, at an average city speed. Good enough for a price the rider confirms before ordering; a
- * provider bean marked {@code @Primary} replaces it.
+ * factor, at an average city speed. Good enough for a price the rider confirms before ordering. Used through
+ * {@link ConfiguredRouteEstimator}, which switches to GraphHopper when it is on.
  */
 @Component
+@org.springframework.context.annotation.Fallback
 @EnableConfigurationProperties(RouteProperties.class)
 class StraightLineRouteEstimator implements RouteEstimator {
 

@@ -3,7 +3,6 @@ package taxi.blizz.pricing.internal;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import taxi.blizz.configuration.Integrations;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -12,8 +11,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnableConfigurationProperties(GraphHopperProperties.class)
 class RoutingConfiguration {
 
+    /** The estimate the quotes use; the plain straight line is only its fallback (and a test's @Primary wins). */
     @Bean
-    @Primary
     ConfiguredRouteEstimator configuredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
                                                       StraightLineRouteEstimator straightLine, JsonMapper json) {
         return new ConfiguredRouteEstimator(integrations, environment, straightLine, json);
