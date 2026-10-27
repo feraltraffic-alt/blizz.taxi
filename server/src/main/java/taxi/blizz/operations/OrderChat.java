@@ -16,7 +16,7 @@ import taxi.blizz.platform.Actor;
  */
 public interface OrderChat {
 
-    String VIEW_PERMISSION = "orders.view";
+    String VIEW_PERMISSION = Orders.VIEW_PERMISSION;
 
     record Message(UUID id, UUID orderId, long sequence, String senderRole, String body, OffsetDateTime sentAt) {
     }
