@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-document-expiring.v1.schema.json",
+  "title": "DriverDocumentExpiring v1 payload",
+  "description": "Published by driver once per accepted document and reminder threshold (7 days, then 1 day) when the document currently in force for its type (and vehicle) is about to end (REQ-DRV-05). Aggregate Driver. Notification turns it into a push to the driver. days_left is counted in the market's time zone: the document is still valid on valid_to and the driver is taken off the line the day after.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["driver_id", "document_id", "document_type", "valid_to", "days_left"],
+  "properties": {
+    "driver_id": { "type": "string", "format": "uuid" },
+    "document_id": { "type": "string", "format": "uuid" },
+    "document_type": {
+      "type": "string",
+      "enum": ["DRIVER_LICENSE", "IDENTITY", "TAXI_PERMIT", "VEHICLE_REGISTRATION", "INSURANCE", "OTHER"]
+    },
+    "valid_to": { "description": "Last day the document is valid.", "type": "string", "format": "date" },
+    "days_left": {
+      "description": "Days from the run's date to valid_to: 2…7 for the first reminder (7 if the run did not miss a day), 0…1 for the second.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    }
+  },
+  "examples": [
+    {
+      "driver_id": "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "document_id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "document_type": "INSURANCE",
+      "valid_to": "2026-11-03",
+      "days_left": 7
+    }
+  ]
+}
