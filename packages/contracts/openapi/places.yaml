@@ -1,0 +1,63 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — address search components
+  version: 1.0.0
+  description: >-
+    The address field of the apps and the call centre (ADR 0012, Q-08): the places of the rider's past orders first,
+    then the service's own addresses, then the provider chosen in the admin panel (BUILT_IN — none, GOOGLE,
+    VISICOM). A provider's answer is never stored by the service.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Place:
+      type: object
+      additionalProperties: false
+      required: [source, label, street, house, point]
+      properties:
+        source:
+          description: HISTORY (the rider's past orders), OWN (the service's address book), GOOGLE, VISICOM; FAKE in the sandbox.
+          type: string
+        address_id:
+          description: Only for OWN.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        label:
+          type: string
+        street:
+          description: Empty when the source does not split the address.
+          type: string
+        house:
+          type: string
+        point:
+          type: object
+          additionalProperties: false
+          required: [lat, lon]
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lon:
+              type: number
+              minimum: -180
+              maximum: 180
+        instructions:
+          description: Pickup instructions of an own address.
+          type: [string, "null"]
+
+    PlaceList:
+      type: object
+      additionalProperties: false
+      required: [provider, places]
+      properties:
+        provider:
+          description: The provider in force (BUILT_IN, GOOGLE, VISICOM; FAKE in the sandbox) — for its attribution.
+          type: string
+        places:
+          type: array
+          items:
+            $ref: "#/components/schemas/Place"

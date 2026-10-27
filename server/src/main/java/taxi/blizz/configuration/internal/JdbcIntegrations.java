@@ -291,6 +291,12 @@ class JdbcIntegrations implements Integrations {
                     throw invalid(field.name() + " must be one of " + MAP_PROVIDERS);
                 }
             }
+            case GEOCODING_PROVIDER -> {
+                value = value.toUpperCase(Locale.ROOT);
+                if (!GEOCODING_PROVIDERS.contains(value)) {
+                    throw invalid(field.name() + " must be one of " + GEOCODING_PROVIDERS);
+                }
+            }
             case FCM_CREDENTIALS -> {
                 Map<?, ?> account;
                 try {

@@ -35,6 +35,7 @@ public interface Integrations {
     String PUSH = "push";
     String ROUTING = "routing";
     String MAPS = "maps";
+    String GEOCODING = "geocoding";
 
     String FCM_PROJECT_ID = "push.fcm.project-id";
     String FCM_CREDENTIALS = "push.fcm.credentials";
@@ -46,8 +47,14 @@ public interface Integrations {
     String MAPS_ANDROID_KEY = "maps.android-key";
     String MAPS_IOS_KEY = "maps.ios-key";
     String MAPS_WEB_KEY = "maps.web-key";
+    String GEOCODING_PROVIDER = "geocoding.provider";
+    String GEOCODING_GOOGLE_KEY = "geocoding.google.api-key";
+    String GEOCODING_VISICOM_KEY = "geocoding.visicom.api-key";
 
-    List<String> MAP_PROVIDERS = List.of("GOOGLE", "MAPBOX", "MAPTILER");
+    /** OSM: Leaflet with OpenStreetMap tiles in the apps and panels, no key (ADR 0012, Q-08). */
+    List<String> MAP_PROVIDERS = List.of("OSM", "GOOGLE", "MAPBOX", "MAPTILER");
+    /** BUILT_IN: only the service's own address book; GOOGLE, VISICOM: own addresses first, then the provider. */
+    List<String> GEOCODING_PROVIDERS = List.of("BUILT_IN", "GOOGLE", "VISICOM");
 
     List<Field> FIELDS = List.of(
             new Field(FCM_PROJECT_ID, PUSH, Kind.TEXT, "Firebase project id",
@@ -63,14 +70,21 @@ public interface Integrations {
             new Field(GRAPHHOPPER_PROFILE, ROUTING, Kind.TEXT, "Vehicle profile", "Usually car", false),
             new Field(GRAPHHOPPER_API_KEY, ROUTING, Kind.SECRET, "GraphHopper API key",
                     "Only for the hosted API; an own server needs none", false),
-            new Field(MAPS_PROVIDER, MAPS, Kind.TEXT, "Map provider of the apps", "GOOGLE, MAPBOX or MAPTILER",
-                    true),
+            new Field(MAPS_PROVIDER, MAPS, Kind.TEXT, "Map provider of the apps",
+                    "OSM (Leaflet with OpenStreetMap tiles, no key), GOOGLE, MAPBOX or MAPTILER", true),
             new Field(MAPS_ANDROID_KEY, MAPS, Kind.TEXT, "Map key of the Android apps",
                     "Restricted to the apps' package names at the provider", true),
             new Field(MAPS_IOS_KEY, MAPS, Kind.TEXT, "Map key of the iOS apps",
                     "Restricted to the apps' bundle ids at the provider", true),
             new Field(MAPS_WEB_KEY, MAPS, Kind.TEXT, "Map key of the web panels",
-                    "Restricted to the panels' domains at the provider", true));
+                    "Restricted to the panels' domains at the provider", true),
+            new Field(GEOCODING_PROVIDER, GEOCODING, Kind.TEXT, "Address search",
+                    "BUILT_IN (only the service's own addresses), GOOGLE or VISICOM; the provider's answers are never"
+                            + " stored", false),
+            new Field(GEOCODING_GOOGLE_KEY, GEOCODING, Kind.SECRET, "Google Geocoding API key",
+                    "A server key with the Geocoding API enabled", false),
+            new Field(GEOCODING_VISICOM_KEY, GEOCODING, Kind.SECRET, "Visicom Data API key",
+                    "The key of api.visicom.ua (Data API 5.0)", false));
 
     /** A value as the panel sees it: {@code value} is null for a secret. */
     record FieldState(String name, String group, Kind kind, String label, String description, boolean forApps,

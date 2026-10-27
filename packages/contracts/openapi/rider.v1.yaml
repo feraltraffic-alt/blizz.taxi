@@ -1027,6 +1027,103 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/rider/v1/places:
+    get:
+      operationId: searchRiderPlaces
+      summary: Address search
+      description: >-
+        The rider's past order places, the service's own addresses, the chosen provider's results; nothing is stored.
+      tags: [Places]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: query
+          in: query
+          description: Blank — the latest places of the order history only.
+          schema:
+            type: string
+            maxLength: 200
+            default: ""
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - name: language
+          in: query
+          schema:
+            type: string
+            maxLength: 16
+      responses:
+        "200":
+          description: History first, then own addresses, then the provider's results; at most limit.
+          content:
+            application/json:
+              schema:
+                $ref: "./places.yaml#/components/schemas/PlaceList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "422":
+          description: OUTSIDE_SERVICE_AREA — the point is in no city of the service.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/Problem"
+
+  /api/rider/v1/places/reverse:
+    get:
+      operationId: reverseRiderPlace
+      summary: The address at a point on the map
+      description: An own address within 100 m, else the provider's nearest; 204 when there is none.
+      tags: [Places]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: language
+          in: query
+          schema:
+            type: string
+            maxLength: 16
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./places.yaml#/components/schemas/Place"
+        "204":
+          description: No address there.
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "422":
+          description: OUTSIDE_SERVICE_AREA — the point is in no city of the service.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/Problem"
+
   /api/rider/v1/safety-contacts:
     get:
       operationId: getRiderSafetyContacts
@@ -1224,6 +1321,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
 
 tags:
+  - name: Places
+    description: Address search (ADR 0012, Q-08)
   - name: Tips
     description: Tips for the driver after the trip (ADR 0012)
   - name: Safety
