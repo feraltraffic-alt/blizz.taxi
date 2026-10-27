@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
+import taxi.blizz.geo.GeoZones;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
@@ -19,6 +20,7 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.pricing.TariffService;
+import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class JdbcTariffService implements TariffService {
@@ -27,8 +29,13 @@ class JdbcTariffService implements TariffService {
     private final IdempotentCommands commands;
     private final AuditLog audit;
     private final Clock clock;
+    private final GeoZones zones;
+    private final JsonMapper json;
 
-    JdbcTariffService(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock, StaffAccess staff) {
+    JdbcTariffService(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock, StaffAccess staff,
+                      GeoZones zones, JsonMapper json) {
+        this.zones = zones;
+        this.json = json;
         this.staff = staff;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -68,6 +75,7 @@ class JdbcTariffService implements TariffService {
         return commands.execute(key(c.actor(), "tariff.createDraft", c.commandId(), c.cityId()), c, Revision.class, () -> {
             initial(c.expectedVersion());
             validate(c);
+            validateZones(c);
             String currency = lockClass(c.classId(), c.cityId());
             if (!currency.equals(c.currency())) {
                 throw error(ErrorCode.VALIDATION_FAILED, "Tariff currency must match its city");
@@ -78,9 +86,11 @@ class JdbcTariffService implements TariffService {
                     insert into tariff_version(id, city_id, class_id, currency, effective_from, effective_to,
                         state, pickup_minor, per_km_minor, per_minute_minor, minimum_minor, free_waiting_minutes,
                         waiting_per_minute_minor, cancellation_fee_minor, commission_rate, waiting_step_seconds,
-                        waiting_rounding, created_at, updated_at)
+                        waiting_rounding, pickup_outside_minor, per_km_outside_minor, zone_surcharges,
+                        created_at, updated_at)
                     values (:id, :city, :class, :currency, :from, :to, 'DRAFT', :pickup, :km, :minute, :minimum,
-                        :free, :waiting, :cancellation, :commission, :step, :rounding, :now, :now)
+                        :free, :waiting, :cancellation, :commission, :step, :rounding, :pickupOutside, :kmOutside,
+                        cast(:zones as jsonb), :now, :now)
                     """).param("id", id).param("city", c.cityId()).param("class", c.classId())
                     .param("currency", c.currency()).param("from", at(c.effectiveFrom()))
                     .param("to", at(c.effectiveTo())).param("pickup", t.pickupMinor()).param("km", t.perKmMinor())
@@ -88,6 +98,8 @@ class JdbcTariffService implements TariffService {
                     .param("free", t.freeWaitingMinutes()).param("waiting", t.waitingPerMinuteMinor())
                     .param("cancellation", t.cancellationFeeMinor()).param("commission", t.commissionRate())
                     .param("step", t.waitingStepSeconds()).param("rounding", t.waitingRounding().name())
+                    .param("pickupOutside", t.pickupOutsideMinor()).param("kmOutside", t.perKmOutsideMinor())
+                    .param("zones", json.writeValueAsString(t.zoneSurcharges()))
                     .param("now", now()).update();
             audit.record(new AuditEntry(c.actor(), "tariff.createDraft", "tariff_version", id.toString(),
                     c.reason(), null, c));
@@ -168,6 +180,30 @@ class JdbcTariffService implements TariffService {
         return new CommandKey(actor, action, commandId);
     }
 
+    /** Zone surcharges name published-or-draft zones of the tariff's city, never the city limits themselves. */
+    private void validateZones(Draft c) {
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (TariffService.ZoneSurcharge z : c.terms().zoneSurcharges()) {
+            if (z == null || z.zoneId() == null || z.mode() == null || !seen.add(z.zoneId())
+                    || (!z.onPickup() && !z.onDropoff())) {
+                throw error(ErrorCode.VALIDATION_FAILED, "Each zone surcharge names one zone once and when it applies");
+            }
+            if (z.mode() == TariffService.SurchargeMode.FIXED && z.amountMinor() <= 0) {
+                throw error(ErrorCode.VALIDATION_FAILED, "A fixed zone surcharge is a positive amount");
+            }
+            if (z.mode() == TariffService.SurchargeMode.COEFFICIENT && (z.coefficient() == null
+                    || z.coefficient().compareTo(BigDecimal.ONE) < 0 || z.coefficient().compareTo(BigDecimal.TEN) > 0)) {
+                throw error(ErrorCode.VALIDATION_FAILED, "A zone coefficient is from 1 to 10");
+            }
+            GeoZones.ZoneRef zone = zones.zone(z.zoneId())
+                    .orElseThrow(() -> error(ErrorCode.VALIDATION_FAILED, "Unknown zone " + z.zoneId()));
+            if (!zone.cityId().equals(c.cityId()) || GeoZones.CITY_LIMITS.equals(zone.type())
+                    || "ARCHIVED".equals(zone.state())) {
+                throw error(ErrorCode.VALIDATION_FAILED, "Zone " + z.zoneId() + " cannot carry a surcharge here");
+            }
+        }
+    }
+
     private static void validate(Draft c) {
         Terms t = c.terms();
         if (c.cityId() == null || c.classId() == null || c.effectiveFrom() == null
@@ -176,7 +212,8 @@ class JdbcTariffService implements TariffService {
                 || t.cancellationFeeMinor() < 0 || negative(t.perKmMinor()) || negative(t.perMinuteMinor())
                 || negative(t.waitingPerMinuteMinor()) || negative(t.commissionRate())
                 || t.commissionRate().compareTo(BigDecimal.ONE) > 0
-                || t.waitingStepSeconds() < 1 || t.waitingStepSeconds() > 3600 || t.waitingRounding() == null) {
+                || t.waitingStepSeconds() < 1 || t.waitingStepSeconds() > 3600 || t.waitingRounding() == null
+                || t.pickupOutsideMinor() < 0 || negative(t.perKmOutsideMinor())) {
             throw error(ErrorCode.VALIDATION_FAILED, "Invalid tariff terms or effective range");
         }
         try {

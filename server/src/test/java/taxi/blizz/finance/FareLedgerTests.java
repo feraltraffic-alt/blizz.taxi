@@ -201,9 +201,10 @@ class FareLedgerTests {
                                                     pickup_minor, per_km_minor, per_minute_minor, minimum_minor,
                                                     free_waiting_minutes, waiting_per_minute_minor,
                                                     cancellation_fee_minor, commission_rate, waiting_step_seconds,
-                                                        waiting_rounding, created_at, updated_at)
+                                                        waiting_rounding, pickup_outside_minor,
+                                                        per_km_outside_minor, zone_surcharges, created_at, updated_at)
                         select :id, city_id, id, 'UAH', now(), 'PUBLISHED', 9000, 9000, 900, 90000, 1, 900, 0, 0.5,
-                               60, 'UP', now(), now()
+                               60, 'UP', 9000, 9000, '[]', now(), now()
                         from vehicle_class where city_id = :city and code = 'STANDARD'""")
                 .param("id", UUID.randomUUID()).param("city", cityId).update();
 
