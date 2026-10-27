@@ -24,7 +24,7 @@ create table operator_bonus_settings (
 
 insert into operator_bonus_settings
     (version, m, g, count_cancellations, reset_day, time_rules, effective_at, changed_by, reason)
-values (0, 1, 10, true, 1, '[]'::jsonb, '-infinity', null, 'Initial operator bonus settings');
+values (0, 1, 10, true, 1, '[]'::jsonb, '2000-01-01T00:00:00Z', null, 'Initial operator bonus settings');
 
 create table operator_bonus_entry (
     id               uuid primary key,
