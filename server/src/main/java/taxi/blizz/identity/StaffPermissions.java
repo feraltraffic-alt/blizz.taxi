@@ -19,6 +19,9 @@ public final class StaffPermissions {
     /** Reading the staff logs; checked in identity itself. */
     public static final String AUDIT_VIEW = "audit.view";
 
+    /** The owner's reports of orders and money per city and day; checked by operations and finance. */
+    public static final String REPORTS_VIEW = "reports.view";
+
     public static final List<Permission> CATALOG = List.of(
             new Permission("orders.create", "Orders", "Create orders (phone orders)"),
             new Permission("orders.cancel", "Orders", "Cancel orders"),
@@ -37,7 +40,8 @@ public final class StaffPermissions {
             new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),
             new Permission("integrations.manage", "Settings",
                     "Keys of integrations: Firebase, GraphHopper, maps, payment merchants"),
-            new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"));
+            new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"),
+            new Permission(StaffPermissions.REPORTS_VIEW, "Reports", "Reports of orders and money per city and day"));
 
     public static final Set<String> CODES = CATALOG.stream().map(Permission::code).collect(Collectors.toUnmodifiableSet());
 

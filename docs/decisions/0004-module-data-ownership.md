@@ -23,6 +23,7 @@
 | `operations` | `device_session` (`identity`) | Принадлежность устройства водителю при открытии смены (`JdbcWorkSessions`) |
 | `audit` | `staff_user` (`identity`) | Снимок роли сотрудника в момент действия в записи аудита (`AuditLog.record`); `identity` сам пишет аудит, поэтому вызов API образовал бы цикл |
 | `identity` | `city` (`geo`) | Проверка, что города, отмеченные сотруднику, существуют (`JdbcStaffDirectory`); `geo` сам зависит от `identity`, поэтому вызов API образовал бы цикл |
+| `finance` | `ride_order` (`operations`) | Город заказа (`city_id`) для отчёта владельца по деньгам города (`JdbcFinanceReports`): журнал знает заказ, но не город; `operations` зависит от `finance`, поэтому вызов API образовал бы цикл |
 | `pricing` | `city` (`geo`) | Валюта и статус города при расчёте цены и выборе тарифа (`JdbcQuoteService`, `JdbcTariffService`, `JdbcVehicleClasses`) |
 
 ## Последствия

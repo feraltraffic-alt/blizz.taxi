@@ -1,0 +1,167 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — report components
+  version: 1.0.0
+  description: >-
+    The owner's reports per city and day of the city's calendar (local midnight, daylight saving included — T-40).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    OrderCounts:
+      type: object
+      additionalProperties: false
+      required: [created, fulfilled, cancelled, unfulfilled, open, by_channel, by_payment, cancelled_by]
+      properties:
+        created:
+          type: integer
+        fulfilled:
+          type: integer
+        cancelled:
+          type: integer
+        unfulfilled:
+          type: integer
+        open:
+          description: Not finished yet.
+          type: integer
+        by_channel:
+          description: APP, PHONE, WEB → count.
+          type: object
+          additionalProperties:
+            type: integer
+        by_payment:
+          description: CASH, CARD, TERMINAL, SERVICE → count.
+          type: object
+          additionalProperties:
+            type: integer
+        cancelled_by:
+          description: RIDER, DRIVER, STAFF → count.
+          type: object
+          additionalProperties:
+            type: integer
+
+    OrderReport:
+      type: object
+      additionalProperties: false
+      required: [city_id, timezone, from, to, days, total, cancellation_reasons]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          description: Days with orders, oldest first, by the day an order was created.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, counts]
+            properties:
+              date:
+                type: string
+                format: date
+              counts:
+                $ref: "#/components/schemas/OrderCounts"
+        total:
+          $ref: "#/components/schemas/OrderCounts"
+        cancellation_reasons:
+          description: Most frequent first.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [cancelled_by, code, count]
+            properties:
+              cancelled_by:
+                type: string
+              code:
+                type: string
+              count:
+                type: integer
+
+    MoneyFigures:
+      description: Minor units of the city's currency; only movements of the city's orders.
+      type: object
+      additionalProperties: false
+      required: [trips, fares_minor, service_rides_minor, commission_minor, driver_share_minor, discounts_minor,
+                 bonuses_granted_minor, paid_by_card_minor, paid_with_bonuses_minor, collected_by_drivers_minor,
+                 tips_minor, rider_debt_change_minor]
+      properties:
+        trips:
+          type: integer
+        fares_minor:
+          type: integer
+          format: int64
+        service_rides_minor:
+          description: Follow-up rides the service paid itself.
+          type: integer
+          format: int64
+        commission_minor:
+          type: integer
+          format: int64
+        driver_share_minor:
+          type: integer
+          format: int64
+        discounts_minor:
+          type: integer
+          format: int64
+        bonuses_granted_minor:
+          type: integer
+          format: int64
+        paid_by_card_minor:
+          type: integer
+          format: int64
+        paid_with_bonuses_minor:
+          type: integer
+          format: int64
+        collected_by_drivers_minor:
+          description: Cash and the drivers' own terminals.
+          type: integer
+          format: int64
+        tips_minor:
+          type: integer
+          format: int64
+        rider_debt_change_minor:
+          description: How the riders' debt for these orders changed; positive — it grew.
+          type: integer
+          format: int64
+
+    MoneyReport:
+      type: object
+      additionalProperties: false
+      required: [city_id, currency, timezone, from, to, days, total]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, figures]
+            properties:
+              date:
+                type: string
+                format: date
+              figures:
+                $ref: "#/components/schemas/MoneyFigures"
+        total:
+          $ref: "#/components/schemas/MoneyFigures"
