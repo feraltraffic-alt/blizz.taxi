@@ -40,9 +40,11 @@ class JdbcDispatch implements Dispatch {
     private final DispatchEngine engine;
     private final WorkSessions workSessions;
     private final DispatchProperties properties;
+    private final AssignmentCommitter committer;
 
     JdbcDispatch(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
-                 WorkSessions workSessions, DispatchProperties properties) {
+                 WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer) {
+        this.committer = committer;
         this.jdbc = jdbc;
         this.commands = commands;
         this.core = core;
@@ -222,41 +224,9 @@ class JdbcDispatch implements Dispatch {
         return core.activeAssignmentOfDriver(driver.id());
     }
 
-    /**
-     * SEARCHING → ASSIGNED in one transaction: assignment COMMITTED, trip TO_PICKUP, capacity
-     * TO_PICKUP, search stopped, other offers revoked (REQ-ASG-01, REQ-ASG-03).
-     */
     private AssignmentView commit(OrderCore.LockedOrder order, Actor driver, UUID vehicleId, String source,
                                   UUID offerId) {
-        UUID assignmentId = UUID.randomUUID();
-        UUID tripId = UUID.randomUUID();
-        OffsetDateTime now = core.now();
-        jdbc.sql("""
-                        insert into assignment (id, order_id, driver_id, vehicle_id, source, state, created_at)
-                        values (:id, :orderId, :driverId, :vehicleId, :source, 'COMMITTED', :now)""")
-                .param("id", assignmentId)
-                .param("orderId", order.id())
-                .param("driverId", driver.id())
-                .param("vehicleId", vehicleId)
-                .param("source", source)
-                .param("now", now)
-                .update();
-        jdbc.sql("""
-                        insert into trip (id, assignment_id, order_id, phase, created_at)
-                        values (:id, :assignmentId, :orderId, 'TO_PICKUP', :now)""")
-                .param("id", tripId)
-                .param("assignmentId", assignmentId)
-                .param("orderId", order.id())
-                .param("now", now)
-                .update();
-        core.setOccupancy(driver.id(), "TO_PICKUP", assignmentId);
-        engine.stop(order.id(), "STOPPED");
-        core.closeOpenOffers(order.id(), "REVOKED");
-        core.changeStatus(order, "ASSIGNED", null, "AssignmentCommitted", driver, Map.of(
-                "assignment_id", assignmentId.toString(), "driver_id", driver.id().toString(), "source", source,
-                "offer_id", offerId == null ? "" : offerId.toString()));
-        return new AssignmentView(assignmentId, order.id(), driver.id(), vehicleId, source, "COMMITTED", tripId,
-                "TO_PICKUP");
+        return committer.commit(order, driver, vehicleId, source, offerId);
     }
 
     private DriverAvailability requireEligible(Actor driver, Set<String> ignored) {

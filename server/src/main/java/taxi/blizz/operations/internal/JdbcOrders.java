@@ -241,6 +241,12 @@ class JdbcOrders implements Orders {
                             ? CancelReasons.Audience.STAFF : CancelReasons.Audience.RIDER, reasonCode);
                     switch (order.status()) {
                         case "SCHEDULED", "AWAITING_PAYMENT", "READY", "SEARCHING" -> {
+                            // A driver holding the pre-order loses it with the order.
+                            jdbc.sql("""
+                                            update preorder_reservation set state = 'CANCELLED', closed_at = :now,
+                                                   close_reason = 'ORDER_CANCELLED', version = version + 1
+                                            where order_id = :id and state = 'RESERVED'""")
+                                    .param("now", core.now()).param("id", orderId).update();
                             engine.stop(orderId, "STOPPED");
                             core.closeOpenOffers(orderId, "REVOKED");
                         }

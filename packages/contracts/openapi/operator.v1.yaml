@@ -271,6 +271,41 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/remove-reservation:
+    post:
+      operationId: removePreorderReservation
+      summary: Take the driver off a reserved pre-order
+      description: >-
+        At any time before the driver confirms; the pre-order stays SCHEDULED and other drivers can reserve it, or it
+        goes to the search at its release time. Requires orders.reassign for the order city. Audited.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoveReservation"
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "./rider.v1.yaml#/components/schemas/Order"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/operator/v1/orders/{order_id}/events:
     get:
       operationId: getOperatorOrderEvents
@@ -761,6 +796,37 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/Caller"
                 - type: "null"
+            reservation:
+              description: The driver holding a SCHEDULED pre-order (ADR 0006); null otherwise.
+              oneOf:
+                - $ref: "#/components/schemas/ReservationHolder"
+                - type: "null"
+
+    ReservationHolder:
+      type: object
+      additionalProperties: false
+      required: [reservation_id, driver_id, driver_name, reserved_at]
+      properties:
+        reservation_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_name:
+          type: [string, "null"]
+        reserved_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    RemoveReservation:
+      type: object
+      additionalProperties: false
+      required: [command_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
 
     CancelOrder:
       type: object

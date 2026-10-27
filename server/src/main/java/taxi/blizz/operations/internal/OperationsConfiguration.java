@@ -33,6 +33,7 @@ class OperationsConfiguration {
         /** Pre-orders due for the search (ADR 0006). */
         @Scheduled(fixedDelayString = "${blizz.preorders.poll-interval:PT15S}")
         void releasePreorders() {
+            preorders.expireReservations();
             preorders.runOnce();
         }
     }

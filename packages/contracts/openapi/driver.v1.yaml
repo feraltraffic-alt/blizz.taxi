@@ -543,6 +543,162 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/preorders:
+    get:
+      operationId: listPreorders
+      summary: Pre-orders the driver can reserve
+      description: >-
+        Only when the service releases pre-orders by reservation (settings, ADR 0006); otherwise an empty list.
+        Pre-orders of the driver's city and vehicle class that nobody holds and the driver has not held before.
+        Needs an open work session; being busy with another ride is fine.
+      tags: [Pre-orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Nearest pickup first, at most 50.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreorderList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/preorders/reservations:
+    get:
+      operationId: listPreorderReservations
+      summary: The driver's open reservations
+      tags: [Pre-orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Nearest pickup first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreorderReservationList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/preorders/{order_id}/reserve:
+    post:
+      operationId: reservePreorder
+      summary: Reserve a pre-order
+      description: >-
+        One driver per pre-order (taken → ORDER_ALREADY_ASSIGNED); at most 3 open reservations per driver; not again
+        an order the driver held before. In BROADCAST_BEFORE mode → 409.
+      tags: [Pre-orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Command"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreorderReservation"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/preorders/reservations/{reservation_id}/drop:
+    post:
+      operationId: dropPreorderReservation
+      summary: Give the pre-order back
+      description: >-
+        Until drop_until (driver_cancel_until_minutes_before the pickup); later → 409, only a dispatcher can take
+        the driver off. reason_code is from the drivers' list of cancellation reasons. The pre-order stays SCHEDULED.
+      tags: [Pre-orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: reservation_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DropReservationCommand"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreorderReservation"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/driver/v1/preorders/reservations/{reservation_id}/confirm:
+    post:
+      operationId: confirmPreorderReservation
+      summary: On my way
+      description: >-
+        Between confirm_from and confirm_until; earlier or later → 409. The driver must be free, online and eligible.
+        The order becomes ASSIGNED to the driver (source RESERVATION) and the trip starts in TO_PICKUP. Not confirmed
+        by confirm_until, the reservation expires and the order goes to the search.
+      tags: [Pre-orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: reservation_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Command"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/driver/v1/offers/{offer_id}/accept:
     post:
       operationId: acceptOffer
@@ -1183,7 +1339,9 @@ tags:
   - name: Finance
     description: Settlement with the service (section 17)
   - name: Trip
-    description: Arrival, start, completion, withdrawal and no-show (sections 9, 10)
+    description: Arrival, start, completion, cancellation and no-show (sections 9, 10)
+  - name: Pre-orders
+    description: Reserving orders for a set time and confirming "On my way" (ADR 0006)
 
 components:
   parameters:
@@ -1628,7 +1786,7 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         source:
           type: string
-          enum: [OFFER, BROADCAST]
+          enum: [OFFER, BROADCAST, RESERVATION]
         state:
           type: string
           enum: [RESERVED, COMMITTED, RELEASED, REVOKED, COMPLETED]
@@ -1638,6 +1796,92 @@ components:
         trip_phase:
           type: [string, "null"]
           enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
+
+    Preorder:
+      type: object
+      additionalProperties: false
+      required: [order_id, short_number, pickup_at, vehicle_class, pickup, pickup_label, dropoff_label, price_minor,
+                 currency, payment_method]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        short_number:
+          type: integer
+          format: int64
+        pickup_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        vehicle_class:
+          type: string
+        pickup:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        pickup_label:
+          type: string
+        dropoff_label:
+          type: string
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+        payment_method:
+          type: string
+          enum: [CASH, CARD]
+
+    PreorderList:
+      type: object
+      additionalProperties: false
+      required: [preorders]
+      properties:
+        preorders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Preorder"
+
+    PreorderReservation:
+      type: object
+      additionalProperties: false
+      required: [id, state, order, reserved_at, confirm_from, confirm_until, drop_until]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [RESERVED, CONFIRMED, DROPPED, REMOVED, EXPIRED, CANCELLED]
+        order:
+          $ref: "#/components/schemas/Preorder"
+        reserved_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        confirm_from:
+          description: '"On my way" is accepted from here…'
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        confirm_until:
+          description: …until here; after that the reservation expires.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        drop_until:
+          description: The driver may give the order back himself until here.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    PreorderReservationList:
+      type: object
+      additionalProperties: false
+      required: [reservations]
+      properties:
+        reservations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreorderReservation"
+
+    DropReservationCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, reason_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 40
 
     Offer:
       type: object

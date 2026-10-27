@@ -49,9 +49,12 @@ class OperatorOrderController {
     private final QuoteService quotes;
     private final StaffAccess staff;
     private final JdbcClient jdbc;
+    private final taxi.blizz.operations.Preorders preorders;
 
     OperatorOrderController(Orders orders, OrderChat chat, CityResolver cities, VehicleClasses classes,
-                            QuoteService quotes, StaffAccess staff, JdbcClient jdbc) {
+                            QuoteService quotes, StaffAccess staff, JdbcClient jdbc,
+                            taxi.blizz.operations.Preorders preorders) {
+        this.preorders = preorders;
         this.orders = orders;
         this.chat = chat;
         this.cities = cities;
@@ -101,7 +104,8 @@ class OperatorOrderController {
                              PaymentMethod paymentMethod, String paymentState, Long priceMinor,
                              Long finalPriceMinor, String currency, String searchPhase,
                              AssignmentView assignment, OffsetDateTime createdAt, CallerView caller,
-                             OrderView.Cancellation cancellation, OffsetDateTime pickupAt, boolean preorder) {
+                             OrderView.Cancellation cancellation, OffsetDateTime pickupAt, boolean preorder,
+                             taxi.blizz.operations.Preorders.Holder reservation) {
     }
 
     record Timeline(List<Orders.TimelineEntry> events) {
@@ -202,7 +206,7 @@ class OperatorOrderController {
                 order.pickup(), order.pickupLabel(), order.dropoff(), order.dropoffLabel(), order.paymentMethod(),
                 order.paymentState(), order.priceMinor(), order.finalPriceMinor(), order.currency(), order.searchPhase(),
                 order.assignment(), order.createdAt(), contact(order.id()), order.cancellation(), order.pickupAt(),
-                order.preorder());
+                order.preorder(), "SCHEDULED".equals(order.status()) ? preorders.holder(order.id()).orElse(null) : null);
     }
 
     private CallerView contact(UUID orderId) {
