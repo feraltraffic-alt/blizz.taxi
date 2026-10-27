@@ -23,7 +23,9 @@ public interface Ledger {
         /** The rider's virtual account: what the service owes the rider in bonuses and top-ups (ADR 0009). */
         RIDER_WALLET,
         /** What the service spends on promotions, discounts and goodwill top-ups (ADR 0009, ADR 0010). */
-        PROMO_EXPENSE
+        PROMO_EXPENSE,
+        /** Bonuses of a rider who deleted the account, now the service's income (owner decision 27.10.2026). */
+        WALLET_FORFEITED
     }
 
     record Line(Account account, UUID partyId, long debitMinor, long creditMinor) {

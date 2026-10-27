@@ -172,6 +172,30 @@ class JdbcRiderWallets implements RiderWallets {
                         Line.credit(Account.RIDER_WALLET, clientId, amountMinor))));
     }
 
+    /**
+     * The rider deleted the account (owner decision 27.10.2026, issue #56): the bonuses burn — the rest of the account
+     * in each currency goes to WALLET_FORFEITED, in the caller's transaction. Once per rider and currency; returns
+     * how many currencies had something to burn.
+     */
+    int forfeitAll(UUID clientId) {
+        List<String> currencies = jdbc.sql(
+                        "select currency from rider_wallet where client_id = :client order by currency for update")
+                .param("client", clientId).query(String.class).list();
+        int forfeited = 0;
+        for (String currency : currencies) {
+            long balance = ledger.balances(Account.RIDER_WALLET, clientId).stream()
+                    .filter(b -> b.currency().equals(currency)).mapToLong(b -> b.creditMinor() - b.debitMinor())
+                    .sum();
+            if (balance > 0 && ledger.post(new Ledger.Posting("wallet-forfeit:" + clientId + ":" + currency,
+                    "WALLET_FORFEIT", clientId, currency, "The rider deleted the account",
+                    List.of(Line.debit(Account.RIDER_WALLET, clientId, balance),
+                            Line.credit(Account.WALLET_FORFEITED, null, balance))))) {
+                forfeited++;
+            }
+        }
+        return forfeited;
+    }
+
     private long reserved(UUID clientId, String currency) {
         return jdbc.sql("""
                         select coalesce(sum(amount_minor), 0) from rider_wallet_hold
