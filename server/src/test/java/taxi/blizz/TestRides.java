@@ -1,6 +1,7 @@
 package taxi.blizz;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -58,6 +59,18 @@ public final class TestRides {
     public UUID city(String code, String currency, double lon) {
         UUID id = jdbc.sql("select id from city where code = :code").param("code", code).query(UUID.class)
                 .optional().orElseGet(() -> {
+                    // Another test class's city under the same pickups makes orders resolve to the wrong city
+                    // depending on the test order; fail at once instead (AGENTS.md, test cities).
+                    List<String> overlapping = jdbc.sql("""
+                                    select code from city where state = 'PUBLISHED' and ST_Intersects(polygon,
+                                        ST_GeomFromEWKT(:area))""")
+                            .param("area", "SRID=4326;MULTIPOLYGON(((%1$s -40,%2$s -40,%2$s -39,%1$s -39,%1$s -40)))"
+                                    .formatted(lon + 0.000001, lon + 0.999999))
+                            .query(String.class).list();
+                    if (!overlapping.isEmpty()) {
+                        throw new IllegalStateException("Test city " + code + " at longitude " + lon
+                                + " overlaps " + overlapping + "; pick a free longitude");
+                    }
                     UUID created = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into city (id, code, name, currency, timezone, polygon, priority, state,
