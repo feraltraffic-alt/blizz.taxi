@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — Operator workstation API
+  version: 1.0.0
+  description: |
+    API of the dispatcher / call-centre workstation (/api/operator/v1, REQ-API-02); tokens of the operator
+    audience only, from /auth/v1/staff/sign-in. Order operations arrive slice by slice.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security:
+  - SubjectBearer: []
+
+paths:
+  /api/operator/v1/me:
+    get:
+      operationId: getOperatorMe
+      summary: The signed-in staff member
+      description: |
+        Same shape as in the admin API.
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./admin.v1.yaml#/components/schemas/Me"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/operator/v1/me/password:
+    post:
+      operationId: changeOperatorPassword
+      summary: Change the own password
+      description: |
+        Required after the first sign-in and after a reset.
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./admin.v1.yaml#/components/schemas/ChangePassword"
+      responses:
+        "204":
+          description: Done.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+tags:
+  - name: Me
+    description: The signed-in staff member
+
+components:
+  securitySchemes:
+    SubjectBearer:
+      $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"

@@ -1,0 +1,531 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — Admin panel API
+  version: 1.0.0
+  description: |
+    API of the admin panel (/api/admin/v1, REQ-API-02); tokens of the admin audience only, from
+    /auth/v1/staff/sign-in. Functions are ticked per admin or operator by a super admin; a super admin has
+    all of them (owner decision 27.10.2026). Until the initial password is changed, everything except
+    /me and /me/password returns 403.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted API domain (REQ-TEN-08)
+security:
+  - SubjectBearer: []
+
+paths:
+  /api/admin/v1/me:
+    get:
+      operationId: getAdminMe
+      summary: The signed-in staff member
+      description: |
+        effective_permissions is what the UI may show: every function for a super admin, the ticked ones otherwise.
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/admin/v1/me/password:
+    post:
+      operationId: changeAdminPassword
+      summary: Change the own password
+      description: |
+        Required after the first sign-in and after a reset. 401 when the current password is wrong.
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePassword"
+      responses:
+        "204":
+          description: Done.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/permissions:
+    get:
+      operationId: listPermissions
+      summary: Functions that can be ticked
+      description: |
+        The checkbox list for admins and operators.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PermissionCatalog"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/admin/v1/staff:
+    get:
+      operationId: listStaff
+      summary: All staff
+      description: |
+        Super admin only.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createStaff
+      summary: Add a staff member
+      description: |
+        Super admin only. First and last name, at least one contact (phone, e-mail, Telegram), login, initial
+        password (must be changed at the first sign-in), role, ticked functions and cities. A taken login → 409.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaff"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/staff/{staff_id}:
+    get:
+      operationId: getStaff
+      summary: One staff member
+      description: |
+        A super admin reads anyone; others only themselves.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/staff/{staff_id}/update:
+    post:
+      operationId: updateStaff
+      summary: Change names, contacts, role, functions or cities
+      description: |
+        Super admin only. The last active super admin cannot lose the role.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaff"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/staff/{staff_id}/suspend:
+    post:
+      operationId: suspendStaff
+      summary: Suspend
+      description: |
+        Signs the member out everywhere. The last active super admin cannot be suspended.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeStaff"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/staff/{staff_id}/restore:
+    post:
+      operationId: restoreStaff
+      summary: Restore a suspended member
+      description: |
+        Super admin only.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeStaff"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/staff/{staff_id}/reset-password:
+    post:
+      operationId: resetStaffPassword
+      summary: Set a temporary password
+      description: |
+        Unlocks the account and signs it out everywhere; the member must change the password at the next sign-in.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPassword"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+tags:
+  - name: Me
+    description: The signed-in staff member
+  - name: Staff
+    description: Staff accounts, roles and functions (super admin)
+
+components:
+  securitySchemes:
+    SubjectBearer:
+      $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
+  schemas:
+    Role:
+      type: string
+      enum: [SUPER_ADMIN, ADMIN, OPERATOR]
+
+    Contacts:
+      description: At least one of phone, e-mail, Telegram.
+      type: object
+      additionalProperties: false
+      properties:
+        phone:
+          type: [string, "null"]
+          description: E.164 after normalization.
+        email:
+          type: [string, "null"]
+          format: email
+        telegram:
+          type: [string, "null"]
+          description: Telegram username, stored with a leading @.
+          pattern: "^@?[A-Za-z0-9_]{5,32}$"
+
+    Profile:
+      type: object
+      additionalProperties: false
+      required: [first_name, last_name, contacts, role]
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        contacts:
+          $ref: "#/components/schemas/Contacts"
+        role:
+          $ref: "#/components/schemas/Role"
+        permissions:
+          description: Ticked function codes from listPermissions; ignored (empty) for a super admin.
+          type: array
+          items:
+            type: string
+        all_cities:
+          description: Every city, including ones added later; always true for a super admin.
+          type: boolean
+        city_ids:
+          description: The cities the member works in when all_cities is false.
+          type: array
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+
+    StaffMember:
+      type: object
+      additionalProperties: false
+      required: [id, login, profile, state, password_change_required, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        login:
+          type: string
+        profile:
+          $ref: "#/components/schemas/Profile"
+        state:
+          type: string
+          enum: [INVITED, ACTIVE, SUSPENDED, DISABLED]
+        password_change_required:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+
+    StaffList:
+      type: object
+      additionalProperties: false
+      required: [staff]
+      properties:
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+
+    Me:
+      type: object
+      additionalProperties: false
+      required: [member, effective_permissions]
+      properties:
+        member:
+          $ref: "#/components/schemas/StaffMember"
+        effective_permissions:
+          type: array
+          items:
+            type: string
+
+    ChangePassword:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          format: password
+          maxLength: 128
+        new_password:
+          description: 12 to 128 characters by default, not equal to the login.
+          type: string
+          format: password
+          maxLength: 128
+
+    Permission:
+      type: object
+      additionalProperties: false
+      required: [code, group, description]
+      properties:
+        code:
+          type: string
+          examples: [orders.create]
+        group:
+          type: string
+        description:
+          type: string
+
+    PermissionCatalog:
+      type: object
+      additionalProperties: false
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+
+    CreateStaff:
+      type: object
+      additionalProperties: false
+      required: [command_id, login, initial_password, profile, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        login:
+          description: 3 to 64 letters, digits, dots, dashes or underscores; case-insensitive.
+          type: string
+        initial_password:
+          type: string
+          format: password
+          maxLength: 128
+        profile:
+          $ref: "#/components/schemas/Profile"
+        reason:
+          type: string
+
+    UpdateStaff:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, profile, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        profile:
+          $ref: "#/components/schemas/Profile"
+        reason:
+          type: string
+
+    ChangeStaff:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+
+    ResetPassword:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, temporary_password, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        temporary_password:
+          type: string
+          format: password
+          maxLength: 128
+        reason:
+          type: string

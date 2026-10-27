@@ -305,6 +305,8 @@ class OrderCore {
                                 select 1 from offer f where f.order_id = o.id and f.driver_id = ws.driver_id))
                           and not exists (
                                 select 1 from assignment x where x.order_id = o.id and x.driver_id = ws.driver_id)
+                          and not exists (
+                                select 1 from driver_restriction r where r.driver_id = ws.driver_id and r.active)
                         order by distance_m, ws.driver_id
                         limit :limit""")
                 .param("orderId", orderId)

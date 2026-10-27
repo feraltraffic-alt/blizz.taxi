@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import taxi.blizz.finance.DriverDebts;
 import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.finance.Ledger.Line;
@@ -29,10 +30,12 @@ class TripFarePosting implements OutboxHandler {
     static final String CONSUMER = "finance.trip-fare-posting";
 
     private final Ledger ledger;
+    private final DriverDebts debts;
     private final JsonMapper json;
 
-    TripFarePosting(Ledger ledger, JsonMapper json) {
+    TripFarePosting(Ledger ledger, DriverDebts debts, JsonMapper json) {
         this.ledger = ledger;
+        this.debts = debts;
         this.json = json;
     }
 
@@ -74,5 +77,7 @@ class TripFarePosting implements OutboxHandler {
                     List.of(Line.debit(Account.DRIVER_PAYABLE, trip.driverId(), trip.amountMinor()),
                             Line.credit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()))));
         }
+        // The driver's debt may have crossed the limit (REQ-PAY-16).
+        debts.refresh(trip.driverId(), trip.currency());
     }
 }

@@ -11,10 +11,13 @@ import java.util.UUID;
  */
 public interface Ledger {
 
-    /** Account types of REQ-LED-03; {@code partyId} names the rider, driver or partner where it applies. */
+    /**
+     * Account types of REQ-LED-03; {@code partyId} names the rider, driver or partner where it applies.
+     * {@code SERVICE_FUNDS} is money the service itself received, e.g. a driver paying in his debt.
+     */
     enum Account {
-        RIDER_RECEIVABLE, DRIVER_PAYABLE, SERVICE_COMMISSION, PROVIDER_CLEARING, PARTNER_SETTLEMENT,
-        TIPS_PAYABLE, REFUNDS_PAYABLE, SUSPENSE
+        RIDER_RECEIVABLE, DRIVER_PAYABLE, SERVICE_COMMISSION, SERVICE_FUNDS, PROVIDER_CLEARING,
+        PARTNER_SETTLEMENT, TIPS_PAYABLE, REFUNDS_PAYABLE, SUSPENSE
     }
 
     record Line(Account account, UUID partyId, long debitMinor, long creditMinor) {

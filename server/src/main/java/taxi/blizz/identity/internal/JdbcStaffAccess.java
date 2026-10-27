@@ -29,8 +29,10 @@ class JdbcStaffAccess implements StaffAccess {
                 : Arrays.stream(cityIds).filter(Objects::nonNull).distinct().toArray(UUID[]::new);
         boolean allowed = jdbc.sql("""
                         select exists(select 1 from staff_user
-                                      where id = :id and state = 'ACTIVE' and :permission = any(permissions)
-                                        and cast(:cities as uuid[]) <@ city_scope)""")
+                                      where id = :id and state = 'ACTIVE' and not must_change_password
+                                        and (role = 'SUPER_ADMIN'
+                                             or (:permission = any(permissions)
+                                                 and (all_cities or cast(:cities as uuid[]) <@ city_scope))))""")
                 .param("id", actor.id())
                 .param("permission", permission)
                 .param("cities", cities)

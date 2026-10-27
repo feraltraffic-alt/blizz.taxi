@@ -21,6 +21,7 @@
 |---|---|---|
 | `operations` | `driver`, `vehicle` (`driver`) | Подбор кандидатов и проверка класса авто при принятии заказа (`OrderCore.candidates`, `JdbcDispatch`): один запрос с блокировкой и PostGIS-фильтром |
 | `operations` | `device_session` (`identity`) | Принадлежность устройства водителю при открытии смены (`JdbcWorkSessions`) |
+| `identity` | `city` (`geo`) | Проверка, что города, отмеченные сотруднику, существуют (`JdbcStaffDirectory`); `geo` сам зависит от `identity`, поэтому вызов API образовал бы цикл |
 | `pricing` | `city` (`geo`) | Валюта и статус города при расчёте цены и выборе тарифа (`JdbcQuoteService`, `JdbcTariffService`, `JdbcVehicleClasses`) |
 
 ## Последствия

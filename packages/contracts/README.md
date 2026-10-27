@@ -7,6 +7,7 @@ Machine-readable contracts, written before the code that implements them (REQ-AP
 | `openapi/common.yaml` | Shared OpenAPI 3.1 components: Problem Details and error codes, commands and idempotency, cursor pagination, Money, GeoPoint, 202 operations, standard error responses, bearer scheme |
 | `openapi/auth.v1.yaml` | Phone sign-in by one-time code, token refresh, logout |
 | `openapi/rider.v1.yaml`, `openapi/driver.v1.yaml` | Rider and driver app APIs (`/api/{audience}/v1`) |
+| `openapi/admin.v1.yaml`, `openapi/operator.v1.yaml` | Admin panel and operator workstation APIs; staff sign in by login and password in `auth.v1.yaml` |
 | `openapi/<audience>.v1.yaml` | One document per audience (`auth`, `rider`, `driver`, `operator`, `admin`, later `partner`), added slice by slice |
 | `events/` | JSON Schemas of events; `envelope.schema.json` wraps every event (REQ-NTF-04) |
 

@@ -14,6 +14,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param accessTtl          access token lifetime, at most 15 minutes (REQ-AUTH-06)
  * @param refreshTtl         lifetime of one refresh token
  * @param maxSessionAge      a session ends after this time even if it keeps refreshing
+ * @param staffSessionAge    the same for staff sessions (admin panel, operator workstation)
  */
 @ConfigurationProperties("blizz.auth")
 public record AuthProperties(
@@ -21,7 +22,8 @@ public record AuthProperties(
         String accessTokenSecret,
         @DefaultValue("PT15M") Duration accessTtl,
         @DefaultValue("P30D") Duration refreshTtl,
-        @DefaultValue("P180D") Duration maxSessionAge) {
+        @DefaultValue("P180D") Duration maxSessionAge,
+        @DefaultValue("PT12H") Duration staffSessionAge) {
 
     public AuthProperties {
         if (instanceId == null) {

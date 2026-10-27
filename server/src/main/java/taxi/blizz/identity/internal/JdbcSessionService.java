@@ -58,11 +58,25 @@ class JdbcSessionService implements SessionService {
 
     @Override
     public IssuedSession open(VerifiedSubject subject, String deviceRef) {
+        return open(subject, ApiAudience.forPhoneSignIn(subject.actor().type()), deviceRef,
+                properties.maxSessionAge());
+    }
+
+    @Override
+    public IssuedSession openStaff(VerifiedSubject subject, ApiAudience audience, String deviceRef) {
+        if (subject.actor().type() != taxi.blizz.platform.SubjectType.STAFF
+                || (audience != ApiAudience.ADMIN && audience != ApiAudience.OPERATOR)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff sign in only to the admin panel or operator app");
+        }
+        return open(subject, audience, deviceRef, properties.staffSessionAge());
+    }
+
+    private IssuedSession open(VerifiedSubject subject, ApiAudience audience, String deviceRef,
+                               java.time.Duration maxAge) {
         if (!ACTIVE_STATES.contains(subject.accountState())) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "The account cannot sign in");
         }
         Actor actor = subject.actor();
-        ApiAudience audience = ApiAudience.forPhoneSignIn(actor.type());
         return tx.execute(status -> {
             OffsetDateTime now = now();
             UUID sessionId = UUID.randomUUID();
@@ -77,9 +91,9 @@ class JdbcSessionService implements SessionService {
                     .param("audience", audience.value())
                     .param("deviceRef", deviceRef)
                     .param("now", now)
-                    .param("expiresAt", now.plus(properties.maxSessionAge()))
+                    .param("expiresAt", now.plus(maxAge))
                     .update();
-            return issue(sessionId, actor, audience, now, now.plus(properties.maxSessionAge()));
+            return issue(sessionId, actor, audience, now, now.plus(maxAge));
         });
     }
 
