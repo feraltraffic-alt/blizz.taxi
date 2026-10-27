@@ -171,3 +171,76 @@ components:
                 $ref: "#/components/schemas/MoneyFigures"
         total:
           $ref: "#/components/schemas/MoneyFigures"
+
+    RequestReportExport:
+      type: object
+      additionalProperties: false
+      required: [command_id, kind, city_id, from, to]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          description: ORDERS — the report of orders; FINANCE — the report of money.
+          type: string
+          enum: [ORDERS, FINANCE]
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        from:
+          type: string
+          format: date
+        to:
+          description: Included; at most 92 days after from.
+          type: string
+          format: date
+
+    ReportExport:
+      description: >-
+        PENDING → RUNNING → READY (the file can be downloaded until expires_at) or FAILED (error); READY → EXPIRED,
+        the file is dropped.
+      type: object
+      additionalProperties: false
+      required: [id, kind, city_id, from, to, state, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [ORDERS, FINANCE]
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        state:
+          type: string
+          enum: [PENDING, RUNNING, READY, FAILED, EXPIRED]
+        file_name:
+          type: [string, "null"]
+        rows:
+          description: Rows of data in the file, the total row included, the header not.
+          type: [integer, "null"]
+        error:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        ready_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        expires_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+
+    ReportExportList:
+      type: object
+      additionalProperties: false
+      required: [exports]
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportExport"

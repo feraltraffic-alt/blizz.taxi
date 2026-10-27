@@ -258,16 +258,19 @@ class JdbcCalls implements Calls {
     }
 
     /**
-     * A number as networks send it, in E.164 when it can be read: with "+" or "00", or digits that already start with
-     * a country code (380…, 48…). A local number (0…) cannot be placed without knowing the country: null.
+     * A number as networks send it, in E.164 when it can be read: with "+" or "00", or bare digits that are a full
+     * Ukrainian (380 + 9 digits) or Polish (48 + 9 digits) number. Anything else bare — a Polish national number
+     * (512345678 is not +512…, Peru), a local one (0…) — cannot be placed without the trunk's country: empty.
      */
     static Optional<String> e164(String raw) {
         if (raw == null) {
             return Optional.empty();
         }
         String value = raw.strip().replaceAll("[\\s\\-().]", "");
-        if (value.matches("^[1-9][0-9]{7,14}$")) {
+        if (value.matches("^(380[0-9]{9}|48[0-9]{9})$")) {
             value = "+" + value;
+        } else if (value.matches("^[0-9]+$") && !value.startsWith("00")) {
+            return Optional.empty();
         }
         try {
             return Optional.of(PhoneNumber.parse(value).e164());
