@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +51,18 @@ class DriverLocationApiTests {
         List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
+        clearTrackFixtures();
+    }
+
+    @AfterEach
+    void tearDown() {
+        clearTrackFixtures();
+    }
+
+    private void clearTrackFixtures() {
         jdbc.sql("delete from location_batch_request").update();
         jdbc.sql("delete from track_point").update();
+        jdbc.sql("delete from work_session where city_id in (select id from city where code like 'track-%')").update();
     }
 
     @Test
