@@ -1,0 +1,177 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — riders in the admin panel
+  version: 1.0.0
+  description: >-
+    Finding a rider, the rider's card, blocking and unblocking (REQ-ADM-01, section 36.4). Needs clients.manage.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Client:
+      type: object
+      additionalProperties: false
+      required: [id, phone, account_state, has_app, created_at, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        phone:
+          type: string
+        name:
+          type: [string, "null"]
+        language:
+          type: [string, "null"]
+        account_state:
+          type: string
+          enum: [UNVERIFIED, ACTIVE, BLOCKED, DELETION_PENDING]
+        has_app:
+          type: boolean
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        version:
+          type: integer
+          format: int64
+        block:
+          description: Set while blocked, and kept under a pending deletion request.
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [reason, at]
+              properties:
+                reason:
+                  type: string
+                until:
+                  description: Null — until staff unblock.
+                  oneOf:
+                    - $ref: "./common.yaml#/components/schemas/Timestamp"
+                    - type: "null"
+                at:
+                  $ref: "./common.yaml#/components/schemas/Timestamp"
+                by:
+                  oneOf:
+                    - $ref: "./common.yaml#/components/schemas/Uuid"
+                    - type: "null"
+        deletion_requested_at:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+
+    ClientList:
+      type: object
+      additionalProperties: false
+      required: [clients]
+      properties:
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+
+    BlockClient:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        until:
+          description: In the future; omitted — until staff unblock.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Timestamp"
+            - type: "null"
+
+    UnblockClient:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    ClientCard:
+      type: object
+      additionalProperties: false
+      required: [client, current_orders, latest_orders, bonuses, debt, cases]
+      properties:
+        client:
+          $ref: "#/components/schemas/Client"
+        current_orders:
+          type: array
+          items:
+            $ref: "./rider.v1.yaml#/components/schemas/Order"
+        latest_orders:
+          description: The latest 20, newest first.
+          type: array
+          items:
+            $ref: "./rider.v1.yaml#/components/schemas/OrderHistoryItem"
+        bonuses:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [currency, balance_minor, available_minor]
+            properties:
+              currency:
+                type: string
+              balance_minor:
+                type: integer
+                format: int64
+              available_minor:
+                type: integer
+                format: int64
+        debt:
+          description: What the rider owes the service (REQ-PAY-18), per currency.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [currency, amount_minor]
+            properties:
+              currency:
+                type: string
+              amount_minor:
+                type: integer
+                format: int64
+        cases:
+          description: The rider's own support cases, newest first.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, number, category, subject, state, created_at]
+            properties:
+              id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              number:
+                type: integer
+                format: int64
+              category:
+                type: string
+              subject:
+                type: string
+              state:
+                type: string
+              order_id:
+                oneOf:
+                  - $ref: "./common.yaml#/components/schemas/Uuid"
+                  - type: "null"
+              created_at:
+                $ref: "./common.yaml#/components/schemas/Timestamp"
