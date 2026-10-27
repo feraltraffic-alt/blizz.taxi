@@ -29,4 +29,17 @@ class JdbcAccountDirectory implements AccountDirectory {
         }
         return jdbc.sql(sql).param("id", subject.id()).query(String.class).optional();
     }
+
+    @Override
+    public Optional<String> phone(Actor subject) {
+        String sql = switch (subject.type()) {
+            case CLIENT -> "select phone_normalized from client where id = :id";
+            case DRIVER -> "select phone_normalized from driver where id = :id";
+            case STAFF, PARTNER, SYSTEM -> null;
+        };
+        if (sql == null) {
+            return Optional.empty();
+        }
+        return jdbc.sql(sql).param("id", subject.id()).query(String.class).optional();
+    }
 }
