@@ -139,13 +139,35 @@ class OrderChatTests {
     }
 
     @Test
-    void theChatClosesWhenTheTripEnds() {
-        Ride ride = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
-        say(ride.payer(), ride, "Stop at the shop please");
-        rides.complete(ride, true);
+    void theChatStaysOpenInTheOrderHistory() {
+        Ride done = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        say(done.payer(), done, "Stop at the shop please");
+        rides.complete(done, true);
+        assertThat(orders.get(done.order().id()).status()).isEqualTo("FULFILLED");
+        say(done.payer(), done, "I left my umbrella in the car");
+        say(done.driver().actor(), done, "Found it, I will bring it");
+        assertThat(chat.messages(done.payer(), done.order().id(), 0, 50)).hasSize(3);
 
-        assertCode(() -> say(ride.payer(), ride, "Thanks"), ErrorCode.STATE_CONFLICT);
-        assertThat(chat.messages(ride.payer(), ride.order().id(), 0, 50)).hasSize(1);
+        Ride cancelled = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        orders.cancel(cancelled.payer(), UUID.randomUUID(), cancelled.order().id(),
+                orders.get(cancelled.order().id()).version(), "CHANGED_MIND");
+        assertThat(say(cancelled.payer(), cancelled, "Sorry, plans changed").senderRole()).isEqualTo("RIDER");
+        assertThat(chat.messages(cancelled.driver().actor(), cancelled.order().id(), 0, 50)).hasSize(1);
+    }
+
+    @Test
+    void noChatBeforeAnyDriverAndNotWithADriverWhoWithdrew() {
+        Actor payer = rides.client();
+        OrderView waiting = rides.order(payer, cityId, PICKUP, DROPOFF);
+        assertCode(() -> chat.post(payer, UUID.randomUUID(), waiting.id(), "Anyone?"), ErrorCode.STATE_CONFLICT);
+        orders.cancel(payer, UUID.randomUUID(), waiting.id(), orders.get(waiting.id()).version(), "CHANGED_MIND");
+
+        Driver leaving = rides.driverNear(PICKUP);
+        Ride ride = rides.assigned(cityId, leaving, PICKUP, DROPOFF);
+        trips.withdraw(leaving.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), "Flat tyre");
+        orders.cancel(ride.payer(), UUID.randomUUID(), ride.order().id(), orders.get(ride.order().id()).version(),
+                "CHANGED_MIND");
+        assertCode(() -> say(leaving.actor(), ride, "sorry"), ErrorCode.NOT_FOUND);
     }
 
     @Test

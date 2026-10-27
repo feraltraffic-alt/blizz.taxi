@@ -8,8 +8,10 @@ import taxi.blizz.platform.Actor;
 /**
  * Chat ("Написать") between the paying rider and the assigned driver of an order. Messages belong to the
  * assignment: a driver reads only the messages of his own assignment, so after a reassignment the new
- * driver never sees the conversation with the previous one; the rider reads the whole order. Writing is
- * possible while the assignment is active (to pickup, waiting, on the trip). Staff read everything with
+ * driver never sees the conversation with the previous one; the rider reads the whole order. Writing opens
+ * when a driver is assigned and stays open in the order history — completed, cancelled, no-show — so the
+ * rider can write to the driver from the order details (owner decision 27.10.2026). A driver who withdrew
+ * or was taken off is no longer the order's driver and cannot write. Staff read everything with
  * {@link #VIEW_PERMISSION} for the order's city, and every such read is audited.
  */
 public interface OrderChat {

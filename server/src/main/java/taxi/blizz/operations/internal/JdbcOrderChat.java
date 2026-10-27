@@ -47,7 +47,11 @@ class JdbcOrderChat implements OrderChat {
     record PostRequest(UUID orderId, String body) {
     }
 
-    private record Party(UUID payerClientId, UUID assignmentId, UUID driverId, String assignmentState) {
+    /**
+     * The rider and the driver of the order's last assignment. {@code driverLeft}: that assignment ended
+     * because the driver withdrew or staff took him off — he is no longer the order's driver.
+     */
+    private record Party(UUID payerClientId, UUID assignmentId, UUID driverId, boolean driverLeft) {
     }
 
     @Override
@@ -64,8 +68,10 @@ class JdbcOrderChat implements OrderChat {
                     core.lockOrder(orderId);
                     Party party = party(orderId);
                     String role = role(sender, party);
-                    if (party.assignmentId() == null || !"COMMITTED".equals(party.assignmentState())) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The chat is open while a driver is assigned");
+                    // Open once a driver is assigned and stays open in the order history (completed or
+                    // cancelled), owner decision 27.10.2026; role() already refused anyone else.
+                    if (party.assignmentId() == null) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "No driver has been assigned to this order");
                     }
                     long sequence = jdbc.sql("select coalesce(max(sequence), 0) + 1 from order_message where order_id = :id")
                             .param("id", orderId).query(Long.class).single();
@@ -152,14 +158,15 @@ class JdbcOrderChat implements OrderChat {
 
     private Party party(UUID orderId) {
         return jdbc.sql("""
-                        select o.payer_client_id, a.id, a.driver_id, a.state
+                        select o.payer_client_id, a.id, a.driver_id,
+                               coalesce(a.state = 'REVOKED' or a.close_reason like 'DRIVER_WITHDREW%', false)
                         from ride_order o
-                        left join lateral (select id, driver_id, state from assignment
+                        left join lateral (select id, driver_id, state, close_reason from assignment
                                            where order_id = o.id order by created_at desc limit 1) a on true
                         where o.id = :id""")
                 .param("id", orderId)
                 .query((rs, i) -> new Party(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class), rs.getString(4)))
+                        rs.getObject(3, UUID.class), rs.getBoolean(4)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
     }
@@ -168,7 +175,7 @@ class JdbcOrderChat implements OrderChat {
         if (sender.type() == SubjectType.CLIENT && sender.id().equals(party.payerClientId())) {
             return "RIDER";
         }
-        if (sender.type() == SubjectType.DRIVER && sender.id().equals(party.driverId())) {
+        if (sender.type() == SubjectType.DRIVER && sender.id().equals(party.driverId()) && !party.driverLeft()) {
             return "DRIVER";
         }
         throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");

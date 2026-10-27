@@ -40,7 +40,7 @@ All screens: loading, empty, offline, stale data, retrying, error states (REQ-UX
 
 - **Theme:** chosen in settings with "Light / Dark / System"; the floating theme button in the mockups is a demo control only.
 - **Branding:** colours, logo and app name are design tokens per service, never hard-coded (REQ-TEN-07). Mockup values are the default theme.
-- **Chat ("Написать"):** in-app chat between client and driver, tied to the order. The full conversation is stored and shown in the admin panel in the order details. Access in the admin follows the order's scope and is audited; retention follows the data retention matrix (Q-19).
+- **Chat ("Написать"):** in-app chat between client and driver, tied to the order. It opens when a driver is assigned and stays open in the order history (completed or cancelled), so the rider can write to the driver from the order card or the order details (product owner decision, 27.10.2026). The full conversation is stored and shown in the admin panel in the order details. Access in the admin follows the order's scope and is audited; retention follows the data retention matrix (Q-19).
 - **Calls ("Позвонить"):** the mode is a service setting in the admin panel (product owner decision, 26.10.2026):
   - `DIRECT` — the app dials the other party's real number;
   - `VIA_SERVICE_NUMBERS` — the call goes through the service's numbers, the real numbers stay hidden (depends on the SIP provider, Q-18).
