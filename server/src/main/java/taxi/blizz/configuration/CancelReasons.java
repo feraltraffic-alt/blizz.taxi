@@ -38,11 +38,20 @@ public interface CancelReasons {
         public Reason {
             labels = labels == null ? Map.of() : Map.copyOf(labels);
         }
+
+        public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
+                      DriverOutcome driverOutcome, boolean active, int sortOrder, long version) {
+            this(id, audience, code, labels, driverOutcome, false, active, sortOrder, version);
+        }
     }
 
     /** {@code driverOutcome} is required for DRIVER and must be null otherwise; operatorFault is STAFF-only. */
     record Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
                  boolean operatorFault, boolean active, int sortOrder) {
+        public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
+                     boolean active, int sortOrder) {
+            this(audience, code, labels, driverOutcome, false, active, sortOrder);
+        }
     }
 
     /** Active reasons of one side in display order; public, for the apps. */
