@@ -805,6 +805,100 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/rider/v1/support/uploads:
+    post:
+      operationId: openRiderSupportAttachmentUpload
+      summary: Open an upload session for one support attachment
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./support.yaml#/components/schemas/OpenAttachmentUpload"
+      responses:
+        "201":
+          description: Upload session.
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/UploadSession"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/uploads/{file_id}:
+    put:
+      operationId: uploadRiderSupportAttachment
+      summary: Upload support attachment bytes
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: {type: string, format: binary}
+          image/png:
+            schema: {type: string, format: binary}
+          image/webp:
+            schema: {type: string, format: binary}
+          application/pdf:
+            schema: {type: string, format: binary}
+      responses:
+        "200":
+          description: Stored file.
+          content:
+            application/json:
+              schema:
+                $ref: "./support.yaml#/components/schemas/StoredFile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/rider/v1/support/cases/{case_id}/attachments/{file_id}:
+    get:
+      operationId: downloadRiderSupportAttachment
+      summary: Download a PUBLIC attachment of my support case
+      tags: [Support]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: Attachment bytes.
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+            application/pdf: {schema: {type: string, format: binary}}
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 tags:
   - name: Push
     description: Push notifications to the app (section 20)

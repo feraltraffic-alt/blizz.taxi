@@ -20,9 +20,12 @@ public interface FileService {
      */
     StoredFile upload(Actor owner, UUID fileId, String contentType, long contentLength, InputStream body);
 
-    /** Throws unless the file is SAFE, belongs to {@code owner} and was uploaded for {@code purpose}. */
-    void requireAttachable(Actor owner, UUID fileId, FilePurpose purpose);
+    /** Returns the SAFE file metadata or throws unless it belongs to {@code owner} and has {@code purpose}. */
+    StoredFile requireAttachable(Actor owner, UUID fileId, FilePurpose purpose);
 
     /** Opens a SAFE file for its owner; anyone else gets NOT_FOUND (no hint that it exists). */
     FileContent open(Actor requester, UUID fileId);
+
+    /** Opens a SAFE file after another module has already authorized access to a record that owns it. */
+    FileContent openAttached(UUID fileId, FilePurpose purpose);
 }

@@ -13,12 +13,14 @@ final class ContentSniffer {
     private static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
     private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
     private static final byte[] PDF = {'%', 'P', 'D', 'F', '-'};
+    private static final byte[] RIFF = {'R', 'I', 'F', 'F'};
+    private static final byte[] WEBP = {'W', 'E', 'B', 'P'};
 
     private ContentSniffer() {
     }
 
     static Optional<String> detect(Path file) throws IOException {
-        byte[] head = new byte[8];
+        byte[] head = new byte[12];
         int read;
         try (InputStream in = Files.newInputStream(file)) {
             read = in.readNBytes(head, 0, head.length);
@@ -31,6 +33,10 @@ final class ContentSniffer {
         }
         if (startsWith(head, read, PDF)) {
             return Optional.of("application/pdf");
+        }
+        if (read >= 12 && startsWith(head, read, RIFF)
+                && Arrays.equals(Arrays.copyOfRange(head, 8, 12), WEBP)) {
+            return Optional.of("image/webp");
         }
         return Optional.empty();
     }
