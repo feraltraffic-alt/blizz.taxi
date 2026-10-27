@@ -3,6 +3,21 @@
 # completes; then the rider's history, the driver's balance and the order history as the operator sees it.
 source "$(dirname "$0")/../lib.sh"
 
+# wait_push PHONE TYPE AFTER — waits up to 10 s for a push of TYPE sent to PHONE after AFTER (UTC); the push
+# worker runs on a timer, so a push comes a second or two after its event. Stops the scenario when none comes.
+wait_push() {
+    local path tries
+    path="/sandbox/v1/pushes?phone=$(jq -rn --arg p "$1" '$p|@uri')&after=$3"
+    for tries in $(seq 10); do
+        if api GET "$path" | jq -e --arg t "$2" 'any(.[]; .data.type == $t)' >/dev/null; then
+            return
+        fi
+        sleep 1
+    done
+    note "**No $2 push for $1 — scenario stopped.**"
+    exit 1
+}
+
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234     # Майдан Незалежності
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890   # Залізничний вокзал
 DRIVER_PHONE="+380500000001"; DRIVER_VEHICLE="5a000000-0000-4000-8000-000000000501"
@@ -22,6 +37,16 @@ QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"ve
   \"pickup\":{\"lat\":$PICKUP_LAT,\"lon\":$PICKUP_LON},\"dropoff\":{\"lat\":$DROPOFF_LAT,\"lon\":$DROPOFF_LON}}" | jq -r .id)
 expect 201
 
+say "Both phones register for pushes (the sandbox only records them: /sandbox/v1/pushes)"
+api POST /api/driver/v1/push-devices "$DRIVER" \
+    "{\"command_id\":\"$(uuid)\",\"platform\":\"ANDROID\",\"token\":\"sandbox-driver-$(uuid)\"}" >/dev/null
+expect 201
+api POST /api/rider/v1/push-devices "$RIDER" \
+    "{\"command_id\":\"$(uuid)\",\"platform\":\"ANDROID\",\"token\":\"sandbox-rider-$(uuid)\"}" >/dev/null
+expect 201
+# Pushes of earlier scenarios to the same test driver do not count.
+SINCE=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+
 say "Rider orders (cash)"
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
   \"vehicle_class\":\"STANDARD\",\"pickup\":{\"lat\":$PICKUP_LAT,\"lon\":$PICKUP_LON},
@@ -32,6 +57,10 @@ expect 201
 say "The driver gets the offer and accepts it"
 OFFER=$(api GET /api/driver/v1/offers "$DRIVER" | jq -r '.[0].id')
 api POST "/api/driver/v1/offers/$OFFER/accept" "$DRIVER" "{\"command_id\":\"$(uuid)\"}" >/dev/null; expect 200
+
+say "The pushes the server sent: the offer to the driver, \"driver assigned\" to the rider"
+wait_push "$DRIVER_PHONE" driver.offer "$SINCE"
+wait_push "$RIDER_PHONE" rider.driver-assigned "$SINCE"
 
 say "Rider and driver write in the order chat"
 api POST "/api/rider/v1/orders/$ORDER/messages" "$RIDER" \
