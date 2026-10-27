@@ -59,6 +59,31 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/operator/v1/me/bonus:
+    get:
+      operationId: getMyOperatorBonus
+      summary: The signed-in staff member's bonus points in the current period
+      description: Points for phone orders this staff member created (ADR 0011). Any staff member.
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./operator-bonuses.yaml#/components/schemas/OperatorBonusAccount"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/operator/v1/quotes:
     post:
       operationId: createOperatorQuote

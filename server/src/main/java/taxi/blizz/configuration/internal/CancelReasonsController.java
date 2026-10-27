@@ -50,13 +50,13 @@ class CancelReasonsController {
 
     record Create(@NotNull UUID commandId, @NotNull Audience audience, @NotBlank @Size(max = 40) String code,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
-                  @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
+                  Boolean operatorFault, @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
                   @NotBlank @Size(max = 500) String reason) {
     }
 
     record Update(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
-                  @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
+                  Boolean operatorFault, @NotNull Boolean active, @NotNull @Min(0) Integer sortOrder,
                   @NotBlank @Size(max = 500) String reason) {
     }
 
@@ -85,14 +85,16 @@ class CancelReasonsController {
     @ResponseStatus(HttpStatus.CREATED)
     CancelReasons.Reason create(AccessClaims claims, @Valid @RequestBody Create body) {
         return reasons.create(claims.actor(), body.commandId(), new CancelReasons.Draft(body.audience(), body.code(),
-                body.labels(), body.driverOutcome(), body.active(), body.sortOrder()), body.reason());
+                body.labels(), body.driverOutcome(), Boolean.TRUE.equals(body.operatorFault()), body.active(),
+                body.sortOrder()), body.reason());
     }
 
     @PostMapping("/api/admin/v1/settings/cancel-reasons/{reasonId}")
     CancelReasons.Reason update(AccessClaims claims, @PathVariable UUID reasonId, @Valid @RequestBody Update body) {
         return reasons.update(claims.actor(), body.commandId(), reasonId, body.expectedVersion(),
-                new CancelReasons.Draft(null, null, body.labels(), body.driverOutcome(), body.active(),
-                        body.sortOrder()), body.reason());
+                new CancelReasons.Draft(null, null, body.labels(), body.driverOutcome(),
+                        Boolean.TRUE.equals(body.operatorFault()),
+                        body.active(), body.sortOrder()), body.reason());
     }
 
     private Items items(Audience audience) {

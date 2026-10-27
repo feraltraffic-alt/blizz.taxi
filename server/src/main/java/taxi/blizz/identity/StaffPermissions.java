@@ -30,6 +30,7 @@ public final class StaffPermissions {
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
             new Permission("support.manage", "Support", "Support cases and problem queues"),
+            new Permission("operator-bonuses.manage", "Operators", "Operator bonus settings, balances and history"),
             new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),
             new Permission("integrations.manage", "Settings",
                     "Keys of integrations: Firebase, GraphHopper, maps, payment merchants"),

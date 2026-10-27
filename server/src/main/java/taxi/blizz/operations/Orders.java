@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.SubjectType;
 
 /** Order lifecycle commands (section 9). Every change is a named command with a command id. */
 public interface Orders {
@@ -98,4 +99,12 @@ public interface Orders {
 
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);
+
+    /** Order creation facts exposed to other modules without leaking the operations tables (ADR 0004). */
+    record Origin(UUID orderId, OrderChannel channel, SubjectType createdByType, UUID createdById,
+                  UUID cityId, OffsetDateTime createdAt) {
+    }
+
+    /** Empty when the order does not exist. */
+    Optional<Origin> origin(UUID orderId);
 }
