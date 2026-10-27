@@ -2318,6 +2318,182 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/drivers/{driver_id}/balance:
+    get:
+      operationId: getDriverBalanceForStaff
+      summary: A driver's balance and its movements
+      description: Needs finance.manage.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/DriverStatement"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/drivers/{driver_id}/balance/top-ups:
+    post:
+      operationId: topUpDriverBalance
+      summary: Top up a driver's balance
+      description: >-
+        DEPOSIT — money the driver paid in (cash at the office, a transfer; reference optional); BONUS — a gift of the
+        service (its expense). Needs finance.manage; the reason is required and audited (ADR 0010).
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, currency, amount_minor, kind, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                currency:
+                  type: string
+                  pattern: "^[A-Z]{3}$"
+                amount_minor:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  maximum: 10000000
+                kind:
+                  type: string
+                  enum: [DEPOSIT, BONUS]
+                reference:
+                  type: [string, "null"]
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        "201":
+          description: The balance after the top-up.
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/DriverStatement"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/settings/driver-transfers:
+    get:
+      operationId: listDriverTransferRules
+      summary: Limits of transfers between drivers
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/TransferRuleList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/settings/driver-transfers/{currency}:
+    post:
+      operationId: setDriverTransferRule
+      summary: Set the limits of transfers in a currency
+      description: expected_version 0 for a currency without a rule yet. Needs finance.manage; audited.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: currency
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, enabled, max_per_transfer_minor, max_per_day_minor,
+                         min_balance_after_minor, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                enabled:
+                  type: boolean
+                max_per_transfer_minor:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                max_per_day_minor:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                min_balance_after_minor:
+                  type: integer
+                  format: int64
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: The rule in force.
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/TransferRule"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Promotions
     description: Discounts and bonuses for riders (ADR 0009)

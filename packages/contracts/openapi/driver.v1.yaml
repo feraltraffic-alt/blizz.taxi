@@ -1597,6 +1597,99 @@ paths:
                   average_hundredths: {type: integer, format: int64, minimum: 0, maximum: 500}
         "401": {$ref: "./common.yaml#/components/responses/Unauthorized"}
 
+  /api/driver/v1/balance/history:
+    get:
+      operationId: getDriverBalanceHistory
+      summary: My balance and its movements
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/DriverStatement"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/driver/v1/transfers:
+    post:
+      operationId: transferToDriver
+      summary: Send part of my balance to another driver
+      description: >-
+        The other driver is found by phone. Within the rules of the currency (GET /api/driver/v1/transfer-rules):
+        transfers off → 409; above one transfer's or the day's limit → 400; the balance would fall below the minimum
+        → 422 WALLET_INSUFFICIENT; no active driver with the phone → 404 (ADR 0010).
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, to_phone, currency, amount_minor]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                to_phone:
+                  type: string
+                currency:
+                  type: string
+                  pattern: "^[A-Z]{3}$"
+                amount_minor:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                comment:
+                  type: [string, "null"]
+                  maxLength: 200
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/Transfer"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/transfer-rules:
+    get:
+      operationId: getDriverTransferRules
+      summary: Limits of transfers between drivers
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Per currency; no rule — transfers are off.
+          content:
+            application/json:
+              schema:
+                $ref: "./balances.yaml#/components/schemas/TransferRuleList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
 tags:
   - name: Push
     description: Push notifications to the app (section 20)
