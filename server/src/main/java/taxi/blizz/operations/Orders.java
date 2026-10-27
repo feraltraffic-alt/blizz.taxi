@@ -1,5 +1,7 @@
 package taxi.blizz.operations;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
@@ -8,6 +10,7 @@ import taxi.blizz.platform.Actor;
 public interface Orders {
 
     String CREATE_PERMISSION = "orders.create";
+    String VIEW_PERMISSION = "orders.view";
     String CANCEL_PERMISSION = "orders.cancel";
     String REASSIGN_PERMISSION = "orders.reassign";
 
@@ -30,6 +33,9 @@ public interface Orders {
     OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason);
 
     OrderView get(UUID orderId);
+
+    /** Orders of one city visible to staff, newest first; limit is capped at 100 (REQ-OPS-01). */
+    List<OrderView> inCity(Actor staff, UUID cityId, boolean activeOnly, OffsetDateTime before, int limit);
 
     /** The payer's order that is not yet finished, if any. */
     Optional<OrderView> active(UUID payerClientId);
