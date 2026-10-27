@@ -124,6 +124,8 @@ class ServiceSettingsTests {
         assertCode(() -> settings.change(staff("orders.view"), UUID.randomUUID(), version,
                 brand("#000000", "#ffffff", CallMode.DIRECT, null, "uk", List.of("uk")), "x"), ErrorCode.ACCESS_DENIED);
         assertCode(() -> settings.history(staff(), 5), ErrorCode.ACCESS_DENIED);
+        settings.change(admin, UUID.randomUUID(), version,
+                brand("#000000", "#ffffff", CallMode.DIRECT, null, "uk", List.of("uk")), "A version to protect");
         assertThatThrownBy(() -> jdbc.sql("delete from service_settings").update())
                 .rootCause().hasMessageContaining("append-only");
     }

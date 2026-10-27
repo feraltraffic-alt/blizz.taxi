@@ -14,3 +14,5 @@ begin
 end $$;
 create trigger service_settings_append_only before update or delete on service_settings
     for each row execute function service_settings_is_append_only();
+create trigger service_settings_no_truncate before truncate on service_settings
+    for each statement execute function service_settings_is_append_only();
