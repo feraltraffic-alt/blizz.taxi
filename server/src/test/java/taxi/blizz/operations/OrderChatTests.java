@@ -148,6 +148,7 @@ class OrderChatTests {
         say(done.driver().actor(), done, "Found it, I will bring it");
         assertThat(chat.messages(done.payer(), done.order().id(), 0, 50)).hasSize(3);
 
+        rides.city("test-order-chat", "UAH", 160); // the first driver goes offline
         Ride cancelled = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
         orders.cancel(cancelled.payer(), UUID.randomUUID(), cancelled.order().id(),
                 orders.get(cancelled.order().id()).version(), "CHANGED_MIND");
