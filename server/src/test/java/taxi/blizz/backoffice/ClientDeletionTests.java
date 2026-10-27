@@ -24,6 +24,7 @@ import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.RiderWallets;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.ApiAudience;
+import taxi.blizz.identity.ClientDeletions;
 import taxi.blizz.identity.IssuedSession;
 import taxi.blizz.identity.OtpAudience;
 import taxi.blizz.identity.OtpDelivery;
@@ -324,6 +325,131 @@ class ClientDeletionTests {
         UUID challenge = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId();
         VerifiedSubject again = otp.verify(challenge, delivery.sent.getLast().code());
         assertThat(again.actor().id()).isNotEqualTo(rider.id());
+    }
+
+    // ------------------------------------------------------------ the rider's side
+
+    @Autowired
+    ClientDeletions deletions;
+
+    private String lastCode() {
+        return delivery.sent.getLast().code();
+    }
+
+    private long sessionsOf(Actor rider) {
+        return count("select count(*) from device_session where subject_id = :id and revoked_at is null", rider);
+    }
+
+    @Test
+    void theRiderAsksWithADeletionCodeKeepsThisSessionAndMayCancel() {
+        Actor rider = rides.client();
+        IssuedSession current = auth.open(new VerifiedSubject(rider, "ACTIVE", false), "this-phone");
+        IssuedSession other = auth.open(new VerifiedSubject(rider, "ACTIVE", false), "other-phone");
+
+        UUID challenge = deletions.requestCode(rider, null, null).challengeId();
+        String code = lastCode();
+        String wrong = code.equals("000000") ? "111111" : "000000";
+        assertCode(() -> deletions.request(rider, current.sessionId(), UUID.randomUUID(), challenge, wrong),
+                ErrorCode.OTP_INVALID);
+        assertThat(jdbc.sql("select attempts from otp_challenge where id = :id").param("id", challenge)
+                .query(Integer.class).single()).as("a wrong code counts although the command failed").isEqualTo(1);
+        assertThat(client(rider)).containsEntry("account_state", "ACTIVE");
+
+        UUID command = UUID.randomUUID();
+        ClientDeletions.Status status = deletions.request(rider, current.sessionId(), command, challenge, code);
+        assertThat(status.accountState()).isEqualTo("DELETION_PENDING");
+        assertThat(client(rider)).containsEntry("account_state", "DELETION_PENDING")
+                .containsEntry("deletion_previous_state", "ACTIVE");
+        assertThat(auth.verifyAccess(current.accessToken(), ApiAudience.RIDER)).as("this session stays").isPresent();
+        assertThat(auth.verifyAccess(other.accessToken(), ApiAudience.RIDER)).as("the others end").isEmpty();
+        // A repeat returns the first result without the used code; another body under the same id is a conflict.
+        assertThat(deletions.request(rider, current.sessionId(), command, challenge, code).accountState())
+                .isEqualTo("DELETION_PENDING");
+        assertCode(() -> deletions.request(rider, current.sessionId(), command, challenge, wrong),
+                ErrorCode.IDEMPOTENCY_CONFLICT);
+        assertCode(() -> deletions.request(rider, current.sessionId(), UUID.randomUUID(), challenge, code),
+                ErrorCode.OTP_INVALID);
+
+        // Pending: the rider still signs in, but does not order.
+        assertThat(auth.open(new VerifiedSubject(rider, "DELETION_PENDING", false), "again").accessToken())
+                .isNotBlank();
+        UUID city = rides.city("test-client-deletion", "UAH", 125);
+        assertCode(() -> rides.order(rider, city, PICKUP, DROPOFF), ErrorCode.ACCOUNT_NOT_ACTIVE);
+
+        UUID cancel = UUID.randomUUID();
+        assertThat(deletions.cancel(rider, cancel).accountState()).isEqualTo("ACTIVE");
+        assertThat(deletions.cancel(rider, cancel).accountState()).as("a repeat").isEqualTo("ACTIVE");
+        assertCode(() -> deletions.cancel(rider, UUID.randomUUID()), ErrorCode.STATE_CONFLICT);
+        assertThat(client(rider)).containsEntry("account_state", "ACTIVE").containsEntry("deletion_previous_state",
+                null);
+    }
+
+    @Test
+    void aBlockedRiderReturnsToBlockedAndAnAnonymizedOneCannotCancel() {
+        Actor blocked = rides.client();
+        jdbc.sql("update client set account_state = 'BLOCKED' where id = :id").param("id", blocked.id()).update();
+        UUID challenge = deletions.requestCode(blocked, null, null).challengeId();
+        assertThat(deletions.request(blocked, UUID.randomUUID(), UUID.randomUUID(), challenge, lastCode())
+                .accountState()).isEqualTo("DELETION_PENDING");
+        assertThat(deletions.cancel(blocked, UUID.randomUUID()).accountState()).isEqualTo("BLOCKED");
+
+        Actor gone = pending("ACTIVE");
+        review.complete(staff, UUID.randomUUID(), gone.id(), "Confirmed");
+        assertCode(() -> deletions.cancel(gone, UUID.randomUUID()), ErrorCode.STATE_CONFLICT);
+        assertCode(() -> review.complete(staff, UUID.randomUUID(), rides.client().id(), "From ACTIVE"),
+                ErrorCode.STATE_CONFLICT);
+    }
+
+    @Test
+    void codesNeverServeAnotherPurposeAndConfirmingCreatesNothing() {
+        // A sign-in code does not confirm a deletion.
+        Actor signingIn = rides.client();
+        UUID signIn = otp.requestChallenge(OtpAudience.CLIENT, phone(signingIn), null, null).challengeId();
+        String signInCode = lastCode();
+        assertCode(() -> deletions.request(signingIn, UUID.randomUUID(), UUID.randomUUID(), signIn, signInCode),
+                ErrorCode.OTP_INVALID);
+        assertThat(otp.verify(signIn, signInCode).actor().id()).as("still good for signing in")
+                .isEqualTo(signingIn.id());
+
+        // A deletion code signs nobody in, and confirming it creates no account and no session.
+        Actor deleting = rides.client();
+        UUID deletion = deletions.requestCode(deleting, null, null).challengeId();
+        String deletionCode = lastCode();
+        assertCode(() -> otp.verify(deletion, deletionCode), ErrorCode.OTP_INVALID);
+        assertCode(() -> otp.confirm(signingIn, deletion, deletionCode, taxi.blizz.identity.OtpPurpose.ACCOUNT_DELETION),
+                ErrorCode.OTP_INVALID);
+        long clients = jdbc.sql("select count(*) from client").query(Long.class).single();
+        long sessions = sessionsOf(deleting);
+        otp.confirm(deleting, deletion, deletionCode, taxi.blizz.identity.OtpPurpose.ACCOUNT_DELETION);
+        assertThat(jdbc.sql("select count(*) from client").query(Long.class).single()).isEqualTo(clients);
+        assertThat(sessionsOf(deleting)).isEqualTo(sessions);
+        assertCode(() -> otp.confirm(deleting, deletion, deletionCode, taxi.blizz.identity.OtpPurpose.ACCOUNT_DELETION),
+                ErrorCode.OTP_INVALID);
+    }
+
+    @Test
+    void anOperatorCannotOrderForACallerWhoseAccountIsPending() {
+        rides.city("test-client-deletion", "UAH", 125); // the pickup must be in a city
+        UUID operatorId = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Operator', 'OPERATOR', :permissions, true, 'ACTIVE', now(), now())""")
+                .param("id", operatorId).param("login", "deletion-op-" + operatorId)
+                .param("permissions", new String[]{Orders.CREATE_PERMISSION}).update();
+        Actor operator = new Actor(SubjectType.STAFF, operatorId);
+        Actor pending = pending("ACTIVE");
+        java.util.function.Function<String, taxi.blizz.operations.CreateOrder> phoneOrder = phone ->
+                new taxi.blizz.operations.CreateOrder(null, "STANDARD", PICKUP, "Home", DROPOFF, "Work",
+                        taxi.blizz.operations.PaymentMethod.CASH, UUID.randomUUID(),
+                        taxi.blizz.operations.OrderChannel.PHONE, null,
+                        new taxi.blizz.operations.CallerContact("Caller", phone));
+        assertCode(() -> orders.create(operator, UUID.randomUUID(), phoneOrder.apply(phone(pending))),
+                ErrorCode.ACCOUNT_NOT_ACTIVE);
+        // A caller without an account goes on to the usual checks (here: the made-up quote).
+        assertThatThrownBy(() -> orders.create(operator, UUID.randomUUID(), phoneOrder.apply("+380631234599")))
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isNotEqualTo(ErrorCode.ACCOUNT_NOT_ACTIVE);
     }
 
     private List<Map<String, Object>> journal(Actor rider) {
