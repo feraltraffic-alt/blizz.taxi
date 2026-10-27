@@ -44,9 +44,10 @@ else
     note "No code was sent to a blocked account (status $(cat /tmp/sandbox-status))."
 fi
 
-say "Staff unblock the rider; the rider signs in again"
+say "Staff reopen the card (the sign-in attempt touched the account) and unblock the rider; the rider signs in again"
+VERSION=$(api GET "/api/admin/v1/clients/$CLIENT_ID" "$ADMIN" | jq -r .client.version); expect 200
 api POST "/api/admin/v1/clients/$CLIENT_ID/unblock" "$ADMIN" \
-  "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .version <<<"$BLOCKED"),\"reason\":\"Apologised\"}" \
+  "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"reason\":\"Apologised\"}" \
   | jq -e '.account_state == "ACTIVE"' >/dev/null
 expect 200
 sleep 2
