@@ -123,7 +123,7 @@ class SupportAttachments {
         OffsetDateTime now = OffsetDateTime.now().withOffsetSameInstant(java.time.ZoneOffset.UTC);
         for (StoredFile file : attachments) {
             UUID existing = jdbc.sql("select message_id from support_message_attachment where file_id = :file")
-                    .param("file", file.id()).query(UUID.class).optional().orElse(null);
+                    .param("file", file.fileId()).query(UUID.class).optional().orElse(null);
             if (existing != null) {
                 if (!existing.equals(message.id())) {
                     throw invalid("An attachment can be used only once");
@@ -134,7 +134,7 @@ class SupportAttachments {
                             insert into support_message_attachment
                                 (message_id, file_id, content_type, size_bytes, name, created_at)
                             values (:message, :file, :type, :size, null, :now)""")
-                    .param("message", message.id()).param("file", file.id()).param("type", file.contentType())
+                    .param("message", message.id()).param("file", file.fileId()).param("type", file.contentType())
                     .param("size", file.sizeBytes()).param("now", now).update();
         }
     }
