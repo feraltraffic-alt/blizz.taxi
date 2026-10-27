@@ -12,11 +12,8 @@ import taxi.blizz.platform.Actor;
  */
 public interface OtpDeliveries {
 
-    /**
-     * The support permission ({@code backoffice.SupportCases.MANAGE_PERMISSION}); written out, because operations links
-     * phone orders to calls here and backoffice depends on operations.
-     */
-    String VIEW_PERMISSION = "support.manage";
+    /** The support permission, from identity: backoffice depends on operations, which depends on telephony. */
+    String VIEW_PERMISSION = taxi.blizz.identity.StaffPermissions.SUPPORT_MANAGE;
 
     /**
      * @param state SENT — the provider took it; FAILED — it refused or is not configured; UNKNOWN — no answer

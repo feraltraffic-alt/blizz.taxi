@@ -13,7 +13,7 @@ import taxi.blizz.platform.Actor;
  */
 public interface SupportCases {
 
-    String MANAGE_PERMISSION = "support.manage";
+    String MANAGE_PERMISSION = taxi.blizz.identity.StaffPermissions.SUPPORT_MANAGE;
 
     enum Category {
         LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER
