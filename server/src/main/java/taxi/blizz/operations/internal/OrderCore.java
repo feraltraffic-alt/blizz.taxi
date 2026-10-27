@@ -78,6 +78,11 @@ class OrderCore {
                 .param("state", state).param("id", orderId).update();
     }
 
+    String paymentState(UUID orderId) {
+        return jdbc.sql("select payment_state from ride_order where id = :id").param("id", orderId)
+                .query(String.class).optional().orElse(null);
+    }
+
     boolean isPreorder(UUID orderId) {
         return jdbc.sql("select preorder from ride_order where id = :id").param("id", orderId)
                 .query(Boolean.class).single();
