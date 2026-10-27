@@ -64,6 +64,12 @@ class AccessIsolationTests {
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 155.55);
     static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
     static final Pattern PARAM = Pattern.compile("\\{([a-z_]+)}");
+    /**
+     * Pool commands: any eligible driver may take a pre-order or an order of "ВСЕМ", so the object is not someone
+     * else's; an order that is not in the pool is refused with 409, never taken (2xx).
+     */
+    static final Set<String> POOL = Set.of("/api/driver/v1/preorders/{order_id}/reserve",
+            "/api/driver/v1/orders/{order_id}/claim");
 
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
@@ -109,6 +115,12 @@ class AccessIsolationTests {
                         values (:id, :order, :driver, 'RESERVED', now())""")
                 .param("id", reservation).param("order", waiting.id()).param("driver", driver.actor().id()).update();
         UUID workSession = sessions.availability(driver.actor().id()).sessionId();
+
+        // Both sides rated the trip, so the owners can read their ratings.
+        postJson("/api/rider/v1/orders/" + ride.order().id() + "/rating", riderToken,
+                Map.of("command_id", UUID.randomUUID(), "score", 5));
+        postJson("/api/driver/v1/orders/" + ride.order().id() + "/rating", driverToken,
+                Map.of("command_id", UUID.randomUUID(), "score", 5));
 
         UUID riderFile = safeFile(rider, FilePurpose.SUPPORT_ATTACHMENT);
         UUID riderCase = id(postJson("/api/rider/v1/support/cases", riderToken, Map.of("command_id", UUID.randomUUID(),
@@ -196,7 +208,8 @@ class AccessIsolationTests {
         }
         MvcResult result = perform(request(call.method(), url), strangerToken);
         int status = result.getResponse().getStatus();
-        Set<Integer> allowed = call.method().equals("get") ? Set.of(403, 404) : Set.of(400, 403, 404);
+        Set<Integer> allowed = call.method().equals("get") ? Set.of(403, 404)
+                : POOL.contains(call.path()) ? Set.of(400, 403, 404, 409) : Set.of(400, 403, 404);
         if (!allowed.contains(status)) {
             problems.add(call + ": a stranger gets " + status + " " + abbreviate(result.getResponse()
                     .getContentAsString()));
