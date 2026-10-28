@@ -26,7 +26,7 @@ gh workflow run sandbox.yml -f scenario=all -f minutes=0       # прогнат�
 gh workflow run sandbox.yml -f scenario=none -f minutes=60     # поднять на час для ручной работы
 ```
 
-- **scenario** — `all`, `full-ride`, `cancellations`, `preorders` или `none`. Каждый сценарий пишет протокол «запрос → ответ» в `transcript.md` (артефакт **sandbox-transcript** вместе с `server.log`); итог — в сводке запуска.
+- **scenario** — `all`, `full-ride`, `cancellations`, `preorders` или `none`. Каждый сценарий пишет протокол «запрос → ответ» в `transcript.md` (артефакт **sandbox-transcript** вместе с `server.log`); итог — в сводке запуска. Каждый JSON-ответ (кроме `/sandbox/*` и ответов без тела) проверяется по OpenAPI-контрактам; несоответствие останавливает сценарий одной строкой (метод, путь, статус, первая ошибка схемы). В сводке запуска — какие операции проверены и какие ни разу не вызывались.
 - **minutes** — после сценариев держать систему N минут (до 120) за временным публичным адресом `https://….trycloudflare.com`; адрес — в сводке запуска. Им можно пользоваться из Postman, браузера, мобильных приложений.
 
 Данные живут только пока идёт запуск.
