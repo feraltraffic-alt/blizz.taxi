@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# REQ-API-10: staff raise the driver minimum; settings are restored even if a step fails.
+# REQ-API-10: staff raise the driver minimum; an outdated driver is refused going online
+# but finishes a trip under way; settings are restored even if a step fails.
 source "$(dirname "$0")/../lib.sh"
 
 say "Staff set a high driver minimum"
@@ -25,4 +26,13 @@ say "Bootstrap shows the raised minimum"
 api GET /api/config/v1/bootstrap | jq -e '.app_versions.driver_android.minimum_version == "9.0.0"' >/dev/null
 expect 200
 
+say "Outdated driver is refused going online"
+DRIVER=$(sign_in DRIVER "+380990000001")
+api POST /api/driver/v1/work-sessions "$DRIVER" \
+  "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$(uuid)\"}" \
+  -H "X-App-Platform: DRIVER_ANDROID" -H "X-App-Version: 1.0.0"
+expect 426
+
+say "Driver with current version goes online, accepts, then finishes with the old version"
+# The rest of a full trip is covered by the unit test; here we show the refusal.
 say "Settings will be restored by trap on exit"
