@@ -146,6 +146,11 @@ class IntegrationsTests {
                 new Change(Integrations.FCM_CREDENTIALS, "{\"not\":\"a key\"}")), "x"), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> integrations.change(admin, UUID.randomUUID(), PASSWORD, List.of(
                 new Change(Integrations.GRAPHHOPPER_BASE_URL, "ftp://x")), "x"), ErrorCode.VALIDATION_FAILED);
+        for (String ssrf : List.of("http://169.254.169.254/latest/meta-data", "http://10.0.0.5:8088",
+                "http://user:secret@example.com", "http://[::ffff:169.254.169.254]/")) {
+            assertCode(() -> integrations.change(admin, UUID.randomUUID(), PASSWORD, List.of(
+                    new Change(Integrations.OTP_ASTERISK_ARI_URL, ssrf)), "x"), ErrorCode.VALIDATION_FAILED);
+        }
         assertCode(() -> integrations.change(admin, UUID.randomUUID(), PASSWORD, List.of(
                 new Change(Integrations.MAPS_PROVIDER, "BING")), "x"), ErrorCode.VALIDATION_FAILED);
         assertThat(integrations.list(admin)).filteredOn(f -> f.name().startsWith("maps."))

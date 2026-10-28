@@ -40,6 +40,8 @@ import taxi.blizz.platform.IdempotentCommands;
 @Service
 class JdbcFileService implements FileService {
 
+    private final taxi.blizz.platform.RateLimits rateLimits;
+
     private static final Logger log = LoggerFactory.getLogger(JdbcFileService.class);
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
 
@@ -53,7 +55,10 @@ class JdbcFileService implements FileService {
     private final Clock clock;
 
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
-                    FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock) {
+                    FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock,
+                    taxi.blizz.platform.RateLimits rateLimits) {
+
+        this.rateLimits = rateLimits;
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
@@ -70,6 +75,7 @@ class JdbcFileService implements FileService {
     @Override
     public UploadSession openUpload(Actor owner, UUID commandId, FilePurpose purpose, String contentType,
                                     long sizeBytes) {
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.FILE_UPLOAD, owner);
         String type = normalize(contentType);
         if (purpose == null || !allowedFor(purpose, type)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Unsupported file type");

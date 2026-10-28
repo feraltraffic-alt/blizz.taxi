@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot's console logging, with phones, tokens, one-time codes and precise coordinates taken out of every
+  message and stack trace (REQ-SEC-08, platform/internal/LogRedaction). The rules come before the include, so the
+  layouts Spring Boot builds use them.
+-->
+<configuration>
+    <conversionRule conversionWord="m" class="taxi.blizz.platform.internal.LogRedaction$RedactedMessage"/>
+    <conversionRule conversionWord="msg" class="taxi.blizz.platform.internal.LogRedaction$RedactedMessage"/>
+    <conversionRule conversionWord="message" class="taxi.blizz.platform.internal.LogRedaction$RedactedMessage"/>
+    <conversionRule conversionWord="redactedEx" class="taxi.blizz.platform.internal.LogRedaction$RedactedThrowable"/>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+</configuration>

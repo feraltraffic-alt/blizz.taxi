@@ -44,6 +44,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 class JdbcOrders implements Orders {
 
+    private final taxi.blizz.platform.RateLimits rateLimits;
+
     private final JdbcClient jdbc;
     private final StaffAccess staff;
     private final AuditLog audit;
@@ -70,7 +72,10 @@ class JdbcOrders implements Orders {
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
-               AccountDirectory accounts, Calls calls, LegalDocuments legal) {
+               AccountDirectory accounts, Calls calls, LegalDocuments legal,
+               taxi.blizz.platform.RateLimits rateLimits) {
+
+        this.rateLimits = rateLimits;
         this.calls = calls;
         this.legal = legal;
         this.accounts = accounts;
@@ -103,6 +108,7 @@ class JdbcOrders implements Orders {
         String channel = authorizeCreate(actor, order, city);
         // A rider orders only after accepting the legal texts in force that must be accepted (REQ-PRV-08).
         legal.requireAccepted(actor);
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.ORDER, actor);
         if (order.paymentMethod() == PaymentMethod.SERVICE) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "SERVICE is set only for a follow-up order");
         }

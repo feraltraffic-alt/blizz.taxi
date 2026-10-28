@@ -31,6 +31,8 @@ import taxi.blizz.platform.IdempotentCommands;
 @Service
 class JdbcDispatch implements Dispatch {
 
+    private final taxi.blizz.platform.RateLimits rateLimits;
+
     /** Reasons that do not matter when the driver accepts the offer made to them. */
     private static final Set<String> IGNORED_ON_ACCEPT = Set.of("OCCUPANCY_OFFERED");
 
@@ -43,7 +45,10 @@ class JdbcDispatch implements Dispatch {
     private final AssignmentCommitter committer;
 
     JdbcDispatch(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
-                 WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer) {
+                 WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer,
+                 taxi.blizz.platform.RateLimits rateLimits) {
+
+        this.rateLimits = rateLimits;
         this.committer = committer;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -83,6 +88,7 @@ class JdbcDispatch implements Dispatch {
     @Override
     public AssignmentView accept(Actor driver, UUID commandId, UUID offerId) {
         requireDriver(driver);
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.OFFER_ACCEPT, driver);
         return commands.execute(new CommandKey(driver, "offer.accept", commandId), new OfferRequest(offerId),
                 AssignmentView.class, () -> {
                     UUID orderId = orderOfOffer(offerId, driver);

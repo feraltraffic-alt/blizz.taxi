@@ -263,7 +263,7 @@ class OtpDeliveryTests {
         assertThat(voice.send(phone, "654321", OtpAudience.DRIVER).state()).as("not configured")
                 .isEqualTo(OtpSender.State.FAILED);
 
-        set(Map.of(Integrations.OTP_ASTERISK_ARI_URL, "http://asterisk:8088/", Integrations.OTP_ASTERISK_ARI_USER,
+        set(Map.of(Integrations.OTP_ASTERISK_ARI_URL, "http://127.0.0.1:8088/", Integrations.OTP_ASTERISK_ARI_USER,
                 "blizz", Integrations.OTP_ASTERISK_ARI_PASSWORD, "ari-secret", Integrations.OTP_ASTERISK_ENDPOINT,
                 "PJSIP/{phone}@trunk"));
         OtpSender.Result sent = voice.send(phone, "654321", OtpAudience.DRIVER);
@@ -271,7 +271,7 @@ class OtpDeliveryTests {
         assertThat(sent.providerRef()).isEqualTo("1730000000.42");
         Recording.Request request = http.requests.getFirst();
         String url = URLDecoder.decode(request.url(), StandardCharsets.UTF_8);
-        assertThat(url).startsWith("http://asterisk:8088/ari/channels?")
+        assertThat(url).startsWith("http://127.0.0.1:8088/ari/channels?")
                 .contains("endpoint=PJSIP/380631234567@trunk", "context=" + AsteriskVoiceSender.CONTEXT,
                         "extension=s", "priority=1", "timeout=25")
                 .as("the code only in the channel variable, not in the address").doesNotContain("654321");
@@ -289,7 +289,7 @@ class OtpDeliveryTests {
     @Test
     void theConnectionCheckAsksBothProvidersAndSendsNothing() {
         set(Map.of(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-test", Integrations.OTP_ASTERISK_ARI_URL,
-                "http://asterisk:8088", Integrations.OTP_ASTERISK_ARI_USER, "blizz",
+                "http://127.0.0.1:8088", Integrations.OTP_ASTERISK_ARI_USER, "blizz",
                 Integrations.OTP_ASTERISK_ARI_PASSWORD, "ari-secret"));
         Recording http = new Recording(r -> r.url().contains("balance")
                 ? new HttpTransport.Response(200, "{\"response_code\":0,\"response_result\":{\"balance\":12.5}}")
@@ -298,7 +298,7 @@ class OtpDeliveryTests {
         assertThat(check.ok()).isTrue();
         assertThat(check.message()).contains("TurboSMS", "Asterisk").doesNotContain("turbo-token-test", "ari-secret");
         assertThat(http.requests).extracting(Recording.Request::url)
-                .containsExactly("https://turbosms.test/user/balance.json", "http://asterisk:8088/ari/asterisk/info");
+                .containsExactly("https://turbosms.test/user/balance.json", "http://127.0.0.1:8088/ari/asterisk/info");
 
         http.answer = r -> new HttpTransport.Response(200, "{\"response_code\":103,\"response_status\":\"BAD_TOKEN\"}");
         assertThat(new OtpIntegrationCheck(integrations, live(), http, json).check().ok()).isFalse();

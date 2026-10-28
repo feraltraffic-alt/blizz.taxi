@@ -36,6 +36,24 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/admin/v1/me/emergency-grants:
+    get:
+      operationId: getMyEmergencyGrants
+      summary: My emergency access
+      description: The extra permissions a super admin gave me for a limited time, and until when (REQ-SEC-10).
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyGrantList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/admin/v1/me/password:
     post:
       operationId: changeAdminPassword
@@ -282,6 +300,134 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/staff/{staff_id}/emergency-grants:
+    post:
+      operationId: grantEmergencyAccess
+      summary: Give emergency access
+      description: >-
+        Super admins only. Extra permissions from the catalog for 5 minutes to 8 hours, with a reason; never to oneself. Counted by every permission check while it lasts; ends by itself or by revoking. Audited.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./emergency.yaml#/components/schemas/GrantEmergencyAccess"
+      responses:
+        "201":
+          description: Granted.
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyGrant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/emergency-grants:
+    get:
+      operationId: listEmergencyGrants
+      summary: Emergency access given
+      description: Super admins only; active first, the latest 100.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyGrantList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/emergency-grants/{grant_id}/revoke:
+    post:
+      operationId: revokeEmergencyAccess
+      summary: End emergency access early
+      description: Super admins only. An ended grant → 409. Audited.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: grant_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./emergency.yaml#/components/schemas/RevokeEmergencyAccess"
+      responses:
+        "200":
+          description: Revoked.
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyGrant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/emergency-grants/{grant_id}/activity:
+    get:
+      operationId: getEmergencyGrantActivity
+      summary: What was done with emergency access
+      description: Super admins only. The staff member's requests while the grant lasted, from the staff activity log.
+      tags: [Staff]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: grant_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyActivity"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
 
   /api/admin/v1/staff/{staff_id}/reset-password:
     post:
