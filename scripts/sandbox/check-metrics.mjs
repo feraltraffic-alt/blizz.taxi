@@ -27,7 +27,8 @@ function validate(text) {
     for (const value of Object.values(tags)) {
       if (uuid.test(value) || phone.test(value)) throw Error(`Id/phone in ${name} label`);
     }
-    const expected = definitions[name] ?? definitions[name.replace(/_(sum|max|bucket)$/, '_count')];
+    const family = definitions[name] ?? definitions[name.replace(/_(sum|max|bucket)$/, '_count')];
+    const expected = family && { ...family, application: ['blizz-taxi-server'] };
     if (name.endsWith('_bucket')) delete tags.le;
     if (!expected) continue; // Existing gauges and timer sum/max/bucket samples are not required counters.
     if (Object.keys(tags).sort().join() !== Object.keys(expected).sort().join()) throw Error(`Wrong tags: ${name}`);
@@ -45,16 +46,16 @@ function validate(text) {
 }
 
 if (process.argv.includes('--self-test')) {
-  const valid = Object.entries(definitions).map(([name, tags]) => `${name}{${Object.entries(tags)
+  const valid = Object.entries(definitions).map(([name, tags]) => `${name}{${Object.entries({ ...tags, application: ['blizz-taxi-server'] })
     .map(([key, values]) => `${key}="${values[0]}"`).join(',')}} 1`).join('\n');
   validate(valid);
-  const withTimerSum = validate(valid + '\nblizz_dispatch_assigned_seconds_sum{source="RESERVATION"} 0');
+  const withTimerSum = validate(valid + '\nblizz_dispatch_assigned_seconds_sum{source="RESERVATION",application="blizz-taxi-server"} 0');
   if (Object.keys(withTimerSum).length !== Object.keys(definitions).length) throw Error('Unexpected totals');
   for (const bad of [valid.replace('blizz_offers_total', 'missing'), valid.replace('outcome="ACCEPTED"', 'outcome="ARBITRARY"'),
     valid.replace('preorder="true"', 'preorder="+380671234567"'), valid.replace('channel="APP"', 'channel="12345678-abcd-abcd-abcd-123456789abc"'),
-    valid.replace('purpose="OTP"', 'purpose="OTP",extra="CUSTOM"'), valid.replace(/ 1/g, ' 0'), valid.replace(/ 1/g, ' NaN'),
+    valid.replace('purpose="OTP"', 'purpose="OTP",extra="CUSTOM"'), valid.replace(/ 1/g, ' 0'), valid.replace(/ 1/g, ' NaN'), valid.replace('application="blizz-taxi-server"', 'application="CUSTOM"'),
     valid + '\nblizz_outbox_pending{type="12345678-abcd-abcd-abcd-123456789abc"} 1',
-    valid + '\nblizz_dispatch_assigned_seconds_sum{source="CUSTOM"} 1']) {
+    valid + '\nblizz_dispatch_assigned_seconds_sum{source="CUSTOM",application="blizz-taxi-server"} 1']) {
     let failed = false;
     try { validate(bad); } catch { failed = true; }
     if (!failed) throw Error('Validator accepted deliberately invalid metrics');
