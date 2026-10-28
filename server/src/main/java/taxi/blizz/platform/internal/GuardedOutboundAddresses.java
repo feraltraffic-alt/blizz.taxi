@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import taxi.blizz.platform.DomainException;
@@ -28,6 +29,7 @@ class GuardedOutboundAddresses implements OutboundAddresses {
     private final Set<String> privateHosts;
     private final Resolver resolver;
 
+    @Autowired
     GuardedOutboundAddresses(@Value("${blizz.security.outbound-private-hosts:}") List<String> privateHosts) {
         this(privateHosts, InetAddress::getAllByName);
     }

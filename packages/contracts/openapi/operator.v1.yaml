@@ -33,6 +33,24 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/operator/v1/me/emergency-grants:
+    get:
+      operationId: getMyEmergencyGrants
+      summary: My emergency access
+      description: The extra permissions a super admin gave me for a limited time, and until when (REQ-SEC-10).
+      tags: [Me]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./emergency.yaml#/components/schemas/EmergencyGrantList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/operator/v1/me/password:
     post:
       operationId: changeOperatorPassword
