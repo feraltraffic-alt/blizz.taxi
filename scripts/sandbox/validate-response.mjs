@@ -73,26 +73,62 @@ function loadSpecs() {
   return specs;
 }
 
-// Add unevaluatedProperties: false only to the top-level response schema if it is a plain object.
-// Do not recurse into allOf/oneOf/anyOf or into $ref (already dereferenced).
-function tightenSchema(schema) {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return schema;
+// Recursively make object schemas strict.
+// - Plain object (not inside allOf): add unevaluatedProperties: false.
+// - oneOf/anyOf parent and its object variants: add unevaluatedProperties: false.
+// - allOf: add unevaluatedProperties: false on the parent only (parts stay open so they can contribute properties).
+function tightenSchema(schema, insideAllOf = false) {
+  if (!schema || typeof schema !== "object") return schema;
+  if (Array.isArray(schema)) return schema.map(s => tightenSchema(s, insideAllOf));
+
   const copy = { ...schema };
-  if (copy.type === "object" &&
+  const isAllOf = !!copy.allOf;
+  const isOneOfOrAnyOf = !!(copy.oneOf || copy.anyOf);
+
+  // Recurse
+  for (const key of ["properties", "patternProperties", "additionalProperties", "unevaluatedProperties",
+                     "items", "prefixItems", "contains", "if", "then", "else", "not",
+                     "dependentSchemas", "propertyNames"]) {
+    if (copy[key] && typeof copy[key] === "object") {
+      if (key === "properties" || key === "patternProperties" || key === "dependentSchemas") {
+        copy[key] = Object.fromEntries(
+          Object.entries(copy[key]).map(([k, v]) => [k, tightenSchema(v, insideAllOf)])
+        );
+      } else if (key === "items" || key === "prefixItems") {
+        copy[key] = Array.isArray(copy[key]) ? copy[key].map(s => tightenSchema(s, insideAllOf)) : tightenSchema(copy[key], insideAllOf);
+      } else {
+        copy[key] = tightenSchema(copy[key], insideAllOf);
+      }
+    }
+  }
+  for (const key of ["allOf", "oneOf", "anyOf"]) {
+    if (Array.isArray(copy[key])) {
+      copy[key] = copy[key].map(s => tightenSchema(s, key === "allOf" ? true : insideAllOf));
+    }
+  }
+
+  const isPlainObject = copy.type === "object" && !isAllOf && !isOneOfOrAnyOf;
+
+  // Strictness:
+  // - plain objects (unless they are inside an allOf)
+  // - oneOf/anyOf parents
+  // - allOf parents (so the combined schema is strict)
+  if (!insideAllOf && isPlainObject &&
       copy.additionalProperties === undefined &&
-      copy.unevaluatedProperties === undefined &&
-      !copy.allOf && !copy.oneOf && !copy.anyOf) {
+      copy.unevaluatedProperties === undefined) {
     copy.unevaluatedProperties = false;
   }
-  // Still tighten nested object properties that are not compositions
-  if (copy.properties) {
-    copy.properties = Object.fromEntries(
-      Object.entries(copy.properties).map(([k, v]) => [k, tightenSchema(v)])
-    );
+  if (isOneOfOrAnyOf &&
+      copy.additionalProperties === undefined &&
+      copy.unevaluatedProperties === undefined) {
+    copy.unevaluatedProperties = false;
   }
-  if (copy.items && typeof copy.items === "object") {
-    copy.items = tightenSchema(copy.items);
+  if (isAllOf &&
+      copy.additionalProperties === undefined &&
+      copy.unevaluatedProperties === undefined) {
+    copy.unevaluatedProperties = false;
   }
+
   return copy;
 }
 
