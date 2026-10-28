@@ -82,7 +82,10 @@ components:
           type: integer
           format: int64
         method:
-          $ref: "#/components/schemas/TipMethod"
+          description: How a tip would be paid; null when the order is SERVICE and cannot be tipped.
+          oneOf:
+            - $ref: "#/components/schemas/TipMethod"
+            - type: "null"
         available_until:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         open:

@@ -2,8 +2,12 @@ package taxi.blizz.payments.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import jakarta.servlet.Filter;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,8 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.WebApplicationContext;
 import taxi.blizz.TestQuotes;
 import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
@@ -21,6 +30,7 @@ import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.RiderWallets;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.SessionService;
+import taxi.blizz.identity.VerifiedSubject;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.Dispatch;
 import taxi.blizz.operations.OrderView;
@@ -35,6 +45,7 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.internal.OutboxRelay;
 import taxi.blizz.pricing.QuoteService;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Tips after the trip (ADR 0012, Q-04): paid the way the order was, all of it to the driver. */
 @SpringBootTest
@@ -59,6 +70,8 @@ class TipTests {
     @Autowired OutboxRelay relay;
     @Autowired TransactionTemplate tx;
     @Autowired JdbcClient jdbc;
+    @Autowired WebApplicationContext context;
+    @Autowired JsonMapper json;
 
     TestRides rides;
     UUID cityId;
@@ -205,6 +218,82 @@ class TipTests {
         assertThat(wallets.available(ride.payer().id(), "UAH")).isEqualTo(300);
     }
 
+    @Test
+    void aBonusPaidCardFareKeepsTheChosenCardForATipLargerThanTheRemainingBonuses() {
+        CardTrip trip = cardTrip(true);
+        assertThat(orders.get(trip.orderId()).paymentMethod()).isEqualTo(PaymentMethod.CASH);
+        assertThat(wallets.available(trip.rider().id(), "UAH")).isEqualTo(300);
+        assertThat(jdbc.sql("select hold_minor from payment_intent where order_id = :order")
+                .param("order", trip.orderId()).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select count(*) from payment_operation where intent_id = "
+                + "(select id from payment_intent where order_id = :order)")
+                .param("order", trip.orderId()).query(Long.class).single()).isZero();
+        assertThat(sent()).isEmpty();
+        assertThatThrownBy(() -> jdbc.sql("update payment_intent set state = 'AUTH_PENDING' where order_id = :order")
+                .param("order", trip.orderId()).update()).isInstanceOf(DataIntegrityViolationException.class);
+        UUID chosenCard = jdbc.sql("select card_id from payment_intent where order_id = :order")
+                .param("order", trip.orderId()).query(UUID.class).single();
+        // Saving another card after the order must not redirect the tip to it.
+        jdbc.sql("""
+                        insert into payment_card (id, client_id, merchant_id, token, masked_pan, card_type, state,
+                                                  created_at)
+                        values (:id, :client, :merchant, 'another-card', '41****2222', 'Visa', 'ACTIVE',
+                                now() + interval '1 minute')""")
+                .param("id", UUID.randomUUID()).param("client", trip.rider().id()).param("merchant", merchantId).update();
+        long before = driverBalance(trip.driver());
+        Tips.Tip tip = tips.leave(trip.rider(), UUID.randomUUID(), trip.orderId(), 500);
+        assertThat(tip.method()).isEqualTo("CARD");
+        settlePayments();
+        assertThat(tips.options(trip.rider(), trip.orderId()).tip().state()).isEqualTo("PAID");
+        assertThat(sent()).contains("CHARGE:SALE:5.00");
+        assertThat(gateway.requests()).anySatisfy(r -> {
+            assertThat(r.get("transactionType")).isEqualTo("CHARGE");
+            assertThat(r.get("recToken")).isEqualTo("tok-" + trip.rider().id());
+        });
+        assertThat(jdbc.sql("select card_id from payment_intent where order_id = :order")
+                .param("order", trip.orderId()).query(UUID.class).single()).isEqualTo(chosenCard);
+        assertThat(wallets.available(trip.rider().id(), "UAH")).isEqualTo(300);
+        assertThat(driverBalance(trip.driver()) - before).isEqualTo(500);
+    }
+
+    @Test
+    void aBonusPaidCardFareStillUsesBonusesForATipWhenTheyAreEnough() {
+        CardTrip trip = cardTrip(true);
+        Tips.Tip tip = tips.leave(trip.rider(), UUID.randomUUID(), trip.orderId(), 200);
+        assertThat(tip.method()).isEqualTo("WALLET");
+        assertThat(tip.state()).isEqualTo("PAID");
+        assertThat(wallets.available(trip.rider().id(), "UAH")).isEqualTo(100);
+        assertThat(sent()).isEmpty();
+    }
+
+    @Test
+    void servicePaidTripsCannotBeTippedThroughOptionsOrTheHttpCommand() throws Exception {
+        TestRides.Ride ride = cashTrip();
+        jdbc.sql("update ride_order set payment_method = 'SERVICE' where id = :order")
+                .param("order", ride.order().id()).update();
+        assertThat(tips.options(ride.payer(), ride.order().id()).open()).isFalse();
+        assertThat(tips.options(ride.payer(), ride.order().id()).method()).isNull();
+        assertCode(() -> tips.leave(ride.payer(), UUID.randomUUID(), ride.order().id(), 100), ErrorCode.STATE_CONFLICT);
+        List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
+        AnnotationAwareOrderComparator.sort(filters);
+        var mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
+        String token = auth.open(new VerifiedSubject(ride.payer(), "ACTIVE", false), "tip-test").accessToken();
+        String path = "/api/rider/v1/orders/" + ride.order().id() + "/tip";
+        var options = mvc.perform(get(path).header("Authorization", "Bearer " + token)).andReturn();
+        assertThat(options.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json.readTree(options.getResponse().getContentAsString()).get("open").asBoolean()).isFalse();
+        assertThat(json.readTree(options.getResponse().getContentAsString()).get("method").isNull()).isTrue();
+        var result = mvc.perform(post(path).header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"command_id":"%s","amount_minor":100}
+                        """.formatted(UUID.randomUUID()))).andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json.readTree(result.getResponse().getContentAsString()).get("code").asString())
+                .isEqualTo("STATE_CONFLICT");
+        assertThat(jdbc.sql("select count(*) from order_tip where order_id = :order")
+                .param("order", ride.order().id()).query(Long.class).single()).isZero();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private TestRides.Ride cashTrip() {
@@ -219,6 +308,10 @@ class TipTests {
     }
 
     private CardTrip cardTrip() {
+        return cardTrip(false);
+    }
+
+    private CardTrip cardTrip(boolean bonusPaid) {
         TestRides.Driver driver = rides.driverNear(PICKUP);
         Actor rider = rides.client();
         jdbc.sql("""
@@ -227,19 +320,26 @@ class TipTests {
                         values (:id, :client, :merchant, :token, '41****1111', 'Visa', 'ACTIVE', now())""")
                 .param("id", UUID.randomUUID()).param("client", rider.id()).param("merchant", merchantId)
                 .param("token", "tok-" + rider.id()).update();
-        UUID quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
+        var quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF);
+        long wallet = bonusPaid ? quote.toPayMinor() : 0;
+        if (bonusPaid) {
+            giveBonuses(rider, wallet + 300);
+        }
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
-                "Home", DROPOFF, "Work", PaymentMethod.CARD, quote));
+                "Home", DROPOFF, "Work", PaymentMethod.CARD, quote.id(), null, null, null, null, false, wallet));
         deliverEvents();
         dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
         TripView started = trips.start(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
-        trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(), OffsetDateTime.now(), null);
+        trips.complete(driver.actor(), UUID.randomUUID(), started.id(), started.version(), OffsetDateTime.now(),
+                bonusPaid ? true : null);
         deliverEvents();
         settlePayments();
-        gateway.reset();
+        if (!bonusPaid) {
+            gateway.reset();
+        }
         return new CardTrip(rider, driver.actor(), order.id());
     }
 

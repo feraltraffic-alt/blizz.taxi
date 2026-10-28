@@ -37,16 +37,35 @@ api GET /api/rider/v1/cards "$RIDER" >/dev/null; expect 200
 say "Andrii is online nearby"
 ANDRII=$(sign_in DRIVER "+380500000003")
 SESSION=$(go_online "$ANDRII" 5a000000-0000-4000-8000-000000000503 50.4480 30.4970)
+trap 'go_offline "$ANDRII"' EXIT
 
+for PAYMENT in CARD BONUS; do
 say "The rider orders by card: the hold comes first, then the search"
-QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
-  \"pickup\":$PICKUP,\"dropoff\":$DROPOFF}" | jq -r .id)
+PRICED=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
+  \"pickup\":$PICKUP,\"dropoff\":$DROPOFF}")
 expect 201
+QUOTE=$(jq -r .id <<<"$PRICED")
+WALLET=0
+if [[ "$PAYMENT" == BONUS ]]; then
+    say "Bonuses cover the fare; 300 minor units remain for a larger card tip"
+    WALLET=$(jq '.amount_minor - (.discount_minor // 0)' <<<"$PRICED")
+    ADMIN=$(admin_token)
+    CLIENT_ID=$(api GET "/api/admin/v1/rider-wallets?phone=%2B${RIDER_PHONE#+}" "$ADMIN" | jq -r .client_id)
+    expect 200
+    api POST "/api/admin/v1/rider-wallets/$CLIENT_ID/top-ups" "$ADMIN" \
+      "{\"command_id\":\"$(uuid)\",\"currency\":\"UAH\",\"amount_minor\":$((WALLET + 300)),\"reason\":\"Bonus fare test\"}" >/dev/null
+    expect 201
+fi
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
   \"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,\"pickup_label\":\"вул. Дмитрівська\",\"dropoff\":$DROPOFF,
-  \"dropoff_label\":\"Нивки\",\"payment_method\":\"CARD\"}" | jq -r .id)
+  \"dropoff_label\":\"Нивки\",\"payment_method\":\"CARD\",\"wallet_minor\":$WALLET}" | jq -r .id)
 expect 201
-wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state AUTHORIZED
+if [[ "$PAYMENT" == CARD ]]; then
+    wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state AUTHORIZED
+else
+    SHOWN=$(api GET "/api/rider/v1/orders/$ORDER" "$RIDER"); expect 200
+    [[ "$(jq -r .payment_method <<<"$SHOWN")" == CASH ]]
+fi
 
 say "Andrii takes it and drives"
 for _ in $(seq 1 10); do
@@ -64,23 +83,31 @@ TRIP=$(api POST "/api/driver/v1/trips/$(jq -r .id <<<"$TRIP")/start" "$ANDRII" \
     "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .version <<<"$TRIP")}")
 expect 200
 api POST "/api/driver/v1/trips/$(jq -r .id <<<"$TRIP")/complete" "$ANDRII" "{\"command_id\":\"$(uuid)\",
-  \"expected_version\":$(jq -r .version <<<"$TRIP"),\"reported_at\":\"$(now_utc)\"}" >/dev/null
+  \"expected_version\":$(jq -r .version <<<"$TRIP"),\"reported_at\":\"$(now_utc)\",\"cash_received\":true}" >/dev/null
 expect 200
 
 say "The bank takes the money after the trip"
-wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state PAID
+if [[ "$PAYMENT" == CARD ]]; then
+    wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state PAID
+else
+    wait_for "$RIDER" /api/rider/v1/wallet '.balances[] | select(.currency == "UAH") | .available_minor' 300
+fi
 api GET /api/driver/v1/balance "$ANDRII" >/dev/null; expect 200
 
 say "The rider tips 15 % on the same card; all of it goes to Andrii"
 BEFORE=$(api GET /api/driver/v1/balance/history "$ANDRII" | jq '[.balances[] | select(.currency == "UAH") | .balance_minor] | add // 0')
 TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
-[[ "$(jq -r .method <<<"$TIPS")" == "CARD" ]]
+if [[ "$PAYMENT" == CARD ]]; then
+    [[ "$(jq -r .method <<<"$TIPS")" == CARD ]]
+fi
 TIP_AMOUNT=$(jq '.presets[] | select(.percent == 15) | .amount_minor' <<<"$TIPS")
-api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(uuid)\",\"amount_minor\":$TIP_AMOUNT}" \
-  >/dev/null
+(( TIP_AMOUNT > 300 ))
+TIP=$(api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(uuid)\",\"amount_minor\":$TIP_AMOUNT}")
 expect 201
+[[ "$(jq -r .method <<<"$TIP")" == CARD ]]
 wait_for "$RIDER" "/api/rider/v1/orders/$ORDER/tip" .tip.state PAID
 wait_for "$ANDRII" /api/driver/v1/balance/history \
   "([.balances[] | select(.currency == \"UAH\") | .balance_minor] | add // 0) - $BEFORE" "$TIP_AMOUNT"
+done
 go_offline "$ANDRII"
 note "Done: card order $ORDER."

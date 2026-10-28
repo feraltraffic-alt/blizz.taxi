@@ -1865,6 +1865,7 @@ paths:
         The other driver is found by phone. Within the rules of the currency (GET /api/driver/v1/transfer-rules):
         transfers off → 409; above one transfer's or the day's limit → 400; the balance would fall below the minimum
         → 422 WALLET_INSUFFICIENT; no active driver with the phone → 404 (ADR 0010).
+        The day is local to the current or last work-session city; no work-session city → 409 STATE_CONFLICT.
       tags: [Finance]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

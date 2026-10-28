@@ -46,6 +46,30 @@ class JdbcCardPayments implements CardPayments {
     @Transactional(propagation = Propagation.MANDATORY)
     public UUID requestHold(UUID orderId, UUID clientId, UUID cityId, long amountMinor, String currency,
                             OffsetDateTime holdUntil) {
+        UUID intentId = createIntent(orderId, clientId, cityId, amountMinor, currency, holdUntil, "AUTH_PENDING");
+        UUID operationId = UUID.randomUUID();
+        createOperation(operationId, intentId, "AUTH", "auth-" + operationId, null, amountMinor);
+        return intentId;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rememberCard(UUID orderId, UUID clientId, UUID cityId, String currency) {
+        Optional<Merchant> merchant = merchants.forCity(cityId).filter(m -> m.currency().equals(currency));
+        if (merchant.isEmpty() || jdbc.sql("""
+                        select count(*) from payment_card
+                        where client_id = :client and merchant_id = :merchant and state = 'ACTIVE'""")
+                .param("client", clientId).param("merchant", merchant.get().id()).query(Long.class).single() == 0) {
+            // A bonus-only fare never required a card. Its selected method is still retained by operations;
+            // a later CARD tip without a saved card is rejected by requestTip, never silently recorded as cash.
+            return;
+        }
+        // Nothing is due on the fare's card leg; the intent retains the card for a later, separate tip.
+        createIntent(orderId, clientId, cityId, 0, currency, null, "PAID");
+    }
+
+    private UUID createIntent(UUID orderId, UUID clientId, UUID cityId, long amountMinor, String currency,
+                              OffsetDateTime holdUntil, String state) {
         Merchant merchant = merchants.forCity(cityId)
                 .orElseThrow(() -> invalid("Card payment is not available in this city"));
         if (!merchant.currency().equals(currency)) {
@@ -62,14 +86,12 @@ class JdbcCardPayments implements CardPayments {
         jdbc.sql("""
                         insert into payment_intent (id, order_id, client_id, merchant_id, card_id, currency, hold_minor,
                                                     hold_until, state, created_at, updated_at, correlation_id)
-                        values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, 'AUTH_PENDING',
+                        values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, :state,
                                 :now, :now, :correlation)""")
                 .param("id", intentId).param("order", orderId).param("client", clientId)
                 .param("correlation", CorrelationId.currentOrNew())
                 .param("merchant", merchant.id()).param("card", cardId).param("currency", currency)
-                .param("amount", amountMinor).param("until", holdUntil).param("now", now).update();
-        UUID operationId = UUID.randomUUID();
-        createOperation(operationId, intentId, "AUTH", "auth-" + operationId, null, amountMinor);
+                .param("amount", amountMinor).param("until", holdUntil).param("state", state).param("now", now).update();
         return intentId;
     }
 
