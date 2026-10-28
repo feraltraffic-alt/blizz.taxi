@@ -349,6 +349,13 @@ class FareLedgerTests {
         return new Actor(taxi.blizz.platform.SubjectType.STAFF, id);
     }
 
+    /** Ends the free driver's shift, so the next ride of this test gets its own driver (the offer goes to the nearest). */
+    private void offline(Ride ride) {
+        long version = jdbc.sql("select version from work_session where driver_id = :d and state = 'OPEN'")
+                .param("d", ride.driver().id()).query(Long.class).single();
+        sessions.close(ride.driver(), UUID.randomUUID(), ride.device(), version);
+    }
+
     /** Sets the cash-not-received rule and returns the version to restore from. */
     private taxi.blizz.configuration.ServiceSettings.Version cashRule(Actor admin, boolean credit, int percent) {
         var now = settings.current();
@@ -366,6 +373,7 @@ class FareLedgerTests {
             cashRule(admin, true, 50);
             Ride half = started();
             complete(half, false);
+            offline(half);
             deliverEvents();
             Fare halfFare = fare(half.order().id());
             long credited = halfFare.share() * 50 / 100;
@@ -379,6 +387,7 @@ class FareLedgerTests {
                     .as("ignored when the driver is not credited").isZero();
             Ride none = started();
             complete(none, false);
+            offline(none);
             deliverEvents();
             Fare noneFare = fare(none.order().id());
             assertThat(net(Account.DRIVER_PAYABLE, none.driver().id())).isZero();
@@ -387,6 +396,7 @@ class FareLedgerTests {
             // A trip paid in cash as reported is not touched by the rule.
             Ride paid = started();
             complete(paid, true);
+            offline(paid);
             deliverEvents();
             assertThat(net(Account.DRIVER_PAYABLE, paid.driver().id())).isEqualTo(fare(paid.order().id()).commission());
             assertThat(net(Account.SUSPENSE, paid.driver().id())).isZero();
