@@ -52,6 +52,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - Test cities must not overlap the cities of other test classes: before choosing a longitude for `TestRides.city(...)` or a city polygon, grep the tests for the ones already taken.
 - A phone number without `+` or `00` is never given a country by guessing (`512345678` is a Polish national number, not `+512…`): only a full number of a known market (`380` + 9 digits, `48` + 9 digits) may get the `+`; anything else stays raw.
 - A `timestamptz` read without a type (`query().singleRow()`, `listOfRows()`) comes back as `java.sql.Timestamp`, not `OffsetDateTime`: compare times in SQL, or read them with `rs.getObject(…, OffsetDateTime.class)`.
+- Before naming a new class, search for `class|interface|record|enum Name` across the code, not only `class Name`: an interface of the same simple name in another package (`operations.OrderCalls`) is easy to miss.
 
 ## Trying the system by hand
 

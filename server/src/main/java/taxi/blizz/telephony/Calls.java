@@ -77,6 +77,12 @@ public interface Calls {
     Optional<Call> find(UUID callId);
 
     /**
+     * The outgoing calls the service made to {@code party} about these orders, oldest first; no staff check — for a
+     * person's own copy of their data (REQ-PRV-07). An outgoing call never holds a number.
+     */
+    List<Call> outboundAbout(Party party, java.util.Collection<UUID> orderIds);
+
+    /**
      * Links an order made during the call, in the caller's transaction (the order is created in it). The staff member
      * needs {@link #ANSWER_PERMISSION} for the call's city. A call that already has an order takes another one only
      * with {@code again}; the first link stays. {@code NOT_FOUND} for an unknown call, {@code STATE_CONFLICT} for a

@@ -74,6 +74,14 @@ class PersonalDataExportTests {
         rides.driverNear(PICKUP);
         UUID theirs = rides.order(other, city, PICKUP, DROPOFF).id();
         support.open(rider, UUID.randomUUID(), SupportCases.Category.LOST_ITEM, mine, "Umbrella", "Left it in the car");
+        for (UUID order : List.of(mine, theirs)) { // the call centre called each rider about their order
+            UUID call = UUID.randomUUID();
+            jdbc.sql("""
+                            insert into call (id, channel_id, direction, party, order_id, city_id, state, started_at,
+                                              ended_at, ended_reason)
+                            values (:id, :channel, 'OUTBOUND', 'RIDER', :order, :city, 'ENDED', now(), now(), 'HANGUP')""")
+                    .param("id", call).param("channel", call.toString()).param("order", order).param("city", city).update();
+        }
         support.open(other, UUID.randomUUID(), SupportCases.Category.OTHER, null, "Someone else's", "Not mine");
         tx.executeWithoutResult(s -> ledger.post(new Ledger.Posting("data-export-bonus:" + UUID.randomUUID(),
                 "PROMOTION", UUID.randomUUID(), "PLN", "Test", List.of(
@@ -107,6 +115,9 @@ class PersonalDataExportTests {
         assertThat((Map<String, Object>) sections.get("profile")).containsEntry("phone", phone);
         assertThat((List<Map<String, Object>>) ((Map<String, Object>) sections.get("orders")).get("orders"))
                 .extracting(o -> o.get("id")).containsExactly(mine.toString());
+        assertThat((List<Map<String, Object>>) ((Map<String, Object>) sections.get("orders"))
+                .get("calls_from_service")).singleElement()
+                .satisfies(c -> assertThat(c).containsEntry("order_id", mine.toString()));
         assertThat((List<Map<String, Object>>) sections.get("support_cases")).singleElement()
                 .satisfies(c -> assertThat(c).containsEntry("subject", "Umbrella"));
         assertThat((List<Map<String, Object>>) sections.get("money")).singleElement()

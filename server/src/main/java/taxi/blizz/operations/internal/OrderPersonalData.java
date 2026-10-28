@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import taxi.blizz.platform.PersonalData;
+import taxi.blizz.telephony.Calls;
 
 /**
  * The rider's orders, ratings, tips and chat messages for the copy of their data (REQ-PRV-07). Left out: the driver's
@@ -17,9 +18,16 @@ import taxi.blizz.platform.PersonalData;
 class OrderPersonalData implements PersonalData {
 
     private final JdbcClient jdbc;
+    private final Calls calls;
 
-    OrderPersonalData(JdbcClient jdbc) {
+    OrderPersonalData(JdbcClient jdbc, Calls calls) {
         this.jdbc = jdbc;
+        this.calls = calls;
+    }
+
+    /** A call the call centre made to the rider about an order; operators are not named, no number is kept. */
+    record ServiceCall(UUID orderId, String state, OffsetDateTime startedAt, OffsetDateTime answeredAt,
+                       OffsetDateTime endedAt, boolean recorded) {
     }
 
     record Place(String label, double lat, double lon) {
@@ -27,8 +35,8 @@ class OrderPersonalData implements PersonalData {
 
     record Order(UUID id, long number, String channel, UUID cityId, String vehicleClass, Place pickup, Place dropoff,
                  String paymentMethod, String currency, Long priceMinor, Long finalPriceMinor,
-                 Long paidWithBonusesMinor, Long discountMinor, String status, String statusReason, boolean forAnotherPerson,
-                 OffsetDateTime createdAt) {
+                 Long paidWithBonusesMinor, Long discountMinor, String status, String statusReason,
+                 boolean forAnotherPerson, OffsetDateTime createdAt) {
     }
 
     /** {@code given}: by the rider about the driver; otherwise the driver's rating of the rider. */
@@ -96,11 +104,18 @@ class OrderPersonalData implements PersonalData {
                 .query((rs, i) -> new Message(rs.getObject("order_id", UUID.class), rs.getString("body"),
                         rs.getObject("sent_at", OffsetDateTime.class)))
                 .list();
+        List<ServiceCall> serviceCalls = calls
+                .outboundAbout(Calls.Party.RIDER, orders.stream().map(Order::id).toList()).stream()
+                .map(c -> new ServiceCall(c.orderIds().isEmpty() ? null : c.orderIds().getFirst(), c.state().name(),
+                        c.startedAt(), c.answeredAt(), c.endedAt(),
+                        c.recording() != null && c.recording().state() == Calls.RecordingState.STORED))
+                .toList();
         Map<String, Object> part = new LinkedHashMap<>();
         part.put("orders", orders);
         part.put("ratings", ratings);
         part.put("tips", tips);
         part.put("chat_messages_sent", messages);
+        part.put("calls_from_service", serviceCalls);
         return part;
     }
 }

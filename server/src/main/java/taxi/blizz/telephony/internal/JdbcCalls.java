@@ -410,6 +410,20 @@ class JdbcCalls implements Calls {
         return find(callId).orElseThrow(JdbcCalls::notFound);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Call> outboundAbout(Party party, java.util.Collection<UUID> orderIds) {
+        if (party == null || orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(SELECT + """
+                         where c.direction = 'OUTBOUND' and c.party = :party
+                           and c.order_id = any(cast(:orders as uuid[]))
+                        order by c.started_at, c.id""")
+                .param("party", party.name()).param("orders", orderIds.toArray(UUID[]::new))
+                .query((rs, i) -> map(rs)).list();
+    }
+
     private static Call map(ResultSet rs) throws SQLException {
         UUID[] orders = (UUID[]) rs.getArray("order_ids").getArray();
         String party = rs.getString("party");
