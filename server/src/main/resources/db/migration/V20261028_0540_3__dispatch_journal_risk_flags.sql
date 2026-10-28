@@ -20,7 +20,7 @@ create index dispatch_round_at_idx on dispatch_round (at);
 -- source raise at most one flag per work session and hour.
 create table driver_risk_flag (
     id              uuid primary key,
-    driver_id       uuid        not null references driver (id),
+    driver_id       uuid        not null, -- driver admission's driver; no foreign key across modules (ADR 0004)
     city_id         uuid        not null,
     kind            text        not null check (kind in ('IMPOSSIBLE_MOVEMENT', 'MANUAL')),
     state           text        not null default 'OPEN' check (state in ('OPEN', 'CONFIRMED', 'DISMISSED')),
