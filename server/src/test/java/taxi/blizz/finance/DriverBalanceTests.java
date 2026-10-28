@@ -66,7 +66,7 @@ class DriverBalanceTests {
 
     @BeforeEach
     void setUp() {
-        clock.current = Instant.now();
+        clock.current = null;
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
         cityId = rides.city("test-driver-balances", "UAH", 4);
         jdbc.sql("update city set timezone = 'UTC', state = 'PUBLISHED' where id = :city")
@@ -217,9 +217,11 @@ class DriverBalanceTests {
     }
 
     static class TransferTestClock extends Clock {
-        volatile Instant current = Instant.now();
+        volatile Instant current;
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(ZoneId zone) { return Clock.fixed(current, zone); }
-        @Override public Instant instant() { return current; }
+        @Override public Clock withZone(ZoneId zone) {
+            return current == null ? Clock.system(zone) : Clock.fixed(current, zone);
+        }
+        @Override public Instant instant() { return current == null ? Instant.now() : current; }
     }
 }
