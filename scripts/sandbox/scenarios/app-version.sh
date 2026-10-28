@@ -29,7 +29,7 @@ expect 200
 say "Outdated driver is refused going online"
 DRIVER=$(sign_in DRIVER "+380990000001")
 api POST /api/driver/v1/work-sessions "$DRIVER" \
-  "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$(uuid)\"}" \
+  "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$(uuid)\",\"location\":{\"lat\":50.45,\"lon\":30.52,\"accuracy_m\":5,\"recorded_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"sequence\":1}}" \
   -H "X-App-Platform: DRIVER_ANDROID" -H "X-App-Version: 1.0.0"
 expect 426
 
