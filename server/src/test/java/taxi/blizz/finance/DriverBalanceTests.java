@@ -132,6 +132,8 @@ class DriverBalanceTests {
     @Test
     void transfersRespectTheRulesAndShowOnBothSides() {
         Actor anna = rides.driverNear(new GeoPoint(-39.5, 4.5)).actor();
+        String annaPhone = jdbc.sql("select phone_normalized from driver where id = :id")
+                .param("id", anna.id()).query(String.class).single();
         Actor bohdan = driver();
         balances.topUp(finance, UUID.randomUUID(), anna.id(), "UAH", 3_000, TopUpKind.DEPOSIT, null, "Готівка");
 
@@ -159,7 +161,7 @@ class DriverBalanceTests {
         rule(true, 1_000, 10_000, 1_800);
         assertCode(() -> balances.transfer(anna, UUID.randomUUID(), phone(bohdan.id()), "UAH", 500, null),
                 ErrorCode.WALLET_INSUFFICIENT); // 2000 - 500 < 1800
-        assertCode(() -> balances.transfer(anna, UUID.randomUUID(), phone(anna.id()), "UAH", 100, null),
+        assertCode(() -> balances.transfer(anna, UUID.randomUUID(), annaPhone, "UAH", 100, null),
                 ErrorCode.VALIDATION_FAILED);
         assertCode(() -> balances.transfer(anna, UUID.randomUUID(), "+380000000001", "UAH", 100, null),
                 ErrorCode.NOT_FOUND);
