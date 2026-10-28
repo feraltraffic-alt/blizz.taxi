@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class OperatorBonusTests {
         jdbc.sql("delete from operator_bonus_entry").update();
         jdbc.sql("delete from operator_bonus_account").update();
         jdbc.sql("delete from operator_bonus_settings where version > 0").update();
+        jdbc.sql("delete from staff_user where login like 'bonus-op-%'").update();
         jdbc.sql("""
                 update operator_bonus_settings set m = 1, g = 10, count_cancellations = true,
                     reset_day = 1, time_rules = '[]'::jsonb where version = 0
@@ -156,8 +158,139 @@ class OperatorBonusTests {
     private OutboxMessage event(String type, UUID orderId, String reasonCode) {
         String payload = reasonCode == null
                 ? "{\"order_id\":\"" + orderId + "\"}"
-                : "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode + "\"}";
+                : "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode + "\",\"cancelled_by\":\"STAFF\"}";
         return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
                 UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
+    }
+
+    @Test
+    void point1_penaltyOnlyForStaffCancellation() {
+        jdbc.sql("""
+                insert into cancel_reason (id, audience, code, labels, driver_outcome, active, sort_order, operator_fault,
+                                           created_at, updated_at)
+                values (gen_random_uuid(), 'STAFF', 'WRONG_ADDRESS',
+                        '{"en":"Wrong address"}', null, true, 60, true, now(), now())
+                on conflict (audience, code) do update set operator_fault = true
+                """).update();
+        jdbc.sql("""
+                insert into cancel_reason (id, audience, code, labels, driver_outcome, active, sort_order, operator_fault,
+                                           created_at, updated_at)
+                values (gen_random_uuid(), 'RIDER', 'WRONG_ADDRESS',
+                        '{"en":"Wrong address"}', null, true, 60, false, now(), now())
+                on conflict (audience, code) do nothing
+                """).update();
+
+        UUID staffCancelled = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        bonuses.handle(eventWithCancelledBy("OrderCancelled", staffCancelled, "WRONG_ADDRESS", "STAFF"));
+        assertThat(bonuses.mine(operator, 10).balance()).isEqualTo(-10);
+
+        UUID riderCancelled = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        bonuses.handle(eventWithCancelledBy("OrderCancelled", riderCancelled, "WRONG_ADDRESS", "RIDER"));
+        assertThat(bonuses.mine(operator, 10).balance())
+                .as("rider cancellation with a staff operator-fault reason must not penalise")
+                .isEqualTo(-10);
+        jdbc.sql("delete from cancel_reason where audience = 'STAFF' and code = 'WRONG_ADDRESS'").update();
+    }
+
+    @Test
+    void point2_settingsChangeIsAudited() {
+        jdbc.sql("""
+                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
+        OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
+        OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
+        bonuses.changeSettings(operator, UUID.randomUUID(), before.version(), next, "raise points");
+        Long count = jdbc.sql("""
+                        select count(*) from audit_log
+                        where action = 'operator_bonus.settings.change' and actor_id = :staff
+                        """)
+                .param("staff", operator.id()).query(Long.class).single();
+        assertThat(count).as("settings change must write one audit row").isEqualTo(1);
+    }
+
+    @Test
+    void point3_twoConcurrentSettingsChangesOneSucceedsOneConflicts() throws Exception {
+        jdbc.sql("""
+                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
+        OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
+        OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
+        var barrier = new java.util.concurrent.CyclicBarrier(2);
+        var results = new java.util.concurrent.ConcurrentLinkedQueue<Object>();
+        Runnable task = () -> {
+            try {
+                barrier.await();
+                results.add(bonuses.changeSettings(operator, UUID.randomUUID(), before.version(), next, "concurrent"));
+            } catch (Exception e) {
+                results.add(e);
+            }
+        };
+        var t1 = new Thread(task);
+        var t2 = new Thread(task);
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+        long successes = results.stream().filter(r -> r instanceof OperatorBonuses.SettingsVersion).count();
+        long conflicts = results.stream().filter(r -> r instanceof DomainException
+                && ((DomainException) r).code() == ErrorCode.VERSION_CONFLICT).count();
+        assertThat(successes).as("exactly one change succeeds").isEqualTo(1);
+        assertThat(conflicts).as("the other gets VERSION_CONFLICT, never a 500").isEqualTo(1);
+    }
+
+    @Test
+    void point4_lateEventGoesToClosedPeriod() {
+        OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(40);
+        UUID first = phoneOrder(operator.id(), old);
+        bonuses.handle(event("TripCompleted", first, null));
+        jdbc.sql("update operator_bonus_account set period_started_at = :started where staff_id = :staff")
+                .param("started", old).param("staff", operator.id()).update();
+        bonuses.resetDueAccounts();
+        assertThat(bonuses.mine(operator, 10).balance()).isZero();
+
+        UUID late = phoneOrder(operator.id(), old.plusHours(1));
+        bonuses.handle(eventAt("TripCompleted", late, null, old.plusHours(1)));
+        assertThat(bonuses.mine(operator, 10).balance())
+                .as("late points must not appear in the new period")
+                .isZero();
+        Integer closedPoints = jdbc.sql("""
+                        select points from operator_bonus_period where staff_id = :staff
+                        """)
+                .param("staff", operator.id()).query(Integer.class).single();
+        assertThat(closedPoints).as("closed period receives the late points").isEqualTo(2);
+
+        bonuses.handle(eventAt("TripCompleted", late, null, old.plusHours(1)));
+        assertThat(jdbc.sql("select points from operator_bonus_period where staff_id = :staff")
+                .param("staff", operator.id()).query(Integer.class).single())
+                .as("repeat of the late event changes nothing")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void point5_archivedCityDoesNotPoisonEvent() {
+        UUID order = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        jdbc.sql("update city set state = 'ARCHIVED' where id = :id").param("id", city).update();
+        bonuses.handle(event("TripCompleted", order, null));
+        assertThat(bonuses.mine(operator, 10).balance())
+                .as("archived city still yields the bonus (timezone known)")
+                .isEqualTo(1);
+        jdbc.sql("update city set state = 'PUBLISHED' where id = :id").param("id", city).update();
+    }
+
+    private OutboxMessage eventWithCancelledBy(String type, UUID orderId, String reasonCode, String cancelledBy) {
+        String payload = "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode
+                + "\",\"cancelled_by\":\"" + cancelledBy + "\"}";
+        return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
+                UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
+    }
+
+    private OutboxMessage eventAt(String type, UUID orderId, String reasonCode, OffsetDateTime occurredAt) {
+        String payload = reasonCode == null
+                ? "{\"order_id\":\"" + orderId + "\"}"
+                : "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode + "\"}";
+        return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
+                UUID.randomUUID(), occurredAt, 0);
     }
 }
