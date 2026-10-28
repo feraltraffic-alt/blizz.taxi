@@ -1,6 +1,6 @@
 package taxi.blizz.configuration.internal;
 
-import java.net.URI;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,11 +31,19 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.OutboundAddresses;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @EnableConfigurationProperties(SecretsProperties.class)
 class JdbcIntegrations implements Integrations {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JdbcIntegrations.class);
+    /** Fields holding an address the server connects to (REQ-SEC-05). */
+    static final Set<String> ADDRESS_FIELDS = Set.of(GRAPHHOPPER_BASE_URL, OTP_ASTERISK_ARI_URL);
+    static final Set<String> ADDRESS_SCHEMES = Set.of("http", "https");
+
+    private final OutboundAddresses addresses;
 
     /** Other instances see a change after at most this long. */
     static final Duration REFRESH = Duration.ofSeconds(5);
@@ -61,7 +70,8 @@ class JdbcIntegrations implements Integrations {
 
     JdbcIntegrations(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, StaffSignIn signIn,
                      AuditLog audit, ObjectProvider<IntegrationCheck> checks, JsonMapper json, Clock clock,
-                     SecretsProperties properties) {
+                     SecretsProperties properties, OutboundAddresses addresses) {
+        this.addresses = addresses;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -103,6 +113,15 @@ class JdbcIntegrations implements Integrations {
             return Optional.empty();
         }
         if (row.plain() != null) {
+            if (ADDRESS_FIELDS.contains(name)) {
+                // Checked again at every use (REQ-SEC-05): the host's DNS answer may have changed since it was saved.
+                try {
+                    addresses.check(row.plain(), ADDRESS_SCHEMES);
+                } catch (DomainException e) {
+                    log.warn("{} is not used: {}", name, e.getMessage());
+                    return Optional.empty();
+                }
+            }
             return Optional.of(row.plain());
         }
         if (row.secret() == null) {
@@ -277,12 +296,9 @@ class JdbcIntegrations implements Integrations {
             }
             case GRAPHHOPPER_BASE_URL -> {
                 try {
-                    URI uri = URI.create(value);
-                    if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null) {
-                        throw invalid(field.name() + " must be an http(s) address");
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw invalid(field.name() + " must be an http(s) address");
+                    addresses.check(value, ADDRESS_SCHEMES);
+                } catch (DomainException e) {
+                    throw invalid(field.name() + ": " + e.getMessage());
                 }
             }
             case MAPS_PROVIDER -> {
@@ -316,12 +332,9 @@ class JdbcIntegrations implements Integrations {
             }
             case OTP_ASTERISK_ARI_URL -> {
                 try {
-                    URI uri = URI.create(value);
-                    if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getHost() == null) {
-                        throw invalid(field.name() + " must be an http(s) address");
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw invalid(field.name() + " must be an http(s) address");
+                    addresses.check(value, ADDRESS_SCHEMES);
+                } catch (DomainException e) {
+                    throw invalid(field.name() + ": " + e.getMessage());
                 }
             }
             case OTP_ASTERISK_ENDPOINT -> {

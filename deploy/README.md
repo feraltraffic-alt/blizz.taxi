@@ -19,6 +19,14 @@ Keep the master key with the database backups but not in them: a restored databa
 keys (they are entered again), and a stolen dump without it reveals none. Without a master key the panel cannot
 store keys.
 
+## Addresses typed in the admin panel
+
+The server refuses an address in the admin panel (GraphHopper, Asterisk ARI) that points into its own network:
+loopback, private networks, carrier-grade NAT, and never link-local (the cloud's metadata service), also when a name
+resolves to such an address, on save and again before every connection (REQ-SEC-05). The service's own hosts in a
+private network — usually Asterisk — are listed in `BLIZZ_OUTBOUND_PRIVATE_HOSTS` (comma-separated, as typed in the
+address, e.g. `asterisk,10.0.0.7`).
+
 ## Call recordings
 
 Every call the call centre takes through the service's Asterisk is recorded (issue #60). The dialplan records it

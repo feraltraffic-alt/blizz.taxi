@@ -41,6 +41,10 @@ blizz:
   auth:
     instance-id: ${INSTANCE_ID:}
     access-token-secret: ${ACCESS_TOKEN_SECRET:}
+  security:
+    # Hosts in a private network that addresses typed in the admin panel may point to (REQ-SEC-05), comma-separated:
+    # usually the service's own Asterisk. Loopback is private too; link-local (cloud metadata) is never allowed.
+    outbound-private-hosts: ${BLIZZ_OUTBOUND_PRIVATE_HOSTS:}
   privacy:
     # The erasure journal (REQ-PRV-05, ADR 0013): a directory on durable storage of its own, NOT backed up together
     # with the database, so deletions made after a backup are applied again when that backup is restored.
@@ -58,3 +62,7 @@ blizz:
     provider: ${PUSH_PROVIDER:FCM}
     fcm-project-id: ${FCM_PROJECT_ID:}
     fcm-credentials: ${FCM_CREDENTIALS:}
+
+logging:
+  # Stack traces go through the redaction of logback-spring.xml as the messages do (REQ-SEC-08).
+  exception-conversion-word: "%redactedEx"
