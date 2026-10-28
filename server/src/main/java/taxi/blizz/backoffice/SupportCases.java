@@ -16,7 +16,18 @@ public interface SupportCases {
     String MANAGE_PERMISSION = taxi.blizz.identity.StaffPermissions.SUPPORT_MANAGE;
 
     enum Category {
-        LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER
+        LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER,
+        /** Problem queues only (REQ-OPS-06), opened by the system: no driver was found. */
+        NO_DRIVER,
+        /** Problem queues only: the assigned driver stopped sending positions during the order. */
+        LOST_CONNECTION,
+        /** Problem queues only: a card operation's result stayed unknown. */
+        PAYMENT_UNKNOWN;
+
+        /** Categories only the system opens; a rider or driver cannot choose them. */
+        public boolean systemOnly() {
+            return this == TRIP_REVIEW || this == NO_DRIVER || this == LOST_CONNECTION || this == PAYMENT_UNKNOWN;
+        }
     }
 
     enum Priority {
@@ -38,7 +49,8 @@ public interface SupportCases {
     record Case(UUID id, long number, UUID cityId, Category category, UUID orderId, String requesterType,
                 UUID requesterId, String subject, Priority priority, State state, UUID assignedStaffId,
                 String resolution, long version, OffsetDateTime createdAt, OffsetDateTime updatedAt,
-                List<Message> messages) {
+                /** By when someone should take the case, from its priority (REQ-OPS-06). */
+                OffsetDateTime respondBy, List<Message> messages) {
         public Case {
             messages = messages == null ? List.of() : List.copyOf(messages);
         }
@@ -59,8 +71,14 @@ public interface SupportCases {
 
     // ---------------------------------------------------------------- staff
 
+    /** {@code overdueOnly}: OPEN cases nobody took by their {@code respondBy}, oldest due first. */
     record QueueFilter(UUID cityId, State state, Priority priority, Category category, UUID assignedStaffId,
-                       boolean unassignedOnly, OffsetDateTime before, int limit) {
+                       boolean unassignedOnly, OffsetDateTime before, int limit, boolean overdueOnly) {
+
+        public QueueFilter(UUID cityId, State state, Priority priority, Category category, UUID assignedStaffId,
+                           boolean unassignedOnly, OffsetDateTime before, int limit) {
+            this(cityId, state, priority, category, assignedStaffId, unassignedOnly, before, limit, false);
+        }
     }
 
     /** Cases of one city (or without a city when {@code cityId} is null), newest first; messages not included. */

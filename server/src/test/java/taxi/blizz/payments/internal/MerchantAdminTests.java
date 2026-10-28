@@ -32,6 +32,8 @@ class MerchantAdminTests {
     Merchants merchants;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    PaymentNotifications notifications;
 
     Actor staff;
 
@@ -97,5 +99,69 @@ class MerchantAdminTests {
                 new MerchantAdmin.MerchantChange("blizz.example", null, null), "x"))
                 .isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    /** A provider's notification about {@code reference}, signed with {@code key}. */
+    private static java.util.Map<String, Object> signed(UUID merchantId, String account, String key,
+                                                       String reference) {
+        Merchant as = new Merchant(merchantId, "WAYFORPAY", account, "blizz.example", key, "UAH");
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("merchantAccount", account);
+        body.put("orderReference", reference);
+        body.put("amount", "1.00");
+        body.put("currency", "UAH");
+        body.put("authCode", "");
+        body.put("cardPan", "41****1111");
+        body.put("transactionStatus", "Approved");
+        body.put("reasonCode", "1100");
+        body.put("merchantSignature", WayForPayProvider.sign(as, account, reference, "1.00", "UAH", "", "41****1111",
+                "Approved", "1100"));
+        return body;
+    }
+
+    private String outcomeOf(String reference) {
+        return jdbc.sql("select outcome from payment_event where reference = :ref").param("ref", reference)
+                .query(String.class).single();
+    }
+
+    /** REQ-SEC-09: after a key change the old key is still accepted for notifications for a while, then never. */
+    @Test
+    void afterAKeyChangeTheOldKeySignsNotificationsUntilItsWindowEnds() {
+        String account = "rotate_" + UUID.randomUUID().toString().substring(0, 8);
+        MerchantAdmin.MerchantView merchant = admin.create(staff, UUID.randomUUID(), PASSWORD,
+                new MerchantAdmin.NewMerchant("wayforpay", account, "blizz.example", "UAH", "old-key-0001",
+                        List.of(UUID.randomUUID())), "Merchant");
+        admin.change(staff, UUID.randomUUID(), PASSWORD, merchant.id(),
+                new MerchantAdmin.MerchantChange(null, "new-key-0002", null), "The key leaked");
+
+        String fresh = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "new-key-0002", fresh))
+                .trusted()).isTrue();
+        assertThat(outcomeOf(fresh)).doesNotContain("previous key");
+
+        String late = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "old-key-0001", late))
+                .trusted()).as("a payment under way when the key changed").isTrue();
+        assertThat(outcomeOf(late)).contains("previous key");
+
+        String forged = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "guessed-key", forged))
+                .trusted()).isFalse();
+
+        jdbc.sql("update payment_merchant set previous_secret_until = now() - interval '1 second' where id = :id")
+                .param("id", merchant.id()).update();
+        String tooLate = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "old-key-0001", tooLate))
+                .trusted()).as("the window has passed").isFalse();
+
+        // A second change keeps only the key just replaced, never an older one.
+        admin.change(staff, UUID.randomUUID(), PASSWORD, merchant.id(),
+                new MerchantAdmin.MerchantChange(null, "third-key-0003", null), "Routine rotation");
+        String again = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "old-key-0001", again))
+                .trusted()).isFalse();
+        String second = "card-" + UUID.randomUUID();
+        assertThat(notifications.receive(merchant.id(), signed(merchant.id(), account, "new-key-0002", second))
+                .trusted()).isTrue();
     }
 }

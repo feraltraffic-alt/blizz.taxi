@@ -58,6 +58,15 @@ class PaymentNotifications {
         Merchant merchant = found.get();
         PaymentProvider provider = providers.of(merchant);
         Optional<PaymentProvider.Notification> read = provider.readNotification(merchant, body);
+        boolean previousKey = false;
+        if (read.isEmpty()) {
+            // REQ-SEC-09: right after a key change the provider may still sign with the old one.
+            read = merchants.withPreviousKey(merchant, now()).flatMap(old -> provider.readNotification(old, body));
+            previousKey = read.isPresent();
+            if (previousKey) {
+                log.warn("A notification for merchant {} was signed with the previous key", merchant.id());
+            }
+        }
         if (read.isEmpty()) {
             log.warn("Rejected a provider notification for merchant {}: signature or account does not match",
                     merchant.id());
@@ -75,7 +84,14 @@ class PaymentNotifications {
                 .param("status", n.status()).param("fingerprint", fingerprint)
                 .param("payload", json.writeValueAsString(redacted(body))).param("now", now()).update();
         if (inserted == 1) {
-            String outcome = apply(merchant, n);
+            String outcome = apply(merchant, n) + (previousKey ? " (previous key)" : "");
+            if (previousKey) {
+                // Checked again with the provider under the current key: the old one is about to go.
+                jdbc.sql("""
+                                update payment_operation set next_check_at = :now
+                                where reference = :reference and state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')""")
+                        .param("now", now()).param("reference", n.reference()).update();
+            }
             jdbc.sql("update payment_event set outcome = :outcome where id = :id")
                     .param("outcome", outcome).param("id", eventId).update();
         }

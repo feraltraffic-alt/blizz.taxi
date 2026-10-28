@@ -64,6 +64,10 @@ class CardCaptureTests {
     TransactionTemplate tx;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    taxi.blizz.payments.PaymentOperations paymentOperations;
+    @Autowired
+    UnknownPayments unknown;
 
     TestRides rides;
     UUID cityId;
@@ -286,5 +290,235 @@ class CardCaptureTests {
         settlePayments();
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("VOIDED");
         assertThat(sentOf("REFUND")).isEqualTo(2);
+    }
+
+    private long clearingFor(OrderView order) {
+        return jdbc.sql("""
+                        select coalesce(sum(l.debit_minor), 0) from journal_line l
+                        join journal_transaction t on t.id = l.transaction_id
+                        where t.basis_id = :order and l.account = 'PROVIDER_CLEARING'""")
+                .param("order", order.id()).query(Long.class).single();
+    }
+
+    private List<UUID> operations(OrderView order, String type) {
+        return jdbc.sql("""
+                        select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.type = :type order by o.created_at""")
+                .param("order", order.id()).param("type", type).query(UUID.class).list();
+    }
+
+    /**
+     * T-24: the capture times out and is sent again, and the provider's answers then come twice — for the capture and
+     * for the charge of the rest. One capture, one charge, the money counted once.
+     */
+    @Test
+    void aTimedOutCaptureAndRepeatedAnswersChargeAndCountOnce() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        gateway.next("TIMEOUT"); // the capture's answer is lost; it is sent again
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        long counted = clearingFor(order);
+        assertThat(counted).isEqualTo(hold + 700);
+        int requests = gateway.requests().size();
+
+        // The same answers again, as a provider repeats its notifications.
+        for (String type : List.of("SETTLE", "CHARGE")) {
+            for (UUID op : operations(order, type)) {
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.SUCCEEDED, "Approved", null,
+                        null));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.SUCCEEDED, "Approved", null,
+                        null));
+            }
+        }
+        settlePayments();
+
+        assertThat(clearingFor(order)).as("no second settlement in the ledger").isEqualTo(counted);
+        assertThat(gateway.requests()).as("no second charge sent").hasSize(requests);
+        assertThat(sent()).filteredOn(r -> r.startsWith("CHARGE:SALE")).hasSize(1);
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+    }
+
+    /** T-25: an answer with an older status after PAID — still in progress, or even declined — changes nothing. */
+    @Test
+    void anOlderAnswerAfterPaidDoesNotUndoIt() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        long counted = clearingFor(order);
+        String paymentState = orders.get(order.id()).paymentState();
+
+        for (String type : List.of("AUTH", "SETTLE", "CHARGE")) {
+            for (UUID op : operations(order, type)) {
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.PENDING, "InProcessing", null,
+                        null));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.DECLINED, "Declined", "1100",
+                        "Old answer"));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.UNKNOWN, null, null, null));
+            }
+        }
+        settlePayments();
+
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo(paymentState);
+        assertThat(clearingFor(order)).isEqualTo(counted);
+        assertThat(jdbc.sql("""
+                        select count(*) from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.state <> 'SUCCEEDED'""")
+                .param("order", order.id()).query(Long.class).single()).as("every operation stays SUCCEEDED")
+                .isZero();
+    }
+
+    private Actor staffWith(String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Finance', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "capture-finance-" + id).param("permissions", permissions).update();
+        return new Actor(taxi.blizz.platform.SubjectType.STAFF, id);
+    }
+
+    private static void assertCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call,
+                                   taxi.blizz.platform.ErrorCode code) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(call)
+                .isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(e -> ((taxi.blizz.platform.DomainException) e).code()).isEqualTo(code);
+    }
+
+    /** A fare whose rest the card refused: PARTIALLY_PAID, the declined CHARGE returned. */
+    private taxi.blizz.payments.PaymentOperations.Operation declinedRest(OrderView order, Actor finance) {
+        long hold = order.priceMinor();
+        gateway.next("Approved", "Declined");
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PARTIALLY_PAID");
+        return paymentOperations.ofOrder(finance, order.id()).stream()
+                .filter(o -> o.type().equals("CHARGE") && o.state().equals("DECLINED")).findFirst().orElseThrow();
+    }
+
+    /** REQ-PAY-14: a declined charge is retried by hand, once, by someone with the right; it pays the debt. */
+    @Test
+    void aDeclinedChargeIsRetriedByHandOnceAndPaysTheDebt() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        Actor other = staffWith("finance.manage");
+        var declined = declinedRest(order, finance);
+        long clearing = clearingFor(order);
+        assertThat(clearing).isEqualTo(hold);
+
+        assertCode(() -> paymentOperations.ofOrder(other, order.id()), taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> paymentOperations.retry(other, UUID.randomUUID(), declined.id(), "x"),
+                taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), " "),
+                taxi.blizz.platform.ErrorCode.VALIDATION_FAILED);
+        UUID settle = operations(order, "SETTLE").getFirst();
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), settle, "x"),
+                taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+
+        UUID command = UUID.randomUUID();
+        var retry = paymentOperations.retry(finance, command, declined.id(), "The rider topped up the card");
+        assertThat(retry.retryOf()).isEqualTo(declined.id());
+        assertThat(retry.initiatedBy()).isEqualTo(finance.id());
+        assertThat(retry.amountMinor()).isEqualTo(700);
+        assertThat(paymentOperations.retry(finance, command, declined.id(), "The rider topped up the card").id())
+                .as("a repeat of the command").isEqualTo(retry.id());
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), "again"),
+                taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), retry.id(), "too early"),
+                taxi.blizz.platform.ErrorCode.PAYMENT_UNKNOWN);
+
+        settlePayments();
+
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PAID");
+        assertThat(clearingFor(order)).as("the rest is counted once").isEqualTo(hold + 700);
+        assertThat(sent()).filteredOn(r -> r.startsWith("CHARGE:SALE")).hasSize(2);
+        settlePayments();
+        assertThat(clearingFor(order)).isEqualTo(hold + 700);
+        assertThat(jdbc.sql("select count(*) from audit_log where action = 'payment.retry' and actor_id = :staff")
+                .param("staff", finance.id()).query(Long.class).single()).isEqualTo(1);
+        // The order's own CardPaymentSettled / OrderDebtPaid history events never poison the ledger's handlers.
+        assertThat(jdbc.sql("select count(*) from outbox where aggregate_id = :order and (attempts > 0 or state = 'FAILED')")
+                .param("order", order.id()).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void aRetryThatIsDeclinedAgainLeavesTheDebtAndCanBeRetriedItself() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        var declined = declinedRest(order, finance);
+        long clearing = clearingFor(order);
+
+        gateway.next("Declined");
+        var retry = paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), "First try");
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PARTIALLY_PAID");
+        assertThat(clearingFor(order)).isEqualTo(clearing);
+
+        var again = paymentOperations.retry(finance, UUID.randomUUID(), retry.id(), "Second try");
+        assertThat(again.retryOf()).isEqualTo(retry.id());
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PAID");
+        assertThat(clearingFor(order)).isEqualTo(clearing + 700);
+    }
+
+    private long systemCases(String sourceKey, String category) {
+        return jdbc.sql("""
+                        select count(*) from support_case
+                        where source_key = :key and category = :category and priority = 'HIGH'""")
+                .param("key", sourceKey).param("category", category).query(Long.class).single();
+    }
+
+    /** REQ-OPS-06: a card fare left partly unpaid is one case for the dispatchers; a paid one is none. */
+    @Test
+    void aCardFareLeftPartlyUnpaidBecomesOneCase() {
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        OrderView partly = heldOrder(riderWithCard());
+        declinedRest(partly, finance);
+        settlePayments();
+        assertThat(systemCases("card-debt:" + partly.id(), "PAYMENT")).isEqualTo(1);
+
+        OrderView paid = heldOrder(riderWithCard());
+        tx.executeWithoutResult(s -> internal.startCapture(paid.id(), paid.priceMinor(), "UAH"));
+        settlePayments();
+        assertThat(payments.intent(paid.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(systemCases("card-debt:" + paid.id(), "PAYMENT")).isZero();
+    }
+
+    /** REQ-OPS-06: an operation whose result stays unknown past the limit is reported once; a fresh one is not. */
+    @Test
+    void aResultStillUnknownAfterTheLimitIsReportedOnce() {
+        OrderView old = heldOrder(riderWithCard());
+        OrderView fresh = heldOrder(riderWithCard());
+        UUID oldAuth = operations(old, "AUTH").getFirst();
+        UUID freshAuth = operations(fresh, "AUTH").getFirst();
+        // The provider never answered (the state set directly: an answer cannot move a finished operation back).
+        jdbc.sql("""
+                        update payment_operation set state = 'UNKNOWN',
+                            created_at = case when id = :old then now() - interval '20 minutes' else now() end
+                        where id in (:old, :fresh)""")
+                .param("old", oldAuth).param("fresh", freshAuth).update();
+
+        while (unknown.report() > 0) {
+            // operations left unknown by other tests are reported too
+        }
+        assertThat(unknown.report()).as("nothing twice").isZero();
+        deliverEvents();
+
+        assertThat(systemCases("payment-unknown:" + oldAuth, "PAYMENT_UNKNOWN")).isEqualTo(1);
+        assertThat(systemCases("payment-unknown:" + freshAuth, "PAYMENT_UNKNOWN")).isZero();
+        assertThat(jdbc.sql("select count(*) from outbox where event_type = 'PaymentResultUnknown' and payload ->> 'operation_id' = :op")
+                .param("op", oldAuth.toString()).query(Long.class).single()).isEqualTo(1);
+        // Back to a finished state, so later tests' workers do not ask the fake provider about it.
+        jdbc.sql("update payment_operation set state = 'SUCCEEDED' where id in (:old, :fresh)")
+                .param("old", oldAuth).param("fresh", freshAuth).update();
     }
 }

@@ -1526,6 +1526,87 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/orders/{order_id}/payment-operations:
+    get:
+      operationId: listPaymentOperations
+      summary: The card operations of an order
+      description: Holds, captures, charges, refunds and tips, oldest first, with each one's state and the provider's status; a retry shows which operation it repeats and who asked. Needs payments.retry. An order without a card payment → 404.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [operations]
+                properties:
+                  operations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentOperation"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/payment-operations/{operation_id}/retry:
+    post:
+      operationId: retryPaymentOperation
+      summary: Retry a declined charge by hand
+      description: >-
+        REQ-PAY-14. Only a CHARGE the provider declined for sure, not retried yet, while no other operation of the
+        payment is under way; anything else → 409 STATE_CONFLICT, a result not known yet → 409 PAYMENT_UNKNOWN (the
+        system keeps asking the provider; never charge twice). A new charge of the same amount to the same saved card;
+        it keeps the operation it repeats and who asked. When it succeeds, the rider's debt for the fare is paid
+        (event CardDebtPaid). Needs payments.retry; reason required; audited.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                reason:
+                  type: string
+      responses:
+        "201":
+          description: The new charge, sent shortly by the payment worker.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOperation"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/payment-merchants:
     get:
       operationId: listPaymentMerchants
@@ -2696,6 +2777,12 @@ paths:
             $ref: "./common.yaml#/components/schemas/Uuid"
         - name: unassigned
           in: query
+          schema:
+            type: boolean
+            default: false
+        - name: overdue
+          in: query
+          description: Only open cases whose respond_by has passed, the most overdue first (REQ-OPS-06).
           schema:
             type: boolean
             default: false
@@ -4504,6 +4591,46 @@ components:
             $ref: "#/components/schemas/CityPaymentMethod"
         reason:
           type: string
+
+    PaymentOperation:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, type, state, amount_minor, currency, provider_status, reason, retry_of, initiated_by,
+                 created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        type:
+          type: string
+          enum: [AUTH, SETTLE, CHARGE, REFUND, TIP]
+        state:
+          type: string
+          enum: [CREATED, SENDING, PENDING, UNKNOWN, SUCCEEDED, DECLINED, CANCELLED]
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        provider_status:
+          type: [string, "null"]
+        reason:
+          description: The provider's reason of a decline.
+          type: [string, "null"]
+        retry_of:
+          description: The operation this one repeats (a manual retry).
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        initiated_by:
+          description: The staff member who asked for the retry.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
 
     GeoChange:
       type: object

@@ -19,10 +19,18 @@ class OperationsConfiguration {
 
         private final DispatchWorker worker;
         private final PreorderWorker preorders;
+        private final LostDrivers lost;
 
-        DeadlineScheduler(DispatchWorker worker, PreorderWorker preorders) {
+        DeadlineScheduler(DispatchWorker worker, PreorderWorker preorders, LostDrivers lost) {
             this.worker = worker;
             this.preorders = preorders;
+            this.lost = lost;
+        }
+
+        /** Drivers on an order who stopped sending positions (REQ-OPS-06). */
+        @Scheduled(fixedDelayString = "PT30S", initialDelayString = "PT30S")
+        void reportLostDrivers() {
+            lost.report();
         }
 
         @Scheduled(fixedDelayString = "${blizz.dispatch.poll-interval:PT1S}")

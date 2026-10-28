@@ -25,6 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 6. Open or update a PR only when the build is green; a PR with a compile error is not ready for review. The reviewer brings `main` in before merging and resolves trivial conflicts himself.
 7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
 8. Do not merge your own PR. Address review comments in new commits on the same branch.
+9. **Do not stop when a step is done; wait for the next one.** After you ask for review, answer a review, or find no open issue with your label, run `scripts/wait-for-work.sh <your label>` (e.g. `grok`). It returns as soon as there is something new for you (a review or comment on your PR, the PR merged or closed, a new or commented issue with your label) and prints what; then start again from step 1. It ends after about nine minutes with nothing new (exit code 2): run it again. Keep the loop going until the person who started you stops you; never end your session with "waiting for review".
 
 ## Done means proven
 
@@ -77,6 +78,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - No foreign key to another module's table, also in a brand-new table: check every `references` in a migration (`driver_risk_flag` once pointed at `driver`).
 - A sandbox scenario that changes shared sandbox data (drivers online, an order searching, a suspended driver, a legal text in force) restores it in a `trap … EXIT`, so a failure does not break the scenarios after it.
 - A time sent by a phone is compared with a server time with a tolerance: phones send whole seconds and keep their own clock.
+- Metrics, logs and traces never fail the operation they observe: an unexpected label value becomes `OTHER` with a warning, never an exception in the business transaction.
+- No database transaction is held open around a call to an outside provider (SMS, payments, maps): call first, then record the result in a short transaction.
 
 ## Trying the system by hand
 

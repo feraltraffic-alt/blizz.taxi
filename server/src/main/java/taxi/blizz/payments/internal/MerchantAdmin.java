@@ -160,6 +160,17 @@ class MerchantAdmin {
                                 .param("id", merchantId).update();
                     }
                     if (secret != null) {
+                        // REQ-SEC-09: the provider may still sign notifications of payments under way with the old
+                        // key for a while; it is kept, encrypted, and accepted until previous_secret_until.
+                        merchants.byId(merchantId).map(Merchant::secret).filter(old -> !old.equals(secret))
+                                .ifPresent(old -> {
+                                    integrations.putSecret(actor, Merchants.previousSecretName(merchantId), old);
+                                    jdbc.sql("""
+                                                    update payment_merchant set previous_secret_until = :until
+                                                    where id = :id""")
+                                            .param("until", OffsetDateTime.now(clock).plus(properties.previousKeyWindow()))
+                                            .param("id", merchantId).update();
+                                });
                         integrations.putSecret(actor, Merchants.secretName(merchantId), secret);
                     }
                     if (cities != null) {
