@@ -660,7 +660,7 @@ paths:
       operationId: switchOrderToCash
       summary: Pay in cash instead of by card
       description: >-
-        REQ-PAY-20 (owner decision 28.10.2026): a card order not yet finished (SCHEDULED, READY, SEARCHING, ASSIGNED, IN_SERVICE) becomes a cash order. The card hold is released at once and the card is never charged for it. A hold whose result is not known yet → 409 PAYMENT_UNKNOWN (try again); not a card order, or nothing left to pay by card → 409 STATE_CONFLICT. The rider's own choice.
+        REQ-PAY-20 (owner decision 28.10.2026): a card order not yet finished (AWAITING_PAYMENT with the hold in place, SCHEDULED, READY, SEARCHING, ASSIGNED, IN_SERVICE) becomes a cash order. The card hold is released at once and the card is never charged for it. A hold whose result is not known yet → 409 PAYMENT_UNKNOWN (try again); not a card order, or nothing left to pay by card → 409 STATE_CONFLICT. The rider's own choice.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

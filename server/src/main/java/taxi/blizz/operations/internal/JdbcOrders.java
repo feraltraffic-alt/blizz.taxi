@@ -481,7 +481,7 @@ class JdbcOrders implements Orders {
                     if (order.version() != expectedVersion) {
                         throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
                     }
-                    if (!java.util.Set.of("SCHEDULED", "READY", "SEARCHING", "ASSIGNED", "IN_SERVICE")
+                    if (!java.util.Set.of("AWAITING_PAYMENT", "SCHEDULED", "READY", "SEARCHING", "ASSIGNED", "IN_SERVICE")
                             .contains(order.status())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "An order in " + order.status() + " cannot switch to cash");
