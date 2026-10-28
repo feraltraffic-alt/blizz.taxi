@@ -74,38 +74,41 @@ function loadSpecs() {
 }
 
 // Recursively add unevaluatedProperties: false to object schemas that lack it
-// (and lack additionalProperties). Do not touch allOf/oneOf/anyOf themselves.
-function tightenSchema(schema) {
+// (and lack additionalProperties). Do not touch schemas that are inside allOf/oneOf/anyOf.
+function tightenSchema(schema, insideComposition = false) {
   if (!schema || typeof schema !== "object") return schema;
-  if (Array.isArray(schema)) return schema.map(tightenSchema);
+  if (Array.isArray(schema)) return schema.map(s => tightenSchema(s, insideComposition));
 
   const copy = { ...schema };
+  const isComposition = !!(copy.allOf || copy.oneOf || copy.anyOf);
 
-  // Recurse into subschemas first
+  // Recurse into subschemas
   for (const key of ["properties", "patternProperties", "additionalProperties", "unevaluatedProperties",
                      "items", "prefixItems", "contains", "if", "then", "else", "not",
                      "dependentSchemas", "propertyNames"]) {
     if (copy[key] && typeof copy[key] === "object") {
       if (key === "properties" || key === "patternProperties" || key === "dependentSchemas") {
         copy[key] = Object.fromEntries(
-          Object.entries(copy[key]).map(([k, v]) => [k, tightenSchema(v)])
+          Object.entries(copy[key]).map(([k, v]) => [k, tightenSchema(v, insideComposition)])
         );
       } else if (key === "items" || key === "prefixItems") {
-        copy[key] = Array.isArray(copy[key]) ? copy[key].map(tightenSchema) : tightenSchema(copy[key]);
+        copy[key] = Array.isArray(copy[key]) ? copy[key].map(s => tightenSchema(s, insideComposition)) : tightenSchema(copy[key], insideComposition);
       } else {
-        copy[key] = tightenSchema(copy[key]);
+        copy[key] = tightenSchema(copy[key], insideComposition);
       }
     }
   }
   for (const key of ["allOf", "oneOf", "anyOf"]) {
-    if (Array.isArray(copy[key])) copy[key] = copy[key].map(tightenSchema);
+    if (Array.isArray(copy[key])) {
+      copy[key] = copy[key].map(s => tightenSchema(s, true)); // mark as inside composition
+    }
   }
 
-  // Tighten this schema if it is an object without additional/unevaluatedProperties
-  if (copy.type === "object" &&
+  // Tighten only if not inside a composition and is a plain object
+  if (!insideComposition && !isComposition &&
+      copy.type === "object" &&
       copy.additionalProperties === undefined &&
-      copy.unevaluatedProperties === undefined &&
-      !copy.allOf && !copy.oneOf && !copy.anyOf) {
+      copy.unevaluatedProperties === undefined) {
     copy.unevaluatedProperties = false;
   }
   return copy;
