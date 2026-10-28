@@ -35,6 +35,16 @@ class SandboxController {
         return calls.push(ariEvent) ? ResponseEntity.accepted().build() : ResponseEntity.notFound().build();
     }
 
+    /**
+     * {@code GET /sandbox/v1/calls/originated}: the outgoing calls the server asked "Asterisk" for (click-to-call),
+     * oldest first, with the number that went to Asterisk — what the panel never sees. The call's own events then come
+     * through {@code /sandbox/v1/calls/events} with {@code channel_id} as the channel.
+     */
+    @GetMapping("/sandbox/v1/calls/originated")
+    java.util.List<FakeCallEvents.Originated> originated() {
+        return calls.originated();
+    }
+
     @GetMapping("/sandbox/v1/otp")
     ResponseEntity<FakeOtpCodes.Sent> otp(@RequestParam String phone) {
         return codes.last(phone).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());

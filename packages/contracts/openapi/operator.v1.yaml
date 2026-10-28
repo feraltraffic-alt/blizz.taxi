@@ -1286,8 +1286,9 @@ paths:
         Asterisk rings my own phone (my extension) and then the other side; the number never reaches the panel, the
         response or the log (REQ-PRV-03). Needs orders.view for the order's city and an extension (409 without one, or
         when the order has no such side, e.g. no driver yet). The call is logged as OUTBOUND, linked to the order and
-        recorded like incoming ones. A repeat of the command returns the first call and does not ring again; Asterisk
-        unreachable → 503 PROVIDER_UNAVAILABLE (nothing logged, a retry rings).
+        recorded like incoming ones. A repeat of the command returns the first call and never rings twice. 503
+        PROVIDER_UNAVAILABLE: Asterisk could not be reached or refused — the call is FAILED, place a new one (new
+        command_id); or its answer was lost — repeat the same command, it does not ring a second time.
       tags: [Calls]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

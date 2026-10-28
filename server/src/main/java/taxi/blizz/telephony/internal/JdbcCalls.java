@@ -1,5 +1,7 @@
 package taxi.blizz.telephony.internal;
 
+import java.io.IOException;
+import java.net.ConnectException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -40,10 +42,11 @@ class JdbcCalls implements Calls {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcCalls.class);
     private static final String SELECT = """
-            select c.id, c.state, c.caller_phone, c.called_number, c.city_id, c.answered_by, c.started_at,
-                   c.answered_at, c.ended_at,
-                   coalesce((select array_agg(o.order_id order by o.linked_at, o.order_id) from call_order o
-                             where o.call_id = c.id), '{}') as order_ids,
+            select c.id, c.direction, c.party, c.state, c.caller_phone, c.called_number, c.city_id, c.answered_by,
+                   c.started_at, c.answered_at, c.ended_at,
+                   case when c.order_id is not null then array[c.order_id]
+                        else coalesce((select array_agg(o.order_id order by o.linked_at, o.order_id) from call_order o
+                                       where o.call_id = c.id), '{}') end as order_ids,
                    r.state as recording_state, r.duration_seconds, r.stored_at
             from call c left join call_recording r on r.call_id = c.id""";
 
@@ -61,15 +64,19 @@ class JdbcCalls implements Calls {
     private final IdempotentCommands commands;
     private final StaffAccess staff;
     private final Outbox outbox;
+    private final TelephonyProperties properties;
+    private final ChannelControl channels;
     private final Clock clock;
 
     JdbcCalls(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, StaffAccess staff,
-              Outbox outbox, Clock clock) {
+              Outbox outbox, TelephonyProperties properties, AriChannels asterisk, FakeChannels fake, Clock clock) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
         this.staff = staff;
         this.outbox = outbox;
+        this.properties = properties;
+        this.channels = properties.fake() ? fake : asterisk;
         this.clock = clock;
     }
 
@@ -79,7 +86,7 @@ class JdbcCalls implements Calls {
      * A channel was created. Logged as a new RINGING call when it is a call to a service number; a repeat (the same
      * channel) changes nothing. {@code CallRinging} is published once, with the new row.
      */
-    Optional<UUID> ringing(String channelId, String callerRaw, String calledRaw, OffsetDateTime at) {
+    Optional<UUID> ringing(String channelId, String callerRaw, String calledRaw, String context, OffsetDateTime at) {
         Optional<String> called = e164(calledRaw);
         if (channelId == null || called.isEmpty()) {
             return Optional.empty();
@@ -87,6 +94,9 @@ class JdbcCalls implements Calls {
         Optional<UUID> city = jdbc.sql("select city_id from call_line where number = :number")
                 .param("number", called.get()).query(UUID.class).optional();
         if (city.isEmpty()) {
+            if (quiet(callerRaw, context)) {
+                return Optional.empty();
+            }
             // Not a service number: usually a leg towards an operator or an outgoing call. A full external number may
             // be a service number missing from the call lines — said in the log (without the caller) to be fixed.
             log.warn("A call to {} is not logged: the number is not a service number (call lines)",
@@ -114,13 +124,75 @@ class JdbcCalls implements Calls {
         });
     }
 
-    /** The channel went Up: RINGING → ANSWERED; anything else stays. */
+    /**
+     * An operator's own phone placing a call, or a channel of the context for outgoing calls, is never a call to
+     * log — no warning for it (issue #67).
+     */
+    private boolean quiet(String callerRaw, String context) {
+        if (context != null && properties.quietContexts().contains(context)) {
+            return true;
+        }
+        String caller = callerRaw == null ? "" : callerRaw.strip();
+        return caller.matches("^[0-9]{2,6}$") && jdbc.sql("select count(*) from staff_extension where extension = :e")
+                .param("e", caller).query(Long.class).single() > 0;
+    }
+
+    /**
+     * The call's own channel went Up. Incoming: RINGING → ANSWERED. Outgoing: the operator picked up their phone —
+     * DIALING → RINGING (the other side is being rung); anything else stays.
+     */
     void answered(String channelId, OffsetDateTime at) {
         jdbc.sql("""
-                        update call set state = 'ANSWERED', answered_at = coalesce(answered_at, :at),
+                        update call set state = case when direction = 'OUTBOUND' then 'RINGING' else 'ANSWERED' end,
+                                        answered_at = case when direction = 'OUTBOUND' then answered_at
+                                                           else coalesce(answered_at, :at) end,
                                         version = version + 1
-                        where channel_id = :channel and state = 'RINGING'""")
+                        where channel_id = :channel
+                          and ((direction = 'INBOUND' and state = 'RINGING')
+                               or (direction = 'OUTBOUND' and state = 'DIALING'))""")
                 .param("channel", channelId).param("at", at(at)).update();
+    }
+
+    /**
+     * Another channel of the call went Up ({@code linkedid} is the call's channel). Incoming: an operator's phone
+     * answered — its extension names who took the call, unless someone is already recorded (the first answer stays;
+     * a different one is logged). Outgoing: the other side picked up — ANSWERED.
+     */
+    void legAnswered(String callChannelId, String legName, OffsetDateTime at) {
+        record Row(UUID id, String direction, UUID answeredBy) {
+        }
+        Optional<Row> call = jdbc.sql("select id, direction, answered_by from call where channel_id = :channel")
+                .param("channel", callChannelId)
+                .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class)))
+                .optional();
+        if (call.isEmpty()) {
+            return;
+        }
+        if ("OUTBOUND".equals(call.get().direction())) {
+            jdbc.sql("""
+                            update call set state = 'ANSWERED', answered_at = coalesce(answered_at, :at),
+                                            version = version + 1
+                            where id = :id and state in ('DIALING', 'RINGING')""")
+                    .param("id", call.get().id()).param("at", at(at)).update();
+            return;
+        }
+        String extension = properties.extensionOf(legName);
+        Optional<UUID> who = extension == null ? Optional.empty()
+                : jdbc.sql("select staff_id from staff_extension where extension = :e").param("e", extension)
+                        .query(UUID.class).optional();
+        if (who.isEmpty()) {
+            return;
+        }
+        int taken = jdbc.sql("""
+                        update call set answered_by = :staff,
+                                        state = case when state = 'RINGING' then 'ANSWERED' else state end,
+                                        answered_at = coalesce(answered_at, :at), version = version + 1
+                        where id = :id and answered_by is null and state in ('RINGING', 'ANSWERED')""")
+                .param("staff", who.get()).param("id", call.get().id()).param("at", at(at)).update();
+        if (taken == 0 && call.get().answeredBy() != null && !call.get().answeredBy().equals(who.get())) {
+            log.warn("Call {}: the phone of staff {} answered, but staff {} took it in the panel first; kept",
+                    call.get().id(), who.get(), call.get().answeredBy());
+        }
     }
 
     /**
@@ -131,7 +203,7 @@ class JdbcCalls implements Calls {
         jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :at, ended_reason = :reason, version = version + 1
-                        where channel_id = :channel and state in ('RINGING', 'ANSWERED')
+                        where channel_id = :channel and state in ('DIALING', 'RINGING', 'ANSWERED')
                         returning id, state""" + RECORD_TAKEN)
                 .param("channel", channelId).param("at", at(at)).param("reason", reason).param("now", now())
                 .query(Long.class).single();
@@ -146,11 +218,32 @@ class JdbcCalls implements Calls {
         long closed = jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :now, ended_reason = 'LOST', version = version + 1
-                        where state in ('RINGING', 'ANSWERED') and started_at < :before
+                        where state in ('DIALING', 'RINGING', 'ANSWERED') and started_at < :before
                         returning id, state""" + RECORD_TAKEN)
                 .param("now", now).param("before", now.minus(staleAfter)).query(Long.class).single();
         if (closed > 0) {
             log.info("Closed {} calls whose end Asterisk did not report", closed);
+        }
+        return (int) closed;
+    }
+
+    /**
+     * After the events stream reconnected (issue #67): the open calls that started before {@code snapshotAt} and
+     * whose channel Asterisk no longer has ({@code alive}, taken at {@code snapshotAt}) ended while the server was not
+     * listening — closed as LOST; a taken one gets its recording fetched. DIALING calls are left to the command that
+     * places them. Returns how many.
+     */
+    int reconcile(Set<String> alive, OffsetDateTime snapshotAt) {
+        long closed = jdbc.sql("with closed as (" + """
+                        update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
+                                        ended_at = :now, ended_reason = 'LOST', version = version + 1
+                        where state in ('RINGING', 'ANSWERED') and started_at < :snapshot
+                          and not (channel_id = any(cast(:alive as text[])))
+                        returning id, state""" + RECORD_TAKEN)
+                .param("now", now()).param("snapshot", snapshotAt).param("alive", alive.toArray(String[]::new))
+                .query(Long.class).single();
+        if (closed > 0) {
+            log.info("Closed {} calls that ended while Asterisk's events were not reachable", closed);
         }
         return (int) closed;
     }
@@ -171,8 +264,8 @@ class JdbcCalls implements Calls {
         }
         var query = jdbc.sql(SELECT + " where (:all or c.city_id = any(cast(:cities as uuid[])))"
                         + (state == null ? "" : " and c.state = :state")
-                        + (orderId == null ? "" : " and exists (select 1 from call_order o"
-                                + " where o.call_id = c.id and o.order_id = :order)")
+                        + (orderId == null ? "" : " and (c.order_id = :order or exists (select 1 from call_order o"
+                                + " where o.call_id = c.id and o.order_id = :order))")
                         + " order by c.started_at desc, c.id limit :limit")
                 .param("all", all).param("cities", cities.toArray(UUID[]::new))
                 .param("limit", Math.max(1, Math.min(limit, 100)));
@@ -191,6 +284,9 @@ class JdbcCalls implements Calls {
         staff.require(actor, ANSWER_PERMISSION, call.cityId());
         return commands.execute(new CommandKey(actor, "call.answer", commandId), callId, Call.class, () -> {
             Call locked = lock(callId);
+            if (locked.direction() == Direction.OUTBOUND) {
+                throw new DomainException(ErrorCode.STATE_CONFLICT, "An outgoing call is not taken");
+            }
             if (locked.state() == State.ENDED || locked.state() == State.MISSED) {
                 throw new DomainException(ErrorCode.STATE_CONFLICT, "The call is over");
             }
@@ -217,6 +313,9 @@ class JdbcCalls implements Calls {
     public void link(Actor actor, UUID callId, UUID orderId, boolean again) {
         Call call = find(callId).orElseThrow(JdbcCalls::notFound);
         staff.require(actor, ANSWER_PERMISSION, call.cityId());
+        if (call.direction() == Direction.OUTBOUND) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "Orders are linked to incoming calls only");
+        }
         lock(callId);
         long links = jdbc.sql("select count(*) from call_order where call_id = :call").param("call", callId)
                 .query(Long.class).single();
@@ -231,6 +330,78 @@ class JdbcCalls implements Calls {
                 .update();
     }
 
+    // ---------------------------------------------------------------- click-to-call
+
+    record DialRequest(UUID orderId, Party party) {
+    }
+
+    @Override
+    public Call dial(Actor actor, UUID commandId, Outbound outbound) {
+        if (outbound.to() == null || outbound.party() == null || outbound.orderId() == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Whom to call is required");
+        }
+        String extension = extension(actor.id()).orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT,
+                "You have no extension: the admin sets it (Settings → staff extensions)"));
+        // 1. The receipt and the call, committed before Asterisk is asked.
+        Call first = commands.execute(new CommandKey(actor, "call.dial", commandId),
+                new DialRequest(outbound.orderId(), outbound.party()), Call.class, () -> {
+                    UUID id = UUID.randomUUID();
+                    jdbc.sql("""
+                                    insert into call (id, channel_id, direction, party, order_id, city_id, state,
+                                                      answered_by, started_at)
+                                    values (:id, :channel, 'OUTBOUND', :party, :order, :city, 'DIALING', :staff,
+                                            :now)""")
+                            .param("id", id).param("channel", id.toString()).param("party", outbound.party().name())
+                            .param("order", outbound.orderId()).param("city", outbound.cityId())
+                            .param("staff", actor.id()).param("now", now()).update();
+                    return find(id).orElseThrow();
+                });
+        Call current = find(first.id()).orElseThrow();
+        if (current.state() == State.FAILED) {
+            throw unreachable();
+        }
+        if (current.state() != State.DIALING) {
+            return current; // a repeat of a call Asterisk already took
+        }
+        // 2. Asterisk, outside any transaction. The call's id is the channel's: a repeat cannot ring twice.
+        try {
+            channels.originate(current.id().toString(), properties.endpoint(extension), properties.outgoingContext(),
+                    Map.of("BLIZZ_DIAL", outbound.to().e164(), "BLIZZ_CALL_ID", current.id().toString()));
+        } catch (IOException | RuntimeException e) {
+            // Only the type and our own message: the request's variables are never part of either.
+            boolean notStarted = e instanceof ChannelControl.Refused || e instanceof ConnectException
+                    || e instanceof RuntimeException;
+            log.warn("Asterisk did not take outgoing call {}{}: {}", current.id(),
+                    notStarted ? "" : " (outcome unknown, a repeat of the command retries it)",
+                    e instanceof ChannelControl.Refused ? e.getMessage() : e.getClass().getSimpleName());
+            if (!notStarted) {
+                // The request may have reached Asterisk: the call stays DIALING, and a repeat asks again with the
+                // same channel id — "already exists" then means it is ringing.
+                throw unreachable();
+            }
+            jdbc.sql("""
+                            update call set state = 'FAILED', ended_at = :now, ended_reason = 'FAILED',
+                                            version = version + 1
+                            where id = :id and state = 'DIALING'""")
+                    .param("now", now()).param("id", current.id()).update();
+            throw unreachable();
+        }
+        // 3. Asterisk took it: from here the events lead the call.
+        jdbc.sql("update call set state = 'RINGING', version = version + 1 where id = :id and state = 'DIALING'")
+                .param("id", current.id()).update();
+        return find(current.id()).orElseThrow();
+    }
+
+    Optional<String> extension(UUID staffId) {
+        return jdbc.sql("select extension from staff_extension where staff_id = :id").param("id", staffId)
+                .query(String.class).optional();
+    }
+
+    private static DomainException unreachable() {
+        return new DomainException(ErrorCode.PROVIDER_UNAVAILABLE,
+                "Asterisk is not reachable: the call was not placed; try again");
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private Call lock(UUID callId) {
@@ -241,7 +412,9 @@ class JdbcCalls implements Calls {
 
     private static Call map(ResultSet rs) throws SQLException {
         UUID[] orders = (UUID[]) rs.getArray("order_ids").getArray();
-        return new Call(rs.getObject("id", UUID.class), State.valueOf(rs.getString("state")),
+        String party = rs.getString("party");
+        return new Call(rs.getObject("id", UUID.class), Direction.valueOf(rs.getString("direction")),
+                party == null ? null : Party.valueOf(party), State.valueOf(rs.getString("state")),
                 rs.getString("caller_phone"), rs.getString("called_number"), rs.getObject("city_id", UUID.class),
                 rs.getObject("answered_by", UUID.class), List.of(orders),
                 rs.getObject("started_at", OffsetDateTime.class), rs.getObject("answered_at", OffsetDateTime.class),

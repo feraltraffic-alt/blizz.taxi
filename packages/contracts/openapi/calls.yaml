@@ -15,10 +15,12 @@ components:
   schemas:
     CallState:
       description: >-
-        RINGING — the call came in; ANSWERED — it was taken; ENDED — it ended after being taken; MISSED — it ended
-        without being taken.
+        DIALING — an outgoing call the server is asking Asterisk for; RINGING — the call came in (for an outgoing call:
+        the operator's phone rings); ANSWERED — it was taken (outgoing: the other side picked up); ENDED — it ended
+        after being taken; MISSED — it ended without being taken; FAILED — Asterisk could not be reached for an
+        outgoing call.
       type: string
-      enum: [RINGING, ANSWERED, ENDED, MISSED]
+      enum: [DIALING, RINGING, ANSWERED, ENDED, MISSED, FAILED]
 
     Call:
       type: object
@@ -58,7 +60,9 @@ components:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
         order_ids:
-          description: Orders made during the call, the first first; ending the call does not cancel them.
+          description: >-
+            Orders made during the call, the first first; for an outgoing call, the order it was placed from. Ending
+            the call does not cancel them.
           type: array
           items:
             $ref: "./common.yaml#/components/schemas/Uuid"

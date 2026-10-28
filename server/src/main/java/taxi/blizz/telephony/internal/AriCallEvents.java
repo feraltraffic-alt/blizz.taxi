@@ -11,9 +11,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Turns an ARI event (the JSON Asterisk sends on the events WebSocket) into the call log: {@code ChannelCreated} →
- * ringing, {@code ChannelStateChange} to {@code Up} → answered, {@code ChannelDestroyed} → ended. Other events, and
- * legs of another call (a {@code linkedid} that is not the channel's own id), are ignored. Never throws: a bad event
- * is logged without its contents, so it cannot stop the stream.
+ * ringing, {@code ChannelStateChange} to {@code Up} → answered, {@code ChannelDestroyed} → ended. A leg of a call
+ * (a {@code linkedid} that is not the channel's own id) counts only when it goes Up: an operator's phone answering an
+ * incoming call, or the other side picking up an outgoing one (issue #67). Other events are ignored. Never throws: a
+ * bad event is logged without its contents, so it cannot stop the stream.
  */
 @Component
 class AriCallEvents {
@@ -41,13 +42,19 @@ class AriCallEvents {
             Map<String, Object> channel = (Map<String, Object>) rawChannel;
             String id = text(channel.get("id"));
             Object linked = channel.get("linkedid");
-            if (id == null || (linked != null && !id.equals(text(linked)))) {
+            if (id == null) {
                 return;
             }
             OffsetDateTime at = time(text(e.get("timestamp")));
+            if (linked != null && !id.equals(text(linked))) {
+                if ("ChannelStateChange".equals(type) && "Up".equalsIgnoreCase(text(channel.get("state")))) {
+                    calls.legAnswered(text(linked), text(channel.get("name")), at);
+                }
+                return;
+            }
             switch (String.valueOf(type)) {
                 case "ChannelCreated" -> calls.ringing(id, field(channel, "caller", "number"),
-                        field(channel, "dialplan", "exten"), at);
+                        field(channel, "dialplan", "exten"), field(channel, "dialplan", "context"), at);
                 case "ChannelStateChange" -> {
                     if ("Up".equalsIgnoreCase(text(channel.get("state")))) {
                         calls.answered(id, at);

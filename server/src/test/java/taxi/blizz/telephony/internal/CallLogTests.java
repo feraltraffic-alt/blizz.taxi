@@ -420,8 +420,10 @@ class CallLogTests {
         Actor anna = callOperator(cityId);
         // A server that listens to a real Asterisk which is not there: it keeps retrying in the background.
         TelephonyProperties live = new TelephonyProperties("LIVE", "https://turbosms.test", Duration.ofSeconds(30),
-                true, Duration.ofHours(4), false, false, Duration.ofHours(1), 268_435_456L);
-        AriEventStream stream = new AriEventStream(new UnreachableAsterisk(), live, new AriCallEvents(log, json));
+                true, Duration.ofHours(4), false, false, Duration.ofHours(1), 268_435_456L, "PJSIP/{extension}", "blizz-outgoing",
+                java.util.List.of("blizz-outgoing", "from-internal"));
+        AriEventStream stream = new AriEventStream(new UnreachableAsterisk(), live, new AriCallEvents(log, json),
+                null);
         long started = System.nanoTime();
         stream.start();
         assertThat(Duration.ofNanos(System.nanoTime() - started)).as("start never waits for Asterisk")

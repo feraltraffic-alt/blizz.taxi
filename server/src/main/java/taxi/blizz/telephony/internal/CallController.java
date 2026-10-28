@@ -26,10 +26,33 @@ class CallController {
 
     private final Calls calls;
     private final CallRecordings recordings;
+    private final OperatorStatuses statuses;
 
-    CallController(Calls calls, CallRecordings recordings) {
+    CallController(Calls calls, CallRecordings recordings, OperatorStatuses statuses) {
         this.calls = calls;
         this.recordings = recordings;
+        this.statuses = statuses;
+    }
+
+    record ChangeStatus(@NotNull UUID commandId, @NotNull OperatorStatuses.Status status) {
+    }
+
+    record OperatorList(List<OperatorStatuses.Operator> operators) {
+    }
+
+    @GetMapping("/api/operator/v1/me/call-status")
+    OperatorStatuses.Mine myStatus(AccessClaims claims) {
+        return statuses.mine(claims.actor());
+    }
+
+    @PostMapping("/api/operator/v1/me/call-status")
+    OperatorStatuses.Mine changeMyStatus(AccessClaims claims, @Valid @RequestBody ChangeStatus body) {
+        return statuses.change(claims.actor(), body.commandId(), body.status());
+    }
+
+    @GetMapping("/api/operator/v1/operators")
+    OperatorList operators(AccessClaims claims, @RequestParam(name = "city_id") UUID cityId) {
+        return new OperatorList(statuses.inCity(claims.actor(), cityId));
     }
 
     record CallList(List<Calls.Call> calls) {

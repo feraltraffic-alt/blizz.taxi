@@ -4,11 +4,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.platform.Actor;
 
 /**
- * Incoming calls of the call centre through the service's Asterisk (REQ-OPS-01/07/08/10, issue #64): one record per
- * call whatever the number of its events, who took it, and the orders made during it. A call and an order are
+ * Calls of the call centre through the service's Asterisk (REQ-OPS-01/07/08/10, issues #64, #67): one record per
+ * call whatever the number of its events, who took it, and the orders made during it; outgoing calls placed from an
+ * order without the number ever reaching the panel (REQ-PRV-03). A call and an order are
  * linked but live on their own: ending the call never touches the order. While Asterisk is unreachable calls are
  * simply not logged; phone orders keep working (REQ-OPS-07, T-36).
  */
@@ -20,8 +22,25 @@ public interface Calls {
     /** Listen to the recordings of a city's calls; every listening is audited (issue #60). */
     String LISTEN_PERMISSION = "calls.listen";
 
+    /** See the operators of a city and their status (issue #67). */
+    String SUPERVISE_PERMISSION = "calls.supervise";
+
+    /**
+     * DIALING — an outgoing call the server is asking Asterisk for; RINGING — ringing (the operator's phone, for an
+     * outgoing one); ANSWERED — taken (the other side picked up, for an outgoing one); ENDED, MISSED — over after or
+     * without an answer; FAILED — Asterisk could not be reached for an outgoing call.
+     */
     enum State {
-        RINGING, ANSWERED, ENDED, MISSED
+        DIALING, RINGING, ANSWERED, ENDED, MISSED, FAILED
+    }
+
+    enum Direction {
+        INBOUND, OUTBOUND
+    }
+
+    /** The other side of an outgoing call. */
+    enum Party {
+        RIDER, DRIVER, CALLER
     }
 
     /** PENDING — being fetched from Asterisk; STORED — kept encrypted; NONE — Asterisk had no recording. */
@@ -33,10 +52,13 @@ public interface Calls {
     record Recording(RecordingState state, Integer durationSeconds, OffsetDateTime storedAt) {
     }
 
-    /** {@code recording} is null for a call that is not over or was missed. */
-    record Call(UUID id, State state, String callerPhone, String calledNumber, UUID cityId, UUID answeredBy,
-                List<UUID> orderIds, OffsetDateTime startedAt, OffsetDateTime answeredAt, OffsetDateTime endedAt,
-                Recording recording) {
+    /**
+     * {@code recording} is null for a call that is not over or was missed. An outgoing call has no numbers
+     * ({@code callerPhone}, {@code calledNumber} null), its {@code party} and its order in {@code orderIds}.
+     */
+    record Call(UUID id, Direction direction, Party party, State state, String callerPhone, String calledNumber,
+                UUID cityId, UUID answeredBy, List<UUID> orderIds, OffsetDateTime startedAt,
+                OffsetDateTime answeredAt, OffsetDateTime endedAt, Recording recording) {
         public Call {
             orderIds = orderIds == null ? List.of() : List.copyOf(orderIds);
         }
@@ -44,7 +66,7 @@ public interface Calls {
 
     /**
      * Newest first, at most 100, in the cities where the staff member has {@link #ANSWER_PERMISSION} or
-     * {@link #LISTEN_PERMISSION}; with {@code orderId}, only the calls that order was made during.
+     * {@link #LISTEN_PERMISSION}; with {@code orderId}, only the calls that order was made during or placed from.
      */
     List<Call> recent(Actor staff, State state, UUID orderId, int limit);
 
@@ -61,4 +83,22 @@ public interface Calls {
      * second link without {@code again}.
      */
     void link(Actor staff, UUID callId, UUID orderId, boolean again);
+
+    /**
+     * An outgoing call from an order, already authorized by the order's module: {@code to} is the other side's number
+     * and is given only to Asterisk — never stored, logged, audited or returned.
+     */
+    record Outbound(UUID orderId, UUID cityId, Party party, PhoneNumber to) {
+    }
+
+    /**
+     * Click-to-call (issue #67): rings the staff member's own phone (their extension), then the other side. The call
+     * is logged as OUTBOUND before Asterisk is asked, and Asterisk is asked outside any transaction with the call's id
+     * as the channel id, so a repeat of the command — even after a lost answer — never rings twice. Without an
+     * extension {@code STATE_CONFLICT}. Asterisk unreachable or refusing → the call is FAILED and
+     * {@code PROVIDER_UNAVAILABLE} (a new command places a new call); an answer lost on the way →
+     * {@code PROVIDER_UNAVAILABLE} with the call still DIALING, and a repeat of the same command asks again without
+     * ringing twice.
+     */
+    Call dial(Actor staff, UUID commandId, Outbound outbound);
 }

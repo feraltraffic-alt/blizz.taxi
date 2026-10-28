@@ -33,6 +33,7 @@ public final class StaffPermissions {
             new Permission("orders.view", "Orders", "Order details and the rider–driver chat"),
             new Permission("calls.answer", "Calls", "Incoming calls: see them as they ring and take them"),
             new Permission("calls.listen", "Calls", "Listen to call recordings (every listening is audited)"),
+            new Permission("calls.supervise", "Calls", "See the operators of a city and their status"),
             new Permission("driver.review", "Drivers", "Review drivers, vehicles and documents"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),

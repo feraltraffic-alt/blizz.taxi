@@ -18,11 +18,18 @@ class FakeCallSource implements FakeCallEvents, RecordingSource {
 
     private final AriCallEvents events;
     private final TelephonyProperties properties;
+    private final FakeChannels channels;
     private final Set<String> withoutRecording = ConcurrentHashMap.newKeySet();
 
-    FakeCallSource(AriCallEvents events, TelephonyProperties properties) {
+    FakeCallSource(AriCallEvents events, TelephonyProperties properties, FakeChannels channels) {
         this.events = events;
         this.properties = properties;
+        this.channels = channels;
+    }
+
+    @Override
+    public java.util.List<Originated> originated() {
+        return properties.fake() ? channels.originated() : java.util.List.of();
     }
 
     @Override
