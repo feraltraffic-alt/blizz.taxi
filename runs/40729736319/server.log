@@ -1,0 +1,796 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.2)
+
+2026-10-28T16:50:15.995Z  INFO 3069 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : Starting BlizzTaxiApplication v0.1.0-SNAPSHOT using Java 25.0.5 with PID 3069 (/home/runner/work/blizz.taxi/blizz.taxi/server/target/server-0.1.0-SNAPSHOT.jar started by runner in /home/runner/work/blizz.taxi/blizz.taxi/server)
+2026-10-28T16:50:16.008Z  INFO 3069 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : The following 1 profile is active: "sandbox"
+2026-10-28T16:50:18.026Z  INFO 3069 --- [blizz-taxi-server] [           main] [] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-28T16:50:18.081Z  INFO 3069 --- [blizz-taxi-server] [           main] [] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 41 ms. Found 0 JPA repository interfaces.
+2026-10-28T16:50:18.945Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-10-28T16:50:18.966Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-28T16:50:18.967Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-10-28T16:50:18.990Z  INFO 3069 --- [blizz-taxi-server] [           main] [] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 2907 ms
+2026-10-28T16:50:19.370Z  INFO 3069 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-28T16:50:19.638Z  INFO 3069 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@579dde54
+2026-10-28T16:50:19.640Z  INFO 3069 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-28T16:50:19.661Z  INFO 3069 --- [blizz-taxi-server] [           main] [] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/blizz (PostgreSQL 18.6)
+2026-10-28T16:50:19.759Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-28T16:50:19.768Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbValidate     : Successfully validated 72 migrations (execution time 00:00.052s)
+2026-10-28T16:50:19.807Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-28T16:50:19.851Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-28T16:50:19.866Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - enable postgis"
+2026-10-28T16:50:19.873Z  WARN 3069 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: extension "postgis" already exists, skipping (SQL State: 42710 - Error Code: 0)
+2026-10-28T16:50:19.890Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - command receipt"
+2026-10-28T16:50:19.908Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - outbox"
+2026-10-28T16:50:19.930Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - audit log"
+2026-10-28T16:50:19.952Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - identity subjects and otp"
+2026-10-28T16:50:19.981Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - device sessions"
+2026-10-28T16:50:19.993Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - otp client limits"
+2026-10-28T16:50:20.006Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - cities and zones"
+2026-10-28T16:50:20.035Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - driver admission"
+2026-10-28T16:50:20.064Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - files"
+2026-10-28T16:50:20.077Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - work sessions"
+2026-10-28T16:50:20.110Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - tariffs and quotes"
+2026-10-28T16:50:20.139Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1640 - order core"
+2026-10-28T16:50:20.177Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1700 - trip phases"
+2026-10-28T16:50:20.191Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1710 - trip exceptions"
+2026-10-28T16:50:20.200Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1730 - order quote"
+2026-10-28T16:50:20.211Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1740 - own addresses"
+2026-10-28T16:50:20.246Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1800 - final fare"
+2026-10-28T16:50:20.263Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1805 - ledger"
+2026-10-28T16:50:20.283Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1837 - address search rate limit"
+2026-10-28T16:50:20.291Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0630 - tariff waiting policy"
+2026-10-28T16:50:20.300Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0700 - driver debt"
+2026-10-28T16:50:20.326Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0710 - driver restriction"
+2026-10-28T16:50:20.341Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0800 - order chat"
+2026-10-28T16:50:20.381Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0900 - staff sign in"
+2026-10-28T16:50:20.393Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1000 - staff activity"
+2026-10-28T16:50:20.409Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1100 - driver track"
+2026-10-28T16:50:20.420Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1200 - tariff zones and outside"
+2026-10-28T16:50:20.430Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1300 - order contact"
+2026-10-28T16:50:20.437Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1400.1 - service settings"
+2026-10-28T16:50:20.447Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1500.1 - support cases"
+2026-10-28T16:50:20.464Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1600.1 - tariff preorder surcharge"
+2026-10-28T16:50:20.476Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1700.1 - cancel reasons"
+2026-10-28T16:50:20.488Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1800.1 - scheduled orders"
+2026-10-28T16:50:20.499Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1900.1 - preorder reservations"
+2026-10-28T16:50:20.513Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2000.1 - trip interruption"
+2026-10-28T16:50:20.525Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2100.1 - payments cards"
+2026-10-28T16:50:20.557Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2200.1 - card holds"
+2026-10-28T16:50:20.571Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2300.1 - card capture"
+2026-10-28T16:50:20.579Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2359.2 - support attachments"
+2026-10-28T16:50:20.591Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0010.1 - push notifications"
+2026-10-28T16:50:20.605Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0020.1 - integrations"
+2026-10-28T16:50:20.615Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0030.2 - ratings"
+2026-10-28T16:50:20.628Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0100.1 - terminal payment"
+2026-10-28T16:50:20.639Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.2 - operator bonuses"
+2026-10-28T16:50:20.658Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.3 - driver document reminders"
+2026-10-28T16:50:20.667Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0200.1 - rider wallet"
+2026-10-28T16:50:20.681Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0210.1 - wallet payment"
+2026-10-28T16:50:20.694Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0220.1 - rider promotions"
+2026-10-28T16:50:20.717Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0230.1 - driver transfers"
+2026-10-28T16:50:20.729Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0240.1 - driver promotions"
+2026-10-28T16:50:20.742Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0250.3 - safety contacts"
+2026-10-28T16:50:20.749Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0300.1 - card top up"
+2026-10-28T16:50:20.759Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0310.3 - payment card token removal"
+2026-10-28T16:50:20.782Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0320.3 - wallet forfeited"
+2026-10-28T16:50:20.788Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0330.3 - client deletion"
+2026-10-28T16:50:20.796Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0340.1 - tips"
+2026-10-28T16:50:20.806Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0350.3 - orders per payer"
+2026-10-28T16:50:20.814Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0400.3 - otp delivery"
+2026-10-28T16:50:20.822Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0410.1 - client blocking"
+2026-10-28T16:50:20.830Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0420.1 - report exports"
+2026-10-28T16:50:20.841Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0430.3 - incoming calls"
+2026-10-28T16:50:20.854Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0440.3 - call recordings"
+2026-10-28T16:50:20.869Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0500.1 - personal data exports"
+2026-10-28T16:50:20.883Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.1 - legal documents"
+2026-10-28T16:50:20.901Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.3 - call centre part2"
+2026-10-28T16:50:20.920Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0520.1 - emergency access"
+2026-10-28T16:50:20.929Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0530.1 - rate limits"
+2026-10-28T16:50:20.935Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0540.3 - dispatch journal risk flags"
+2026-10-28T16:50:20.946Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0550.3 - track retention correlation"
+2026-10-28T16:50:20.956Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1120.1 - city operations"
+2026-10-28T16:50:20.964Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1150.1 - phone change"
+2026-10-28T16:50:20.973Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Successfully applied 72 migrations to schema "public", now at version v20261028.1150.1 (execution time 00:00.581s)
+2026-10-28T16:50:21.138Z  INFO 3069 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-10-28T16:50:21.216Z  INFO 3069 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.13.Final
+2026-10-28T16:50:21.873Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-28T16:50:22.007Z  INFO 3069 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/blizz]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 18.6
+	Default catalog/schema: blizz/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-28T16:50:22.403Z  INFO 3069 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-28T16:50:22.461Z  INFO 3069 --- [blizz-taxi-server] [           main] [] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-28T16:50:24.701Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-10-28T16:50:24.850Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8081 (http)
+2026-10-28T16:50:24.851Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-28T16:50:24.852Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-10-28T16:50:24.854Z  INFO 3069 --- [blizz-taxi-server] [           main] [] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 141 ms
+2026-10-28T16:50:24.869Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-10-28T16:50:24.902Z  INFO 3069 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8081 (http) with context path '/'
+2026-10-28T16:50:24.921Z  INFO 3069 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : Started BlizzTaxiApplication in 9.93 seconds (process running for 10.561)
+2026-10-28T16:50:25.664Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-28T16:50:25.664Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-28T16:50:25.665Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-28T16:50:25.792Z  WARN 3069 --- [blizz-taxi-server] [           main] [] taxi.blizz.sandbox.SandboxSeed           : [sandbox] Seed data loaded. This instance is a sandbox: SMS codes are readable at /sandbox/v1/otp.
+2026-10-28T16:50:26.115Z  WARN 3069 --- [blizz-taxi-server] [           main] [] t.b.identity.internal.StaffBootstrap     : Created the first super admin 'admin'; the password must be changed at the first sign-in
+2026-10-28T16:50:37.781Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-5] [0d7f1aad-dd4c-45f6-9702-149af3081dd2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 412700
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=9.0.0, latestVersion=9.0.0]
+2026-10-28T16:50:40.293Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [6d3d65b3-4287-4512-ba61-0d65e484e160] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****99: 693294
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:50:42.022Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-3] [6472f84c-ab74-4441-ba02-5021e0ddf675] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 626292
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/wallet checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/ebc6a7aa-58d6-4712-a8be-c1570138381a/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/8e3641d3-ddfe-4c36-b684-1ca783cc81db/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9d8f5082-992a-4818-8e25-1ce6b01be4a8/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9d8f5082-992a-4818-8e25-1ce6b01be4a8/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9d8f5082-992a-4818-8e25-1ce6b01be4a8/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/wallet checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/8e3641d3-ddfe-4c36-b684-1ca783cc81db/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:50:58.105Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-5] [910bb546-cc9d-4b0a-93d6-148586484fec] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****00: 239938
+AppVersionInterceptor: GET /api/rider/v1/cancel-reasons checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:50:58.929Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-3] [3b6a8ee1-6168-431b-9bcf-4bb0434fac5c] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 033350
+AppVersionInterceptor: GET /api/driver/v1/cancel-reasons checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/c05358eb-47dd-4cff-8010-7dd1b2ac6b2a checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/c05358eb-47dd-4cff-8010-7dd1b2ac6b2a/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:02.846Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [6d176b11-4886-4608-a34c-dd0595ef9dd5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 835276
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/3f1ea1fc-03d2-4145-bf15-8d1d4d1d3fae/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/540f393f-f332-40ec-af98-c561a7acb202/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/56b1e89b-fbe2-41fd-b8c5-12651feebf44 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/52fdcbe9-f113-483b-a111-8b0996077028/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/e8671335-052f-4ccb-ba6f-b121109ef3c5/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:07.979Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-5] [31753f51-f0b8-4d57-935c-8e86ba1f9d5e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****35: 624065
+AppVersionInterceptor: POST /api/rider/v1/card-bindings checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/card-bindings/2977fe1f-1be7-4272-9d64-94a2afce259a checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/cards checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:09.382Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [93829d3f-f7a1-49b3-8f2d-88341b366559] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 106573
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/e34e7393-7b3e-46f0-a3fd-57c3d32b4548/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/e34e7393-7b3e-46f0-a3fd-57c3d32b4548/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/ca28c749-bcfe-48ac-b704-05f81efcbb5c/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/e34e7393-7b3e-46f0-a3fd-57c3d32b4548/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/88384193-2697-4ea5-93a6-52da34bf484f/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/88384193-2697-4ea5-93a6-52da34bf484f/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/88384193-2697-4ea5-93a6-52da34bf484f/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:18.496Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 1; retry in PT1S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance/history checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:19.503Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 2; retry in PT2S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: POST /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/e0cf192e-3dde-491d-882e-11a557e3d688/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:21.520Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 3; retry in PT4S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: GET /api/driver/v1/balance/history checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/e34e7393-7b3e-46f0-a3fd-57c3d32b4548/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:22.423Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [4bf8a018-f978-4d79-a28b-6e5704ff2993] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****64: 565467
+AppVersionInterceptor: POST /api/rider/v1/wallet/card-top-ups checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/wallet/card-top-ups/e3b87940-bbc1-4b6a-ac8d-0a5ae57bdeb1 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/wallet checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/wallet checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:24.123Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-5] [1ece6478-7469-4bc6-ae22-148d5dad7d8f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 414560
+AppVersionInterceptor: GET /api/driver/v1/balance/history checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/balance/card-top-ups checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance/card-top-ups/2d3cf0a8-cbc4-401e-9aa3-93bb31c1ecca checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance/history checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:25.556Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 4; retry in PT8S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: GET /api/driver/v1/balance/history checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/balance/card-top-ups checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:28.480Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [ed3bdb83-7a69-4f69-88fb-53a0b633ab7d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****73: 988217
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:33.585Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 5; retry in PT16S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T16:51:34.584Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [4f1c8ee1-b880-4f3d-9e43-5bfc59bdcf4a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****06: 848499
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/me/deletion-request/challenge checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:37.688Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [feb2186a-3017-4536-9576-bef21994570f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****06: 505606
+AppVersionInterceptor: POST /api/rider/v1/me/deletion-request checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:39.962Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [abbf1a87-768a-40c6-9046-1511615f4002] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 802544
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:44.772Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [c7d4ba19-c937-4bec-a63b-16e5dd735492] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 946515
+2026-10-28T16:51:47.895Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [7c222b49-741d-4b38-9ff6-330f5a0304ec] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 002626
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:48.722Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [7375432f-56d6-4804-822f-0c68edc4f3f8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****30: 697347
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:49.644Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 6; retry in PT32S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: GET /api/rider/v1/orders/be390f55-692f-4ee0-950d-728d292040f2 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/be390f55-692f-4ee0-950d-728d292040f2/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:52.171Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-3] [44e04694-2321-460a-8dcb-3bdf07c602bc] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****83: 121009
+AppVersionInterceptor: POST /api/rider/v1/me/data-exports/challenge checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:51:54.742Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [99ed1a03-d31b-4fd2-ac61-6661efd9acf3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****83: 446317
+AppVersionInterceptor: POST /api/rider/v1/me/data-exports checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf/file checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:05.679Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-4] [f1b0b53d-1a0d-4bf2-b75c-ede2f7d275b4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****31: 936975
+AppVersionInterceptor: GET /api/rider/v1/me/data-exports/fe255673-aa9b-405b-a8e6-dfb70dae2daf/file checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:07.585Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-6] [c4bd3b04-b82e-49c6-95eb-fb94b80c4555] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 757522
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:08.389Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [c86c0493-dc52-4e4c-8af6-257a5928ab78] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 709932
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:09.473Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [fdb4e5bf-9b5b-4349-97d3-f2c4f9c237a9] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 159465
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/58485797-bc76-4dc6-9044-4b8d337aadbe/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/58485797-bc76-4dc6-9044-4b8d337aadbe/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:11.977Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [cc7b9056-55bc-4cb8-b838-03dae9f0e172] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****01: 993110
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/c6469818-7fe0-459e-8797-afbfd30035d7/reject checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/fe16ea4b-494e-4585-9842-5cce031b5e67/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/14bb03fd-20e5-4d33-87dc-39a298d17439/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/58485797-bc76-4dc6-9044-4b8d337aadbe/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:16.181Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [80d05bdd-867d-4baa-a30d-39d6bcbdaa4d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 247985
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:17.271Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [0438e809-de9b-4447-b457-eca225c72ec1] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****92: 590523
+AppVersionInterceptor: GET /api/rider/v1/vehicle-classes checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/push-devices checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/push-devices checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/a0c0c9d8-8b4c-49d4-a08c-a099e0c6dc14/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:20.259Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T16:52:20.263Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] rider.driver-assigned — Водитель найден: Машина едет к вам
+AppVersionInterceptor: POST /api/rider/v1/orders/b77f60e7-4080-462f-ae69-2d58a8b449e8/messages checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/93d1a3a0-64cc-4e82-914a-e305994e7111/messages checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/b77f60e7-4080-462f-ae69-2d58a8b449e8/call checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:21.800Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 7; retry in PT1M4S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+AppVersionInterceptor: GET /api/driver/v1/trips/93d1a3a0-64cc-4e82-914a-e305994e7111/call checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/93d1a3a0-64cc-4e82-914a-e305994e7111/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/93d1a3a0-64cc-4e82-914a-e305994e7111/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:23.269Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] rider.driver-arrived — Водитель на месте: Машина ждёт вас
+AppVersionInterceptor: POST /api/driver/v1/trips/93d1a3a0-64cc-4e82-914a-e305994e7111/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/b77f60e7-4080-462f-ae69-2d58a8b449e8 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:24.273Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] rider.trip-completed — Поездка завершена: Спасибо, что выбрали нас
+AppVersionInterceptor: GET /api/driver/v1/trips checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/earnings checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/b77f60e7-4080-462f-ae69-2d58a8b449e8/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/b77f60e7-4080-462f-ae69-2d58a8b449e8/tip checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:34.292Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T16:52:34.981Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [be175aba-de3c-4c50-af61-89df2ddd9ae4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 943731
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:36.321Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-4] [b681c1c2-d4d7-40b1-8078-87e64dc51baa] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****86: 076883
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/e5e09216-3a81-4b04-b706-bbadb7d0cb52/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:38.300Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+AppVersionInterceptor: POST /api/driver/v1/trips/adabf790-b46f-49ce-9ae4-bb8ebf0aeaf9/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/adabf790-b46f-49ce-9ae4-bb8ebf0aeaf9/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:39.326Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-6] [09a69251-a6fe-4359-b94a-0c20096088d8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 185732
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/23c02e6a-ecee-41c1-8697-ebae550030af/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/b59d9cbd-ee49-40ed-923b-696f3497a834/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/ab6928a4-86ac-4564-97d1-62e336ca2e5b/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/ab6928a4-86ac-4564-97d1-62e336ca2e5b/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/ab6928a4-86ac-4564-97d1-62e336ca2e5b/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:49.524Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [eff72b79-0a26-41c5-961b-0eefdc42a47b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****72: 114557
+AppVersionInterceptor: GET /api/rider/v1/legal checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/legal/acceptances checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/ca19e607-d3c1-488c-9a4a-967459e4568f checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/ca19e607-d3c1-488c-9a4a-967459e4568f/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:53.079Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-4] [ca1ec43d-f76f-4934-a95c-9e29e26d7e7f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 169320
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/b59d9cbd-ee49-40ed-923b-696f3497a834/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/b59d9cbd-ee49-40ed-923b-696f3497a834/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:52:54.437Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [b5eaec65-9aa2-4f35-a44d-7d0a32ab06f4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****48: 510518
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/6354ab45-469f-47eb-a586-38a12ae35807/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/active checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/442e95a5-2be7-4dd4-9f47-8d10369c6024 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/442e95a5-2be7-4dd4-9f47-8d10369c6024/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/073c7f63-2ceb-454f-b48b-60249bca611b checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/073c7f63-2ceb-454f-b48b-60249bca611b/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/orders/a6e531b9-9ee6-446d-9c57-e8114039eb49 checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/a6e531b9-9ee6-446d-9c57-e8114039eb49/cancel checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/b59d9cbd-ee49-40ed-923b-696f3497a834/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:01.905Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-6] [439b8238-afa4-4091-a7ac-bf7e84bfc14b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 921597
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/0c5f006d-1517-4030-b1ba-a719d10212d9/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:05.359Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/142b8af6-215d-4d40-b0fd-2ed41f9bccb2/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/142b8af6-215d-4d40-b0fd-2ed41f9bccb2/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/142b8af6-215d-4d40-b0fd-2ed41f9bccb2/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:07.364Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/4b1f0f79-040b-4bf3-87e2-786ee0d1ff05/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:10.539Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-6] [007a401b-39c8-4b89-bedb-c9ddcc26dbe5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****27: 618144
+2026-10-28T16:53:10.828Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [fb8fa304-6ea5-4555-a8b8-1e47d035e7fd] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****28: 399394
+2026-10-28T16:53:11.116Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-7] [5f5ae09a-7869-4af5-b44f-9d53cfcb9e63] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****00: 610116
+2026-10-28T16:53:11.983Z  WARN 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [92af38ad-987f-4f64-9a9a-54f18e20eebc] .s.b.m.m.MaximumAllowableTagsMeterFilter : Reached the maximum number of 'uri' tags for 'http.server.requests'.
+2026-10-28T16:53:26.209Z  WARN 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.blizz.platform.internal.OutboxRelay    : Outbox event 4df0ccae-af2d-4e77-8057-f3fa9171fd4b (CardPaymentSettled) failed, attempt 8; retry in PT2M8S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T16:53:26.471Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-4] [9201b73f-25bd-4007-b149-47f7e9c4d23c] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 972237
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:29.265Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [58e1c1ea-2b7b-46a8-9a64-ee3a078641fd] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 720435
+AppVersionInterceptor: POST /api/rider/v1/me/phone-change/current-code checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:31.837Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-6] [45f91be0-98c1-4584-8d43-f2e61aa9017b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 060733
+AppVersionInterceptor: POST /api/rider/v1/me/phone-change/new-code checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:32.122Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [34161a30-147f-48bf-81a7-b7b1c106612b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****55: 352370
+AppVersionInterceptor: POST /api/rider/v1/me/phone-change checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/me/phone-change checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:35.448Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-4] [dae89248-ba9e-4348-bd58-c7a3c637153a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****55: 099118
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:37.925Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [e989941b-dbbc-4ba0-aa68-0bf993bc7137] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****28: 798727
+AppVersionInterceptor: GET /api/rider/v1/me checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:38.732Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-9] [da490c12-8ce2-4510-bfc5-5d58d8e43a38] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****46: 151263
+AppVersionInterceptor: GET /api/rider/v1/places checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/places/reverse checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/places checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:42.038Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [6dbc89b0-e4f6-49fa-a83c-e1c0af6d117b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****50: 437649
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:43.124Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [92999d86-9f75-4f18-bea3-adfa1656a1ae] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 215856
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/preorders checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/preorders/2b8f066e-2d4b-4a24-b38d-9bbb269b90c6/reserve checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/preorders/reservations checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/preorders/reservations checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/preorders/reservations/b49c49ef-f402-482c-a693-d35b084136d5/confirm checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:46.631Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-8] [fc39e5b4-6288-4a9f-b383-fec7a75175b8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 103958
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:47.688Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-8] [26fdc12c-82b9-4e1f-af0e-769b1b4ee258] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****53: 016622
+AppVersionInterceptor: POST /api/rider/v1/quotes checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/ad98ee9d-f99f-4fe3-9fd8-f69dce8e12bf/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:53:49.420Z  INFO 3069 --- [blizz-taxi-server] [   scheduling-1] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/ce66f2b1-71ee-4db2-b057-08709f8c15a4/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9ebb1fb8-2ee8-425f-8390-a7034f533a07/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9ebb1fb8-2ee8-425f-8390-a7034f533a07/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/ce66f2b1-71ee-4db2-b057-08709f8c15a4/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/9ebb1fb8-2ee8-425f-8390-a7034f533a07/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/orders/01ad8e66-7db0-4ff4-b8bc-1dd4d0611650/rating checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/orders/01ad8e66-7db0-4ff4-b8bc-1dd4d0611650/rating checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/me/rating checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:01.687Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [d3e194c8-72b8-43d0-93d9-2e65df7065f4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 710095
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/location-batches checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/1ab16cc1-4ccf-4002-a7e4-641446b50fde/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:11.151Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-1] [475cb9db-38a2-46eb-ae10-0b9ee67ac48a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +484*****79: 927135
+AppVersionInterceptor: GET /api/rider/v1/safety-contacts checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/safety-contacts checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:12.209Z  INFO 3069 --- [blizz-taxi-server] [io-8080-exec-10] [4fb463d6-1970-412c-915f-5506d9c12a64] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 785209
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/75b6bd9c-fa90-4492-b434-9a7f2576db40/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/75b6bd9c-fa90-4492-b434-9a7f2576db40/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/safety-contacts checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/75b6bd9c-fa90-4492-b434-9a7f2576db40/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/safety-contacts checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:14.595Z  INFO 3069 --- [blizz-taxi-server] [io-8080-exec-10] [a82896ef-daa0-4375-8e08-1c5cbb025843] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****62: 419722
+AppVersionInterceptor: POST /api/rider/v1/support/uploads checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: PUT /api/rider/v1/uploads/69bf6596-3c27-4a83-8464-4b2028476fcb checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/rider/v1/support/cases checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/support/cases/87992c64-e485-4d45-80ab-f79851bfb09a checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/rider/v1/support/cases/87992c64-e485-4d45-80ab-f79851bfb09a/attachments/3ae0644d-bad0-4007-adcc-59916b002b4f checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:18.648Z  INFO 3069 --- [blizz-taxi-server] [io-8080-exec-10] [48a69268-2643-434e-b333-1c200765c14f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 065450
+AppVersionInterceptor: GET /api/driver/v1/profile checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+2026-10-28T16:54:19.984Z  INFO 3069 --- [blizz-taxi-server] [nio-8080-exec-2] [f7133e3a-199b-4664-8f0e-cf2e3268d3bf] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 145341
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/ce66f2b1-71ee-4db2-b057-08709f8c15a4/handover checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/ce66f2b1-71ee-4db2-b057-08709f8c15a4/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/offers checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/offers/1835db1d-7331-42eb-949c-62f521f4dd41/accept checked=true policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/trips/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/53a230c9-41ef-44e4-bdaa-4fe39269dbf3/heartbeat checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/c38d7f7b-aa39-4145-b3b0-18d58abb73db/arrive checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/c38d7f7b-aa39-4145-b3b0-18d58abb73db/start checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/trips/c38d7f7b-aa39-4145-b3b0-18d58abb73db/complete checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/balance checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/ce66f2b1-71ee-4db2-b057-08709f8c15a4/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: GET /api/driver/v1/work-sessions/current checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
+AppVersionInterceptor: POST /api/driver/v1/work-sessions/53a230c9-41ef-44e4-bdaa-4fe39269dbf3/close checked=false policy=PlatformVersions[minimumVersion=0.0.0, latestVersion=0.0.0]
