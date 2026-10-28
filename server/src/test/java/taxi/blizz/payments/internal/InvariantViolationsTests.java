@@ -16,6 +16,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -277,6 +279,7 @@ class InvariantViolationsTests {
     void i5CancelledOrderStillHasStandingAuthorizationAfterOneHour() {
         var order = heldOrder(riderWithCard());
         UUID intent = cards.intent(order.id()).orElseThrow().id();
+        drain(); // Consume authorization before the deliberate cancellation loses its release step.
         restore.add(() -> {
             tx.executeWithoutResult(status -> cards.releaseHold(order.id(), "INVARIANT_TEST_CLEANUP"));
             for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
@@ -292,6 +295,55 @@ class InvariantViolationsTests {
         assertThat(cards.intent(order.id()).orElseThrow().state()).isEqualTo("AUTHORIZED");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"OFFERED", "RESERVED", "WAITING", "ON_TRIP"})
+    void i2OtherOccupanciesWithoutTheirRequiredOfferOrAssignmentAreViolations(String occupancy) {
+        UUID id = rides.driverNear(PICKUP).actor().id();
+        jdbc.sql("update driver_capacity set occupancy=:occupancy,assignment_id=null where driver_id=:id")
+                .param("occupancy", occupancy).param("id", id).update();
+        restore.add(() -> jdbc.sql("update driver_capacity set occupancy='FREE',assignment_id=null,updated_at=now() where driver_id=:id")
+                .param("id", id).update());
+        ageData();
+        assertOneReport("operations", "I2", id);
+    }
+
+    @Test
+    void i2OpenPersonalOfferIsCleanWithoutACommittedAssignment() {
+        var driver = rides.driverNear(PICKUP);
+        var payer = rides.client();
+        var order = rides.order(payer, city, PICKUP, DROPOFF);
+        restore.add(() -> { orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND"); drain(); });
+        assertThat(dispatch.offers(driver.actor())).hasSize(1);
+        ageData();
+        scan("operations");
+        assertThat(gauge("I2")).isZero();
+        assertThat(gauge("I3")).isZero();
+    }
+
+    @Test
+    void i2ReservedCapacityNeedsItsMatchingReservedAssignment() {
+        var ride = rides.assigned(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        UUID assignment = jdbc.sql("select id from assignment where order_id=:id").param("id", ride.order().id()).query(UUID.class).single();
+        restore.add(() -> {
+            jdbc.sql("update assignment set state='COMMITTED' where id=:id").param("id", assignment).update();
+            jdbc.sql("update ride_order set status='ASSIGNED' where id=:id").param("id", ride.order().id()).update();
+            jdbc.sql("update driver_capacity set occupancy='TO_PICKUP',assignment_id=:assignment where driver_id=:id")
+                    .param("assignment", assignment).param("id", ride.driver().actor().id()).update();
+            orders.cancel(ride.payer(), UUID.randomUUID(), ride.order().id(), orders.get(ride.order().id()).version(), "CHANGED_MIND");
+            drain();
+        });
+        jdbc.sql("update assignment set state='RESERVED' where id=:id").param("id", assignment).update();
+        jdbc.sql("update ride_order set status='SEARCHING' where id=:id").param("id", ride.order().id()).update();
+        jdbc.sql("update driver_capacity set occupancy='RESERVED' where driver_id=:id").param("id", ride.driver().actor().id()).update();
+        ageData();
+        scan("operations");
+        assertThat(gauge("I2")).isZero();
+        assertThat(gauge("I3")).isZero();
+        jdbc.sql("update driver_capacity set assignment_id=:wrong where driver_id=:id")
+                .param("wrong", UUID.randomUUID()).param("id", ride.driver().actor().id()).update();
+        assertOneReport("operations", "I2", ride.driver().actor().id());
+    }
+
     @Test
     void anActiveRealRideHasOneCommittedAssignmentAndMatchingBusyCapacity() {
         var ride = rides.started(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
@@ -302,6 +354,130 @@ class InvariantViolationsTests {
         assertThat(gauge("I3")).isZero();
         assertThat(events("I2", ride.driver().actor().id())).isZero();
         assertThat(events("I3", ride.order().id())).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"FREE", "WRONG_ASSIGNMENT", "MISSING_CAPACITY"})
+    void i2CommittedRideNeedsItsCapacityRowAndMatchingBusyAssignment(String corruption) {
+        var ride = rides.started(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        UUID driver = ride.driver().actor().id();
+        UUID assignment = jdbc.sql("select id from assignment where order_id=:id").param("id", ride.order().id()).query(UUID.class).single();
+        long version = jdbc.sql("select version from driver_capacity where driver_id=:id").param("id", driver).query(Long.class).single();
+        restore.add(() -> {
+            jdbc.sql("""
+                    insert into driver_capacity(driver_id,occupancy,assignment_id,updated_at,version)
+                    values(:id,'ON_TRIP',:assignment,now(),:version) on conflict(driver_id) do update
+                    set occupancy='ON_TRIP',assignment_id=excluded.assignment_id,updated_at=now()
+                    """).param("id", driver).param("assignment", assignment).param("version", version).update();
+            rides.complete(ride, true);
+            drain();
+        });
+        if ("MISSING_CAPACITY".equals(corruption)) jdbc.sql("delete from driver_capacity where driver_id=:id").param("id", driver).update();
+        else jdbc.sql("update driver_capacity set occupancy=:occupancy,assignment_id=:assignment where driver_id=:id")
+                .param("occupancy", "FREE".equals(corruption) ? "FREE" : "ON_TRIP")
+                .param("assignment", "FREE".equals(corruption) ? null : UUID.randomUUID()).param("id", driver).update();
+        ageData();
+        assertOneReport("operations", "I2", driver);
+        assertThat(gauge("I3")).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"select deliberately_missing_column from ride_order", "select pg_sleep(10)"})
+    @SuppressWarnings("unchecked")
+    void actualOperationsQueryFailureOrTimeoutLeavesOtherChecksRunning(String sql) {
+        var scanner = context.getBean("operationsInvariants");
+        var queries = (java.util.Map<InvariantChecks.Check, java.util.function.Supplier<List<InvariantChecks.Violation>>>)
+                ReflectionTestUtils.getField(scanner, "checks");
+        var original = queries.get(InvariantChecks.Check.I2);
+        double before = meters.counter("blizz.invariant.failures", "check", "I2").count();
+        queries.put(InvariantChecks.Check.I2, () -> { jdbc.sql(sql).query().listOfRows(); return List.of(); });
+        try {
+            long start = System.nanoTime();
+            scan("operations");
+            assertThat(java.time.Duration.ofNanos(System.nanoTime() - start)).isLessThan(java.time.Duration.ofSeconds(9));
+            assertThat(gauge("I2")).isNaN();
+            assertThat(gauge("I3")).isZero();
+            assertThat(gauge("I5")).isZero();
+            assertThat(meters.counter("blizz.invariant.failures", "check", "I2").count()).isEqualTo(before + 1);
+        } finally { queries.put(InvariantChecks.Check.I2, original); }
+        scan("operations");
+        assertThat(gauge("I2")).isZero();
+    }
+
+    record CancelledHold(OrderView order, UUID intent) { }
+
+    CancelledHold cancelledHold() {
+        var order = heldOrder(riderWithCard());
+        UUID intent = cards.intent(order.id()).orElseThrow().id();
+        drain();
+        restore.add(() -> {
+            tx.executeWithoutResult(status -> cards.releaseHold(order.id(), "INVARIANT_TEST_CLEANUP"));
+            for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
+        });
+        jdbc.sql("update ride_order set status='CANCELLED' where id=:id").param("id", order.id()).update();
+        return new CancelledHold(order, intent);
+    }
+
+    void ageTerminalData() {
+        ageData();
+        jdbc.sql("update ride_order set updated_at=now()-interval '2 hours' where status in ('FULFILLED','CANCELLED','UNFULFILLED')").update();
+    }
+
+    UUID voidHold(CancelledHold hold) {
+        tx.executeWithoutResult(status -> cards.releaseHold(hold.order().id(), "INVARIANT_TEST_VOID"));
+        for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
+        assertThat(cards.intent(hold.order().id()).orElseThrow().state()).isEqualTo("VOIDED");
+        return jdbc.sql("select id from payment_operation where intent_id=:id and type='REFUND' and state='SUCCEEDED'")
+                .param("id", hold.intent()).query(UUID.class).single();
+    }
+
+    @Test
+    void i5OneHourTerminalGracePreventsTransientFalseAlarms() {
+        var hold = cancelledHold();
+        ageData();
+        jdbc.sql("update ride_order set updated_at=now()-interval '59 minutes' where id=:id").param("id", hold.order().id()).update();
+        scan("operations");
+        assertThat(gauge("I5")).isZero();
+        assertThat(events("I5", hold.intent())).isZero();
+        jdbc.sql("update ride_order set updated_at=now()-interval '61 minutes' where id=:id").param("id", hold.order().id()).update();
+        assertOneReport("operations", "I5", hold.intent());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SUCCEEDED", "PENDING", "UNKNOWN"})
+    void i5ClosedOrUnresolvedVoidBelongsOutsideStandingHoldCases(String state) {
+        var hold = cancelledHold();
+        UUID refund = voidHold(hold);
+        jdbc.sql("update payment_operation set state=:state where id=:id").param("state", state).param("id", refund).update();
+        restore.add(() -> jdbc.sql("update payment_operation set state='SUCCEEDED',updated_at=now() where id=:id").param("id", refund).update());
+        ageTerminalData();
+        scan("operations");
+        assertThat(gauge("I5")).isZero();
+        assertThat(events("I5", hold.intent())).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "UNKNOWN"})
+    void i5UnresolvedSettleIsHandledByThePaymentUnknownQueue(String state) {
+        var ride = completedCardRide(false);
+        UUID settle = jdbc.sql("select id from payment_operation where intent_id=:id and type='SETTLE' and state='SUCCEEDED'")
+                .param("id", ride.intent()).query(UUID.class).single();
+        jdbc.sql("update payment_operation set state=:state where id=:id").param("state", state).param("id", settle).update();
+        restore.add(() -> jdbc.sql("update payment_operation set state='SUCCEEDED',updated_at=now() where id=:id").param("id", settle).update());
+        ageTerminalData();
+        scan("operations");
+        assertThat(gauge("I5")).isZero();
+        assertThat(events("I5", ride.intent())).isZero();
+    }
+
+    @Test
+    void i5DeclinedVoidDoesNotCloseSuccessfulAuthorization() {
+        var hold = cancelledHold();
+        UUID refund = voidHold(hold);
+        jdbc.sql("update payment_operation set state='DECLINED' where id=:id").param("id", refund).update();
+        restore.add(() -> jdbc.sql("update payment_operation set state='SUCCEEDED',updated_at=now() where id=:id").param("id", refund).update());
+        ageTerminalData();
+        assertOneReport("operations", "I5", hold.intent());
     }
 
     @Test
@@ -431,7 +607,7 @@ class InvariantViolationsTests {
         assertThat(tips.options(card.rider(), card.order().id()).tip().state()).isEqualTo("PAID");
         assertThat(jdbc.sql("select count(*) from payment_operation where intent_id=:id and type='CHARGE' and state='SUCCEEDED'")
                 .param("id", card.intent()).query(Long.class).single()).isPositive();
-        ageData();
+        ageTerminalData();
         for (String owner : List.of("finance", "operations", "payments")) scan(owner);
         assertThat(gauge("I1")).isZero();
         assertThat(gauge("I2")).isZero();

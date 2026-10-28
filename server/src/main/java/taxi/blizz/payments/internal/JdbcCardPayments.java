@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -132,6 +133,22 @@ class JdbcCardPayments implements CardPayments {
     @Override
     public void processNow(UUID orderId) {
         worker.processOrder(orderId);
+    }
+
+    @Override
+    public List<StandingHold> standingHoldsOlderThan(OffsetDateTime changedBefore) {
+        return jdbc.sql("""
+                select distinct i.id,i.order_id from payment_intent i
+                join payment_operation a on a.intent_id=i.id and a.type='AUTH' and a.state='SUCCEEDED'
+                where i.hold_minor>0 and greatest(i.updated_at,a.updated_at)<:before
+                  and not exists (
+                    select 1 from payment_operation c where c.intent_id=i.id and c.type in ('SETTLE','REFUND')
+                      and c.target=a.reference and c.state in ('SUCCEEDED','PENDING','UNKNOWN'))
+                  and not exists (
+                    select 1 from payment_operation recent where recent.intent_id=i.id
+                      and recent.type in ('AUTH','SETTLE','REFUND') and recent.updated_at>=:before)
+                """).param("before", changedBefore)
+                .query((rs, n) -> new StandingHold(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class))).list();
     }
 
     @Override

@@ -6,6 +6,12 @@ spring:
     username: ${DB_USER:blizz}
     password: ${DB_PASSWORD:blizz-sandbox}
 blizz:
+  finance:
+    invariants:
+      interval: PT5S
+  operations:
+    invariants:
+      interval: PT5S
   telephony:
     # Codes are kept for /sandbox/v1/otp; an SMS to a number ending in 0000 is refused, to show the fallback.
     otp-provider: FAKE
@@ -28,6 +34,8 @@ blizz:
     # Sandbox only: the keys typed into its panel protect nothing real.
     master-key: ${SECRETS_MASTER_KEY:BTafAxut8u7D3rruCvQv3xUre9M69sCDmY0XHITZGJA=}
   payments:
+    invariants:
+      interval: PT5S
     fake-merchants-allowed: true
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
     secrets:

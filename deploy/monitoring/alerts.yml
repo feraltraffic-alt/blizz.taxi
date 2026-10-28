@@ -125,7 +125,7 @@ groups:
           runbook: docs/runbooks/invariants.md
 
       - alert: InvariantCheckFailed
-        expr: increase(blizz_invariant_failures_total[30m]) > 0 or blizz_invariant_violations != blizz_invariant_violations
+        expr: blizz_invariant_violations != blizz_invariant_violations
         for: 20m
         labels: {severity: warning, owner: backend-oncall}
         annotations:

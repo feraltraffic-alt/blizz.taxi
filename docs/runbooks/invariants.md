@@ -17,10 +17,10 @@ the interval to five seconds; the two-minute settling margin is unchanged.
 | Check | Meaning and investigation |
 | --- | --- |
 | I1 | Finance journal posting: compare debit/credit totals in its currency and check for missing journal lines. Inspect the posting's business key and originating finance event. |
-| I2 | Operations driver capacity disagrees with its assignment. Inspect occupancy, assignment id, assignment state and any outstanding offer before changing availability. |
+| I2 | Operations driver capacity disagrees with its assignment. FREE needs zero COMMITTED assignments and no assignment id; OFFERED additionally needs an OPEN offer; RESERVED needs its matching RESERVED assignment. TO_PICKUP, WAITING and ON_TRIP need exactly one COMMITTED assignment with the matching capacity assignment id. Inspect those rows before changing availability. |
 | I3 | Operations order has the wrong number of COMMITTED assignments. ASSIGNED and IN_SERVICE require exactly one; SCHEDULED, AWAITING_PAYMENT, READY, SEARCHING, FULFILLED, CANCELLED and UNFULFILLED require none. RESERVED is not COMMITTED. |
 | I4 | Payments PAID intent does not match SUCCEEDED SETTLE/CHARGE amounts, or a SETTLE exceeds its authorization. TIP is separate, bonus-only zero-card-leg intents need no capture, and above-hold CHARGE is legitimate. Inspect provider references and reconciled operations before retrying; never charge again merely to clear this alert. |
-| I5 | A terminal order's authorization is still standing after one hour. Inspect AUTH and its matching SETTLE/REFUND operations and provider reconciliation. |
+| I5 | A FULFILLED, CANCELLED or UNFULFILLED order's authorization is still standing after one hour. Operations queries its orders through identifiers supplied by the read-only CardPayments API; payments reads only its own tables. A SUCCEEDED SETTLE/REFUND targeting the AUTH closes it; PENDING/UNKNOWN is handled by UnknownPayments, not this check. A separate CHARGE is not an authorization. Inspect AUTH and its target references before taking action. |
 
 For an alert, open the OTHER/HIGH problem case whose source key is
 `invariant:<check>:<object_id>`. The case and `InvariantViolated` event contain
