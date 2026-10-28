@@ -165,8 +165,9 @@ class CityOperationsTests {
         assertThat(resumed.version()).isEqualTo(2);
         assertThat(jdbc.sql("""
                         select count(*) from audit_log where resource_type = 'city' and resource_id = :city
-                          and action in ('city.operations.pause', 'city.operations.resume')""")
-                .param("city", cityId.toString()).query(Long.class).single()).isEqualTo(2);
+                          and actor_id = :admin and action in ('city.operations.pause', 'city.operations.resume')""")
+                .param("city", cityId.toString()).param("admin", admin.id()).query(Long.class).single())
+                .as("other tests of this class pause the same city with their own staff").isEqualTo(2);
     }
 
     @Test
