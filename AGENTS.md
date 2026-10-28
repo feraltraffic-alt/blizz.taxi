@@ -53,6 +53,9 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - A phone number without `+` or `00` is never given a country by guessing (`512345678` is a Polish national number, not `+512…`): only a full number of a known market (`380` + 9 digits, `48` + 9 digits) may get the `+`; anything else stays raw.
 - A `timestamptz` read without a type (`query().singleRow()`, `listOfRows()`) comes back as `java.sql.Timestamp`, not `OffsetDateTime`: compare times in SQL, or read them with `rs.getObject(…, OffsetDateTime.class)`.
 - Before naming a new class, search for `class|interface|record|enum Name` across the code, not only `class Name`: an interface of the same simple name in another package (`operations.OrderCalls`) is easy to miss.
+- An address staff type in the admin panel that the server connects to goes through `platform.OutboundAddresses.check` on save and again before connecting (REQ-SEC-05); never `URI.create` of an admin value straight into an HTTP client.
+- Never log a phone number, token, one-time code, card data or a precise position. `LogRedaction` in the log layout is a safety net, not a permission: write the log line without them.
+- A new action a rider or driver can repeat cheaply but that costs us (a provider call, a file, a write) gets a `platform.RateLimits` bucket, counted per account, never per IP.
 
 ## Trying the system by hand
 
