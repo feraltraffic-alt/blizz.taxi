@@ -84,6 +84,11 @@ class OtpDeliveryTests {
             assertThat(meters.get("blizz.sms.sent").tags("purpose", "OTP", "state", state.name()).counter().count())
                     .isEqualTo(before + 1);
         }
+        double beforeVoice = meters.find("blizz.sms.sent").tag("purpose", "OTP").counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count).sum();
+        otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null, OtpChannel.VOICE);
+        assertThat(meters.find("blizz.sms.sent").tag("purpose", "OTP").counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count).sum()).isEqualTo(beforeVoice);
     }
 
     Actor keys;

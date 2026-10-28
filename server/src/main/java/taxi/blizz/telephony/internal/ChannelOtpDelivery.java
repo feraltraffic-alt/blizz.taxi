@@ -12,11 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.configuration.Integrations;
 import taxi.blizz.identity.OtpAudience;
 import taxi.blizz.identity.OtpChannel;
 import taxi.blizz.identity.OtpDelivery;
 import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.platform.CommittedMetrics;
 
 /**
  * Sends a one-time code (ADR 0012 Q-18): first by the channel the person asked for ("call me instead"), else by the
@@ -35,9 +38,11 @@ class ChannelOtpDelivery implements OtpDelivery {
     private final Integrations integrations;
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final CommittedMetrics metrics;
 
     ChannelOtpDelivery(List<OtpSender> live, FakeOtpSender fake, TelephonyProperties properties,
-                       Integrations integrations, JdbcClient jdbc, Clock clock) {
+                       Integrations integrations, JdbcClient jdbc, Clock clock, CommittedMetrics metrics) {
+        this.metrics = metrics;
         this.live = live;
         this.fake = fake;
         this.properties = properties;
@@ -47,11 +52,13 @@ class ChannelOtpDelivery implements OtpDelivery {
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void send(PhoneNumber phone, String code, OtpAudience audience) {
         send(null, phone, code, audience, null);
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void send(UUID challengeId, PhoneNumber phone, String code, OtpAudience audience, OtpChannel preferred) {
         for (OtpChannel channel : order(preferred)) {
             OtpSender sender = sender(channel);
@@ -62,6 +69,9 @@ class ChannelOtpDelivery implements OtpDelivery {
                 result = OtpSender.Result.unknown(e.getClass().getSimpleName());
             }
             record(challengeId, phone, audience, sender, result);
+            if (channel == OtpChannel.SMS) {
+                metrics.counter("blizz.sms.sent", "purpose", "OTP", "state", result.state().name());
+            }
             if (result.state() == OtpSender.State.SENT) {
                 return;
             }

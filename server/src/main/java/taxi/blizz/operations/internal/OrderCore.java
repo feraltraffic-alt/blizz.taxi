@@ -39,9 +39,11 @@ class OrderCore {
     private final PresenceProperties presence;
     private final Clock clock;
     private final CardPayments payments;
+    private final OrderMetrics metrics;
 
     OrderCore(JdbcClient jdbc, Outbox outbox, JsonMapper json, DispatchProperties properties,
-              PresenceProperties presence, Clock clock, CardPayments payments) {
+              PresenceProperties presence, Clock clock, CardPayments payments, OrderMetrics metrics) {
+        this.metrics = metrics;
         this.payments = payments;
         this.jdbc = jdbc;
         this.outbox = outbox;
@@ -129,6 +131,7 @@ class OrderCore {
                 .param("correlation", taxi.blizz.platform.CorrelationId.currentOrNew())
                 .update();
         outbox.publish(new OutboxEvent(type, 1, "Order", orderId, version, body));
+        metrics.event(orderId, type, payload);
     }
 
     /** Bumps the order version for a change that keeps the status (e.g. a new offer). */
@@ -226,6 +229,7 @@ class OrderCore {
                 .query(UUID.class)
                 .list();
         for (UUID driverId : drivers) {
+            metrics.offer(state);
             lockCapacity(driverId);
             jdbc.sql("""
                             update driver_capacity set occupancy = 'FREE', updated_at = :now, version = version + 1
@@ -308,6 +312,7 @@ class OrderCore {
                         where id = :id""")
                 .param("by", by).param("code", reason.code())
                 .param("labels", json.writeValueAsString(reason.labels())).param("id", order.id()).update();
+        metrics.cancelled(by, reason.code());
         return version;
     }
 

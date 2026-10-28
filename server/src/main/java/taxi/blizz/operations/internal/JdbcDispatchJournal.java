@@ -36,9 +36,11 @@ class JdbcDispatchJournal implements DispatchJournal {
     private final DispatchProperties properties;
     private final JsonMapper json;
     private final Clock clock;
+    private final OrderMetrics metrics;
 
     JdbcDispatchJournal(JdbcClient jdbc, StaffAccess staff, DispatchProperties properties, JsonMapper json,
-                        Clock clock) {
+                        Clock clock, OrderMetrics metrics) {
+        this.metrics = metrics;
         this.jdbc = jdbc;
         this.staff = staff;
         this.properties = properties;
@@ -58,6 +60,7 @@ class JdbcDispatchJournal implements DispatchJournal {
                     : c.driverId().equals(offered) ? "OFFERED" : "ELIGIBLE");
             candidate.put("reason", c.reason());
             candidates.add(candidate);
+            if (c.reason() != null) metrics.excluded(c.reason());
         }
         jdbc.sql("""
                         insert into dispatch_round (id, order_id, attempt_id, phase, radius_m, at, candidates)

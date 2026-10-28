@@ -67,6 +67,10 @@ class OrderMetricsTests {
         var t = meters.find(name).tags(tags).timer();
         return t == null ? 0 : t.count();
     }
+    double seconds(String name, String... tags) {
+        var t = meters.find(name).tags(tags).timer();
+        return t == null ? 0 : t.totalTime(TimeUnit.SECONDS);
+    }
     void rollback(Runnable action) {
         tx.executeWithoutResult(status -> { action.run(); status.setRollbackOnly(); });
     }
@@ -208,6 +212,7 @@ class OrderMetricsTests {
             jdbc.sql("update dispatch_attempt set created_at = now() - interval '10 seconds' where order_id = :id")
                     .param("id", order.id()).update();
             long before = timer("blizz.dispatch.assigned", "source", source);
+            double elapsed = seconds("blizz.dispatch.assigned", "source", source);
             double accepted = counter("blizz.offers", "outcome", "ACCEPTED");
             Runnable assign = () -> {
                 if (offer != null) dispatch.accept(d.actor(), command, offer);
@@ -218,7 +223,7 @@ class OrderMetricsTests {
             assertThat(counter("blizz.offers", "outcome", "ACCEPTED")).isEqualTo(accepted);
             assign.run();
             assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before + 1);
-            assertThat(meters.get("blizz.dispatch.assigned").tag("source", source).timer().max(TimeUnit.SECONDS))
+            assertThat(seconds("blizz.dispatch.assigned", "source", source) - elapsed)
                     .isBetween(9.0, 30.0);
             assign.run();
             assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before + 1);
@@ -236,11 +241,12 @@ class OrderMetricsTests {
         rides.driverNear(PICKUP);
         rides.driverNear(PICKUP);
         long before = timer("blizz.dispatch.first_offer");
+        double elapsed = seconds("blizz.dispatch.first_offer");
         rollback(() -> { worker.runOnce(); assertThat(timer("blizz.dispatch.first_offer")).isEqualTo(before); });
         assertThat(timer("blizz.dispatch.first_offer")).isEqualTo(before);
         worker.runOnce();
         assertThat(timer("blizz.dispatch.first_offer")).isEqualTo(before + 1);
-        assertThat(meters.get("blizz.dispatch.first_offer").timer().max(TimeUnit.SECONDS)).isBetween(9.0, 30.0);
+        assertThat(seconds("blizz.dispatch.first_offer") - elapsed).isBetween(9.0, 30.0);
         jdbc.sql("update offer set expires_at = now() - interval '1 second' where order_id = :id")
                 .param("id", order.id()).update();
         jdbc.sql("update dispatch_attempt set next_action_at = now() where order_id = :id")

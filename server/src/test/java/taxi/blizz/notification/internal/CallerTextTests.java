@@ -60,6 +60,7 @@ class CallerTextTests {
     JdbcClient jdbc;
 
     @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     taxi.blizz.telephony.TextMessages provider;
 
@@ -77,6 +78,15 @@ class CallerTextTests {
             TestRides.Driver driver = online();
             phoneOrder(phone("+38067", ending));
             accept(driver);
+            while (relay.runOnce() > 0) { /* queue the SMS without sending it */ }
+            tx.executeWithoutResult(status -> {
+                sms.runOnce();
+                var pending = meters.find("blizz.sms.sent").tags("purpose", "CALLER", "state", state).counter();
+                assertThat(pending == null ? 0 : pending.count()).isEqualTo(before);
+                status.setRollbackOnly();
+            });
+            var rolledBack = meters.find("blizz.sms.sent").tags("purpose", "CALLER", "state", state).counter();
+            assertThat(rolledBack == null ? 0 : rolledBack.count()).isEqualTo(before);
             drain();
             assertThat(meters.get("blizz.sms.sent").tags("purpose", "CALLER", "state", state).counter().count())
                     .isEqualTo(before + 1);

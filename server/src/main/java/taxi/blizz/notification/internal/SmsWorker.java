@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.platform.CommittedMetrics;
 import taxi.blizz.operations.Orders;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
@@ -35,9 +36,11 @@ class SmsWorker {
     private final Orders orders;
     private final Outbox outbox;
     private final Clock clock;
+    private final CommittedMetrics metrics;
 
     SmsWorker(JdbcClient jdbc, TransactionTemplate tx, TextMessages texts, Orders orders, Outbox outbox,
-              Clock clock) {
+              Clock clock, CommittedMetrics metrics) {
+        this.metrics = metrics;
         this.jdbc = jdbc;
         this.tx = tx;
         this.texts = texts;
@@ -95,22 +98,25 @@ class SmsWorker {
             return;
         }
         TextMessages.Result result = texts.send(new PhoneNumber(phone), sms.body());
-        switch (result.state()) {
-            case SENT -> finish(sms.id(), "SENT", null, now);
-            case UNKNOWN -> finish(sms.id(), "SENT", "No answer from the provider: " + result.error(), now);
-            case FAILED -> {
-                OffsetDateTime next = now.plus(PushWorker.backoff(sms.attempts()));
-                if (sms.attempts() >= PushWorker.MAX_ATTEMPTS || !next.isBefore(sms.deadline())) {
-                    giveUp(sms, "FAILED", result.error());
-                } else {
-                    jdbc.sql("""
-                                    update notification set state = 'PENDING', next_attempt_at = :next,
-                                                            lease_until = null, last_error = :error
-                                    where id = :id and state = 'SENDING'""")
-                            .param("next", next).param("error", result.error()).param("id", sms.id()).update();
+        tx.executeWithoutResult(status -> {
+            metrics.counter("blizz.sms.sent", "purpose", "CALLER", "state", result.state().name());
+            switch (result.state()) {
+                case SENT -> finish(sms.id(), "SENT", null, now);
+                case UNKNOWN -> finish(sms.id(), "SENT", "No answer from the provider: " + result.error(), now);
+                case FAILED -> {
+                    OffsetDateTime next = now.plus(PushWorker.backoff(sms.attempts()));
+                    if (sms.attempts() >= PushWorker.MAX_ATTEMPTS || !next.isBefore(sms.deadline())) {
+                        giveUp(sms, "FAILED", result.error());
+                    } else {
+                        jdbc.sql("""
+                                        update notification set state = 'PENDING', next_attempt_at = :next,
+                                                                lease_until = null, last_error = :error
+                                        where id = :id and state = 'SENDING'""")
+                                .param("next", next).param("error", result.error()).param("id", sms.id()).update();
+                    }
                 }
             }
-        }
+        });
     }
 
     /** Ends the SMS unsent and, once, tells the dispatchers (REQ-NTF-08). */

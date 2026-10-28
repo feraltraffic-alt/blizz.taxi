@@ -2,6 +2,22 @@
 
 **Алерты:** `OrdersWaitingLong` (заказ ищет машину дольше 15 минут), `DriversLosingGps` (у больше чем половины водителей на линии нет свежей позиции).
 
+## Метрики событий (REQ-OBS-02)
+
+`OrdersUnfulfilledRate`: `sum(rate(blizz_orders_unfulfilled_total[5m])) / clamp_min(sum(rate(blizz_orders_created_total[5m])), 1e-9) > 0.2` непрерывно 15 минут. Это отношение потоков событий, не доля одной когорты заказов: завершения поиска могут относиться к заказам из предыдущего окна.
+
+На management-порту `/actuator/prometheus`:
+
+- `blizz_orders_created_total{channel,preorder}` — APP/WEB/PHONE, `preorder=true/false`.
+- `blizz_orders_cancelled_total{by,reason}` — RIDER/STAFF/DRIVER; исходные коды каталога, новые коды сведены в OTHER.
+- `blizz_orders_unfulfilled_total` — поиск завершился без машины.
+- `blizz_dispatch_first_offer_seconds_count/sum` — первое предложение за всё время заказа, от первого начала поиска.
+- `blizz_dispatch_assigned_seconds_count/sum{source}` — назначение OFFER/BROADCAST/RESERVATION от первого начала поиска, включая повторный поиск. Для резерва без поиска длительность нулевая, ожидание времени предзаказа не входит.
+- `blizz_offers_total{outcome}` — ACCEPTED/DECLINED/EXPIRED/REVOKED, ровно одно завершение каждого предложения.
+- `blizz_dispatch_excluded_total{reason}` — исключения кандидатов в раунде журнала: STALE_LOCATION, PAUSED, NOT_ADMITTED, CLASS, PAYMENT, RESTRICTED, PREVIOUS_DRIVER, ALREADY_OFFERED, BUSY, TOO_FAR.
+
+Счётчики и таймеры меняются после коммита; повтор `command_id` и откат их не меняют. Это метрики процесса: после рестарта начинаются заново, для графиков используйте `rate`/`increase`. Рост EXPIRED и времени первого предложения при свежих GPS — повод проверить доставку предложений; рост PAUSED/BUSY — доступность водителей.
+
 ## Проверить
 
 - В панели оператора откройте карту машин на линии: статусы, свежесть позиций, `NO_SIGNAL`.
