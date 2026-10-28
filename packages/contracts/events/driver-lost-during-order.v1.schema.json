@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-lost-during-order.v1.schema.json",
+  "title": "DriverLostDuringOrder v1 payload",
+  "description": "Published by operations once per assignment when the driver of a taken order (to the pickup, waiting or riding) has sent no position for longer than the configured limit (REQ-OPS-06). Aggregate Order. backoffice opens one LOST_CONNECTION case: URGENT while riding, HIGH before. No position is sent, only when it was last seen.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assignment_id", "driver_id", "phase", "last_seen_at"],
+  "properties": {
+    "assignment_id": { "type": "string", "format": "uuid" },
+    "driver_id": { "type": "string", "format": "uuid" },
+    "phase": { "type": "string", "enum": ["TO_PICKUP", "WAITING", "IN_PROGRESS"] },
+    "last_seen_at": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "examples": [
+    {
+      "assignment_id": "7d000000-0000-4000-8000-000000000091",
+      "driver_id": "7e000000-0000-4000-8000-000000000091",
+      "phase": "IN_PROGRESS",
+      "last_seen_at": "2026-10-28T14:02:11Z"
+    }
+  ]
+}

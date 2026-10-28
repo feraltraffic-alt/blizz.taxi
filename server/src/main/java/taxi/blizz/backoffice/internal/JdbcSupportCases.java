@@ -34,7 +34,7 @@ class JdbcSupportCases implements SupportCases {
 
     private static final String SELECT = """
             select id, number, city_id, category, order_id, requester_type, requester_id, subject, priority, state,
-                   assigned_staff_id, resolution, version, created_at, updated_at
+                   assigned_staff_id, resolution, version, created_at, updated_at, respond_by
             from support_case
             """;
 
@@ -65,7 +65,7 @@ class JdbcSupportCases implements SupportCases {
     @Override
     public Case open(Actor requester, UUID commandId, Category category, UUID orderId, String subject, String message) {
         requireRequester(requester);
-        if (category == null || category == Category.TRIP_REVIEW) {
+        if (category == null || category.systemOnly()) {
             throw invalid("Choose a category");
         }
         String title = text(subject, 200, "A subject of 1 to 200 characters");
@@ -144,9 +144,12 @@ class JdbcSupportCases implements SupportCases {
                           and (cast(:assignee as uuid) is null or assigned_staff_id = :assignee)
                           and (not :unassigned or assigned_staff_id is null)
                           and (cast(:before as timestamptz) is null or created_at < :before)
-                        order by case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
+                          and (not :overdue or (state = 'OPEN' and respond_by < :now))
+                        order by case when :overdue then respond_by end,
+                                 case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
                                  created_at desc, id desc
                         limit :limit""")
+                .param("overdue", f.overdueOnly()).param("now", now())
                 .param("city", f.cityId()).param("state", f.state() == null ? null : f.state().name())
                 .param("priority", f.priority() == null ? null : f.priority().name())
                 .param("category", f.category() == null ? null : f.category().name())
@@ -329,9 +332,10 @@ class JdbcSupportCases implements SupportCases {
         OffsetDateTime now = now();
         jdbc.sql("""
                         insert into support_case (id, city_id, category, order_id, requester_type, requester_id, subject,
-                                                  priority, state, source_key, created_at, updated_at)
+                                                  priority, state, source_key, created_at, updated_at, respond_by)
                         values (:id, :city, :category, :order, :type, :requester, :subject, :priority, 'OPEN',
-                                :source, :now, :now)""")
+                                :source, :now, :now, :respondBy)""")
+                .param("respondBy", now.plus(respondWithin(priority)))
                 .param("id", id).param("city", cityId).param("category", category.name()).param("order", orderId)
                 .param("type", requesterType).param("requester", requesterId).param("subject", subject)
                 .param("priority", priority.name()).param("source", sourceKey).param("now", now).update();
@@ -352,9 +356,13 @@ class JdbcSupportCases implements SupportCases {
 
     private void update(UUID caseId, State state, UUID assignee, Priority priority, String resolution) {
         jdbc.sql("""
-                        update support_case set state = :state, assigned_staff_id = :assignee, priority = :priority,
+                        update support_case set state = :state, assigned_staff_id = :assignee,
+                                                respond_by = case when priority = :priority then respond_by
+                                                                  else created_at + cast(:within as interval) end,
+                                                priority = :priority,
                                                 resolution = :resolution, version = version + 1, updated_at = :now
                         where id = :id""")
+                .param("within", respondWithin(priority).toSeconds() + " seconds")
                 .param("state", state.name()).param("assignee", assignee).param("priority", priority.name())
                 .param("resolution", resolution).param("now", now()).param("id", caseId).update();
     }
@@ -457,7 +465,7 @@ class JdbcSupportCases implements SupportCases {
                 .toList();
         return new Case(c.id(), c.number(), c.cityId(), c.category(), c.orderId(), c.requesterType(), c.requesterId(),
                 c.subject(), c.priority(), c.state(), null, c.resolution(), c.version(), c.createdAt(), c.updatedAt(),
-                visible);
+                c.respondBy(), visible);
     }
 
     private OrderView ownOrder(Actor requester, UUID orderId) {
@@ -489,7 +497,17 @@ class JdbcSupportCases implements SupportCases {
                 Priority.valueOf(rs.getString("priority")), State.valueOf(rs.getString("state")),
                 rs.getObject("assigned_staff_id", UUID.class), rs.getString("resolution"), rs.getLong("version"),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class),
-                messages);
+                rs.getObject("respond_by", OffsetDateTime.class), messages);
+    }
+
+    /** How soon a case of the priority should be taken (REQ-OPS-06). */
+    static java.time.Duration respondWithin(Priority priority) {
+        return switch (priority) {
+            case URGENT -> java.time.Duration.ofMinutes(5);
+            case HIGH -> java.time.Duration.ofMinutes(15);
+            case NORMAL -> java.time.Duration.ofHours(4);
+            case LOW -> java.time.Duration.ofHours(24);
+        };
     }
 
     private static String text(String value, int max, String message) {

@@ -66,6 +66,8 @@ class CardCaptureTests {
     JdbcClient jdbc;
     @Autowired
     taxi.blizz.payments.PaymentOperations paymentOperations;
+    @Autowired
+    UnknownPayments unknown;
 
     TestRides rides;
     UUID cityId;
@@ -466,5 +468,57 @@ class CardCaptureTests {
         settlePayments();
         assertThat(orders.get(order.id()).paymentState()).isEqualTo("PAID");
         assertThat(clearingFor(order)).isEqualTo(clearing + 700);
+    }
+
+    private long systemCases(String sourceKey, String category) {
+        return jdbc.sql("""
+                        select count(*) from support_case
+                        where source_key = :key and category = :category and priority = 'HIGH'""")
+                .param("key", sourceKey).param("category", category).query(Long.class).single();
+    }
+
+    /** REQ-OPS-06: a card fare left partly unpaid is one case for the dispatchers; a paid one is none. */
+    @Test
+    void aCardFareLeftPartlyUnpaidBecomesOneCase() {
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        OrderView partly = heldOrder(riderWithCard());
+        declinedRest(partly, finance);
+        settlePayments();
+        assertThat(systemCases("card-debt:" + partly.id(), "PAYMENT")).isEqualTo(1);
+
+        OrderView paid = heldOrder(riderWithCard());
+        tx.executeWithoutResult(s -> internal.startCapture(paid.id(), paid.priceMinor(), "UAH"));
+        settlePayments();
+        assertThat(payments.intent(paid.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(systemCases("card-debt:" + paid.id(), "PAYMENT")).isZero();
+    }
+
+    /** REQ-OPS-06: an operation whose result stays unknown past the limit is reported once; a fresh one is not. */
+    @Test
+    void aResultStillUnknownAfterTheLimitIsReportedOnce() {
+        OrderView old = heldOrder(riderWithCard());
+        OrderView fresh = heldOrder(riderWithCard());
+        UUID oldAuth = operations(old, "AUTH").getFirst();
+        UUID freshAuth = operations(fresh, "AUTH").getFirst();
+        // The provider never answered (the state set directly: an answer cannot move a finished operation back).
+        jdbc.sql("""
+                        update payment_operation set state = 'UNKNOWN',
+                            created_at = case when id = :old then now() - interval '20 minutes' else now() end
+                        where id in (:old, :fresh)""")
+                .param("old", oldAuth).param("fresh", freshAuth).update();
+
+        while (unknown.report() > 0) {
+            // operations left unknown by other tests are reported too
+        }
+        assertThat(unknown.report()).as("nothing twice").isZero();
+        deliverEvents();
+
+        assertThat(systemCases("payment-unknown:" + oldAuth, "PAYMENT_UNKNOWN")).isEqualTo(1);
+        assertThat(systemCases("payment-unknown:" + freshAuth, "PAYMENT_UNKNOWN")).isZero();
+        assertThat(jdbc.sql("select count(*) from outbox where event_type = 'PaymentResultUnknown' and payload ->> 'operation_id' = :op")
+                .param("op", oldAuth.toString()).query(Long.class).single()).isEqualTo(1);
+        // Back to a finished state, so later tests' workers do not ask the fake provider about it.
+        jdbc.sql("update payment_operation set state = 'SUCCEEDED' where id in (:old, :fresh)")
+                .param("old", oldAuth).param("fresh", freshAuth).update();
     }
 }

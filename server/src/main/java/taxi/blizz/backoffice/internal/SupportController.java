@@ -92,10 +92,11 @@ class SupportController {
                 @RequestParam(required = false) SupportCases.Category category,
                 @RequestParam(name = "assigned_staff_id", required = false) UUID assignee,
                 @RequestParam(defaultValue = "false") boolean unassigned,
+                @RequestParam(defaultValue = "false") boolean overdue,
                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
                 @RequestParam(defaultValue = "50") int limit) {
         return new Cases(cases.queue(claims.actor(), new SupportCases.QueueFilter(cityId, state, priority, category,
-                assignee, unassigned, before, limit)));
+                assignee, unassigned, before, limit, overdue)));
     }
 
     @GetMapping({"/api/admin/v1/support/cases/{caseId}", "/api/operator/v1/support/cases/{caseId}"})

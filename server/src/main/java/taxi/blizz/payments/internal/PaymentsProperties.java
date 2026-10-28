@@ -18,6 +18,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param topUpMaxMinor      the largest card top-up, minor units
  * @param previousKeyWindow  after a merchant key change, how long notifications signed with the old key are still
  *                           accepted (REQ-SEC-09)
+ * @param unknownReportAfter an operation whose result is still unknown after this is reported, once, to the problem
+ *                           queue (REQ-OPS-06); it keeps being asked about all the same
  */
 @ConfigurationProperties("blizz.payments")
 record PaymentsProperties(
@@ -29,7 +31,8 @@ record PaymentsProperties(
         @DefaultValue("false") boolean fakeMerchantsAllowed,
         @DefaultValue("100") long topUpMinMinor,
         @DefaultValue("1000000") long topUpMaxMinor,
-        @DefaultValue("P3D") Duration previousKeyWindow) {
+        @DefaultValue("P3D") Duration previousKeyWindow,
+        @DefaultValue("PT15M") Duration unknownReportAfter) {
 
     PaymentsProperties {
         secrets = secrets == null ? Map.of() : Map.copyOf(secrets);

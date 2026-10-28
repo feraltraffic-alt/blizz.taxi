@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/payment-result-unknown.v1.schema.json",
+  "title": "PaymentResultUnknown v1 payload",
+  "description": "Published by payments once per card operation whose result the provider has still not given after the configured time (REQ-OPS-06). Aggregate PaymentIntent. The operation keeps being asked about; backoffice opens one PAYMENT_UNKNOWN case so nobody charges again by hand.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "operation_id", "type", "amount_minor", "currency"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "operation_id": { "type": "string", "format": "uuid" },
+    "type": { "type": "string", "enum": ["AUTH", "SETTLE", "CHARGE", "REFUND", "TIP"] },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+  },
+  "examples": [
+    {
+      "order_id": "7b000000-0000-4000-8000-000000000092",
+      "operation_id": "7f000000-0000-4000-8000-000000000092",
+      "type": "SETTLE",
+      "amount_minor": 15400,
+      "currency": "UAH"
+    }
+  ]
+}
