@@ -173,8 +173,42 @@ class JdbcServiceSettings implements ServiceSettings {
         if (orders.activePerPayer() < 1 || orders.activePerPayer() > 10) {
             throw invalid("Orders: active_per_payer must be between 1 and 10");
         }
+        ServiceSettings.AppVersions appVersions = s.appVersions();
+        if (appVersions != null) {
+            validatePlatform(appVersions.riderAndroid(), "rider_android");
+            validatePlatform(appVersions.riderIos(), "rider_ios");
+            validatePlatform(appVersions.driverAndroid(), "driver_android");
+            validatePlatform(appVersions.driverIos(), "driver_ios");
+        }
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders);
+                orders, appVersions);
+    }
+
+    private static void validatePlatform(ServiceSettings.PlatformVersions v, String name) {
+        if (v == null) {
+            return;
+        }
+        if (!VERSION.matcher(v.minimumVersion()).matches() || !VERSION.matcher(v.latestVersion()).matches()) {
+            throw invalid(name + ": versions must be MAJOR.MINOR.PATCH");
+        }
+        if (compareVersions(v.minimumVersion(), v.latestVersion()) > 0) {
+            throw invalid(name + ": minimum_version must not exceed latest_version");
+        }
+    }
+
+    private static final Pattern VERSION = Pattern.compile("^[0-9]+\\.[0-9]+\\.[0-9]+$");
+
+    static int compareVersions(String a, String b) {
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int ca = Integer.parseInt(pa[i]);
+            int cb = Integer.parseInt(pb[i]);
+            if (ca != cb) {
+                return Integer.compare(ca, cb);
+            }
+        }
+        return 0;
     }
 
     /** Versions saved before a section existed get its defaults. */
@@ -183,7 +217,14 @@ class JdbcServiceSettings implements ServiceSettings {
         Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
         Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
         Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders);
+        ServiceSettings.AppVersions appVersions = s.appVersions() == null
+                ? new ServiceSettings.AppVersions(
+                        new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                        new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                        new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                        new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"), false)
+                : s.appVersions();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, appVersions);
     }
 
     private static String color(String value, boolean required) {

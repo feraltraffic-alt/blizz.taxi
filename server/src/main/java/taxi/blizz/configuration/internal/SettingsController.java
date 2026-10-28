@@ -68,7 +68,8 @@ class SettingsController {
     }
 
     record Bootstrap(long settingsVersion, ServiceSettings.Brand brand, ServiceSettings.Languages languages,
-                     PublicCalls calls, PublicPreorders preorders, PublicMaps maps, List<CityItem> cities) {
+                     PublicCalls calls, PublicPreorders preorders, PublicMaps maps, List<CityItem> cities,
+                     ServiceSettings.AppVersions appVersions) {
     }
 
     @GetMapping("/api/admin/v1/settings")
@@ -98,7 +99,7 @@ class SettingsController {
                         current.settings().preorders().maxDaysAhead()),
                 new PublicMaps(map(Integrations.MAPS_PROVIDER), map(Integrations.MAPS_ANDROID_KEY),
                         map(Integrations.MAPS_IOS_KEY), map(Integrations.MAPS_WEB_KEY)),
-                cityItems());
+                cityItems(), current.settings().appVersions());
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(1)).cachePublic()).body(body);
     }
 

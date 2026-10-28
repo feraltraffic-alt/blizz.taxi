@@ -52,6 +52,8 @@ public enum ErrorCode {
     PROVIDER_UNAVAILABLE(503),
     /** Wrong, expired, used or exhausted one-time code; deliberately not more specific. */
     OTP_INVALID(422),
+    /** The app build is below the minimum allowed for its platform (REQ-API-10). */
+    UPGRADE_REQUIRED(426),
     INTERNAL_ERROR(500);
 
     private final int httpStatus;
