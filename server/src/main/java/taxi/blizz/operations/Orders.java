@@ -48,6 +48,14 @@ public interface Orders {
     OrderView cancel(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reasonCode);
 
     /**
+     * A card order becomes a cash order before the trip ends (REQ-PAY-20, owner decision 28.10.2026): only the paying
+     * rider, or staff with {@link #CREATE_PERMISSION} in the order's city with a reason (the operator acts at the
+     * rider's request). The card hold is released at once; the card is never charged for this order. A hold whose
+     * result is not known yet is PAYMENT_UNKNOWN: try again once it is.
+     */
+    OrderView switchToCash(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reason);
+
+    /**
      * Takes the driver off an assigned order before the start, with a reason, and searches again
      * (REQ-OPS-05). Staff with {@link #REASSIGN_PERMISSION} for the order's city.
      */

@@ -180,6 +180,18 @@ class OperatorOrderController {
         return view(order);
     }
 
+    record SwitchToCashRequest(@NotNull UUID commandId, @NotNull @jakarta.validation.constraints.Min(0) Long expectedVersion,
+                               @NotBlank @Size(max = 500) String reason) {
+    }
+
+    /** At the rider's request (REQ-PAY-20); the reason says so. */
+    @PostMapping("/orders/{orderId}/switch-to-cash")
+    OperatorOrderView switchToCash(AccessClaims claims, @PathVariable UUID orderId,
+                                   @Valid @RequestBody SwitchToCashRequest body) {
+        return view(orders.switchToCash(claims.actor(), body.commandId(), orderId, body.expectedVersion(),
+                body.reason()));
+    }
+
     @PostMapping("/orders/{orderId}/cancel")
     OperatorOrderView cancel(AccessClaims claims, @PathVariable UUID orderId,
                              @Valid @RequestBody CancelRequest body) {

@@ -108,6 +108,15 @@ class RiderOrderController {
         return etas.with(order);
     }
 
+    record SwitchToCashRequest(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion) {
+    }
+
+    @PostMapping("/{orderId}/switch-to-cash")
+    OrderView switchToCash(AccessClaims claims, @PathVariable UUID orderId,
+                           @Valid @RequestBody SwitchToCashRequest body) {
+        return etas.with(orders.switchToCash(claims.actor(), body.commandId(), orderId, body.expectedVersion(), null));
+    }
+
     @PostMapping("/{orderId}/cancel")
     OrderView cancel(AccessClaims claims, @PathVariable UUID orderId, @Valid @RequestBody CancelRequest body) {
         return orders.cancel(claims.actor(), body.commandId(), orderId, body.expectedVersion(), body.reasonCode());

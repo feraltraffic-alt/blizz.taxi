@@ -655,6 +655,42 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/orders/{order_id}/switch-to-cash:
+    post:
+      operationId: switchOrderToCash
+      summary: Pay in cash instead of by card
+      description: >-
+        REQ-PAY-20 (owner decision 28.10.2026): a card order not yet finished (SCHEDULED, READY, SEARCHING, ASSIGNED, IN_SERVICE) becomes a cash order. The card hold is released at once and the card is never charged for it. A hold whose result is not known yet → 409 PAYMENT_UNKNOWN (try again); not a card order, or nothing left to pay by card → 409 STATE_CONFLICT. The rider's own choice.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchToCash"
+      responses:
+        "200":
+          description: The order, now CASH with payment_state CASH_EXPECTED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/rider/v1/orders/{order_id}/cancel:
     post:
       operationId: cancelOrder
@@ -1994,6 +2030,17 @@ components:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
 
+    SwitchToCash:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
     CancelOrder:
       type: object
       additionalProperties: false
