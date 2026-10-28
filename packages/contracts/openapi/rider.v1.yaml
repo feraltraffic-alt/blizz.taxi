@@ -1936,14 +1936,24 @@ components:
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
         driver_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        source:
+          type: string
+          enum: [OFFER, BROADCAST, RESERVATION]
+        trip_id:
+          type: [string, "null"]
+          format: uuid
         state:
           type: string
+          enum: [RESERVED, COMMITTED, RELEASED, REVOKED, COMPLETED]
         trip_phase:
           type: [string, "null"]
+          enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
 
     HistoryVehicle:
       type: object
@@ -2040,6 +2050,11 @@ components:
           description: Where the order came from.
           type: string
           enum: [APP, WEB, PHONE, PARTNER]
+        payer_client_id:
+          description: The client who pays for this order (the signed-in rider, or the account created for a phone order). Null while the phone order has no account yet.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_class:

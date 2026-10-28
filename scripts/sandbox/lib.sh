@@ -22,6 +22,7 @@ say() { printf '\n## %s\n' "$*" | tee -a "$TRANSCRIPT" >&2; }
 note() { printf '\n%s\n' "$*" | tee -a "$TRANSCRIPT" >&2; }
 
 # api METHOD PATH [TOKEN] [JSON] — prints the response body; sets STATUS. Fails the scenario on 5xx.
+# After a successful call, validates the JSON body against the OpenAPI contract (issue #84).
 api() {
     local method="$1" path="$2" token="${3:-}" body="${4:-}"
     local args=(-sS -X "$method" -o /tmp/sandbox-body -w '%{http_code}' -H 'Accept: application/json'
@@ -41,6 +42,13 @@ api() {
         echo "Server error $STATUS on $method $path" >&2
         cat /tmp/sandbox-body >&2
         exit 1
+    fi
+    # Contract validation (issue #84). Skips non-JSON and /sandbox/*.
+    if [[ -s /tmp/sandbox-body && "$path" != /sandbox/* && "$STATUS" != 204 ]]; then
+        if ! node "$(dirname "${BASH_SOURCE[0]}")/validate-response.mjs" "$method" "$path" "$STATUS" < /tmp/sandbox-body; then
+            note "**Contract validation failed — scenario stopped.**"
+            exit 1
+        fi
     fi
     cat /tmp/sandbox-body
 }
