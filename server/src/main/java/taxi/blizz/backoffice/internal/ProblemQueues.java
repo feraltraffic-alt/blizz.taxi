@@ -119,7 +119,8 @@ class ProblemQueues implements OutboxHandler {
                     "The search ended without a driver. Call back if it was a phone order or the rider asks.");
             case "DriverLostDuringOrder" -> {
                 boolean riding = "IN_PROGRESS".equals(p.phase());
-                cases.openFromSystem("lost-driver:" + p.assignmentId(), cityOf(orderId), Category.LOST_CONNECTION,
+                cases.openFromSystem("lost-driver:" + p.assignmentId() + ":" + (p.lastSeenAt() == null ? "never"
+                        : p.lastSeenAt()), cityOf(orderId), Category.LOST_CONNECTION,
                         orderId, riding ? "The driver is not heard from during the ride"
                                 : "The assigned driver is not heard from", riding ? Priority.URGENT : Priority.HIGH,
                         "No position from the driver since " + (p.lastSeenAt() == null ? "the session ended"

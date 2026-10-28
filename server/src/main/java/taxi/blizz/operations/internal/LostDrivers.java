@@ -34,6 +34,14 @@ class LostDrivers {
     @Transactional
     public int report() {
         OffsetDateTime now = core.now();
+        // A driver heard from again after a report may be lost again later: forget the old report.
+        jdbc.sql("""
+                        update assignment a set lost_reported_at = null
+                        where a.state = 'COMMITTED' and a.lost_reported_at is not null
+                          and exists (select 1 from work_session ws
+                                      where ws.driver_id = a.driver_id and ws.state in ('OPEN', 'CLOSING')
+                                        and ws.last_location_at > a.lost_reported_at)""")
+                .update();
         List<Lost> lost = jdbc.sql("""
                         select a.id, a.order_id, a.driver_id, t.phase, ws.last_location_at
                         from assignment a
