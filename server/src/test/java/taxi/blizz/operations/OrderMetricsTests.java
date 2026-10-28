@@ -36,6 +36,7 @@ class OrderMetricsTests {
     @Autowired QuoteService quotes;
     @Autowired JdbcClient jdbc;
     @Autowired MeterRegistry meters;
+    @Autowired io.micrometer.prometheusmetrics.PrometheusMeterRegistry prometheus;
     @Autowired TransactionTemplate tx;
     @Autowired DispatchWorker worker;
     TestRides rides;
@@ -96,6 +97,8 @@ class OrderMetricsTests {
                 assertThat(counter("blizz.orders.created", tags)).isEqualTo(before + 1);
             }
         }
+        // Prometheus removes the reserved _created suffix: alert rules must use the actual wire name.
+        assertThat(prometheus.scrape()).contains("blizz_orders_total{").doesNotContain("blizz_orders_created_total{");
     }
 
     @Test

@@ -4,11 +4,11 @@
 
 ## Метрики событий (REQ-OBS-02)
 
-`OrdersUnfulfilledRate`: `sum(rate(blizz_orders_unfulfilled_total[5m])) / clamp_min(sum(rate(blizz_orders_created_total[5m])), 1e-9) > 0.2` непрерывно 15 минут. Это отношение потоков событий, не доля одной когорты заказов: завершения поиска могут относиться к заказам из предыдущего окна.
+`OrdersUnfulfilledRate`: `sum(rate(blizz_orders_unfulfilled_total[5m])) / clamp_min(sum(rate(blizz_orders_total[5m])), 1e-9) > 0.2` непрерывно 15 минут. Это отношение потоков событий, не доля одной когорты заказов: завершения поиска могут относиться к заказам из предыдущего окна.
 
 На management-порту `/actuator/prometheus`:
 
-- `blizz_orders_created_total{channel,preorder}` — APP/WEB/PHONE, `preorder=true/false`.
+- `blizz_orders_total{channel,preorder}` — Micrometer `blizz.orders.created`: APP/WEB/PHONE, `preorder=true/false`. Prometheus-клиент удаляет зарезервированный суффикс `_created`, поэтому экспорт называется `blizz_orders_total`.
 - `blizz_orders_cancelled_total{by,reason}` — RIDER/STAFF/DRIVER; исходные коды каталога, новые коды сведены в OTHER.
 - `blizz_orders_unfulfilled_total` — поиск завершился без машины.
 - `blizz_dispatch_first_offer_seconds_count/sum` — первое предложение за всё время заказа, от первого начала поиска.

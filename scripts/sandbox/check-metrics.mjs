@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 
 const definitions = {
-  blizz_orders_created_total: { channel: ['APP', 'WEB', 'PHONE'], preorder: ['true', 'false'] },
+  blizz_orders_total: { channel: ['APP', 'WEB', 'PHONE'], preorder: ['true', 'false'] },
   blizz_orders_cancelled_total: { by: ['RIDER', 'STAFF', 'DRIVER'], reason: ['CHANGED_MIND', 'WAIT_TOO_LONG',
     'WRONG_ADDRESS', 'OTHER_TRANSPORT', 'NO_SHOW', 'PASSENGER_ASKED', 'VEHICLE_PROBLEM', 'CANNOT_REACH',
     'DUPLICATE', 'NO_CARS', 'TEST_ORDER', 'OTHER'] },

@@ -83,7 +83,7 @@ groups:
       - alert: OrdersUnfulfilledRate
         expr: |
           sum(rate(blizz_orders_unfulfilled_total[5m]))
-            / clamp_min(sum(rate(blizz_orders_created_total[5m])), 1e-9) > 0.2
+            / clamp_min(sum(rate(blizz_orders_total[5m])), 1e-9) > 0.2
         for: 15m
         labels: {severity: warning, owner: operations}
         annotations:

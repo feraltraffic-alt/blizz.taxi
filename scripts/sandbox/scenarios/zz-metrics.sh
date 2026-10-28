@@ -44,7 +44,7 @@ curl -fsS "http://localhost:${MANAGEMENT_PORT:-8081}/actuator/prometheus" > "$SC
 node "$(dirname "$0")/../check-metrics.mjs" < "$SCRAPE" | tee -a "$TRANSCRIPT"
 {
     printf '\n```prometheus\n'
-    grep -E '^blizz_(orders_(created|cancelled|unfulfilled)_total|dispatch_(first_offer_seconds|assigned_seconds|excluded_total)|offers_total|sms_sent_total)' "$SCRAPE"
+    grep -E '^blizz_(orders(_total|_(cancelled|unfulfilled)_total)|dispatch_(first_offer_seconds|assigned_seconds|excluded_total)|offers_total|sms_sent_total)' "$SCRAPE"
     printf '```\n'
 } >> "$TRANSCRIPT"
 rm -f "$SCRAPE"
