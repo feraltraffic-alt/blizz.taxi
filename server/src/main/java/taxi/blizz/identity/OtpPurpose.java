@@ -10,5 +10,9 @@ public enum OtpPurpose {
     /** The signed-in rider confirms the request to delete the account: {@link OtpService#confirm}. */
     ACCOUNT_DELETION,
     /** The signed-in rider confirms the request for a copy of their personal data (REQ-PRV-07). */
-    DATA_EXPORT
+    DATA_EXPORT,
+    /** The signed-in rider or driver confirms a phone change from the current phone (REQ-AUTH-08). */
+    PHONE_CHANGE,
+    /** Sent to the new phone of a phone change; bound to the account that asked (REQ-AUTH-08). */
+    NEW_PHONE
 }

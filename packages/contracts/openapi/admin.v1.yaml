@@ -574,6 +574,45 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/drivers/{driver_id}/phone:
+    post:
+      operationId: changeDriverPhoneBySupport
+      summary: Set the driver's phone when the old one is lost
+      description: >-
+        REQ-AUTH-08, support's process: after identifying the person, staff with driver.review set the new phone with a
+        reason (how the person was identified). Every session of the account ends; the person signs in with the new
+        phone, which proves it. Another account's phone → 409 STATE_CONFLICT. Audited with masked numbers.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/SupportPhoneChange"
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChanged"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/drivers/{driver_id}/decision:
     post:
       operationId: decideDriverReview
@@ -2358,6 +2397,45 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/clients/{client_id}/phone:
+    post:
+      operationId: changeClientPhoneBySupport
+      summary: Set the client's phone when the old one is lost
+      description: >-
+        REQ-AUTH-08, support's process: after identifying the person, staff with clients.manage set the new phone with a
+        reason (how the person was identified). Every session of the account ends; the person signs in with the new
+        phone, which proves it. Another account's phone → 409 STATE_CONFLICT. Audited with masked numbers.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/SupportPhoneChange"
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChanged"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/clients/{client_id}/block:
     post:
       operationId: blockClient
