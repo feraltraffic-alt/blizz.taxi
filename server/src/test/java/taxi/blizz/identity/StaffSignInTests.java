@@ -205,7 +205,9 @@ class StaffSignInTests {
         String login = uniqueLogin("susp");
         StaffMember member = operator(login, "susp-password-123", "orders.view");
         StaffSignIn.Result session = signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null);
-        // An active member's session goes on: the refresh works (review of 28.10.2026).
+        // An active member's session goes on: the refresh works (review of 28.10.2026). A new member must change
+        // the first password before that, so this one is taken as having done it.
+        jdbc.sql("update staff_user set must_change_password = false where id = :id").param("id", member.id()).update();
         var refreshed = sessions.refresh(session.session().refreshToken());
         assertThat(refreshed.accessToken()).isNotBlank();
 

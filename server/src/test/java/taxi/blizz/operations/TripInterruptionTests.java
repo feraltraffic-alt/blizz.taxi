@@ -101,9 +101,6 @@ class TripInterruptionTests {
         GeoPoint stop = TestRides.north(PICKUP, 300);
         rides.moveTo(broken, stop);
         TestRides.Driver rescue = rides.driverNear(stop);
-        // The driver ends the shift during the trip: the session waits for the trip to end (CLOSING).
-        assertThat(sessions.close(broken.actor(), UUID.randomUUID(), broken.device(),
-                sessions.availability(broken.actor().id()).sessionVersion()).sessionState()).isEqualTo("CLOSING");
         long version = orders.get(ride.order().id()).version();
 
         assertCode(() -> orders.interrupt(staff(Orders.CANCEL_PERMISSION), UUID.randomUUID(), ride.order().id(), version,
@@ -126,9 +123,6 @@ class TripInterruptionTests {
                         + "(interrupted_at_point is not null) from trip where id = :id")
                 .param("id", ride.trip().id()).query(String.class).single()).isEqualTo("ABORTED true true");
         assertThat(occupancy(broken.actor())).isEqualTo("FREE");
-        assertThat(jdbc.sql("select state from work_session where driver_id = :id order by opened_at desc limit 1")
-                .param("id", broken.actor().id()).query(String.class).single())
-                .as("the closing session closes with the interrupted trip (review of 28.10.2026)").isEqualTo("CLOSED");
 
         OrderView followUp = result.followUp();
         assertThat(followUp.relatedOrderId()).isEqualTo(ride.order().id());
@@ -182,5 +176,22 @@ class TripInterruptionTests {
         assertCode(() -> orders.interrupt(support, UUID.randomUUID(), ride.order().id(),
                 orders.get(ride.order().id()).version(), new Orders.Interruption("ACCIDENT", null, false, null, null)),
                 ErrorCode.STATE_CONFLICT);
+    }
+
+    /** Review of 28.10.2026: a driver who ended the shift during the trip is not left in a closing session. */
+    @Test
+    void anInterruptedTripClosesTheSessionTheDriverWasEnding() {
+        Actor support = staff(Orders.INTERRUPT_PERMISSION, Orders.VIEW_PERMISSION);
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        Ride ride = rides.started(cityId, driver, PICKUP, DROPOFF);
+        assertThat(sessions.close(driver.actor(), UUID.randomUUID(), driver.device(),
+                sessions.availability(driver.actor().id()).sessionVersion()).sessionState()).isEqualTo("CLOSING");
+
+        orders.interrupt(support, UUID.randomUUID(), ride.order().id(), orders.get(ride.order().id()).version(),
+                new Orders.Interruption("VEHICLE_BREAKDOWN", null, false, null, null));
+
+        assertThat(occupancy(driver.actor())).isEqualTo("FREE");
+        assertThat(jdbc.sql("select state from work_session where driver_id = :id order by opened_at desc limit 1")
+                .param("id", driver.actor().id()).query(String.class).single()).isEqualTo("CLOSED");
     }
 }
