@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,12 @@ class OperatorBonusTests {
 
     private UUID city;
     private Actor operator;
+
+    /** The shared reason catalog is put back even when an assertion fails; each test's city is its own. */
+    @AfterEach
+    void restoreSharedData() {
+        jdbc.sql("delete from cancel_reason where audience = 'STAFF' and code = 'WRONG_ADDRESS'").update();
+    }
 
     @BeforeEach
     void resetData() {
@@ -189,7 +196,6 @@ class OperatorBonusTests {
         assertThat(bonuses.mine(operator, 10).balance())
                 .as("rider cancellation with a staff operator-fault reason must not penalise")
                 .isEqualTo(-10);
-        jdbc.sql("delete from cancel_reason where audience = 'STAFF' and code = 'WRONG_ADDRESS'").update();
     }
 
     @Test
@@ -276,7 +282,6 @@ class OperatorBonusTests {
         assertThat(bonuses.mine(operator, 10).balance())
                 .as("archived city still yields the bonus (timezone known)")
                 .isEqualTo(1);
-        jdbc.sql("update city set state = 'PUBLISHED' where id = :id").param("id", city).update();
     }
 
     private OutboxMessage eventWithCancelledBy(String type, UUID orderId, String reasonCode, String cancelledBy) {
