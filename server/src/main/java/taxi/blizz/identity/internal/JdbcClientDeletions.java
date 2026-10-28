@@ -177,6 +177,8 @@ class JdbcClientDeletions implements ClientDeletions {
                         where id = :id returning version""")
                 .param("now", now()).param("id", clientId).query(Long.class).single();
         sessions.revokeAll(new Actor(SubjectType.CLIENT, clientId), "ACCOUNT_ANONYMIZED");
+        // Copies of the personal data go with the account (REQ-PRV-07).
+        jdbc.sql("delete from personal_data_export where client_id = :id").param("id", clientId).update();
         outbox.publish(new OutboxEvent("ClientAnonymized", 1, "Client", clientId, version,
                 Map.of("client_id", clientId.toString())));
     }

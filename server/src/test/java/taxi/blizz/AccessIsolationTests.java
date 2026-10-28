@@ -147,8 +147,16 @@ class AccessIsolationTests {
         UUID riderTopUp = topUps.start(rider, UUID.randomUUID(), city, 10_000).id();
         UUID driverTopUp = topUps.start(driver.actor(), UUID.randomUUID(), city, 10_000).id();
 
+        UUID riderExport = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into personal_data_export (id, client_id, state, content, size_bytes, created_at,
+                                                          ready_at, expires_at)
+                        values (:id, :client, 'READY', '{}'::bytea, 2, now(), now(), now() + interval '7 days')""")
+                .param("id", riderExport).param("client", rider.id()).update();
+
         Map<String, UUID> riderIds = Map.of("order_id", ride.order().id(), "binding_id", binding, "card_id", card,
-                "device_id", riderDevice, "case_id", riderCase, "file_id", riderFile, "top_up_id", riderTopUp);
+                "device_id", riderDevice, "case_id", riderCase, "file_id", riderFile, "top_up_id", riderTopUp,
+                "export_id", riderExport);
         Map<String, UUID> driverIds = new LinkedHashMap<>();
         driverIds.put("trip_id", ride.trip().id());
         driverIds.put("offer_id", offer);

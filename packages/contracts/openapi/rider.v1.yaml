@@ -1265,6 +1265,139 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/rider/v1/me/data-exports/challenge:
+    post:
+      operationId: requestDataExportCode
+      summary: Send a code to confirm a copy of my data
+      description: >-
+        Step one of getting a copy of the personal data (REQ-PRV-07): a code of purpose DATA_EXPORT goes to the rider's current phone, with the same resend delay and budgets as sign-in.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "201":
+          description: Code sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DataExportCodeChallenge"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+  /api/rider/v1/me/data-exports:
+    post:
+      operationId: requestDataExport
+      summary: Ask for a copy of my data
+      description: >-
+        Step two, a command: with the code of step one the server starts building one JSON file with the rider's data in every part of the service — profile and sessions, orders with routes and prices, ratings, tips, chat messages sent, money movements, cards and card payments, promotion bonuses, push devices, support cases, calls and codes sent. Other people's data (the driver, the person an order was for) and staff are left out. At most one a day (409 STATE_CONFLICT); an account that is not ACTIVE or DELETION_PENDING → 403 ACCOUNT_NOT_ACTIVE; wrong code → 422 OTP_INVALID. Audited.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DataExportCommand"
+      responses:
+        "202":
+          description: Queued; poll the export until READY.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DataExport"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+    get:
+      operationId: listDataExports
+      summary: My copies of my data
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DataExportList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/me/data-exports/{export_id}:
+    get:
+      operationId: getDataExport
+      summary: A copy of my data
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DataExport"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/rider/v1/me/data-exports/{export_id}/file:
+    get:
+      operationId: downloadDataExport
+      summary: Download the copy of my data
+      description: >-
+        The JSON file, as an attachment, Cache-Control no-store; only while READY and not expired (7 days), otherwise 409 STATE_CONFLICT. Audited.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The file. `sections` holds one key per part of the service.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [format, generated_at, client_id, sections]
+                properties:
+                  format:
+                    type: integer
+                    const: 1
+                  generated_at:
+                    $ref: "./common.yaml#/components/schemas/Timestamp"
+                  client_id:
+                    $ref: "./common.yaml#/components/schemas/Uuid"
+                  sections:
+                    type: object
+                    additionalProperties: true
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/rider/v1/me/deletion-request/challenge:
     post:
       operationId: requestAccountDeletionCode
