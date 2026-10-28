@@ -35,6 +35,7 @@ public final class StaffPermissions {
             new Permission("calls.listen", "Calls", "Listen to call recordings (every listening is audited)"),
             new Permission("calls.supervise", "Calls", "See the operators of a city and their status"),
             new Permission("driver.review", "Drivers", "Review drivers, vehicles and documents"),
+            new Permission("drivers.risk", "Drivers", "Review drivers' risk flags and raise them by hand"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),

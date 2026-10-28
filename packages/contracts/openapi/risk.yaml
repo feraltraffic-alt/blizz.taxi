@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — driver risk flag components
+  version: 1.0.0
+  description: >-
+    A suspicion about a driver is a flag for a person to review, never an automatic punishment (REQ-DS-08,
+    REQ-SEC-11, issue #71). A flag blocks nothing by itself; suspending a driver stays a separate, explained action,
+    which can name the flag that caused it. Drivers never see flags. Evidence holds ids and numbers only, no tracks.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    RiskFlagKind:
+      description: >-
+        IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default)
+        over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff.
+      type: string
+      enum: [IMPOSSIBLE_MOVEMENT, MANUAL]
+
+    RiskFlagState:
+      type: string
+      enum: [OPEN, CONFIRMED, DISMISSED]
+
+    RiskFlag:
+      type: object
+      additionalProperties: false
+      required: [id, driver_id, city_id, kind, state, evidence, raised_by, raised_at, reason, reviewed_by,
+                 reviewed_at, review_reason, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          $ref: "#/components/schemas/RiskFlagKind"
+        state:
+          $ref: "#/components/schemas/RiskFlagState"
+        evidence:
+          description: >-
+            For IMPOSSIBLE_MOVEMENT: work_session_id, track_point_id, distance_m, seconds, speed_kph, recorded_at.
+            Never coordinates.
+          type: object
+          additionalProperties: true
+        raised_by:
+          description: The staff member who raised a MANUAL flag; null for an automatic one.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        raised_at:
+          type: string
+          format: date-time
+        reason:
+          description: Why a MANUAL flag was raised; null for an automatic one.
+          type: [string, "null"]
+        reviewed_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        reviewed_at:
+          type: [string, "null"]
+          format: date-time
+        review_reason:
+          type: [string, "null"]
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+
+    RiskFlagList:
+      type: object
+      additionalProperties: false
+      required: [flags]
+      properties:
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskFlag"
+
+    RaiseRiskFlag:
+      type: object
+      additionalProperties: false
+      required: [command_id, driver_id, city_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
+    ReviewRiskFlag:
+      description: OPEN → CONFIRMED or DISMISSED, once; the reason is required and audited.
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000

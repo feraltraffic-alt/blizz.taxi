@@ -84,9 +84,14 @@ class AdminDriverReviewController {
                 body.rejectedDocuments() == null ? List.of() : body.rejectedDocuments());
     }
 
+    record Suspend(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                   @NotBlank @Size(max = 1000) String reason, UUID riskFlagId) {
+    }
+
     @PostMapping("/{driverId}/suspend")
-    DriverProfile suspend(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Change body) {
-        return admission.suspend(claims.actor(), body.commandId(), driverId, body.expectedVersion(), body.reason());
+    DriverProfile suspend(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Suspend body) {
+        return admission.suspend(claims.actor(), body.commandId(), driverId, body.expectedVersion(), body.reason(),
+                body.riskFlagId());
     }
 
     record Terminal(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull Boolean hasTerminal,
