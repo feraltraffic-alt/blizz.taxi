@@ -1318,6 +1318,95 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/rider/v1/me/phone-change/current-code:
+    post:
+      operationId: requestRiderCurrentPhoneCode
+      summary: Step one of a phone change — a code to the current phone
+      description: >-
+        REQ-AUTH-08. A code of purpose PHONE_CHANGE to the account's current phone, with the same resend delay and
+        budgets as sign-in. Together with the code to the new phone it protects the account from a stolen session
+        or a stolen SIM alone.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "201":
+          description: Code sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCode"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+  /api/rider/v1/me/phone-change/new-code:
+    post:
+      operationId: requestRiderNewPhoneCode
+      summary: Step two of a phone change — a code to the new phone
+      description: >-
+        A code of purpose NEW_PHONE to the new phone, bound to this account. The answer is the same whoever has the
+        number; the account's own current phone → 409 STATE_CONFLICT.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/NewPhone"
+      responses:
+        "201":
+          description: Code sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCode"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+  /api/rider/v1/me/phone-change:
+    post:
+      operationId: changeRiderPhone
+      summary: Step three — change the phone with both codes
+      description: >-
+        A command. The phone becomes the new one and every other session of the account ends; this one stays. A
+        wrong code → 422 OTP_INVALID. The new phone being the current one or another account's → 409 STATE_CONFLICT
+        (accounts are never merged). An account that is not ACTIVE → 403 ACCOUNT_NOT_ACTIVE. Audited with masked
+        numbers.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCommand"
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChanged"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/rider/v1/me/data-exports/challenge:
     post:
       operationId: requestDataExportCode
@@ -2035,6 +2124,38 @@ components:
       type: object
       required: [id, short_number, status, version, channel, city_id, vehicle_class, pickup, dropoff, payment_method]
       properties:
+        pickup_eta:
+          description: >-
+            While the driver is on the way to the pickup (trip TO_PICKUP): a forecast, never a promise (REQ-RID-04), from
+            the driver's last position on the server. Null in every other state and when no position is known — never
+            a made-up value. Shown in the rider's order reads (GET /orders/{id}, /current, /active); command answers
+            leave it null.
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [seconds, distance_metres, source, location_at, stale]
+              properties:
+                seconds:
+                  description: Driving time from that position to the pickup.
+                  type: integer
+                  format: int64
+                  minimum: 0
+                distance_metres:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                source:
+                  description: ROUTER — on the roads; STRAIGHT_LINE — from the straight line, when no router answered.
+                  type: string
+                  enum: [ROUTER, STRAIGHT_LINE]
+                location_at:
+                  description: When the driver was at that position; the ETA counts from then.
+                  type: string
+                  format: date-time
+                stale:
+                  description: The position is older than the freshness limit; show the forecast as uncertain.
+                  type: boolean
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         short_number:

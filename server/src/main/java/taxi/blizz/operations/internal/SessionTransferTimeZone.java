@@ -28,6 +28,6 @@ class SessionTransferTimeZone implements DriverTransferTimeZone {
                         select city_id from work_session where driver_id = :driver
                         order by case when state in ('OPEN', 'CLOSING') then 0 else 1 end,
                                  opened_at desc, id desc limit 1""")
-                .param("driver", driverId).query(UUID.class).optional().flatMap(cities::timezone);
+                .param("driver", driverId).query(UUID.class).optional().flatMap(cities::timezone).map(ZoneId::of);
     }
 }

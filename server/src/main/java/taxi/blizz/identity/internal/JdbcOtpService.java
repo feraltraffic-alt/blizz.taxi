@@ -75,7 +75,32 @@ class JdbcOtpService implements OtpService {
     @Override
     public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp,
                                             OtpChannel preferred) {
-        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp, preferred);
+        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp, preferred, null);
+    }
+
+    @Override
+    public ChallengeIssued requestForNewPhone(Actor subject, String rawPhone, String deviceRef, String clientIp) {
+        OtpAudience audience = audienceOf(subject);
+        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.NEW_PHONE, deviceRef, clientIp, null,
+                subject.id());
+    }
+
+    @Override
+    public PhoneNumber confirmNewPhone(Actor subject, UUID challengeId, String code) {
+        OtpAudience audience = audienceOf(subject);
+        PhoneNumber confirmed = own.execute(status -> {
+            Optional<Challenge> challenge = lockValid(challengeId);
+            // Another purpose, kind of account or account: as if there were no such challenge, no attempt counted.
+            if (challenge.isEmpty() || challenge.get().purpose() != OtpPurpose.NEW_PHONE
+                    || challenge.get().audience() != audience || !subject.id().equals(challenge.get().subjectId())) {
+                return null;
+            }
+            return use(challenge.get(), code, now()) ? challenge.get().phone() : null;
+        });
+        if (confirmed == null) {
+            throw new DomainException(ErrorCode.OTP_INVALID, "The code is wrong or no longer valid");
+        }
+        return confirmed;
     }
 
     @Override
@@ -87,12 +112,12 @@ class JdbcOtpService implements OtpService {
         OtpAudience audience = audienceOf(subject);
         PhoneNumber phone = currentPhone(subject)
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The account has no phone"));
-        return issue(audience, phone, purpose, deviceRef, clientIp, null);
+        return issue(audience, phone, purpose, deviceRef, clientIp, null, null);
     }
 
     /** A new challenge of the purpose; the code is sent after commit. Budgets are shared by all purposes. */
     private ChallengeIssued issue(OtpAudience audience, PhoneNumber phone, OtpPurpose purpose, String deviceRef,
-                                  String clientIp, OtpChannel preferred) {
+                                  String clientIp, OtpChannel preferred, UUID subjectId) {
         return tx.execute(status -> {
             OffsetDateTime now = now();
             enforceLimits(audience, phone, deviceRef, clientIp, now);
@@ -102,10 +127,12 @@ class JdbcOtpService implements OtpService {
             OffsetDateTime expiresAt = now.plus(properties.ttl());
             jdbc.sql("""
                             insert into otp_challenge (id, audience, phone_normalized, code_hmac, expires_at,
-                                                       max_attempts, device_ref, client_ip, created_at, purpose)
+                                                       max_attempts, device_ref, client_ip, created_at, purpose,
+                                                       subject_id)
                             values (:id, :audience, :phone, :hmac, :expiresAt, :maxAttempts, :deviceRef, :clientIp,
-                                    :now, :purpose)
+                                    :now, :purpose, :subject)
                             """)
+                    .param("subject", subjectId)
                     .param("id", challengeId)
                     .param("audience", audience.name())
                     .param("phone", phone.e164())
@@ -316,7 +343,7 @@ class JdbcOtpService implements OtpService {
         OffsetDateTime now = now();
         return jdbc.sql("""
                         select id, audience, phone_normalized, code_hmac, expires_at, attempts, max_attempts,
-                               consumed_at, purpose
+                               consumed_at, purpose, subject_id
                         from otp_challenge where id = :id for update
                         """)
                 .param("id", challengeId)
@@ -329,7 +356,8 @@ class JdbcOtpService implements OtpService {
                         rs.getInt("attempts"),
                         rs.getInt("max_attempts"),
                         rs.getObject("consumed_at", OffsetDateTime.class),
-                        OtpPurpose.valueOf(rs.getString("purpose"))))
+                        OtpPurpose.valueOf(rs.getString("purpose")),
+                        rs.getObject("subject_id", UUID.class)))
                 .optional()
                 .filter(c -> c.consumedAt() == null && now.isBefore(c.expiresAt()) && c.attempts() < c.maxAttempts());
     }
@@ -389,7 +417,7 @@ class JdbcOtpService implements OtpService {
 
     private record Challenge(UUID id, OtpAudience audience, PhoneNumber phone, byte[] codeHmac,
                              OffsetDateTime expiresAt, int attempts, int maxAttempts, OffsetDateTime consumedAt,
-                             OtpPurpose purpose) {
+                             OtpPurpose purpose, UUID subjectId) {
     }
 
     private record Account(UUID id, String state) {

@@ -47,4 +47,18 @@ public interface OtpService {
      *         challenge, or one of another purpose, subject or phone
      */
     void confirm(Actor subject, UUID challengeId, String code, OtpPurpose purpose);
+
+    /**
+     * Sends a {@code NEW_PHONE} code to {@code rawPhone}, which the signed-in {@code subject} wants as the new phone.
+     * Says nothing about whether the number belongs to anybody. Same resend delay and budgets as sign-in.
+     */
+    ChallengeIssued requestForNewPhone(Actor subject, String rawPhone, String deviceRef, String clientIp);
+
+    /**
+     * Checks a {@code NEW_PHONE} code this subject asked for and uses it up; returns the phone it went to.
+     *
+     * @throws taxi.blizz.platform.DomainException with {@code OTP_INVALID} for a wrong, expired, used or exhausted
+     *         challenge, or one of another purpose or account
+     */
+    PhoneNumber confirmNewPhone(Actor subject, UUID challengeId, String code);
 }

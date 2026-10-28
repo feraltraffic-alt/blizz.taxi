@@ -1,0 +1,85 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — phone change components
+  version: 1.0.0
+  description: >-
+    Shared schemas of a rider's or driver's phone change (REQ-AUTH-08): codes to the current and to the new phone,
+    both needed; support sets the phone when the old one is lost. Referenced by the rider, driver and admin APIs.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    PhoneChangeCode:
+      description: A code was sent (to the current phone, or to the new one). Says nothing about who has the number.
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_at, resend_available_at]
+      properties:
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resend_available_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    NewPhone:
+      type: object
+      additionalProperties: false
+      required: [phone]
+      properties:
+        phone:
+          description: International format, "+" or "00" first.
+          type: string
+
+    PhoneChangeCommand:
+      description: >-
+        Both codes: of purpose PHONE_CHANGE from the current phone and NEW_PHONE from the new one. A code of another
+        purpose or account is refused (OTP_INVALID); a wrong code counts as an attempt.
+      type: object
+      additionalProperties: false
+      required: [command_id, current_challenge_id, current_code, new_challenge_id, new_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        current_challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        current_code:
+          type: string
+          pattern: "^[0-9]{4,8}$"
+        new_challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        new_code:
+          type: string
+          pattern: "^[0-9]{4,8}$"
+
+    SupportPhoneChange:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, phone, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        phone:
+          type: string
+        reason:
+          description: How the person was identified, e.g. the documents checked.
+          type: string
+
+    PhoneChanged:
+      type: object
+      additionalProperties: false
+      required: [subject_id, phone, version]
+      properties:
+        subject_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        phone:
+          type: string
+        version:
+          type: integer
+          format: int64

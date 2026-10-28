@@ -1,6 +1,5 @@
 package taxi.blizz.geo;
 
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +10,6 @@ public interface CityCatalog {
     /** Published cities, by name. */
     List<City> published();
 
-    /** The time zone also remains available for historical sessions in an archived city. */
-    Optional<ZoneId> timezone(UUID cityId);
+    /** Time zone of a city in any state, or empty if the city does not exist. */
+    Optional<String> timezone(UUID cityId);
 }
