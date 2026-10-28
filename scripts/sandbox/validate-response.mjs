@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 // Validates a single sandbox API response against the OpenAPI 3.1 contracts.
-// Called from scripts/sandbox/lib.sh api(). Caches bundled specs in /tmp.
+// Called from scripts/sandbox/lib.sh api(). Caches bundled specs in /tmp keyed by openapi hash.
 // Usage: node validate-response.mjs METHOD PATH STATUS < body.json
 // Exits 0 on ok / skipped, 1 on schema mismatch (prints one-line error to stderr).
 
 import { createRequire } from "node:module";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "../..");
 const CONTRACTS = join(REPO_ROOT, "packages/contracts");
-const CACHE = "/tmp/blizz-sandbox-contracts";
+const OPENAPI_DIR = join(CONTRACTS, "openapi");
+const CACHE_BASE = "/tmp/blizz-sandbox-contracts";
 const OPS_LOG = "/tmp/sandbox-ops-checked.txt";
+const UNKNOWN_PATHS_LOG = "/tmp/sandbox-unknown-paths.txt";
 
 const require = createRequire(join(CONTRACTS, "package.json"));
 const Ajv2020 = require("ajv/dist/2020.js").default;
@@ -30,27 +33,38 @@ const MAIN_APIS = [
   "providers-v1",
 ];
 
+function openapiHash() {
+  const hash = createHash("sha256");
+  const files = readdirSync(OPENAPI_DIR).filter(f => f.endsWith(".yaml") || f.endsWith(".yml")).sort();
+  for (const f of files) {
+    const p = join(OPENAPI_DIR, f);
+    hash.update(f);
+    hash.update(readFileSync(p));
+  }
+  return hash.digest("hex").slice(0, 16);
+}
+
 function ensureBundled() {
-  if (existsSync(join(CACHE, "ready"))) return;
+  const hash = openapiHash();
+  const CACHE = join(CACHE_BASE, hash);
+  if (existsSync(join(CACHE, "ready"))) return CACHE;
   mkdirSync(CACHE, { recursive: true });
-  // Ensure node_modules exist
   if (!existsSync(join(CONTRACTS, "node_modules"))) {
     execSync("npm ci --no-fund --no-audit", { cwd: CONTRACTS, stdio: "ignore" });
   }
   for (const api of MAIN_APIS) {
     const out = join(CACHE, `${api}.json`);
-    if (!existsSync(out)) {
-      execSync(
-        `npx redocly bundle ${api} --dereferenced -o ${out}`,
-        { cwd: CONTRACTS, stdio: "ignore" }
-      );
-    }
+    execSync(
+      `npx redocly bundle ${api} --dereferenced -o ${out}`,
+      { cwd: CONTRACTS, stdio: "ignore" }
+    );
   }
   writeFileSync(join(CACHE, "ready"), "1");
+  return CACHE;
 }
 
 function loadSpecs() {
-  ensureBundled();
+  const CACHE = ensureBundled();
   const specs = [];
   for (const api of MAIN_APIS) {
     const p = join(CACHE, `${api}.json`);
@@ -59,7 +73,44 @@ function loadSpecs() {
   return specs;
 }
 
-// Build a list of { template, method, status -> schema, operationId, pathRegex }
+// Recursively add unevaluatedProperties: false to object schemas that lack it
+// (and lack additionalProperties). Do not touch allOf/oneOf/anyOf themselves.
+function tightenSchema(schema) {
+  if (!schema || typeof schema !== "object") return schema;
+  if (Array.isArray(schema)) return schema.map(tightenSchema);
+
+  const copy = { ...schema };
+
+  // Recurse into subschemas first
+  for (const key of ["properties", "patternProperties", "additionalProperties", "unevaluatedProperties",
+                     "items", "prefixItems", "contains", "if", "then", "else", "not",
+                     "dependentSchemas", "propertyNames"]) {
+    if (copy[key] && typeof copy[key] === "object") {
+      if (key === "properties" || key === "patternProperties" || key === "dependentSchemas") {
+        copy[key] = Object.fromEntries(
+          Object.entries(copy[key]).map(([k, v]) => [k, tightenSchema(v)])
+        );
+      } else if (key === "items" || key === "prefixItems") {
+        copy[key] = Array.isArray(copy[key]) ? copy[key].map(tightenSchema) : tightenSchema(copy[key]);
+      } else {
+        copy[key] = tightenSchema(copy[key]);
+      }
+    }
+  }
+  for (const key of ["allOf", "oneOf", "anyOf"]) {
+    if (Array.isArray(copy[key])) copy[key] = copy[key].map(tightenSchema);
+  }
+
+  // Tighten this schema if it is an object without additional/unevaluatedProperties
+  if (copy.type === "object" &&
+      copy.additionalProperties === undefined &&
+      copy.unevaluatedProperties === undefined &&
+      !copy.allOf && !copy.oneOf && !copy.anyOf) {
+    copy.unevaluatedProperties = false;
+  }
+  return copy;
+}
+
 function buildIndex(specs) {
   const index = [];
   for (const spec of specs) {
@@ -71,10 +122,8 @@ function buildIndex(specs) {
         for (const [status, resp] of Object.entries(op.responses)) {
           const schema = resp?.content?.["application/json"]?.schema
             ?? resp?.content?.["application/problem+json"]?.schema;
-          if (schema) responses[status] = schema;
+          if (schema) responses[status] = tightenSchema(schema);
         }
-        if (Object.keys(responses).length === 0) continue;
-        // Convert template to regex: {param} -> [^/]+
         const regexStr = "^" + template.replace(/\{[^}]+\}/g, "[^/]+") + "$";
         index.push({
           template,
@@ -86,11 +135,10 @@ function buildIndex(specs) {
       }
     }
   }
-  // Prefer more specific templates (fewer parameters, then longer)
   index.sort((a, b) => {
     const pa = (a.template.match(/\{/g) || []).length;
     const pb = (b.template.match(/\{/g) || []).length;
-    if (pa !== pb) return pa - pb; // fewer params first
+    if (pa !== pb) return pa - pb;
     return b.template.length - a.template.length;
   });
   return index;
@@ -110,7 +158,7 @@ if (!method || !path || !status) {
   process.exit(2);
 }
 
-// Skip non-API or sandbox
+// Skip known non-contract paths
 if (path.startsWith("/sandbox/") || path === "/readyz" || path === "/livez") {
   process.exit(0);
 }
@@ -122,8 +170,6 @@ try {
   process.exit(0);
 }
 if (!body || status === "204" || status === "101") process.exit(0);
-
-// Quick JSON check
 if (!body.startsWith("{") && !body.startsWith("[")) process.exit(0);
 
 let json;
@@ -139,14 +185,16 @@ const index = buildIndex(specs);
 const op = matchOperation(index, method.toUpperCase(), path);
 
 if (!op) {
-  // Path not in contracts — skip (or could warn)
-  process.exit(0);
+  const msg = `${method} ${path} ${status}: path not in contracts`;
+  console.error(msg);
+  try { writeFileSync(UNKNOWN_PATHS_LOG, `${method} ${path}\n`, { flag: "a" }); } catch {}
+  process.exit(1);
 }
 
-const schema = op.responses[status] || op.responses["default"];
+const schema = op.responses[status];
 if (!schema) {
-  // No schema for this status — skip
-  process.exit(0);
+  console.error(`${method} ${path} ${status}: response code not declared in contract`);
+  process.exit(1);
 }
 
 const ajv = new Ajv2020({ strict: false, allErrors: false, coerceTypes: false });
@@ -161,14 +209,16 @@ try {
 
 if (!validate(json)) {
   const err = validate.errors?.[0];
-  const msg = err
-    ? `${err.instancePath || "/"} ${err.message}`
-    : "schema error";
+  let msg = err ? `${err.instancePath || "/"} ${err.message}` : "schema error";
+  if (err && (err.keyword === "unevaluatedProperties" || err.keyword === "additionalProperties") && err.params?.unevaluatedProperty) {
+    msg = `${err.instancePath || "/"} unexpected property '${err.params.unevaluatedProperty}'`;
+  } else if (err && err.keyword === "additionalProperties" && err.params?.additionalProperty) {
+    msg = `${err.instancePath || "/"} unexpected property '${err.params.additionalProperty}'`;
+  }
   console.error(`${method} ${path} ${status}: ${msg}`);
   process.exit(1);
 }
 
-// Record that this operation was checked
 try {
   const line = `${op.method} ${op.template}\n`;
   writeFileSync(OPS_LOG, line, { flag: "a" });

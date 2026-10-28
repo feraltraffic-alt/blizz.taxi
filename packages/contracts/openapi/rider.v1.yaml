@@ -1936,10 +1936,18 @@ components:
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
         driver_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        source:
+          type: string
+        trip_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
         state:
           type: string
         trip_phase:
@@ -2040,6 +2048,9 @@ components:
           description: Where the order came from.
           type: string
           enum: [APP, WEB, PHONE, PARTNER]
+        payer_client_id:
+          description: The client who pays for this order (the signed-in rider, or the account created for a phone order).
+          $ref: "./common.yaml#/components/schemas/Uuid"
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_class:
