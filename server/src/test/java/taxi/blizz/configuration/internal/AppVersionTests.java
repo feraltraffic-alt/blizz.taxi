@@ -198,6 +198,11 @@ class AppVersionTests {
                 insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
                 values (:id, :login, 'test', 'ADMIN', array['settings.manage'], 'ACTIVE', now(), now())
                 """).param("id", id).param("login", "av-" + id).update();
+        String state = jdbc.sql("select state from staff_user where id = :id")
+                .param("id", id).query(String.class).single();
+        if (!"ACTIVE".equals(state)) {
+            throw new IllegalStateException("staff_user insert did not persist state=ACTIVE for " + id);
+        }
         return new Actor(SubjectType.STAFF, id);
     }
 }
