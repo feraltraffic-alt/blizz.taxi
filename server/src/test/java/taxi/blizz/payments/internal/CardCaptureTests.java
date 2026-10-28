@@ -442,6 +442,9 @@ class CardCaptureTests {
         assertThat(clearingFor(order)).isEqualTo(hold + 700);
         assertThat(jdbc.sql("select count(*) from audit_log where action = 'payment.retry' and actor_id = :staff")
                 .param("staff", finance.id()).query(Long.class).single()).isEqualTo(1);
+        // The order's own CardPaymentSettled / OrderDebtPaid history events never poison the ledger's handlers.
+        assertThat(jdbc.sql("select count(*) from outbox where aggregate_id = :order and (attempts > 0 or state = 'FAILED')")
+                .param("order", order.id()).query(Long.class).single()).isZero();
     }
 
     @Test
