@@ -57,7 +57,10 @@ components:
     SupportPhoneChange:
       type: object
       additionalProperties: false
-      required: [command_id, expected_version, phone, reason]
+      description: >-
+        The code sent by the support code request to the new phone, which the person reads to support (owner decision
+        28.10.2026). The new phone is the one the code went to.
+      required: [command_id, expected_version, new_challenge_id, new_code, reason]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -65,8 +68,11 @@ components:
           type: integer
           format: int64
           minimum: 0
-        phone:
+        new_challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        new_code:
           type: string
+          pattern: "^[0-9]{4,8}$"
         reason:
           description: How the person was identified, e.g. the documents checked.
           type: string

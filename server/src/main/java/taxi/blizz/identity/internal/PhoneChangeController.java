@@ -44,7 +44,8 @@ class PhoneChangeController {
                   @NotNull @Pattern(regexp = "^[0-9]{4,8}$") String newCode) {
     }
 
-    record SupportChange(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String phone,
+    record SupportChange(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                         @NotNull UUID newChallengeId, @NotNull @Pattern(regexp = "^[0-9]{4,8}$") String newCode,
                          @NotBlank String reason) {
     }
 
@@ -66,17 +67,33 @@ class PhoneChangeController {
                 body.currentCode(), body.newChallengeId(), body.newCode());
     }
 
+    @PostMapping("/api/admin/v1/clients/{clientId}/phone/new-code")
+    @ResponseStatus(HttpStatus.CREATED)
+    CodeResponse clientCode(AccessClaims claims, @PathVariable UUID clientId, @Valid @RequestBody NewPhone body,
+                            HttpServletRequest request) {
+        return CodeResponse.of(phones.codeToNewBySupport(claims.actor(), new Actor(SubjectType.CLIENT, clientId),
+                body.phone(), request.getRemoteAddr()));
+    }
+
+    @PostMapping("/api/admin/v1/drivers/{driverId}/phone/new-code")
+    @ResponseStatus(HttpStatus.CREATED)
+    CodeResponse driverCode(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody NewPhone body,
+                            HttpServletRequest request) {
+        return CodeResponse.of(phones.codeToNewBySupport(claims.actor(), new Actor(SubjectType.DRIVER, driverId),
+                body.phone(), request.getRemoteAddr()));
+    }
+
     @PostMapping("/api/admin/v1/clients/{clientId}/phone")
     PhoneChanges.Changed client(AccessClaims claims, @PathVariable UUID clientId,
                                 @Valid @RequestBody SupportChange body) {
         return phones.changeBySupport(claims.actor(), body.commandId(), new Actor(SubjectType.CLIENT, clientId),
-                body.expectedVersion(), body.phone(), body.reason());
+                body.expectedVersion(), body.newChallengeId(), body.newCode(), body.reason());
     }
 
     @PostMapping("/api/admin/v1/drivers/{driverId}/phone")
     PhoneChanges.Changed driver(AccessClaims claims, @PathVariable UUID driverId,
                                 @Valid @RequestBody SupportChange body) {
         return phones.changeBySupport(claims.actor(), body.commandId(), new Actor(SubjectType.DRIVER, driverId),
-                body.expectedVersion(), body.phone(), body.reason());
+                body.expectedVersion(), body.newChallengeId(), body.newCode(), body.reason());
     }
 }

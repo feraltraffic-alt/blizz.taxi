@@ -574,14 +574,56 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/drivers/{driver_id}/phone/new-code:
+    post:
+      operationId: sendDriverNewPhoneCodeBySupport
+      summary: Send a code to the new phone, for a change by support
+      description: >-
+        REQ-AUTH-08, support's process, step one: after identifying the person, staff with driver.review send a code to the
+        new phone; the person reads it to them. Audited with the masked number. Another account's phone is found
+        out only at the change. The same phone as now → 409.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/NewPhone"
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCode"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/admin/v1/drivers/{driver_id}/phone:
     post:
       operationId: changeDriverPhoneBySupport
       summary: Set the driver's phone when the old one is lost
       description: >-
         REQ-AUTH-08, support's process: after identifying the person, staff with driver.review set the new phone with a
-        reason (how the person was identified). Every session of the account ends; the person signs in with the new
-        phone, which proves it. Another account's phone → 409 STATE_CONFLICT. Audited with masked numbers.
+        reason (how the person was identified) and the code the person received on the new phone (owner decision
+        28.10.2026). Every session of the account ends. Another account's phone → 409 STATE_CONFLICT; a wrong code →
+        OTP_INVALID. Audited with masked numbers.
       tags: [Account]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -613,6 +655,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
   /api/admin/v1/drivers/{driver_id}/decision:
     post:
       operationId: decideDriverReview
@@ -2538,14 +2582,56 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/clients/{client_id}/phone/new-code:
+    post:
+      operationId: sendClientNewPhoneCodeBySupport
+      summary: Send a code to the new phone, for a change by support
+      description: >-
+        REQ-AUTH-08, support's process, step one: after identifying the person, staff with clients.manage send a code to the
+        new phone; the person reads it to them. Audited with the masked number. Another account's phone is found
+        out only at the change. The same phone as now → 409.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./phone-change.yaml#/components/schemas/NewPhone"
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCode"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/admin/v1/clients/{client_id}/phone:
     post:
       operationId: changeClientPhoneBySupport
       summary: Set the client's phone when the old one is lost
       description: >-
         REQ-AUTH-08, support's process: after identifying the person, staff with clients.manage set the new phone with a
-        reason (how the person was identified). Every session of the account ends; the person signs in with the new
-        phone, which proves it. Another account's phone → 409 STATE_CONFLICT. Audited with masked numbers.
+        reason (how the person was identified) and the code the person received on the new phone (owner decision
+        28.10.2026). Every session of the account ends. Another account's phone → 409 STATE_CONFLICT; a wrong code →
+        OTP_INVALID. Audited with masked numbers.
       tags: [Account]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2577,6 +2663,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
   /api/admin/v1/clients/{client_id}/block:
     post:
       operationId: blockClient
