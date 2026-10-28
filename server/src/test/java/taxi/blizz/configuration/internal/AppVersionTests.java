@@ -89,6 +89,7 @@ class AppVersionTests {
         mvc = MockMvcBuilders.webAppContextSetup(context).build();
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
         cityId = rides.city("test-app-version", "UAH", 77);
+        new taxi.blizz.TestQuotes(jdbc, quotes).ensureClass(cityId, "STANDARD");
         admin = staff("settings.manage");
         saved = settings.current().settings();
     }
