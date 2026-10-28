@@ -38,7 +38,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Preorders(60, 7, PreorderDispatch.BROADCAST_BEFORE, 30, 30, 10, 60),
             new Ratings(24),
             new Tips(24),
-            new Orders(3));
+            new Orders(3),
+            new CashNotReceived(true, 100));
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -173,8 +174,13 @@ class JdbcServiceSettings implements ServiceSettings {
         if (orders.activePerPayer() < 1 || orders.activePerPayer() > 10) {
             throw invalid("Orders: active_per_payer must be between 1 and 10");
         }
+        CashNotReceived cash = s.cashNotReceived() == null ? DEFAULTS.cashNotReceived() : s.cashNotReceived();
+        if (cash.driverSharePercent() < 0 || cash.driverSharePercent() > 100) {
+            throw invalid("Cash not received: driver_share_percent must be between 0 and 100");
+        }
+        cash = new CashNotReceived(cash.creditDriver(), cash.creditDriver() ? cash.driverSharePercent() : 0);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders);
+                orders, cash);
     }
 
     /** Versions saved before a section existed get its defaults. */
@@ -183,7 +189,8 @@ class JdbcServiceSettings implements ServiceSettings {
         Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
         Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
         Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders);
+        CashNotReceived cash = s.cashNotReceived() == null ? DEFAULTS.cashNotReceived() : s.cashNotReceived();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash);
     }
 
     private static String color(String value, boolean required) {

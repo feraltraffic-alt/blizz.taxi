@@ -4571,6 +4571,26 @@ components:
               description: >-
                 How many orders not in a final state (pre-orders included) one paying rider may have at once
                 (active_orders_per_payer, ADR 0012 Q-03); one more is refused with 409 ACTIVE_ORDER_LIMIT.
+        cash_not_received:
+          description: >-
+            When the driver reports that cash (or the driver's own terminal) was not paid (owner decision
+            28.10.2026). The rider owes the whole fare either way. Omitted — the driver is credited the whole share.
+          type: object
+          additionalProperties: false
+          required: [credit_driver, driver_share_percent]
+          properties:
+            credit_driver:
+              type: boolean
+              default: true
+              description: Whether the driver's balance gets anything for such a trip.
+            driver_share_percent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              default: 100
+              description: >-
+                The part of the driver's share credited when credit_driver is true; the rest is held in suspense
+                until support settles the dispute. Ignored (0) when credit_driver is false.
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
