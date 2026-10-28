@@ -60,6 +60,16 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **a check's failure must be readable in the evidence.** Send its errors to the transcript or the PR.
 - **Habit:** **no transaction around a network call.** Call outside, then write the result in a short transaction.
 
+## 8. Proving something with a tool that does not do it (PR #94, issue #93)
+
+- **Task:** app version check; a sandbox scenario that shows the 426.
+- **Handed in:** after five rounds of review the scenario still got no 426. The contributor added debug output to the server to find out why. The lead finished the work.
+- **Missed:**
+  - The sandbox helper `api` never sent the extra `-H` headers: it ignores arguments it does not know. The server was right all along.
+  - The tests called the endpoints without signing in, so they answered 401 before the version was looked at. "Not 426" proved nothing.
+- **Habit:** **check that your instrument does what you think before you debug the system.** Look at the request as it left: the transcript, the curl line, the headers.
+- **Habit:** **a test must reach the code it claims to test.** If an earlier layer (sign-in, validation) answers first, the test shows nothing about yours.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

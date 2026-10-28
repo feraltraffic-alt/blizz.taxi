@@ -39,6 +39,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 6. **Read your own diff** (`git diff origin/main...HEAD`) as if you were the reviewer, before you ask for review.
 7. **Answer every review point**: "done" with the evidence, or "not doing, because …". A point dropped without a word is worse than a refusal with a reason.
 8. **Evidence is proof, not a location**: a run link, a test name, a command with its output. "See `file.mjs`" is not evidence.
+9. **The test reaches the code it is about.** A request refused earlier (401 without a token, 400 on the body) proves nothing about the check after it: sign in and send a valid body, then vary only what you test. Before debugging the server, check that your tool sent what you meant (the sandbox `api` helper sends extra headers only through `API_HEADERS`).
 
 ## Rules that must not be broken
 
