@@ -36,7 +36,7 @@ function validate(text) {
     }
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0) throw Error(`Invalid value: ${name}`);
-    totals[name] += value;
+    if (Object.hasOwn(totals, name)) totals[name] += value;
   }
   for (const [name, total] of Object.entries(totals)) {
     if (total <= 0) throw Error(`Missing or zero metric: ${name}`);
@@ -48,6 +48,8 @@ if (process.argv.includes('--self-test')) {
   const valid = Object.entries(definitions).map(([name, tags]) => `${name}{${Object.entries(tags)
     .map(([key, values]) => `${key}="${values[0]}"`).join(',')}} 1`).join('\n');
   validate(valid);
+  const withTimerSum = validate(valid + '\nblizz_dispatch_assigned_seconds_sum{source="RESERVATION"} 0');
+  if (Object.keys(withTimerSum).length !== Object.keys(definitions).length) throw Error('Unexpected totals');
   for (const bad of [valid.replace('blizz_offers_total', 'missing'), valid.replace('outcome="ACCEPTED"', 'outcome="ARBITRARY"'),
     valid.replace('preorder="true"', 'preorder="+380671234567"'), valid.replace('channel="APP"', 'channel="12345678-abcd-abcd-abcd-123456789abc"'),
     valid.replace('purpose="OTP"', 'purpose="OTP",extra="CUSTOM"'), valid.replace(/ 1/g, ' 0'), valid.replace(/ 1/g, ' NaN'),
