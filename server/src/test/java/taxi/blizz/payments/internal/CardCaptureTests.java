@@ -603,5 +603,8 @@ class CardCaptureTests {
                         select count(*) from audit_log where action = 'order.switch_to_cash' and actor_id = :a
                           and reason = 'The rider asked by phone'""")
                 .param("a", operator.id()).query(Long.class).single()).isEqualTo(1);
+        // Its release goes out now: a later test's scripted provider answers must not meet it.
+        settlePayments();
+        assertThat(payments.intent(second.id()).orElseThrow().state()).isEqualTo("VOIDED");
     }
 }
