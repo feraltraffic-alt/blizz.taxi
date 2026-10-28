@@ -18,6 +18,7 @@ import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.SubjectType;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -105,6 +106,6 @@ class AppVersionTests {
                 insert into staff_user (id, login, password_hash, display_name, permissions)
                 values (:id, :login, 'x', 'test', array['settings.manage'])
                 """).param("id", id).param("login", "av-" + id).update();
-        return new Actor(id, "STAFF");
+        return new Actor(SubjectType.STAFF, id);
     }
 }
