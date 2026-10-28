@@ -194,8 +194,8 @@ class AppVersionTests {
     private Actor staffWithPermission() {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                insert into staff_user (id, login, name, role, permissions)
-                values (:id, :login, 'test', 'ADMIN', array['settings.manage'])
+                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'test', 'ADMIN', array['settings.manage'], 'ACTIVE', now(), now())
                 """).param("id", id).param("login", "av-" + id).update();
         return new Actor(SubjectType.STAFF, id);
     }
