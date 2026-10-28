@@ -72,8 +72,9 @@ public interface Orders {
     record TimelineActor(String type, UUID id, String name, String role) {
     }
 
+    /** {@code correlationId}: the request or job that made the change; null for events older than the column. */
     record TimelineEntry(long sequence, String type, OffsetDateTime occurredAt, TimelineActor actor, String reason,
-                         java.util.Map<String, Object> details) {
+                         java.util.Map<String, Object> details, UUID correlationId) {
     }
 
     String INTERRUPT_PERMISSION = "orders.interrupt";

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.payments.CardPayments;
+import taxi.blizz.platform.CorrelationId;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.Outbox;
@@ -60,10 +61,11 @@ class JdbcCardPayments implements CardPayments {
         OffsetDateTime now = now();
         jdbc.sql("""
                         insert into payment_intent (id, order_id, client_id, merchant_id, card_id, currency, hold_minor,
-                                                    hold_until, state, created_at, updated_at)
+                                                    hold_until, state, created_at, updated_at, correlation_id)
                         values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, 'AUTH_PENDING',
-                                :now, :now)""")
+                                :now, :now, :correlation)""")
                 .param("id", intentId).param("order", orderId).param("client", clientId)
+                .param("correlation", CorrelationId.currentOrNew())
                 .param("merchant", merchant.id()).param("card", cardId).param("currency", currency)
                 .param("amount", amountMinor).param("until", holdUntil).param("now", now).update();
         UUID operationId = UUID.randomUUID();
@@ -146,10 +148,12 @@ class JdbcCardPayments implements CardPayments {
         OffsetDateTime now = now();
         jdbc.sql("""
                         insert into payment_operation (id, intent_id, type, reference, target, amount_minor, state,
-                                                       next_check_at, created_at, updated_at)
-                        values (:id, :intent, :type, :reference, :target, :amount, 'CREATED', :now, :now, :now)""")
+                                                       next_check_at, created_at, updated_at, correlation_id)
+                        values (:id, :intent, :type, :reference, :target, :amount, 'CREATED', :now, :now, :now,
+                                :correlation)""")
                 .param("id", id).param("intent", intentId).param("type", type).param("reference", reference)
                 .param("target", target == null ? reference : target).param("amount", amountMinor).param("now", now)
+                .param("correlation", CorrelationId.currentOrNew())
                 .update();
     }
 

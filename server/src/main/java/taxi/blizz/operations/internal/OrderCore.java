@@ -115,8 +115,9 @@ class OrderCore {
         body.put("order_id", orderId.toString());
         jdbc.sql("""
                         insert into order_event (order_id, sequence, type, actor_type, actor_id, reason, payload,
-                                                 occurred_at)
-                        values (:orderId, :sequence, :type, :actorType, :actorId, :reason, cast(:payload as jsonb), :now)""")
+                                                 occurred_at, correlation_id)
+                        values (:orderId, :sequence, :type, :actorType, :actorId, :reason, cast(:payload as jsonb), :now,
+                                :correlation)""")
                 .param("orderId", orderId)
                 .param("sequence", version)
                 .param("type", type)
@@ -125,6 +126,7 @@ class OrderCore {
                 .param("reason", reason)
                 .param("payload", json.writeValueAsString(body))
                 .param("now", now())
+                .param("correlation", taxi.blizz.platform.CorrelationId.currentOrNew())
                 .update();
         outbox.publish(new OutboxEvent(type, 1, "Order", orderId, version, body));
     }

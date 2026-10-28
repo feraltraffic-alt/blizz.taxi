@@ -176,8 +176,15 @@ components:
         when given through a reason from the list.
       type: object
       additionalProperties: false
-      required: [sequence, type, occurred_at, actor, reason, details]
+      required: [sequence, type, occurred_at, actor, reason, details, correlation_id]
       properties:
+        correlation_id:
+          description: >-
+            The request or job that made the change (REQ-OBS-01/04) — search it in GET
+            /api/admin/v1/logs/correlation/{correlation_id}; null for events older than the column.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
         sequence:
           type: integer
           format: int64

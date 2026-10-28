@@ -2354,6 +2354,34 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/logs/correlation/{correlation_id}:
+    get:
+      operationId: findByCorrelationId
+      summary: What one request or job touched
+      description: >-
+        Everything recorded under a correlation id (REQ-OBS-01/04) — order events, payment intents and operations,
+        audit records, staff requests — as types and ids only, never their contents; open each in its own screen.
+        At most 200, oldest first. Needs audit.view.
+      tags: [Logs]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: correlation_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrelationTrail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/logs/changes:
     get:
       operationId: listStaffChanges
@@ -4512,6 +4540,33 @@ components:
           type: array
           items:
             $ref: "./common.yaml#/components/schemas/Uuid"
+
+    CorrelationTrail:
+      type: object
+      additionalProperties: false
+      required: [found]
+      properties:
+        found:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [type, id, order_id, at]
+            properties:
+              type:
+                type: string
+                enum: [ORDER_EVENT, PAYMENT_INTENT, PAYMENT_OPERATION, AUDIT, STAFF_ACTIVITY]
+              id:
+                description: The row's id (for an order event, "{order_id}:{sequence}").
+                type: string
+              order_id:
+                description: The order it belongs to, when there is one.
+                oneOf:
+                  - $ref: "./common.yaml#/components/schemas/Uuid"
+                  - type: "null"
+              at:
+                type: string
+                format: date-time
 
     SuspendDriver:
       type: object

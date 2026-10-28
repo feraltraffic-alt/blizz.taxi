@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.audit.AuditLog;
@@ -12,6 +13,7 @@ import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.identity.StaffPermissions;
+import taxi.blizz.platform.CorrelationTrail;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 
@@ -25,12 +27,29 @@ class StaffLogsController {
     private final StaffAccess access;
     private final StaffActivityLog activity;
     private final AuditLog audit;
+    private final List<CorrelationTrail> trails;
 
-    StaffLogsController(StaffAccess access, StaffActivityLog activity, AuditLog audit) {
+    StaffLogsController(StaffAccess access, StaffActivityLog activity, AuditLog audit, List<CorrelationTrail> trails) {
         this.access = access;
         this.activity = activity;
         this.audit = audit;
+        this.trails = trails;
     }
+
+    record Trail(List<CorrelationTrail.Found> found) {
+    }
+
+    /** What one request or job touched (REQ-OBS-01/04, issue #81): types and ids only, oldest first, at most 200. */
+    @GetMapping("/api/admin/v1/logs/correlation/{correlationId}")
+    Trail correlation(AccessClaims claims, @PathVariable UUID correlationId) {
+        access.require(claims.actor(), StaffPermissions.AUDIT_VIEW);
+        return new Trail(trails.stream().flatMap(t -> t.find(correlationId, LIMIT).stream())
+                .sorted(java.util.Comparator.comparing(CorrelationTrail.Found::at)
+                        .thenComparing(CorrelationTrail.Found::type).thenComparing(CorrelationTrail.Found::id))
+                .limit(LIMIT).toList());
+    }
+
+    private static final int LIMIT = 200;
 
     record ActivityPage(List<StaffActivityLog.Entry> entries) {
     }
