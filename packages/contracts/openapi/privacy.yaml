@@ -156,3 +156,68 @@ components:
         requested_at:
           type: [string, "null"]
           format: date-time
+
+    DataExportCodeChallenge:
+      description: A code of purpose DATA_EXPORT was sent to the rider's current phone.
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_at, resend_available_at]
+      properties:
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expires_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resend_available_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    DataExportCommand:
+      description: >-
+        The rider confirms the request with the code of the challenge. A sign-in or deletion code is refused
+        (OTP_INVALID); a wrong code counts as an attempt.
+      type: object
+      additionalProperties: false
+      required: [command_id, challenge_id, otp_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        challenge_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        otp_code:
+          type: string
+          pattern: "^[0-9]{4,8}$"
+
+    DataExport:
+      description: >-
+        A copy of the rider's personal data (REQ-PRV-07). PENDING → RUNNING → READY (downloadable until expires_at)
+        or FAILED; READY → EXPIRED, the file is dropped.
+      type: object
+      additionalProperties: false
+      required: [id, state, created_at, ready_at, expires_at, size_bytes]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        state:
+          type: string
+          enum: [PENDING, RUNNING, READY, FAILED, EXPIRED]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        ready_at:
+          type: [string, "null"]
+          format: date-time
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        size_bytes:
+          type: [integer, "null"]
+          format: int64
+
+    DataExportList:
+      type: object
+      additionalProperties: false
+      required: [exports]
+      properties:
+        exports:
+          description: Newest first, at most 20.
+          type: array
+          items:
+            $ref: "#/components/schemas/DataExport"

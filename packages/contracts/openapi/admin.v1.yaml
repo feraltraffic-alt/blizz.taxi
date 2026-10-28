@@ -1914,6 +1914,32 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/clients/{client_id}/data-exports:
+    get:
+      operationId: listClientDataExports
+      summary: A rider's copies of their data
+      description: >-
+        Whether and when the rider asked for a copy of their personal data and its state (REQ-PRV-07); the content is never shown to staff. Requires clients.manage.
+      tags: [Clients]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DataExportList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/clients/{client_id}/block:
     post:
       operationId: blockClient
