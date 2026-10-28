@@ -39,9 +39,11 @@ import taxi.blizz.platform.ErrorCode;
 class RiderOrderController {
 
     private final Orders orders;
+    private final PickupEtas etas;
 
-    RiderOrderController(Orders orders) {
+    RiderOrderController(Orders orders, PickupEtas etas) {
         this.orders = orders;
+        this.etas = etas;
     }
 
     record CancelRequest(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String reasonCode) {
@@ -88,12 +90,12 @@ class RiderOrderController {
     /** Every order of the rider not yet finished, pre-orders included, newest first (ADR 0012 Q-03). */
     @GetMapping("/current")
     CurrentOrders current(AccessClaims claims) {
-        return new CurrentOrders(orders.current(claims.actor().id()));
+        return new CurrentOrders(orders.current(claims.actor().id()).stream().map(etas::with).toList());
     }
 
     @GetMapping("/active")
     ResponseEntity<OrderView> active(AccessClaims claims) {
-        return orders.active(claims.actor().id()).map(ResponseEntity::ok)
+        return orders.active(claims.actor().id()).map(etas::with).map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
@@ -103,7 +105,7 @@ class RiderOrderController {
         if (!claims.actor().id().equals(order.payerClientId())) {
             throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");
         }
-        return order;
+        return etas.with(order);
     }
 
     @PostMapping("/{orderId}/cancel")

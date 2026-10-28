@@ -2124,6 +2124,38 @@ components:
       type: object
       required: [id, short_number, status, version, channel, city_id, vehicle_class, pickup, dropoff, payment_method]
       properties:
+        pickup_eta:
+          description: >-
+            While the driver is on the way to the pickup (trip TO_PICKUP): a forecast, never a promise (REQ-RID-04), from
+            the driver's last position on the server. Null in every other state and when no position is known — never
+            a made-up value. Shown in the rider's order reads (GET /orders/{id}, /current, /active); command answers
+            leave it null.
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required: [seconds, distance_metres, source, location_at, stale]
+              properties:
+                seconds:
+                  description: Driving time from that position to the pickup.
+                  type: integer
+                  format: int64
+                  minimum: 0
+                distance_metres:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                source:
+                  description: ROUTER — on the roads; STRAIGHT_LINE — from the straight line, when no router answered.
+                  type: string
+                  enum: [ROUTER, STRAIGHT_LINE]
+                location_at:
+                  description: When the driver was at that position; the ETA counts from then.
+                  type: string
+                  format: date-time
+                stale:
+                  description: The position is older than the freshness limit; show the forecast as uncertain.
+                  type: boolean
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         short_number:
