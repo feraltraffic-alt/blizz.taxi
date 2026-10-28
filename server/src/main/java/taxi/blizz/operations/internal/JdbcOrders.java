@@ -51,6 +51,7 @@ class JdbcOrders implements Orders {
     private final AuditLog audit;
     private final IdempotentCommands commands;
     private final CityResolver cities;
+    private final taxi.blizz.geo.CityOperations cityOperations;
     private final OrderCore core;
     private final DispatchEngine engine;
     private final VehicleClasses classes;
@@ -73,8 +74,9 @@ class JdbcOrders implements Orders {
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
-               taxi.blizz.platform.RateLimits rateLimits) {
+               taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations) {
 
+        this.cityOperations = cityOperations;
         this.rateLimits = rateLimits;
         this.calls = calls;
         this.legal = legal;
@@ -106,6 +108,10 @@ class JdbcOrders implements Orders {
                     "A contact is the caller of a phone order or the recipient of a rider's order");
         }
         String channel = authorizeCreate(actor, order, city);
+        // The city's pause, working hours (at the pickup time of an order for later) and payment methods (REQ-TEN-03/06).
+        cityOperations.requireAccepting(city, order.pickupAt() == null ? core.now()
+                : order.pickupAt().atOffset(java.time.ZoneOffset.UTC),
+                order.paymentMethod() == null ? null : order.paymentMethod().name());
         // A rider orders only after accepting the legal texts in force that must be accepted (REQ-PRV-08).
         legal.requireAccepted(actor);
         rateLimits.acquire(taxi.blizz.platform.RateLimits.ORDER, actor);

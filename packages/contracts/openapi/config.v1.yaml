@@ -131,7 +131,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [id, code, name, currency, timezone]
+            required: [id, code, name, currency, timezone, working_hours, payment_methods, orders_paused]
             properties:
               id:
                 $ref: "./common.yaml#/components/schemas/Uuid"
@@ -143,6 +143,21 @@ components:
                 type: string
               timezone:
                 type: string
+              working_hours:
+                description: >-
+                  In the city's time zone; empty — around the clock. An order for now outside them is refused
+                  (CITY_CLOSED); one for later only needs its pickup time inside them (REQ-TEN-03).
+                type: array
+                items:
+                  $ref: "./admin.v1.yaml#/components/schemas/WorkingHours"
+              payment_methods:
+                description: The methods an order in this city may use.
+                type: array
+                items:
+                  $ref: "./admin.v1.yaml#/components/schemas/CityPaymentMethod"
+              orders_paused:
+                description: New orders are refused with CITY_PAUSED for now (REQ-TEN-06).
+                type: boolean
 
     Brand:
       description: Shown by the apps; never changes business rules (REQ-TEN-07).

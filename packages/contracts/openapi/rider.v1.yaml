@@ -333,6 +333,9 @@ paths:
         payment is not available yet (S-09). At most active_orders_per_payer orders not in a final state, pre-orders
         included, together with phone orders from my phone (ADR 0012) → 409 ACTIVE_ORDER_LIMIT. A rider whose
         account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE.
+        The pickup city refuses new orders while paused (422 CITY_PAUSED), an order for now outside its working hours or
+        one for later whose pickup time is outside them (422 CITY_CLOSED), and a payment method it does not offer
+        (422 PAYMENT_METHOD_NOT_OFFERED); see the cities in the bootstrap (REQ-TEN-03/06).
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

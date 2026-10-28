@@ -31,6 +31,12 @@ public enum ErrorCode {
     /** Fewer bonuses on the rider's account than asked for (ADR 0009). */
     WALLET_INSUFFICIENT(422),
     OUTSIDE_SERVICE_AREA(422),
+    /** The pickup city takes no new orders for now (REQ-TEN-06). */
+    CITY_PAUSED(422),
+    /** Outside the pickup city's working hours: now for an order for now, at the pickup time for one for later. */
+    CITY_CLOSED(422),
+    /** The pickup city does not offer this payment method (REQ-TEN-03). */
+    PAYMENT_METHOD_NOT_OFFERED(422),
     LOCATION_NOT_FRESH(422),
     /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */
     PICKUP_TOO_FAR(422),

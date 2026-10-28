@@ -955,6 +955,145 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/operations:
+    get:
+      operationId: getCityOperations
+      summary: Working hours, payment methods and the pause of a city
+      description: >-
+        REQ-TEN-03/06. Defaults until the first change: open around the clock, every payment method, not paused
+        (version 0). Needs geo.manage for the city.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityOperations"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      operationId: changeCityOperations
+      summary: Change the working hours and payment methods of a city
+      description: >-
+        Outside the working hours an order for now is refused (CITY_CLOSED); an order for later is accepted when its
+        pickup time is inside them. A payment method not offered is refused (PAYMENT_METHOD_NOT_OFFERED). Orders
+        already accepted are not touched. Versioned, audited, reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeCityOperations"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityOperations"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+  /api/admin/v1/cities/{city_id}/operations/pause:
+    post:
+      operationId: pauseCityOrders
+      summary: Pause new orders in a city
+      description: >-
+        New orders from the apps and by phone are refused with CITY_PAUSED until the pause is lifted. Trips under way
+        and orders for later already accepted go on as usual (REQ-TEN-06). Versioned, audited, reason required.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityOperations"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+  /api/admin/v1/cities/{city_id}/operations/resume:
+    post:
+      operationId: resumeCityOrders
+      summary: Lift the pause of new orders in a city
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeoChange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityOperations"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/cities/{city_id}/zones:
     get:
       operationId: listZones
@@ -4203,6 +4342,90 @@ components:
         version:
           type: integer
           format: int64
+
+    WorkingHours:
+      description: >-
+        One interval of work in the city's time zone, starting on each of the given ISO days (1 = Monday). An interval
+        whose `to` is not after `from` runs past midnight into the next day ("22:00"–"06:00"); `from` equal to `to`
+        is 24 hours from `from`.
+      type: object
+      additionalProperties: false
+      required: [days_of_week, from, to]
+      properties:
+        days_of_week:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        from:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        to:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+
+    CityPaymentMethod:
+      type: string
+      enum: [CASH, CARD, TERMINAL]
+
+    CityOperations:
+      type: object
+      additionalProperties: false
+      required: [city_id, working_hours, payment_methods, orders_paused, pause_reason, paused_at, version]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        working_hours:
+          description: Empty — open around the clock.
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkingHours"
+        payment_methods:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/CityPaymentMethod"
+        orders_paused:
+          type: boolean
+        pause_reason:
+          type: [string, "null"]
+        paused_at:
+          type: [string, "null"]
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+
+    ChangeCityOperations:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, working_hours, payment_methods, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        working_hours:
+          description: Empty — open around the clock. At most 14 intervals.
+          type: array
+          maxItems: 14
+          items:
+            $ref: "#/components/schemas/WorkingHours"
+        payment_methods:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/CityPaymentMethod"
+        reason:
+          type: string
 
     GeoChange:
       type: object
