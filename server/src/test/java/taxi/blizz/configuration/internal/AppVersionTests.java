@@ -86,6 +86,13 @@ class AppVersionTests {
     private void setMinimum(String platform, String version) {
         ServiceSettings.Version current = settings.current();
         ServiceSettings.AppVersions av = current.settings().appVersions();
+        if (av == null) {
+            av = new ServiceSettings.AppVersions(
+                    new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                    new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                    new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"),
+                    new ServiceSettings.PlatformVersions("0.0.0", "0.0.0"), false);
+        }
         ServiceSettings.PlatformVersions pv = new ServiceSettings.PlatformVersions(version, version);
         ServiceSettings.AppVersions next = new ServiceSettings.AppVersions(
                 platform.equals("RIDER_ANDROID") ? pv : av.riderAndroid(),
@@ -103,8 +110,8 @@ class AppVersionTests {
     private Actor staffWithPermission() {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                insert into staff_user (id, login, password_hash, display_name, permissions)
-                values (:id, :login, 'x', 'test', array['settings.manage'])
+                insert into staff_user (id, login, name, role, permissions)
+                values (:id, :login, 'test', 'ADMIN', array['settings.manage'])
                 """).param("id", id).param("login", "av-" + id).update();
         return new Actor(SubjectType.STAFF, id);
     }
