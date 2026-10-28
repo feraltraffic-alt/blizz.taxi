@@ -617,7 +617,9 @@ paths:
     post:
       operationId: suspendDriver
       summary: Suspend an approved driver
-      description: No new orders; a trip in progress is not interrupted (REQ-DS-01). Reason required.
+      description: >-
+        No new orders; a trip in progress is not interrupted (REQ-DS-01). Reason required. risk_flag_id names the risk
+        flag that caused it (it must be this driver's; 422 otherwise) and is kept with the change and in the audit.
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -631,7 +633,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReviewChange"
+              $ref: "#/components/schemas/SuspendDriver"
       responses:
         "200":
           description: The driver after the decision.
@@ -3806,6 +3808,171 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/driver-risk-flags:
+    get:
+      operationId: listDriverRiskFlags
+      summary: Risk flags of drivers to review
+      description: >-
+        Newest first, at most 100, in the cities where I have drivers.risk; filter by city, state and driver. A flag
+        blocks nothing by itself.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: state
+          in: query
+          schema:
+            $ref: "./risk.yaml#/components/schemas/RiskFlagState"
+        - name: driver_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: before
+          in: query
+          description: Only flags raised before this time (the next page).
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./risk.yaml#/components/schemas/RiskFlagList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: raiseDriverRiskFlag
+      summary: Raise a risk flag by hand
+      description: Needs drivers.risk for the city; audited. A repeat of the command returns the first flag.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./risk.yaml#/components/schemas/RaiseRiskFlag"
+      responses:
+        "201":
+          description: The new flag (OPEN).
+          content:
+            application/json:
+              schema:
+                $ref: "./risk.yaml#/components/schemas/RiskFlag"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/driver-risk-flags/{flag_id}:
+    get:
+      operationId: getDriverRiskFlag
+      summary: One risk flag
+      description: Needs drivers.risk for the flag's city.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/RiskFlagId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./risk.yaml#/components/schemas/RiskFlag"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/driver-risk-flags/{flag_id}/confirm:
+    post:
+      operationId: confirmDriverRiskFlag
+      summary: Confirm a risk flag — the suspicion holds
+      description: >-
+        OPEN → CONFIRMED with a reason; audited. Changes nothing for the driver: suspend them separately, naming the
+        flag. Not OPEN → 409.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/RiskFlagId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./risk.yaml#/components/schemas/ReviewRiskFlag"
+      responses:
+        "200":
+          description: The flag now.
+          content:
+            application/json:
+              schema:
+                $ref: "./risk.yaml#/components/schemas/RiskFlag"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/driver-risk-flags/{flag_id}/dismiss:
+    post:
+      operationId: dismissDriverRiskFlag
+      summary: Dismiss a risk flag — no case
+      description: OPEN → DISMISSED with a reason; audited. Not OPEN → 409.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/RiskFlagId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./risk.yaml#/components/schemas/ReviewRiskFlag"
+      responses:
+        "200":
+          description: The flag now.
+          content:
+            application/json:
+              schema:
+                $ref: "./risk.yaml#/components/schemas/RiskFlag"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Legal
     description: Legal texts and their versions (REQ-PRV-08)
@@ -3833,6 +4000,13 @@ tags:
     description: Staff accounts, roles and functions (super admin)
 
 components:
+  parameters:
+    RiskFlagId:
+      name: flag_id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
   securitySchemes:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
@@ -4338,6 +4512,26 @@ components:
           type: array
           items:
             $ref: "./common.yaml#/components/schemas/Uuid"
+
+    SuspendDriver:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          maxLength: 1000
+        risk_flag_id:
+          description: The driver's risk flag that caused the suspension (issue #71).
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
 
     ReviewChange:
       type: object

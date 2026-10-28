@@ -20,11 +20,13 @@ class DispatchEngine {
     private final JdbcClient jdbc;
     private final OrderCore core;
     private final DispatchProperties properties;
+    private final JdbcDispatchJournal journal;
 
-    DispatchEngine(JdbcClient jdbc, OrderCore core, DispatchProperties properties) {
+    DispatchEngine(JdbcClient jdbc, OrderCore core, DispatchProperties properties, JdbcDispatchJournal journal) {
         this.jdbc = jdbc;
         this.core = core;
         this.properties = properties;
+        this.journal = journal;
     }
 
     record Attempt(UUID id, UUID orderId, int generation, String phase, OffsetDateTime phaseDeadline,
@@ -125,6 +127,10 @@ class DispatchEngine {
     }
 
     private boolean offerToNextDriver(Attempt attempt, OffsetDateTime now) {
+        int widest = properties.radiiMeters().stream().mapToInt(Integer::intValue).max().orElse(0);
+        // Considered before the offer, so the chosen driver is not shown as busy with it (REQ-DSP-12).
+        List<OrderCore.Considered> considered = core.explain(attempt.orderId(), widest,
+                properties.journalCandidates());
         for (int radius : properties.radiiMeters()) {
             for (OrderCore.Candidate candidate : core.candidates(attempt.orderId(), radius, null, false)) {
                 OrderCore.Capacity capacity = core.lockCapacity(candidate.driverId());
@@ -150,9 +156,11 @@ class DispatchEngine {
                         null, Map.of("offer_id", offerId.toString(), "driver_id", candidate.driverId().toString(),
                                 "distance_m", candidate.distanceM()));
                 schedule(attempt, expiresAt);
+                journal.round(attempt, widest, considered, candidate.driverId(), now);
                 return true;
             }
         }
+        journal.round(attempt, widest, considered, null, now);
         return false;
     }
 

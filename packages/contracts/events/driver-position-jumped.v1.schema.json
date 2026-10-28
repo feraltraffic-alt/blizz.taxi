@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-position-jumped.v1.schema.json",
+  "title": "DriverPositionJumped v1 payload",
+  "description": "Published by location when a driver's position, compared with the previous one of the same device session, implies a speed above the jump limit and both have good accuracy and no future time (REQ-DS-08, issue #71). Aggregate Driver. Ids and numbers only, never coordinates: operations decides whether it is an impossible movement and raises at most one risk flag per work session and hour. Nothing else happens to the driver or the trip.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["driver_id", "device_session_id", "track_point_id", "distance_m", "seconds", "speed_kph", "recorded_at"],
+  "properties": {
+    "driver_id": { "type": "string", "format": "uuid" },
+    "device_session_id": { "type": "string", "format": "uuid" },
+    "track_point_id": { "type": "string", "format": "uuid", "description": "The later of the two points." },
+    "distance_m": { "type": "integer", "minimum": 0 },
+    "seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "speed_kph": { "type": "integer", "minimum": 0 },
+    "recorded_at": { "type": "string", "format": "date-time", "description": "Device time of the later point." }
+  },
+  "examples": [
+    {
+      "driver_id": "7b000000-0000-4000-8000-000000000071",
+      "device_session_id": "7c000000-0000-4000-8000-000000000071",
+      "track_point_id": "7d000000-0000-4000-8000-000000000071",
+      "distance_m": 41250,
+      "seconds": 60,
+      "speed_kph": 2475,
+      "recorded_at": "2026-10-28T09:00:00Z"
+    }
+  ]
+}

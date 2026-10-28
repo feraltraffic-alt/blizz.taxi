@@ -60,7 +60,16 @@ public interface DriverAdmission {
                          List<UUID> rejectedDocuments);
 
     /** APPROVED → SUSPENDED with a reason; stops new orders, never an ongoing trip (REQ-DS-01). */
-    DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
+    default DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason) {
+        return suspend(reviewer, commandId, driverId, expectedVersion, reason, null);
+    }
+
+    /**
+     * The same, naming the risk flag that caused it (issue #71): it must be this driver's ({@code VALIDATION_FAILED}
+     * otherwise) and is kept with the change and in the audit. The driver sees the reason, never the flag.
+     */
+    DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason,
+                          UUID riskFlagId);
 
     /** SUSPENDED → APPROVED with a reason, when the cause of the suspension is gone. */
     DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
