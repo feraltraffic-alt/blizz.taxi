@@ -1,0 +1,444 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.2)
+
+2026-10-28T08:15:53.018Z  INFO 2996 --- [blizz-taxi-server] [           main] taxi.blizz.BlizzTaxiApplication          : Starting BlizzTaxiApplication v0.1.0-SNAPSHOT using Java 25.0.4.1 with PID 2996 (/home/runner/work/blizz.taxi/blizz.taxi/server/target/server-0.1.0-SNAPSHOT.jar started by runner in /home/runner/work/blizz.taxi/blizz.taxi/server)
+2026-10-28T08:15:53.028Z  INFO 2996 --- [blizz-taxi-server] [           main] taxi.blizz.BlizzTaxiApplication          : The following 1 profile is active: "sandbox"
+2026-10-28T08:15:54.899Z  INFO 2996 --- [blizz-taxi-server] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-28T08:15:54.970Z  INFO 2996 --- [blizz-taxi-server] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 55 ms. Found 0 JPA repository interfaces.
+2026-10-28T08:15:55.796Z  INFO 2996 --- [blizz-taxi-server] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-10-28T08:15:55.818Z  INFO 2996 --- [blizz-taxi-server] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-28T08:15:55.819Z  INFO 2996 --- [blizz-taxi-server] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-10-28T08:15:55.852Z  INFO 2996 --- [blizz-taxi-server] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 2754 ms
+2026-10-28T08:15:56.346Z  INFO 2996 --- [blizz-taxi-server] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-28T08:15:56.713Z  INFO 2996 --- [blizz-taxi-server] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@69d021c1
+2026-10-28T08:15:56.715Z  INFO 2996 --- [blizz-taxi-server] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-28T08:15:56.737Z  INFO 2996 --- [blizz-taxi-server] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/blizz (PostgreSQL 18.6)
+2026-10-28T08:15:56.830Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-28T08:15:56.836Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 69 migrations (execution time 00:00.051s)
+2026-10-28T08:15:56.878Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-28T08:15:56.919Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-28T08:15:56.926Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - enable postgis"
+2026-10-28T08:15:56.932Z  WARN 2996 --- [blizz-taxi-server] [           main] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: extension "postgis" already exists, skipping (SQL State: 42710 - Error Code: 0)
+2026-10-28T08:15:56.947Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - command receipt"
+2026-10-28T08:15:56.966Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - outbox"
+2026-10-28T08:15:56.992Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - audit log"
+2026-10-28T08:15:57.019Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - identity subjects and otp"
+2026-10-28T08:15:57.051Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - device sessions"
+2026-10-28T08:15:57.074Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - otp client limits"
+2026-10-28T08:15:57.089Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - cities and zones"
+2026-10-28T08:15:57.144Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - driver admission"
+2026-10-28T08:15:57.172Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - files"
+2026-10-28T08:15:57.189Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - work sessions"
+2026-10-28T08:15:57.211Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - tariffs and quotes"
+2026-10-28T08:15:57.246Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1640 - order core"
+2026-10-28T08:15:57.294Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1700 - trip phases"
+2026-10-28T08:15:57.308Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1710 - trip exceptions"
+2026-10-28T08:15:57.318Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1730 - order quote"
+2026-10-28T08:15:57.330Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1740 - own addresses"
+2026-10-28T08:15:57.368Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1800 - final fare"
+2026-10-28T08:15:57.385Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1805 - ledger"
+2026-10-28T08:15:57.407Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1837 - address search rate limit"
+2026-10-28T08:15:57.417Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0630 - tariff waiting policy"
+2026-10-28T08:15:57.431Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0700 - driver debt"
+2026-10-28T08:15:57.446Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0710 - driver restriction"
+2026-10-28T08:15:57.457Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0800 - order chat"
+2026-10-28T08:15:57.472Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0900 - staff sign in"
+2026-10-28T08:15:57.487Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1000 - staff activity"
+2026-10-28T08:15:57.504Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1100 - driver track"
+2026-10-28T08:15:57.523Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1200 - tariff zones and outside"
+2026-10-28T08:15:57.536Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1300 - order contact"
+2026-10-28T08:15:57.546Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1400.1 - service settings"
+2026-10-28T08:15:57.558Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1500.1 - support cases"
+2026-10-28T08:15:57.579Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1600.1 - tariff preorder surcharge"
+2026-10-28T08:15:57.596Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1700.1 - cancel reasons"
+2026-10-28T08:15:57.613Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1800.1 - scheduled orders"
+2026-10-28T08:15:57.626Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1900.1 - preorder reservations"
+2026-10-28T08:15:57.641Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2000.1 - trip interruption"
+2026-10-28T08:15:57.652Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2100.1 - payments cards"
+2026-10-28T08:15:57.672Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2200.1 - card holds"
+2026-10-28T08:15:57.686Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2300.1 - card capture"
+2026-10-28T08:15:57.692Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2359.2 - support attachments"
+2026-10-28T08:15:57.702Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0010.1 - push notifications"
+2026-10-28T08:15:57.715Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0020.1 - integrations"
+2026-10-28T08:15:57.722Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0030.2 - ratings"
+2026-10-28T08:15:57.732Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0100.1 - terminal payment"
+2026-10-28T08:15:57.741Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.2 - operator bonuses"
+2026-10-28T08:15:57.756Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.3 - driver document reminders"
+2026-10-28T08:15:57.763Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0200.1 - rider wallet"
+2026-10-28T08:15:57.773Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0210.1 - wallet payment"
+2026-10-28T08:15:57.783Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0220.1 - rider promotions"
+2026-10-28T08:15:57.797Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0230.1 - driver transfers"
+2026-10-28T08:15:57.808Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0240.1 - driver promotions"
+2026-10-28T08:15:57.819Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0250.3 - safety contacts"
+2026-10-28T08:15:57.827Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0300.1 - card top up"
+2026-10-28T08:15:57.835Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0310.3 - payment card token removal"
+2026-10-28T08:15:57.842Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0320.3 - wallet forfeited"
+2026-10-28T08:15:57.849Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0330.3 - client deletion"
+2026-10-28T08:15:57.858Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0340.1 - tips"
+2026-10-28T08:15:57.868Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0350.3 - orders per payer"
+2026-10-28T08:15:57.875Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0400.3 - otp delivery"
+2026-10-28T08:15:57.882Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0410.1 - client blocking"
+2026-10-28T08:15:57.889Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0420.1 - report exports"
+2026-10-28T08:15:57.898Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0430.3 - incoming calls"
+2026-10-28T08:15:57.910Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0440.3 - call recordings"
+2026-10-28T08:15:57.923Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0500.1 - personal data exports"
+2026-10-28T08:15:57.934Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.1 - legal documents"
+2026-10-28T08:15:57.950Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.3 - call centre part2"
+2026-10-28T08:15:57.965Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0520.1 - emergency access"
+2026-10-28T08:15:57.975Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0530.1 - rate limits"
+2026-10-28T08:15:57.985Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0540.3 - dispatch journal risk flags"
+2026-10-28T08:15:58.001Z  INFO 2996 --- [blizz-taxi-server] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 69 migrations to schema "public", now at version v20261028.0540.3 (execution time 00:00.575s)
+2026-10-28T08:15:58.134Z  INFO 2996 --- [blizz-taxi-server] [           main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-10-28T08:15:58.188Z  INFO 2996 --- [blizz-taxi-server] [           main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.13.Final
+2026-10-28T08:15:58.643Z  INFO 2996 --- [blizz-taxi-server] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-28T08:15:58.718Z  INFO 2996 --- [blizz-taxi-server] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/blizz]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 18.6
+	Default catalog/schema: blizz/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-10-28T08:15:59.073Z  INFO 2996 --- [blizz-taxi-server] [           main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-28T08:15:59.129Z  INFO 2996 --- [blizz-taxi-server] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-28T08:16:01.903Z  INFO 2996 --- [blizz-taxi-server] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-10-28T08:16:01.992Z  INFO 2996 --- [blizz-taxi-server] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-10-28T08:16:02.019Z  INFO 2996 --- [blizz-taxi-server] [           main] taxi.blizz.BlizzTaxiApplication          : Started BlizzTaxiApplication in 10.145 seconds (process running for 10.858)
+2026-10-28T08:16:02.297Z  WARN 2996 --- [blizz-taxi-server] [           main] taxi.blizz.sandbox.SandboxSeed           : [sandbox] Seed data loaded. This instance is a sandbox: SMS codes are readable at /sandbox/v1/otp.
+2026-10-28T08:16:02.382Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-28T08:16:02.382Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-28T08:16:02.384Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+2026-10-28T08:16:02.603Z  WARN 2996 --- [blizz-taxi-server] [           main] t.b.identity.internal.StaffBootstrap     : Created the first super admin 'admin'; the password must be changed at the first sign-in
+2026-10-28T08:16:05.680Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****14: 432567
+2026-10-28T08:16:06.080Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 661528
+2026-10-28T08:16:13.246Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****49: 543482
+2026-10-28T08:16:13.379Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 165263
+2026-10-28T08:16:14.447Z  INFO 2996 --- [blizz-taxi-server] [io-8080-exec-10] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 841648
+2026-10-28T08:16:15.184Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****81: 478392
+2026-10-28T08:16:15.510Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 651290
+2026-10-28T08:16:19.500Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 1; retry in PT1S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:20.507Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 2; retry in PT2S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:21.637Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 316832
+2026-10-28T08:16:22.532Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 3; retry in PT4S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:22.947Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-1] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 545701
+2026-10-28T08:16:24.276Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****04: 202273
+2026-10-28T08:16:26.446Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****04: 790240
+2026-10-28T08:16:26.550Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 4; retry in PT8S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:27.066Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****42: 452097
+2026-10-28T08:16:29.742Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-1] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****42: 530394
+2026-10-28T08:16:31.908Z  INFO 2996 --- [blizz-taxi-server] [io-8080-exec-10] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****42: 115781
+2026-10-28T08:16:32.046Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****18: 622530
+2026-10-28T08:16:34.143Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****18: 913522
+2026-10-28T08:16:34.587Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 5; retry in PT16S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:42.511Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****52: 343744
+2026-10-28T08:16:43.017Z  INFO 2996 --- [blizz-taxi-server] [io-8080-exec-10] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 242853
+2026-10-28T08:16:43.135Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 567730
+2026-10-28T08:16:43.298Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 588341
+2026-10-28T08:16:44.138Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****25: 210394
+2026-10-28T08:16:44.820Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 349962
+2026-10-28T08:16:44.988Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****33: 227526
+2026-10-28T08:16:45.226Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:16:46.230Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] rider.driver-assigned — Водитель найден: Машина едет к вам
+2026-10-28T08:16:46.232Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:16:48.237Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] rider.driver-arrived — Водитель на месте: Машина ждёт вас
+2026-10-28T08:16:48.238Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] rider.trip-completed — Поездка завершена: Спасибо, что выбрали нас
+2026-10-28T08:16:50.699Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 6; retry in PT32S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:16:52.033Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 116693
+2026-10-28T08:16:52.232Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****79: 410693
+2026-10-28T08:16:52.658Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 648682
+2026-10-28T08:16:53.249Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:16:53.250Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:16:57.411Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****01: 135839
+2026-10-28T08:16:57.927Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 440967
+2026-10-28T08:16:58.119Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****67: 364883
+2026-10-28T08:16:59.265Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:16:59.604Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 542197
+2026-10-28T08:17:01.271Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:17:01.273Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:17:02.519Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****83: 969721
+2026-10-28T08:17:02.579Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-9] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****51: 818354
+2026-10-28T08:17:02.638Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****00: 329304
+2026-10-28T08:17:04.047Z  WARN 2996 --- [blizz-taxi-server] [nio-8080-exec-2] .s.b.m.m.MaximumAllowableTagsMeterFilter : Reached the maximum number of 'uri' tags for 'http.server.requests'.
+2026-10-28T08:17:12.549Z  INFO 2996 --- [blizz-taxi-server] [io-8080-exec-10] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****45: 755833
+2026-10-28T08:17:13.524Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****51: 531689
+2026-10-28T08:17:13.694Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 909970
+2026-10-28T08:17:14.390Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 649569
+2026-10-28T08:17:14.553Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****90: 523508
+2026-10-28T08:17:15.295Z  INFO 2996 --- [blizz-taxi-server] [   scheduling-1] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-10-28T08:17:22.576Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 145713
+2026-10-28T08:17:23.027Z  WARN 2996 --- [blizz-taxi-server] [   scheduling-1] t.blizz.platform.internal.OutboxRelay    : Outbox event 821b6ef1-58d8-4240-977b-2928a675812e (CardPaymentSettled) failed, attempt 7; retry in PT1M4S
+taxi.blizz.platform.DomainException: Incomplete journal posting
+	at taxi.blizz.finance.internal.JdbcLedger.validate(JdbcLedger.java:79)
+	at taxi.blizz.finance.internal.JdbcLedger.post(JdbcLedger.java:28)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158)
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:714)
+	at taxi.blizz.finance.internal.JdbcLedger$$SpringCGLIB$$0.post(<generated>)
+	at taxi.blizz.finance.internal.CardPaymentPosting.handle(CardPaymentPosting.java:50)
+	at taxi.blizz.platform.internal.OutboxRelay.lambda$deliver$0(OutboxRelay.java:119)
+	at org.springframework.transaction.support.TransactionOperations.lambda$executeWithoutResult$0(TransactionOperations.java:68)
+	at org.springframework.transaction.support.TransactionTemplate.execute(TransactionTemplate.java:137)
+	at org.springframework.transaction.support.TransactionOperations.executeWithoutResult(TransactionOperations.java:67)
+	at taxi.blizz.platform.internal.OutboxRelay.deliver(OutboxRelay.java:108)
+	at taxi.blizz.platform.internal.OutboxRelay.process(OutboxRelay.java:98)
+	at taxi.blizz.platform.internal.OutboxRelay.runOnce(OutboxRelay.java:53)
+	at taxi.blizz.platform.internal.OutboxRelayScheduler.poll(OutboxRelayScheduler.java:22)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:128)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$1(ScheduledMethodRunnable.java:122)
+	at io.micrometer.observation.Observation.observe(Observation.java:569)
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:122)
+	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:88)
+	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:369)
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:310)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+2026-10-28T08:17:26.430Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +480*****24: 391156
+2026-10-28T08:17:26.578Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 639511
+2026-10-28T08:17:26.926Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****55: 624727
+2026-10-28T08:17:28.306Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 443817
+2026-10-28T08:17:28.480Z  INFO 2996 --- [blizz-taxi-server] [nio-8080-exec-4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 391524
