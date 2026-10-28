@@ -51,7 +51,7 @@ class OtpDeliveryTests {
     OtpService otp;
     @Autowired
     ChannelOtpDelivery delivery;
-    @Autowired
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     FakeOtpSender fake;
     @Autowired
     OtpDeliveries deliveries;
@@ -89,6 +89,24 @@ class OtpDeliveryTests {
         otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null, OtpChannel.VOICE);
         assertThat(meters.find("blizz.sms.sent").tag("purpose", "OTP").counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count).sum()).isEqualTo(beforeVoice);
+    }
+
+    @Test
+    void providerRunsWithoutAnActiveDatabaseTransaction() {
+        for (OtpChannel channel : OtpChannel.values()) {
+            OtpSender delegate = fake.sender(channel);
+            OtpSender checked = new OtpSender() {
+                public OtpChannel channel() { return delegate.channel(); }
+                public String provider() { return delegate.provider(); }
+                public Result send(PhoneNumber phone, String code, OtpAudience audience) {
+                    assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
+                            .isActualTransactionActive()).as("provider must not hold a transaction").isFalse();
+                    return delegate.send(phone, code, audience);
+                }
+            };
+            org.mockito.Mockito.doReturn(checked).when(fake).sender(channel);
+            otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null, channel);
+        }
     }
 
     Actor keys;

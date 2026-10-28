@@ -32,9 +32,7 @@ class OrderMetrics {
         switch (type) {
             case "OrderCreated", "OrderScheduled" -> jdbc.sql("select channel, preorder from ride_order where id = :id")
                     .param("id", order).query((rs, i) -> {
-                        metrics.counter("blizz.orders.created", "channel",
-                                bounded(rs.getString(1), Set.of("APP", "WEB", "PHONE")),
-                                "preorder", Boolean.toString(rs.getBoolean(2)));
+                        created(rs.getString(1), rs.getBoolean(2));
                         return true;
                     }).single();
             case "OrderUnfulfilled" -> metrics.counter("blizz.orders.unfulfilled");
@@ -52,6 +50,11 @@ class OrderMetrics {
             case "OfferRejected" -> offer("DECLINED");
             default -> { /* Other history events do not represent these metrics. */ }
         }
+    }
+
+    void created(String channel, boolean preorder) {
+        metrics.counter("blizz.orders.created", "channel", bounded(channel, Set.of("APP", "WEB", "PHONE")),
+                "preorder", Boolean.toString(preorder));
     }
 
     void cancelled(String by, String reason) {
