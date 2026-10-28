@@ -2049,8 +2049,10 @@ components:
           type: string
           enum: [APP, WEB, PHONE, PARTNER]
         payer_client_id:
-          description: The client who pays for this order (the signed-in rider, or the account created for a phone order).
-          $ref: "./common.yaml#/components/schemas/Uuid"
+          description: The client who pays for this order (the signed-in rider, or the account created for a phone order). Null while the phone order has no account yet.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         vehicle_class:
