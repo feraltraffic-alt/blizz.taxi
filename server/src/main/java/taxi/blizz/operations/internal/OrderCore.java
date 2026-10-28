@@ -389,6 +389,58 @@ class OrderCore {
     record Candidate(UUID driverId, UUID vehicleId, int distanceM) {
     }
 
+    /** A driver considered for an order and the first check that left him out (null: he qualified). */
+    record Considered(UUID driverId, Integer distanceM, String reason) {
+    }
+
+    /**
+     * For the dispatch journal (REQ-DSP-12, issue #71): the drivers with an open shift in the order's city, nearest
+     * first, at most {@code limit}, each with the first of the checks of {@link #candidates} that fails, in the same
+     * order of importance — or null when he qualifies within {@code radius}. Ids and distances only.
+     */
+    List<Considered> explain(UUID orderId, int radius, int limit) {
+        OffsetDateTime now = now();
+        return jdbc.sql("""
+                        select ws.driver_id,
+                               cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance_m,
+                               case
+                                 when ws.last_heartbeat_at is null or ws.last_heartbeat_at <= :heartbeatSince
+                                      or ws.last_location_at is null or ws.last_location_at <= :locationSince
+                                      or ws.last_location is null then 'STALE_LOCATION'
+                                 when ws.intent <> 'ACCEPTING' then 'PAUSED'
+                                 when d.account_state <> 'ACTIVE' or d.review_status <> 'APPROVED'
+                                      or v.state <> 'APPROVED' then 'NOT_ADMITTED'
+                                 when not (o.vehicle_class = any(v.class_approvals)) then 'CLASS'
+                                 when o.payment_method = 'TERMINAL' and not d.has_payment_terminal then 'PAYMENT'
+                                 when exists (select 1 from driver_restriction r
+                                              where r.driver_id = ws.driver_id and r.active) then 'RESTRICTED'
+                                 when exists (select 1 from assignment x
+                                              where x.order_id in (o.id, o.related_order_id)
+                                                and x.driver_id = ws.driver_id) then 'PREVIOUS_DRIVER'
+                                 when exists (select 1 from offer f
+                                              where f.order_id = o.id and f.driver_id = ws.driver_id) then 'ALREADY_OFFERED'
+                                 when coalesce(c.occupancy, 'FREE') <> 'FREE' then 'BUSY'
+                                 when not ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
+                                      then 'TOO_FAR'
+                               end as reason
+                        from ride_order o
+                        join work_session ws on ws.city_id = o.city_id and ws.state = 'OPEN'
+                        join driver d on d.id = ws.driver_id
+                        join vehicle v on v.id = ws.vehicle_id
+                        left join driver_capacity c on c.driver_id = ws.driver_id
+                        where o.id = :orderId
+                        order by distance_m nulls last, ws.driver_id
+                        limit :limit""")
+                .param("orderId", orderId)
+                .param("heartbeatSince", now.minus(presence.stale()))
+                .param("locationSince", now.minus(presence.gpsMaxAge()))
+                .param("radius", radius)
+                .param("limit", limit)
+                .query((rs, i) -> new Considered(rs.getObject("driver_id", UUID.class),
+                        (Integer) rs.getObject("distance_m"), rs.getString("reason")))
+                .list();
+    }
+
     static Actor system() {
         return Actor.system();
     }

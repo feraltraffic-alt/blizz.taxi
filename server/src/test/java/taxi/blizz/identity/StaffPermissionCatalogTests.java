@@ -33,6 +33,6 @@ class StaffPermissionCatalogTests {
                 RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION, OperatorBonuses.MANAGE_PERMISSION,
                 ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION,
                 Calls.ANSWER_PERMISSION, Calls.LISTEN_PERMISSION,
-                Calls.SUPERVISE_PERMISSION));
+                Calls.SUPERVISE_PERMISSION, taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION));
     }
 }

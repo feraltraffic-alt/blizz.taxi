@@ -50,11 +50,13 @@ class OperatorOrderController {
     private final StaffAccess staff;
     private final JdbcClient jdbc;
     private final taxi.blizz.operations.Preorders preorders;
+    private final taxi.blizz.operations.DispatchJournal journal;
 
     OperatorOrderController(Orders orders, OrderChat chat, CityResolver cities, VehicleClasses classes,
                             QuoteService quotes, StaffAccess staff, JdbcClient jdbc,
-                            taxi.blizz.operations.Preorders preorders) {
+                            taxi.blizz.operations.Preorders preorders, taxi.blizz.operations.DispatchJournal journal) {
         this.preorders = preorders;
+        this.journal = journal;
         this.orders = orders;
         this.chat = chat;
         this.cities = cities;
@@ -109,7 +111,7 @@ class OperatorOrderController {
                              taxi.blizz.operations.Preorders.Holder reservation, UUID relatedOrderId) {
     }
 
-    record Timeline(List<Orders.TimelineEntry> events) {
+    record Timeline(List<Orders.TimelineEntry> events, taxi.blizz.operations.DispatchJournal.Journal dispatch) {
     }
 
     record ChatMessages(List<OrderChat.Message> messages) {
@@ -215,7 +217,7 @@ class OperatorOrderController {
     /** Who did what with the order: "Operator Anna cancelled the order: passenger asked". */
     @GetMapping("/orders/{orderId}/events")
     Timeline events(AccessClaims claims, @PathVariable UUID orderId) {
-        return new Timeline(orders.timeline(claims.actor(), orderId));
+        return new Timeline(orders.timeline(claims.actor(), orderId), journal.of(claims.actor(), orderId));
     }
 
         @GetMapping("/orders/{orderId}/messages")

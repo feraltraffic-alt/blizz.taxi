@@ -21,6 +21,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param arrivalRadiusMeters  arrival must be reported within this distance of the pickup (REQ-ASG-06)
  * @param reportedTimeTolerance completion time from the device further than this from server time is flagged
  * @param noShowMinimumWait    a no-show can be reported only after waiting this long (REQ-CAN-06; value per Q-07)
+ * @param journalRetention     how long the rounds of the dispatch journal are kept (REQ-DSP-12, issue #71)
+ * @param journalCandidates    drivers recorded per round, nearest first
  */
 @ConfigurationProperties("blizz.dispatch")
 public record DispatchProperties(
@@ -36,5 +38,7 @@ public record DispatchProperties(
         @DefaultValue("PT30S") Duration lease,
         @DefaultValue("150") int arrivalRadiusMeters,
         @DefaultValue("PT5M") Duration reportedTimeTolerance,
-        @DefaultValue("PT5M") Duration noShowMinimumWait) {
+        @DefaultValue("PT5M") Duration noShowMinimumWait,
+        @DefaultValue("P90D") Duration journalRetention,
+        @DefaultValue("50") int journalCandidates) {
 }

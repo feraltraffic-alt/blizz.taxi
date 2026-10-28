@@ -21,6 +21,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.driver.DocumentType;
 import taxi.blizz.driver.DriverAdmission;
+import taxi.blizz.driver.DriverRiskFlagCheck;
 import taxi.blizz.driver.DriverProfile;
 import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
@@ -53,6 +54,7 @@ class JdbcDriverAdmission implements DriverAdmission {
 
     private final JdbcClient jdbc;
     private final StaffAccess staff;
+    private final DriverRiskFlagCheck riskFlags;
     private final TransactionTemplate tx;
     private final IdempotentCommands commands;
     private final Outbox outbox;
@@ -62,8 +64,10 @@ class JdbcDriverAdmission implements DriverAdmission {
     private final Clock clock;
 
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
-                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock, StaffAccess staff) {
+                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock, StaffAccess staff,
+                        DriverRiskFlagCheck riskFlags) {
         this.staff = staff;
+        this.riskFlags = riskFlags;
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
@@ -338,17 +342,27 @@ class JdbcDriverAdmission implements DriverAdmission {
     record SuspendRequest(UUID driverId, long expectedVersion, String reason) {
     }
 
+    record SuspendForFlagRequest(UUID driverId, long expectedVersion, String reason, UUID riskFlagId) {
+    }
+
     @Override
-    public DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason) {
+    public DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason,
+                                 UUID riskFlagId) {
         requireReviewer(reviewer);
         requireReason(reason);
+        if (riskFlagId != null && !riskFlags.concerns(riskFlagId, driverId)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The risk flag is not this driver's");
+        }
+        // The plain request keeps the receipts of suspensions made before flags existed comparable.
+        Object request = riskFlagId == null ? new SuspendRequest(driverId, expectedVersion, reason)
+                : new SuspendForFlagRequest(driverId, expectedVersion, reason, riskFlagId);
         return commands.execute(new CommandKey(reviewer, "driver.review.suspend", commandId),
-                new SuspendRequest(driverId, expectedVersion, reason), DriverProfile.class, () -> {
+                request, DriverProfile.class, () -> {
                     Locked locked = lockVersion(driverId, expectedVersion);
                     if (locked.status() != ReviewStatus.APPROVED) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only an approved driver can be suspended");
                     }
-                    transition(driverId, ReviewStatus.APPROVED, ReviewStatus.SUSPENDED, reviewer, reason);
+                    transition(driverId, ReviewStatus.APPROVED, ReviewStatus.SUSPENDED, reviewer, reason, riskFlagId);
                     return profile(driverId);
                 });
     }
@@ -518,6 +532,11 @@ class JdbcDriverAdmission implements DriverAdmission {
     }
 
     private void transition(UUID driverId, ReviewStatus from, ReviewStatus to, Actor actor, String reason) {
+        transition(driverId, from, to, actor, reason, null);
+    }
+
+    private void transition(UUID driverId, ReviewStatus from, ReviewStatus to, Actor actor, String reason,
+                            UUID riskFlagId) {
         OffsetDateTime now = now();
         long version = jdbc.sql("""
                         update driver set review_status = :to, updated_at = :now, version = version + 1
@@ -529,8 +548,8 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .single();
         jdbc.sql("""
                         insert into driver_review_event (id, driver_id, from_status, to_status, actor_type, actor_id,
-                                                         reason, occurred_at)
-                        values (:id, :driverId, :from, :to, :actorType, :actorId, :reason, :now)""")
+                                                         reason, occurred_at, risk_flag_id)
+                        values (:id, :driverId, :from, :to, :actorType, :actorId, :reason, :now, :riskFlag)""")
                 .param("id", UUID.randomUUID())
                 .param("driverId", driverId)
                 .param("from", from.name())
@@ -539,9 +558,15 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .param("actorId", actor.id())
                 .param("reason", reason)
                 .param("now", now)
+                .param("riskFlag", riskFlagId)
                 .update();
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("review_status", to.name());
+        if (riskFlagId != null) {
+            after.put("risk_flag_id", riskFlagId.toString());
+        }
         auditLog.record(new AuditEntry(actor, "driver.review_status." + to.name().toLowerCase(), "driver",
-                driverId.toString(), reason, Map.of("review_status", from.name()), Map.of("review_status", to.name())));
+                driverId.toString(), reason, Map.of("review_status", from.name()), after));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("driver_id", driverId.toString());
         payload.put("from", from.name());
