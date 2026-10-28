@@ -9,12 +9,30 @@ DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890
 NEAR_ID="5a000000-0000-4000-8000-000000000401"; FAR_ID="5a000000-0000-4000-8000-000000000402"
 RIDER_PHONE="+38068$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
 
+ORDER=""
+# Whatever happens, leave no order searching and no driver online for the next scenarios.
+cleanup() {
+    set +e
+    if [[ -n "$ORDER" && -n "${OPERATOR:-}" ]]; then
+        local version
+        version=$(api GET "/api/operator/v1/orders/$ORDER" "$OPERATOR" | jq -r .version)
+        api POST "/api/operator/v1/orders/$ORDER/cancel" "$OPERATOR" \
+            "{\"command_id\":\"$(uuid)\",\"expected_version\":$version,\"reason_code\":\"NO_CARS\"}" >/dev/null
+    fi
+    [[ -n "${NEAR:-}" ]] && go_offline "$NEAR"
+    [[ -n "${FAR:-}" ]] && go_offline "$FAR"
+}
+trap cleanup EXIT
+
 say "Only the two drivers of this scenario are online"
 OTHER=$(sign_in DRIVER "+380500000003"); go_offline "$OTHER"
 NEAR=$(sign_in DRIVER "+380500000001")
 go_online "$NEAR" "5a000000-0000-4000-8000-000000000501" 50.4519 "$PICKUP_LON" >/dev/null   # about 200 m
 FAR=$(sign_in DRIVER "+380500000002")
 go_online "$FAR" "5a000000-0000-4000-8000-000000000502" 50.4555 "$PICKUP_LON" >/dev/null    # about 600 m
+
+ADMIN=$(admin_token)
+OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 
 say "A rider orders"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")
@@ -31,15 +49,13 @@ say "The nearest driver declines, the next one accepts"
 OFFER=$(api GET /api/driver/v1/offers "$NEAR" | jq -r --arg o "$ORDER" '[.[] | select(.order_id == $o)][0].id')
 expect 200
 [[ -n "$OFFER" && "$OFFER" != null ]]
-api POST "/api/driver/v1/offers/$OFFER/reject" "$NEAR" "{\"command_id\":\"$(uuid)\"}" >/dev/null; expect 200
+api POST "/api/driver/v1/offers/$OFFER/reject" "$NEAR" "{\"command_id\":\"$(uuid)\"}" >/dev/null; expect 204
 OFFER=$(api GET /api/driver/v1/offers "$FAR" | jq -r --arg o "$ORDER" '[.[] | select(.order_id == $o)][0].id')
 expect 200
 [[ -n "$OFFER" && "$OFFER" != null ]]
 api POST "/api/driver/v1/offers/$OFFER/accept" "$FAR" "{\"command_id\":\"$(uuid)\"}" >/dev/null; expect 200
 
 say "The operator reads why: the order's history with the dispatch journal"
-ADMIN=$(admin_token)
-OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 HISTORY=$(api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR"); expect 200
 ATTEMPT=$(jq -c '.dispatch.attempts[0]' <<<"$HISTORY")
 [[ "$(jq -r .outcome <<<"$ATTEMPT")" == ASSIGNED ]]
@@ -56,10 +72,4 @@ if jq -e '.dispatch | .. | objects | has("lat") or has("lon")' <<<"$HISTORY" | g
 fi
 
 say "Clean-up: the order is cancelled, the drivers go offline"
-VERSION=$(api GET "/api/operator/v1/orders/$ORDER" "$OPERATOR" | jq -r .version)
-api POST "/api/operator/v1/orders/$ORDER/cancel" "$OPERATOR" \
-    "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"reason_code\":\"NO_CARS\"}" >/dev/null
-expect 200
-go_offline "$NEAR"
-go_offline "$FAR"
 note "Done: order $ORDER — declined by $NEAR_ID, taken by $FAR_ID."

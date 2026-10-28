@@ -27,6 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
 class ImpossibleMovementFlags implements OutboxHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ImpossibleMovementFlags.class);
+    /** A phone's clock is not the server's: a point stamped just before the shift opened still belongs to it. */
+    private static final String SKEW = "2 minutes";
 
     private final JdbcClient jdbc;
     private final JdbcDriverRiskFlags flags;
@@ -66,10 +68,12 @@ class ImpossibleMovementFlags implements OutboxHandler {
         }
         Optional<Shift> shift = jdbc.sql("""
                         select id, city_id from work_session
-                        where driver_id = :driver and opened_at <= :at and (closed_at is null or closed_at >= :at)
+                        where driver_id = :driver
+                          and opened_at <= cast(:at as timestamptz) + cast(:skew as interval)
+                          and (closed_at is null or closed_at >= cast(:at as timestamptz) - cast(:skew as interval))
                         order by (device_session_id = :device) desc, opened_at desc
                         limit 1""")
-                .param("driver", jump.driverId()).param("at", jump.recordedAt())
+                .param("driver", jump.driverId()).param("at", jump.recordedAt()).param("skew", SKEW)
                 .param("device", jump.deviceSessionId())
                 .query((rs, i) -> new Shift(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
                 .optional();

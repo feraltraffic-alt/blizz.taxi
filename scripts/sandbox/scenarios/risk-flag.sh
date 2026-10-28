@@ -7,12 +7,27 @@ source "$(dirname "$0")/../lib.sh"
 DRIVER_ID="5a000000-0000-4000-8000-000000000403"
 KYIV="5a000000-0000-4000-8000-000000000001"
 
+# Whatever happens, the sandbox driver ends approved and offline for the next scenarios.
+cleanup() {
+    set +e
+    local admin profile
+    admin=$(admin_token)
+    profile=$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$admin")
+    if [[ "$(jq -r .review_status <<<"$profile")" == SUSPENDED ]]; then
+        api POST "/api/admin/v1/drivers/$DRIVER_ID/reinstate" "$admin" "{\"command_id\":\"$(uuid)\",
+          \"expected_version\":$(jq -r .version <<<"$profile"),\"reason\":\"Sandbox clean-up\"}" >/dev/null
+    fi
+    [[ -n "${DRIVER:-}" ]] && go_offline "$DRIVER"
+}
+trap cleanup EXIT
+
 say "The driver starts a new shift in Kyiv"
 DRIVER=$(sign_in DRIVER "+380500000003")
 go_offline "$DRIVER"
 go_online "$DRIVER" "5a000000-0000-4000-8000-000000000503" 50.4501 30.5234 >/dev/null
 
 say "His phone reports a jump: 40 km in one minute"
+sleep 2                                                    # the later point after the shift opened
 BEFORE=$(date -u -d '-60 seconds' +%Y-%m-%dT%H:%M:%SZ)
 api POST /api/driver/v1/location-batches "$DRIVER" "{\"command_id\":\"$(uuid)\",\"points\":[
   {\"sequence\":$(next_sequence),\"lat\":50.4501,\"lon\":30.5234,\"accuracy_m\":5,\"recorded_at\":\"$BEFORE\"},
@@ -53,14 +68,10 @@ api POST "/api/admin/v1/driver-risk-flags/$(jq -r .id <<<"$MANUAL")/dismiss" "$A
   >/dev/null
 expect 200
 
-say "The suspension is a separate action and names the confirmed flag; then the driver is reinstated"
+say "The suspension is a separate action and names the confirmed flag; the clean-up reinstates the driver"
 VERSION=$(jq -r .version <<<"$PROFILE")
 api POST "/api/admin/v1/drivers/$DRIVER_ID/suspend" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
   \"reason\":\"Sandbox: impossible movement confirmed\",\"risk_flag_id\":\"$FLAG_ID\"}" >/dev/null
 expect 200
-VERSION=$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$ADMIN" | jq -r .version)
-api POST "/api/admin/v1/drivers/$DRIVER_ID/reinstate" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
-  \"reason\":\"Sandbox clean-up\"}" >/dev/null
-expect 200
-go_offline "$DRIVER"
+[[ "$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$ADMIN" | jq -r .review_status)" == SUSPENDED ]]
 note "Done: flag $FLAG_ID confirmed, suspension named it, driver reinstated."
