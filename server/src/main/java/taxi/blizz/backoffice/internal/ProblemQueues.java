@@ -55,7 +55,7 @@ class ProblemQueues implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
-                 "PaymentResultUnknown", "CardPaymentSettled" -> true;
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue" -> true;
             default -> false;
         };
     }
@@ -63,6 +63,16 @@ class ProblemQueues implements OutboxHandler {
     @Override
     public void handle(OutboxMessage message) {
         if (problem(message)) {
+            return;
+        }
+        if ("CashDisputeOverdue".equals(message.type())) {
+            OrderProblem p = json.readValue(message.payload(), OrderProblem.class);
+            UUID orderId = p.orderId() != null ? p.orderId() : message.aggregateId();
+            // Owner decision 28.10.2026: past the deadline nothing moves by itself; a manager decides.
+            cases.openFromSystem("cash-dispute-overdue:" + orderId, cityOf(orderId), Category.CASH_DISPUTE, orderId,
+                    "A cash dispute was not decided in time", Priority.URGENT,
+                    "The driver reported the fare as not paid and nobody decided within 14 days. Decide it in the"
+                            + " order's cash dispute: the rider paid, pay the driver, or keep the held part.");
             return;
         }
         if ("CallerNotNotified".equals(message.type())) {

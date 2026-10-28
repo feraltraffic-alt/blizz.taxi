@@ -1570,6 +1570,104 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/cash-disputes:
+    get:
+      operationId: listOpenCashDisputes
+      summary: Cash disputes not decided yet
+      description: >-
+        Trips the driver reported as not paid in cash or at the terminal (owner decision 28.10.2026), the soonest
+        deadline first. Needs finance.manage.
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashDisputeList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/orders/{order_id}/cash-dispute:
+    get:
+      operationId: getCashDispute
+      summary: The cash dispute of an order
+      description: Needs finance.manage. 404 when the driver did not report the fare as unpaid.
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashDispute"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/orders/{order_id}/cash-dispute/decide:
+    post:
+      operationId: decideCashDispute
+      summary: Decide a cash dispute, once
+      description: >-
+        RIDER_PAID: the rider had paid the driver; the rider's debt goes, the held part is released, the driver
+        holds the cash and gets a CASH_DISPUTE risk flag. PAY_DRIVER: the rider did not pay; the service releases the
+        held part to the driver, the rider's debt stays. KEEP_HELD: the rider did not pay; the held part stays until
+        the rider pays. Nothing moves without this decision; past decide_by the dispute becomes an urgent task.
+        Audited; needs finance.manage.
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideCashDispute"
+      responses:
+        "200":
+          description: Decided.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashDispute"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/orders/{order_id}/payment-operations:
     get:
       operationId: listPaymentOperations
@@ -4819,6 +4917,78 @@ components:
         reason:
           type: string
 
+    CashDispute:
+      type: object
+      additionalProperties: false
+      required: [order_id, driver_id, payer_client_id, currency, held_minor, rider_debt_minor, opened_at, decide_by,
+                 decision, decided_by, reason, decided_at, version]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        payer_client_id:
+          type: [string, "null"]
+          format: uuid
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        held_minor:
+          description: The part of the driver's share held by the cash_not_received setting.
+          type: integer
+          format: int64
+          minimum: 0
+        rider_debt_minor:
+          description: What the driver reported as not paid.
+          type: integer
+          format: int64
+          minimum: 0
+        opened_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        decide_by:
+          description: 14 days after the trip.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        decision:
+          type: [string, "null"]
+          enum: [RIDER_PAID, PAY_DRIVER, KEEP_HELD, null]
+        decided_by:
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: [string, "null"]
+        decided_at:
+          type: [string, "null"]
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    CashDisputeList:
+      type: object
+      additionalProperties: false
+      required: [disputes]
+      properties:
+        disputes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CashDispute"
+    DecideCashDispute:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, decision, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        decision:
+          type: string
+          enum: [RIDER_PAID, PAY_DRIVER, KEEP_HELD]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
     PaymentOperation:
       type: object
       additionalProperties: false
