@@ -22,7 +22,8 @@ import tools.jackson.databind.json.JsonMapper;
  * the driver holds the payer's money, so the payer's debt moves onto the driver. For a cash trip the
  * driver therefore ends up owing the service its commission and nothing is paid out (spec section 17,
  * AC-16). When the driver says the cash was not received, the payer's debt stays open; whether it
- * blocks new orders is Q-10.
+ * blocks new orders is Q-10. How much of the driver's share for the unpaid part is credited then is the service's
+ * setting (cash_not_received, owner decision 28.10.2026); the rest waits in SUSPENSE, under the driver, for support.
  */
 @Component
 class TripFarePosting implements OutboxHandler {
@@ -32,11 +33,16 @@ class TripFarePosting implements OutboxHandler {
     private final Ledger ledger;
     private final DriverDebts debts;
     private final JsonMapper json;
+    private final taxi.blizz.configuration.ServiceSettings settings;
+    private final JdbcCashDisputes disputes;
 
-    TripFarePosting(Ledger ledger, DriverDebts debts, JsonMapper json) {
+    TripFarePosting(Ledger ledger, DriverDebts debts, JsonMapper json,
+                    taxi.blizz.configuration.ServiceSettings settings, JdbcCashDisputes disputes) {
+        this.disputes = disputes;
         this.ledger = ledger;
         this.debts = debts;
         this.json = json;
+        this.settings = settings;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -66,14 +72,22 @@ class TripFarePosting implements OutboxHandler {
         fare.add("SERVICE".equals(trip.paymentMethod())
                 ? Line.debit(Account.SERVICE_EXPENSE, null, trip.amountMinor())
                 : Line.debit(Account.RIDER_RECEIVABLE, trip.payerClientId(), trip.amountMinor()));
-        if (trip.driverShareMinor() > 0) {
-            fare.add(Line.credit(Account.DRIVER_PAYABLE, trip.driverId(), trip.driverShareMinor()));
+        long held = held(trip);
+        if (trip.driverShareMinor() - held > 0) {
+            fare.add(Line.credit(Account.DRIVER_PAYABLE, trip.driverId(), trip.driverShareMinor() - held));
+        }
+        if (held > 0) {
+            fare.add(Line.credit(Account.SUSPENSE, trip.driverId(), held));
         }
         if (trip.commissionMinor() > 0) {
             fare.add(Line.credit(Account.SERVICE_COMMISSION, null, trip.commissionMinor()));
         }
         ledger.post(new Ledger.Posting("trip-fare:" + trip.finalFareId(), "TRIP_FARE", trip.orderId(),
                 trip.currency(), "Fare of a completed trip, final fare v" + trip.finalFareVersion(), fare));
+        if (unpaidByDriverReport(trip) > 0) {
+            disputes.open(trip.orderId(), trip.driverId(), trip.payerClientId(), trip.currency(), held,
+                    unpaidByDriverReport(trip));
+        }
         // Cash, or a card at the driver's own terminal: the money is with the driver, who owes the service its
         // commission from the balance (owner decision 27.10.2026).
         boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
@@ -97,5 +111,34 @@ class TripFarePosting implements OutboxHandler {
         }
         // The driver's debt may have crossed the limit (REQ-PAY-16).
         debts.refresh(trip.driverId(), trip.currency());
+    }
+
+    /**
+     * The part of the driver's share held back when the driver reports the money was not paid: the share of the
+     * part the driver was to collect (bonuses and discounts were paid anyway), less what the setting credits.
+     */
+    private long held(TripCompleted trip) {
+        boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
+        if (!collectedByDriver || !Boolean.FALSE.equals(trip.cashReceived()) || trip.driverShareMinor() <= 0) {
+            return 0;
+        }
+        long amount = trip.amountMinor();
+        long unpaid = unpaidByDriverReport(trip);
+        if (unpaid <= 0) {
+            return 0;
+        }
+        long shareOfUnpaid = trip.driverShareMinor() * unpaid / amount;
+        var rule = settings.current().settings().cashNotReceived();
+        return shareOfUnpaid - rule.credited(shareOfUnpaid);
+    }
+
+    /** What the driver says was not paid: the part the driver was to collect, when reported as not received. */
+    private static long unpaidByDriverReport(TripCompleted trip) {
+        boolean collectedByDriver = "CASH".equals(trip.paymentMethod()) || "TERMINAL".equals(trip.paymentMethod());
+        if (!collectedByDriver || !Boolean.FALSE.equals(trip.cashReceived())) {
+            return 0;
+        }
+        return Math.max(0, trip.amountMinor() - (trip.walletMinor() == null ? 0 : trip.walletMinor())
+                - (trip.discountMinor() == null ? 0 : trip.discountMinor()));
     }
 }

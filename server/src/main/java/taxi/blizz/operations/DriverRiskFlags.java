@@ -16,7 +16,9 @@ public interface DriverRiskFlags {
     String RISK_PERMISSION = "drivers.risk";
 
     enum Kind {
-        IMPOSSIBLE_MOVEMENT, MANUAL
+        IMPOSSIBLE_MOVEMENT, MANUAL,
+        /** The driver reported cash as not received, and support found the rider had paid (owner decision 28.10.2026). */
+        CASH_DISPUTE
     }
 
     enum State {

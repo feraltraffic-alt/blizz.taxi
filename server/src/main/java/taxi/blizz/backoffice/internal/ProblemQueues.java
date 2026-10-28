@@ -55,7 +55,7 @@ class ProblemQueues implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
-                 "PaymentResultUnknown", "CardPaymentSettled", "InvariantViolated" -> true;
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated" -> true;
             default -> false;
         };
     }
@@ -73,6 +73,16 @@ class ProblemQueues implements OutboxHandler {
             return;
         }
         if (problem(message)) {
+            return;
+        }
+        if ("CashDisputeOverdue".equals(message.type())) {
+            OrderProblem p = json.readValue(message.payload(), OrderProblem.class);
+            UUID orderId = p.orderId() != null ? p.orderId() : message.aggregateId();
+            // Owner decision 28.10.2026: past the deadline nothing moves by itself; a manager decides.
+            cases.openFromSystem("cash-dispute-overdue:" + orderId, cityOf(orderId), Category.CASH_DISPUTE, orderId,
+                    "A cash dispute was not decided in time", Priority.URGENT,
+                    "The driver reported the fare as not paid and nobody decided within 14 days. Decide it in the"
+                            + " order's cash dispute: the rider paid, pay the driver, or keep the held part.");
             return;
         }
         if ("CallerNotNotified".equals(message.type())) {
@@ -129,7 +139,8 @@ class ProblemQueues implements OutboxHandler {
                     "The search ended without a driver. Call back if it was a phone order or the rider asks.");
             case "DriverLostDuringOrder" -> {
                 boolean riding = "IN_PROGRESS".equals(p.phase());
-                cases.openFromSystem("lost-driver:" + p.assignmentId(), cityOf(orderId), Category.LOST_CONNECTION,
+                cases.openFromSystem("lost-driver:" + p.assignmentId() + ":" + (p.lastSeenAt() == null ? "never"
+                        : p.lastSeenAt()), cityOf(orderId), Category.LOST_CONNECTION,
                         orderId, riding ? "The driver is not heard from during the ride"
                                 : "The assigned driver is not heard from", riding ? Priority.URGENT : Priority.HIGH,
                         "No position from the driver since " + (p.lastSeenAt() == null ? "the session ended"

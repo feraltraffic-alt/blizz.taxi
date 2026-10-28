@@ -83,7 +83,7 @@ class ProblemReportTests {
 
     private long cases(String sourceKey, String category, String priority) {
         return jdbc.sql("""
-                        select count(*) from support_case where source_key = :key and category = :category
+                        select count(*) from support_case where source_key like :key || '%' and category = :category
                           and priority = :priority and requester_type = 'SYSTEM'""")
                 .param("key", sourceKey).param("category", category).param("priority", priority)
                 .query(Long.class).single();
@@ -107,7 +107,7 @@ class ProblemReportTests {
         assertThat(cases("lost-driver:" + assignment, "LOST_CONNECTION", "HIGH")).isEqualTo(1);
         assertThat(jdbc.sql("""
                         select extract(epoch from respond_by - created_at)::int from support_case
-                        where source_key = :key""")
+                        where source_key like :key || '%'""")
                 .param("key", "lost-driver:" + assignment).query(Integer.class).single())
                 .as("HIGH is answered within 15 minutes").isEqualTo(15 * 60);
         assertThat(orders.get(ride.order().id()).assignment()).as("the order stays with the driver").isNotNull();
@@ -150,5 +150,26 @@ class ProblemReportTests {
 
         assertThat(orders.get(order.id()).status()).isEqualTo("UNFULFILLED");
         assertThat(cases("no-driver:" + order.id(), "NO_DRIVER", "NORMAL")).isEqualTo(1);
+    }
+
+    /** A driver heard from again and then lost again is a new problem, not the old one. */
+    @Test
+    void aDriverWhoCameBackAndIsLostAgainIsReportedAgain() {
+        Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        UUID assignment = assignment(ride.order());
+        silence(ride, 10);
+        report();
+        assertThat(cases("lost-driver:" + assignment, "LOST_CONNECTION", "HIGH")).isEqualTo(1);
+
+        silence(ride, 0); // a fresh position
+        report();
+        assertThat(jdbc.sql("select lost_reported_at is null from assignment where id = :id")
+                .param("id", assignment).query(Boolean.class).single()).as("the old report is forgotten").isTrue();
+
+        silence(ride, 5);
+        report();
+        report();
+        assertThat(events(ride.order(), "DriverLostDuringOrder")).isEqualTo(2);
+        assertThat(cases("lost-driver:" + assignment, "LOST_CONNECTION", "HIGH")).as("one new case").isEqualTo(2);
     }
 }

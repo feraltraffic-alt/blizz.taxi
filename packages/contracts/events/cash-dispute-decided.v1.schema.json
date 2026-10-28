@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/cash-dispute-decided.v1.schema.json",
+  "title": "CashDisputeDecided v1 payload",
+  "description": "Published by finance once, when support decides a trip the driver reported as not paid (owner decision 28.10.2026). Aggregate Order. operations raises a CASH_DISPUTE risk flag on RIDER_PAID.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "driver_id", "decision"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "driver_id": { "type": "string", "format": "uuid" },
+    "decision": { "type": "string", "enum": ["RIDER_PAID", "PAY_DRIVER", "KEEP_HELD"] }
+  },
+  "examples": [
+    { "order_id": "7b000000-0000-4000-8000-000000000093", "driver_id": "7e000000-0000-4000-8000-000000000093", "decision": "RIDER_PAID" }
+  ]
+}

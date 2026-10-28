@@ -42,16 +42,26 @@ sleep 2
 AGAIN=$(sign_in CLIENT "$NEW")
 [[ "$(api GET /api/rider/v1/me "$AGAIN" | jq -r .subject_id)" == "$ID" ]]
 
-say "The rider loses the phone: support sets another after checking who it is"
+say "The rider loses the phone: support checks who it is and sends a code to the new phone"
 ADMIN=$(admin_token)
 VERSION=$(api GET "/api/admin/v1/clients/$ID" "$ADMIN" | jq -r .client.version); expect 200
-api POST "/api/admin/v1/clients/$ID/phone" "$ADMIN" \
-  "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"phone\":\"$LAST\",\"reason\":\" \"}" >/dev/null
+SUPPORT=$(api POST "/api/admin/v1/clients/$ID/phone/new-code" "$ADMIN" "{\"phone\":\"$LAST\"}" | jq -r .challenge_id)
+expect 201
+SUPPORT_CODE=$(code_for "$LAST")
+
+say "Without the right code nothing changes; with it, support sets the phone"
+WRONG_SUPPORT=$(( (10#$SUPPORT_CODE + 1) % 1000000 )); WRONG_SUPPORT=$(printf '%06d' "$WRONG_SUPPORT")
+api POST "/api/admin/v1/clients/$ID/phone" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
+  \"new_challenge_id\":\"$SUPPORT\",\"new_code\":\"$WRONG_SUPPORT\",\"reason\":\"Passport checked at the office\"}" >/dev/null
+expect 422
+api POST "/api/admin/v1/clients/$ID/phone" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
+  \"new_challenge_id\":\"$SUPPORT\",\"new_code\":\"$SUPPORT_CODE\",\"reason\":\" \"}" >/dev/null
 expect 400
 api POST "/api/admin/v1/clients/$ID/phone" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
-  \"phone\":\"$LAST\",\"reason\":\"Passport checked at the office\"}" | jq -e --arg p "$LAST" '.phone == $p' >/dev/null
+  \"new_challenge_id\":\"$SUPPORT\",\"new_code\":\"$SUPPORT_CODE\",\"reason\":\"Passport checked at the office\"}" \
+  | jq -e --arg p "$LAST" '.phone == $p' >/dev/null
 expect 200
 api GET /api/rider/v1/me "$AGAIN" >/dev/null; expect 401
 RIDER=$(sign_in CLIENT "$LAST")
 [[ "$(api GET /api/rider/v1/me "$RIDER" | jq -r .subject_id)" == "$ID" ]]
-note "Done: changed with both codes (one was not enough), then by support with a reason; sessions ended each time."
+note "Done: changed with both codes (one was not enough), then by support with a code to the new phone and a reason; sessions ended each time."

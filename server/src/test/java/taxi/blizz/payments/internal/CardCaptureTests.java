@@ -555,4 +555,56 @@ class CardCaptureTests {
         }
         assertThat(flags.enabled(card)).isTrue();
     }
+
+    /** REQ-PAY-20, owner decision 28.10.2026: only the rider or an operator switches a card order to cash. */
+    @Test
+    void theRiderOrAnOperatorSwitchesACardOrderToCashAndTheHoldIsReleased() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        Actor stranger = rides.client();
+        assertCode(() -> orders.switchToCash(stranger, UUID.randomUUID(), order.id(), order.version(), null),
+                taxi.blizz.platform.ErrorCode.NOT_FOUND);
+        long version = orders.get(order.id()).version();
+        assertCode(() -> orders.switchToCash(rider, UUID.randomUUID(), order.id(), version + 5, null),
+                taxi.blizz.platform.ErrorCode.VERSION_CONFLICT);
+
+        // A hold still being asked about is not released by a switch.
+        UUID intent = payments.intent(order.id()).orElseThrow().id();
+        jdbc.sql("update payment_intent set state = 'AUTH_PENDING' where id = :id").param("id", intent).update();
+        assertCode(() -> orders.switchToCash(rider, UUID.randomUUID(), order.id(), version, null),
+                taxi.blizz.platform.ErrorCode.PAYMENT_UNKNOWN);
+        jdbc.sql("update payment_intent set state = 'AUTHORIZED' where id = :id").param("id", intent).update();
+
+        UUID command = UUID.randomUUID();
+        OrderView cash = orders.switchToCash(rider, command, order.id(), version, null);
+        assertThat(cash.paymentMethod()).isEqualTo(PaymentMethod.CASH);
+        assertThat(cash.paymentState()).isEqualTo("CASH_EXPECTED");
+        assertThat(orders.switchToCash(rider, command, order.id(), version, null).version()).as("a repeat")
+                .isEqualTo(cash.version());
+        assertCode(() -> orders.switchToCash(rider, UUID.randomUUID(), order.id(), cash.version(), null),
+                taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).as("the hold is released").isEqualTo("VOIDED");
+        assertThat(sent()).anyMatch(r -> r.startsWith("REFUND"));
+        assertThat(jdbc.sql("select count(*) from order_event where order_id = :o and type = 'PaymentSwitchedToCash'")
+                .param("o", order.id()).query(Long.class).single()).isEqualTo(1);
+
+        // An operator, at the rider's request, with a reason and the right.
+        OrderView second = heldOrder(riderWithCard());
+        long v2 = orders.get(second.id()).version();
+        Actor operator = staffWith(taxi.blizz.operations.Orders.CREATE_PERMISSION);
+        assertCode(() -> orders.switchToCash(staffWith("finance.manage"), UUID.randomUUID(), second.id(), v2,
+                "Rider asked"), taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> orders.switchToCash(operator, UUID.randomUUID(), second.id(), v2, " "),
+                taxi.blizz.platform.ErrorCode.VALIDATION_FAILED);
+        assertThat(orders.switchToCash(operator, UUID.randomUUID(), second.id(), v2, "The rider asked by phone")
+                .paymentMethod()).isEqualTo(PaymentMethod.CASH);
+        assertThat(jdbc.sql("""
+                        select count(*) from audit_log where action = 'order.switch_to_cash' and actor_id = :a
+                          and reason = 'The rider asked by phone'""")
+                .param("a", operator.id()).query(Long.class).single()).isEqualTo(1);
+        // Its release goes out now: a later test's scripted provider answers must not meet it.
+        settlePayments();
+        assertThat(payments.intent(second.id()).orElseThrow().state()).isEqualTo("VOIDED");
+    }
 }

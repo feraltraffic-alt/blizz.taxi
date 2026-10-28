@@ -455,6 +455,72 @@ class JdbcOrders implements Orders {
                 });
     }
 
+    record SwitchToCashRequest(UUID orderId, long expectedVersion, String reason) {
+    }
+
+    @Override
+    public OrderView switchToCash(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reason) {
+        String why = reason == null || reason.isBlank() ? null : reason.strip();
+        if (actor.type() == SubjectType.STAFF) {
+            UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                    .query(UUID.class).optional()
+                    .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+            requireStaff(actor, CREATE_PERMISSION, cityId);
+            if (why == null) {
+                throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+            }
+        } else if (actor.type() != SubjectType.CLIENT) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only the rider or an operator switches to cash");
+        }
+        return commands.execute(new CommandKey(actor, "order.switch_to_cash", commandId),
+                new SwitchToCashRequest(orderId, expectedVersion, why), OrderView.class, () -> {
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (actor.type() == SubjectType.CLIENT && !actor.id().equals(order.payerClientId())) {
+                        throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");
+                    }
+                    if (order.version() != expectedVersion) {
+                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                    }
+                    if (!java.util.Set.of("AWAITING_PAYMENT", "SCHEDULED", "READY", "SEARCHING", "ASSIGNED", "IN_SERVICE")
+                            .contains(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "An order in " + order.status() + " cannot switch to cash");
+                    }
+                    String method = jdbc.sql("select payment_method from ride_order where id = :id")
+                            .param("id", orderId).query(String.class).single();
+                    if (!"CARD".equals(method)) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The order is not paid by card");
+                    }
+                    var intent = cardPayments.intent(orderId);
+                    String held = intent.map(taxi.blizz.payments.CardPayments.Intent::state).orElse(null);
+                    if (held == null || "PAID".equals(held)) {
+                        // Wholly paid by bonuses: nothing to pay in cash.
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Nothing is left to pay by card");
+                    }
+                    if (java.util.Set.of("AUTH_PENDING", "UNKNOWN").contains(held)) {
+                        throw new DomainException(ErrorCode.PAYMENT_UNKNOWN,
+                                "The card hold is not settled yet; switch once it is");
+                    }
+                    if (!"AUTHORIZED".equals(held)) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The card payment is " + held);
+                    }
+                    // One way of paying at a time (REQ-PAY-20): the hold goes before the order becomes cash.
+                    core.releaseCardHold(orderId, "Switched to cash");
+                    jdbc.sql("""
+                                    update ride_order set payment_method = 'CASH', payment_state = 'CASH_EXPECTED',
+                                                          selected_payment_method = 'CASH', updated_at = :now
+                                    where id = :id""")
+                            .param("now", core.now()).param("id", orderId).update();
+                    String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
+                    core.recordEvent(orderId, core.touch(orderId), "PaymentSwitchedToCash", actor, why,
+                            Map.of("from", "CARD", "to", "CASH", "by", by));
+                    audit.record(new AuditEntry(actor, "order.switch_to_cash", "ride_order", orderId.toString(),
+                            why == null ? "By the rider" : why, Map.of("payment_method", "CARD"),
+                            Map.of("payment_method", "CASH")));
+                    return core.view(orderId);
+                });
+    }
+
     /** Before the start: assignment RELEASED, trip ABORTED, driver free again (REQ-ASG-04). */
     private void releaseAssignment(UUID orderId, String reason) {
         AssignmentView assignment = core.assignmentOfOrder(orderId)
