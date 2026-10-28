@@ -41,6 +41,12 @@ class JdbcServiceSettings implements ServiceSettings {
             new Orders(3),
             new CashNotReceived(true, 100));
 
+    /**
+     * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
+     * also keeps a card hold, which lasts until the pickup, well inside the provider's limit of about 20 days.
+     */
+    static final int MAX_DAYS_AHEAD = 14;
+
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
     private final StaffAccess staff;
@@ -152,13 +158,13 @@ class JdbcServiceSettings implements ServiceSettings {
         }
         Preorders p = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
         if (p.dispatch() == null || p.thresholdMinutes() < 15 || p.thresholdMinutes() > 1440
-                || p.maxDaysAhead() < 1 || p.maxDaysAhead() > 30
+                || p.maxDaysAhead() < 1 || p.maxDaysAhead() > MAX_DAYS_AHEAD
                 || p.releaseMinutesBefore() < 5 || p.releaseMinutesBefore() > p.thresholdMinutes()
                 || p.confirmMinutesBefore() < 5 || p.confirmMinutesBefore() > p.thresholdMinutes()
                 || p.confirmWindowMinutes() < 1 || p.confirmWindowMinutes() >= p.confirmMinutesBefore()
                 || p.driverCancelUntilMinutesBefore() < p.confirmMinutesBefore()
                 || p.driverCancelUntilMinutesBefore() > 10_080) {
-            throw invalid("Pre-orders: threshold 15..1440 min, up to 30 days ahead; release and confirmation within the"
+            throw invalid("Pre-orders: threshold 15..1440 min, up to " + MAX_DAYS_AHEAD + " days ahead; release and confirmation within the"
                     + " threshold; the confirmation window shorter than the confirmation time; drivers may drop a"
                     + " reservation no later than the confirmation");
         }
@@ -186,6 +192,12 @@ class JdbcServiceSettings implements ServiceSettings {
     /** Versions saved before a section existed get its defaults. */
     private static Settings complete(Settings s) {
         Preorders preorders = s.preorders() == null ? DEFAULTS.preorders() : s.preorders();
+        if (preorders.maxDaysAhead() > MAX_DAYS_AHEAD) {
+            // A version saved when a month was allowed.
+            preorders = new Preorders(preorders.thresholdMinutes(), MAX_DAYS_AHEAD, preorders.dispatch(),
+                    preorders.releaseMinutesBefore(), preorders.confirmMinutesBefore(),
+                    preorders.confirmWindowMinutes(), preorders.driverCancelUntilMinutesBefore());
+        }
         Ratings ratings = s.ratings() == null ? DEFAULTS.ratings() : s.ratings();
         Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
         Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();

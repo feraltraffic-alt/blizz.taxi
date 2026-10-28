@@ -135,4 +135,27 @@ class ServiceSettingsTests {
         assertThatThrownBy(() -> jdbc.sql("delete from service_settings").update())
                 .rootCause().hasMessageContaining("append-only");
     }
+
+    /** Owner decision 28.10.2026: pre-orders at most two weeks ahead, also for a version saved earlier. */
+    @Test
+    void preOrdersReachAtMostTwoWeeksAhead() {
+        Actor admin = staff(ServiceSettings.MANAGE_PERMISSION);
+        var now = settings.current();
+        Settings base = now.settings();
+        java.util.function.IntFunction<Settings> withDays = days -> new Settings(base.brand(), base.languages(),
+                base.calls(), new ServiceSettings.Preorders(60, days, ServiceSettings.PreorderDispatch.BROADCAST_BEFORE,
+                        30, 30, 10, 60), base.ratings(), base.tips(), base.orders(), base.cashNotReceived());
+        assertCode(() -> settings.change(admin, UUID.randomUUID(), now.version(), withDays.apply(15), "x"),
+                ErrorCode.VALIDATION_FAILED);
+        var fourteen = settings.change(admin, UUID.randomUUID(), now.version(), withDays.apply(14), "Two weeks");
+        assertThat(fourteen.settings().preorders().maxDaysAhead()).isEqualTo(14);
+
+        // A version from before the decision, with a month, is read as two weeks.
+        jdbc.sql("""
+                        insert into service_settings (version, settings, changed_by, reason, changed_at)
+                        select version + 1, jsonb_set(settings, '{preorders,max_days_ahead}', '30'), changed_by,
+                               'Saved when a month was allowed', now()
+                        from service_settings where version = :v""").param("v", fourteen.version()).update();
+        assertThat(settings.current().settings().preorders().maxDaysAhead()).isEqualTo(14);
+    }
 }
