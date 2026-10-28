@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CorrelationId;
 import taxi.blizz.platform.SubjectType;
 
 /**
@@ -50,7 +51,7 @@ public class PaymentWorker {
     }
 
     private record Claimed(UUID id, UUID intentId, String type, String reference, String target, long amount,
-                           String previous) {
+                           String previous, UUID correlationId) {
     }
 
     /** Processes the due operations; returns how many were handled. */
@@ -84,29 +85,38 @@ public class PaymentWorker {
                             update payment_operation o
                             set state = 'SENDING', lease_until = :lease, attempts = o.attempts + 1, updated_at = :now
                             from due where o.id = due.id
-                            returning o.id, o.intent_id, o.type, o.reference, o.target, o.amount_minor, due.previous""")
+                            returning o.id, o.intent_id, o.type, o.reference, o.target, o.amount_minor, due.previous,
+                                      o.correlation_id""")
                     .param("now", now).param("lease", now.plus(LEASE)).param("limit", BATCH);
             if (orderId != null) {
                 query = query.param("order", orderId);
             }
             return query.query((rs, i) -> new Claimed(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                    rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getString(7))).list();
+                    rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getString(7),
+                    rs.getObject(8, UUID.class))).list();
         });
         return claimed == null ? List.of() : claimed;
     }
 
     private int handle(List<Claimed> claimed) {
         for (Claimed op : claimed) {
-            try {
-                PaymentProvider.Result result = "CREATED".equals(op.previous()) ? send(op) : check(op);
-                payments.apply(op.id(), result.outcome(), result.providerStatus(), result.reasonCode(),
-                        result.reason());
-            } catch (RuntimeException e) {
-                // Leave it SENDING: when the lease runs out the next round asks the provider, it does not resend.
-                log.error("Payment operation {} ({}) failed locally", op.id(), op.type(), e);
+            // Under the id of the request that created the operation: its log lines and provider calls carry it.
+            try (CorrelationId.Scope ignored = CorrelationId.open(
+                    op.correlationId() != null ? op.correlationId() : UUID.randomUUID())) {
+                process(op);
             }
         }
         return claimed.size();
+    }
+
+    private void process(Claimed op) {
+        try {
+            PaymentProvider.Result result = "CREATED".equals(op.previous()) ? send(op) : check(op);
+            payments.apply(op.id(), result.outcome(), result.providerStatus(), result.reasonCode(), result.reason());
+        } catch (RuntimeException e) {
+            // Leave it SENDING: when the lease runs out the next round asks the provider, it does not resend.
+            log.error("Payment operation {} ({}) failed locally", op.id(), op.type(), e);
+        }
     }
 
     private record Context(Merchant merchant, String token, UUID clientId, OffsetDateTime holdUntil) {

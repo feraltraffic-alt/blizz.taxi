@@ -703,15 +703,16 @@ class JdbcOrders implements Orders {
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
         requireStaff(actor, VIEW_PERMISSION, cityId);
         record Row(long sequence, String type, String actorType, UUID actorId, String reason, String payload,
-                   OffsetDateTime occurredAt) {
+                   OffsetDateTime occurredAt, UUID correlationId) {
         }
         List<Row> rows = jdbc.sql("""
-                        select sequence, type, actor_type, actor_id, reason, payload::text as payload, occurred_at
+                        select sequence, type, actor_type, actor_id, reason, payload::text as payload, occurred_at,
+                               correlation_id
                         from order_event where order_id = :id order by sequence""")
                 .param("id", orderId)
                 .query((rs, i) -> new Row(rs.getLong("sequence"), rs.getString("type"), rs.getString("actor_type"),
                         rs.getObject("actor_id", UUID.class), rs.getString("reason"), rs.getString("payload"),
-                        rs.getObject("occurred_at", OffsetDateTime.class)))
+                        rs.getObject("occurred_at", OffsetDateTime.class), rs.getObject("correlation_id", UUID.class)))
                 .list();
         java.util.Set<UUID> staffIds = new java.util.HashSet<>();
         java.util.Set<UUID> driverIds = new java.util.HashSet<>();
@@ -741,7 +742,8 @@ class JdbcOrders implements Orders {
             @SuppressWarnings("unchecked")
             Map<String, Object> payload = row.payload() == null ? Map.of() : json.readValue(row.payload(), Map.class);
             return new TimelineEntry(row.sequence(), row.type(), row.occurredAt(),
-                    new TimelineActor(row.actorType(), row.actorId(), name, role), row.reason(), payload);
+                    new TimelineActor(row.actorType(), row.actorId(), name, role), row.reason(), payload,
+                    row.correlationId());
         }).toList();
     }
 
