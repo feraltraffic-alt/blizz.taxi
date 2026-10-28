@@ -95,7 +95,6 @@ fi
 api GET /api/driver/v1/balance "$ANDRII" >/dev/null; expect 200
 
 say "The rider tips 15 % on the same card; all of it goes to Andrii"
-BEFORE=$(api GET /api/driver/v1/balance/history "$ANDRII" | jq '[.balances[] | select(.currency == "UAH") | .balance_minor] | add // 0')
 TIPS=$(api GET "/api/rider/v1/orders/$ORDER/tip" "$RIDER"); expect 200
 if [[ "$PAYMENT" == CARD ]]; then
     [[ "$(jq -r .method <<<"$TIPS")" == CARD ]]
@@ -106,8 +105,9 @@ TIP=$(api POST "/api/rider/v1/orders/$ORDER/tip" "$RIDER" "{\"command_id\":\"$(u
 expect 201
 [[ "$(jq -r .method <<<"$TIP")" == CARD ]]
 wait_for "$RIDER" "/api/rider/v1/orders/$ORDER/tip" .tip.state PAID
+# The order's own TIP entries, not a difference of balances: the fare of this trip may still be posting.
 wait_for "$ANDRII" /api/driver/v1/balance/history \
-  "([.balances[] | select(.currency == \"UAH\") | .balance_minor] | add // 0) - $BEFORE" "$TIP_AMOUNT"
+  "[.entries[] | select(.order_id == \"$ORDER\" and .kind == \"TIP\") | .amount_minor] | add // 0" "$TIP_AMOUNT"
 done
 go_offline "$ANDRII"
 note "Done: card order $ORDER."
