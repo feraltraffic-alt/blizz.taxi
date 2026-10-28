@@ -102,7 +102,9 @@ class OperatorOrderApiTests {
                 "pickup", point(A_PICKUP), "dropoff", point(A_DROPOFF)));
         assertThat(quote.getResponse().getStatus()).isEqualTo(201);
         UUID quoteId = UUID.fromString((String) object(quote).get("id"));
-        assertThat(object(quote)).containsEntry("city_id", cityA.toString());
+        assertThat(object(quote)).containsEntry("city_id", cityA.toString())
+                .as("the operator gets the quote the contract describes (rider.v1.yaml Quote)")
+                .containsKeys("discount_minor", "to_pay_minor", "promotions", "route_source");
 
         UUID createCommand = UUID.randomUUID();
         MvcResult created = postJson("/api/operator/v1/orders", full.token(), orderBody(

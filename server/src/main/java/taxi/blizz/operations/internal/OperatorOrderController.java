@@ -75,7 +75,8 @@ class OperatorOrderController {
 
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
                      long distanceM, long durationS, String routeSource, java.time.Instant expiresAt, WaitingTerms waiting,
-                     java.time.Instant pickupAt, boolean preorder) {
+                     java.time.Instant pickupAt, boolean preorder, long discountMinor, long toPayMinor,
+                     List<RiderQuoteController.PromotionView> promotions) {
     }
 
     record CallerInput(@Size(max = 120) String name, @NotBlank String phone) {
@@ -129,7 +130,10 @@ class OperatorOrderController {
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
                 quote.route().distanceMetres(), quote.route().durationSeconds(), quote.route().source().name(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
-                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(), quote.breakdown().preorder());
+                        quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(),
+                quote.breakdown().preorder(), quote.discountMinor(), quote.toPayMinor(),
+                quote.promotions().stream().map(p -> new RiderQuoteController.PromotionView(p.promotionId(), p.name(),
+                        p.kind().name(), p.valueType().name(), p.value(), p.discountMinor())).toList());
     }
 
     @PostMapping("/orders")
