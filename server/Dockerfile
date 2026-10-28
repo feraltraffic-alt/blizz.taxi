@@ -1,6 +1,6 @@
 # Server image: build with Maven on JDK 25, run on JRE 25. Used by deploy/sandbox; the same image fits later
 # environments with their own configuration (section 26).
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /src
 COPY pom.xml .
 RUN mvn -B -q -ntp dependency:go-offline
