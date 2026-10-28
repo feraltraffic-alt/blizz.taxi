@@ -140,7 +140,7 @@ class JdbcCardPayments implements CardPayments {
         return jdbc.sql("""
                 select distinct i.id,i.order_id from payment_intent i
                 join payment_operation a on a.intent_id=i.id and a.type='AUTH' and a.state='SUCCEEDED'
-                where i.hold_minor>0 and greatest(i.updated_at,a.updated_at)<:before
+                where greatest(i.updated_at,a.updated_at)<:before
                   and not exists (
                     select 1 from payment_operation c where c.intent_id=i.id and c.type in ('SETTLE','REFUND')
                       and c.target=a.reference and c.state in ('SUCCEEDED','PENDING','UNKNOWN'))

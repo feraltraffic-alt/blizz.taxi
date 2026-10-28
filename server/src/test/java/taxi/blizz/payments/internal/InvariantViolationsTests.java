@@ -471,6 +471,17 @@ class InvariantViolationsTests {
     }
 
     @Test
+    void i5SuccessfulAuthorizationIsNotHiddenByAZeroedPaidIntent() {
+        var hold = cancelledHold();
+        long original = cards.intent(hold.order().id()).orElseThrow().holdMinor();
+        restore.add(() -> jdbc.sql("update payment_intent set hold_minor=:hold,state='AUTHORIZED',capture_minor=null where id=:id")
+                .param("hold", original).param("id", hold.intent()).update());
+        jdbc.sql("update payment_intent set hold_minor=0,state='PAID',capture_minor=0 where id=:id").param("id", hold.intent()).update();
+        ageTerminalData();
+        assertOneReport("operations", "I5", hold.intent());
+    }
+
+    @Test
     void i5DeclinedVoidDoesNotCloseSuccessfulAuthorization() {
         var hold = cancelledHold();
         UUID refund = voidHold(hold);
