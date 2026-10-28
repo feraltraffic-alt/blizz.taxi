@@ -161,7 +161,6 @@ class OperatorBonusTests {
         return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
                 UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
     }
-}
 
     @Test
     void point1_penaltyOnlyForStaffCancellation() {
@@ -283,3 +282,4 @@ class OperatorBonusTests {
         return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
                 UUID.randomUUID(), occurredAt, 0);
     }
+}
