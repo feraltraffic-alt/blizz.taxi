@@ -39,4 +39,8 @@ if [[ -s "$out" ]]; then
           ((.Misconfigurations // [])[] | "\(.Severity) \(.ID) \(.Title) in \($t)"),
           ((.Secrets // [])[] | "\(.Severity) secret \(.RuleID) in \($t):\(.StartLine)")' "$out"
 fi
+if [[ -n "${GITHUB_ACTIONS:-}" && -s "$out" ]]; then
+    # A summary on every run, so it is visible that the scan really looked at something.
+    echo "::notice title=Security scan (${out%.json})::$(jq -r '"\(.Results // [] | length) targets: " + ([.Results[]?.Target] | join(", "))' "$out" | cut -c1-900)"
+fi
 exit "$status"
