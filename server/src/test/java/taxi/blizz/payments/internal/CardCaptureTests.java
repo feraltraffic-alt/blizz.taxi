@@ -287,4 +287,86 @@ class CardCaptureTests {
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("VOIDED");
         assertThat(sentOf("REFUND")).isEqualTo(2);
     }
+
+    private long clearingFor(OrderView order) {
+        return jdbc.sql("""
+                        select coalesce(sum(l.debit_minor), 0) from journal_line l
+                        join journal_transaction t on t.id = l.transaction_id
+                        where t.basis_id = :order and l.account = 'PROVIDER_CLEARING'""")
+                .param("order", order.id()).query(Long.class).single();
+    }
+
+    private List<UUID> operations(OrderView order, String type) {
+        return jdbc.sql("""
+                        select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.type = :type order by o.created_at""")
+                .param("order", order.id()).param("type", type).query(UUID.class).list();
+    }
+
+    /**
+     * T-24: the capture times out and is sent again, and the provider's answers then come twice — for the capture and
+     * for the charge of the rest. One capture, one charge, the money counted once.
+     */
+    @Test
+    void aTimedOutCaptureAndRepeatedAnswersChargeAndCountOnce() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        gateway.next("TIMEOUT"); // the capture's answer is lost; it is sent again
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        long counted = clearingFor(order);
+        assertThat(counted).isEqualTo(hold + 700);
+        int requests = gateway.requests().size();
+
+        // The same answers again, as a provider repeats its notifications.
+        for (String type : List.of("SETTLE", "CHARGE")) {
+            for (UUID op : operations(order, type)) {
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.SUCCEEDED, "Approved", null,
+                        null));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.SUCCEEDED, "Approved", null,
+                        null));
+            }
+        }
+        settlePayments();
+
+        assertThat(clearingFor(order)).as("no second settlement in the ledger").isEqualTo(counted);
+        assertThat(gateway.requests()).as("no second charge sent").hasSize(requests);
+        assertThat(sent()).filteredOn(r -> r.startsWith("CHARGE:SALE")).hasSize(1);
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+    }
+
+    /** T-25: an answer with an older status after PAID — still in progress, or even declined — changes nothing. */
+    @Test
+    void anOlderAnswerAfterPaidDoesNotUndoIt() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        long counted = clearingFor(order);
+        String paymentState = orders.get(order.id()).paymentState();
+
+        for (String type : List.of("AUTH", "SETTLE", "CHARGE")) {
+            for (UUID op : operations(order, type)) {
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.PENDING, "InProcessing", null,
+                        null));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.DECLINED, "Declined", "1100",
+                        "Old answer"));
+                tx.executeWithoutResult(s -> internal.apply(op, PaymentProvider.Outcome.UNKNOWN, null, null, null));
+            }
+        }
+        settlePayments();
+
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo(paymentState);
+        assertThat(clearingFor(order)).isEqualTo(counted);
+        assertThat(jdbc.sql("""
+                        select count(*) from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.state <> 'SUCCEEDED'""")
+                .param("order", order.id()).query(Long.class).single()).as("every operation stays SUCCEEDED")
+                .isZero();
+    }
 }
