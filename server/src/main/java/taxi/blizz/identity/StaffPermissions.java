@@ -48,6 +48,8 @@ public final class StaffPermissions {
             new Permission("clients.delete", "Clients", "Riders' deletion requests: check, complete or reject"),
             new Permission("operator-bonuses.manage", "Operators", "Operator bonus settings, balances and history"),
             new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),
+            new Permission("flags.manage", "Settings",
+                    "Feature flags: switch a function of the whole service on or off (audited)"),
             new Permission("integrations.manage", "Settings",
                     "Keys of integrations: Firebase, GraphHopper, maps, payment merchants"),
             new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"),

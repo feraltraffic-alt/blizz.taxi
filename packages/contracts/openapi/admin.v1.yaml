@@ -1768,6 +1768,66 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/feature-flags:
+    get:
+      operationId: listFeatureFlags
+      summary: Feature flags of the service
+      description: |
+        Server-side switches (REQ-ENG-14), declared in the server with an owner and a review date. A flag is read
+        only where a process starts; switching it off never stops what has begun. Needs flags.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Every flag, in the server's order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureFlagList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/feature-flags/{key}/change:
+    post:
+      operationId: changeFeatureFlag
+      summary: Switch a feature flag on or off
+      description: Audited, with a reason. Needs flags.manage.
+      tags: [Settings]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9-]{1,64}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeFeatureFlag"
+      responses:
+        "200":
+          description: The flag as it is now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureFlag"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/settings/history:
     get:
       operationId: listServiceSettingsHistory
@@ -4457,6 +4517,65 @@ components:
           type: [string, "null"]
           format: date-time
 
+    FeatureFlag:
+      type: object
+      additionalProperties: false
+      required: [key, description, owner, review_by, default_enabled, enabled, version, changed_by, reason, changed_at]
+      properties:
+        key:
+          type: string
+          examples: [card-payments]
+        description:
+          type: string
+        owner:
+          description: The server module that answers for the flag.
+          type: string
+        review_by:
+          description: By this date the flag is removed or its date moved with a reason.
+          type: string
+          format: date
+        default_enabled:
+          type: boolean
+        enabled:
+          type: boolean
+        version:
+          description: 0 until the first switch.
+          type: integer
+          format: int64
+        changed_by:
+          type: [string, "null"]
+          format: uuid
+        reason:
+          type: [string, "null"]
+        changed_at:
+          type: [string, "null"]
+          format: date-time
+    FeatureFlagList:
+      type: object
+      additionalProperties: false
+      required: [flags]
+      properties:
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureFlag"
+    ChangeFeatureFlag:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, enabled, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        enabled:
+          type: boolean
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     SettingsHistory:
       type: object
       additionalProperties: false
