@@ -235,6 +235,14 @@ class JdbcSessionService implements SessionService {
     }
 
     private boolean accountActive(Actor actor) {
+        if (actor.type() == SubjectType.STAFF) {
+            // A staff session goes on while the member is active and has no password change pending (review of
+            // 28.10.2026: before, no staff session could ever be refreshed).
+            return jdbc.sql("""
+                            select exists(select 1 from staff_user
+                                          where id = :id and state = 'ACTIVE' and not must_change_password)""")
+                    .param("id", actor.id()).query(Boolean.class).single();
+        }
         String table = switch (actor.type()) {
             case CLIENT -> "client";
             case DRIVER -> "driver";

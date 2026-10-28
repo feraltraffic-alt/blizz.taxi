@@ -20,7 +20,8 @@ import taxi.blizz.platform.SubjectType;
  * Talks to providers outside any transaction (REQ-PAY-01). An operation is claimed with a lease
  * ({@code SKIP LOCKED}), so several replicas never send it twice. A CREATED operation is sent once; any other —
  * UNKNOWN, PENDING, or SENDING whose lease ran out (a crash mid-call) — is only asked about with CHECK_STATUS,
- * never sent again (REQ-PAY-10).
+ * never sent again (REQ-PAY-10). The exception is a capture or a void of a hold the bank still shows untouched: that
+ * request never arrived, and sending it again cannot take money twice.
  */
 @Component
 public class PaymentWorker {
@@ -170,6 +171,11 @@ public class PaymentWorker {
                     ? PaymentProvider.Result.unknown("The provider does not know the transaction") : status;
         }
         String s = status.providerStatus().toLowerCase(java.util.Locale.ROOT);
+        if (("SETTLE".equals(op.type()) || "REFUND".equals(op.type())) && "waitingauthcomplete".equals(s)) {
+            // The hold stands untouched: our capture or void never reached the bank. Send it again — on a hold a
+            // second settle or void cannot take money twice (review of 28.10.2026: it waited until the hold lapsed).
+            return send(op);
+        }
         PaymentProvider.Outcome outcome = switch (op.type()) {
             case "AUTH" -> switch (s) {
                 case "waitingauthcomplete", "approved", "voided", "refunded" -> PaymentProvider.Outcome.SUCCEEDED;
@@ -177,13 +183,20 @@ public class PaymentWorker {
                 case "inprocessing", "pending", "created" -> PaymentProvider.Outcome.PENDING;
                 default -> PaymentProvider.Outcome.UNKNOWN;
             };
-            case "CHARGE", "SETTLE", "TIP" -> switch (s) {
+            // A hold that was voided or lapsed was never captured: the settle failed, the fare goes to the card.
+            case "SETTLE" -> switch (s) {
+                case "approved", "refunded" -> PaymentProvider.Outcome.SUCCEEDED;
+                case "declined", "expired", "voided" -> PaymentProvider.Outcome.DECLINED;
+                default -> PaymentProvider.Outcome.PENDING;
+            };
+            case "CHARGE", "TIP" -> switch (s) {
                 case "approved", "refunded", "voided" -> PaymentProvider.Outcome.SUCCEEDED;
                 case "declined", "expired" -> PaymentProvider.Outcome.DECLINED;
                 default -> PaymentProvider.Outcome.PENDING;
             };
+            // A hold that lapsed is released as surely as a voided one.
             case "REFUND" -> switch (s) {
-                case "voided", "refunded" -> PaymentProvider.Outcome.SUCCEEDED;
+                case "voided", "refunded", "expired" -> PaymentProvider.Outcome.SUCCEEDED;
                 case "refundinprocessing" -> PaymentProvider.Outcome.PENDING;
                 default -> PaymentProvider.Outcome.UNKNOWN;
             };

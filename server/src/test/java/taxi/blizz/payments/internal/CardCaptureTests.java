@@ -230,4 +230,61 @@ class CardCaptureTests {
         assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(hold),
                 "SETTLE::" + WayForPayProvider.amount(hold - 100), "CHARGE:SALE:" + WayForPayProvider.amount(hold - 100));
     }
+
+    private String authReference(OrderView order) {
+        return jdbc.sql("""
+                        select o.reference from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.type = 'AUTH'""")
+                .param("order", order.id()).query(String.class).single();
+    }
+
+    private long sentOf(String type) {
+        return gateway.requests().stream().filter(r -> type.equals(r.get("transactionType"))).count();
+    }
+
+    /** Review of 28.10.2026: a capture that never reached the bank is sent again while the hold stands. */
+    @Test
+    void aLostCaptureIsSentAgainWhileTheHoldStands() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        gateway.next("TIMEOUT"); // the settle never arrives
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold - 100, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(sentOf("SETTLE")).isEqualTo(2);
+        assertThat(sent()).as("no extra charge").noneMatch(r -> r.startsWith("CHARGE:SALE"));
+    }
+
+    /** Review of 28.10.2026: a hold that lapsed before the capture arrived is not taken for paid. */
+    @Test
+    void aHoldThatLapsedBeforeTheCaptureIsNotTakenForPaid() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        gateway.next("TIMEOUT");
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold - 100, "UAH"));
+        worker.runOnce(); // the settle is lost
+        gateway.record(authReference(order), "Voided"); // meanwhile the hold lapsed
+        settlePayments();
+        assertThat(jdbc.sql("""
+                        select o.state from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where i.order_id = :order and o.type = 'SETTLE'""")
+                .param("order", order.id()).query(String.class).single()).isEqualTo("DECLINED");
+        assertThat(sent()).contains("CHARGE:SALE:" + WayForPayProvider.amount(hold - 100));
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+    }
+
+    /** Review of 28.10.2026: a void that never reached the bank is sent again; the rider's money is not blocked. */
+    @Test
+    void aLostVoidIsSentAgain() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        gateway.next("TIMEOUT");
+        orders.cancel(rider, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
+        deliverEvents();
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("VOIDED");
+        assertThat(sentOf("REFUND")).isEqualTo(2);
+    }
 }

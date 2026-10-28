@@ -205,10 +205,13 @@ class StaffSignInTests {
         String login = uniqueLogin("susp");
         StaffMember member = operator(login, "susp-password-123", "orders.view");
         StaffSignIn.Result session = signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null);
+        // An active member's session goes on: the refresh works (review of 28.10.2026).
+        var refreshed = sessions.refresh(session.session().refreshToken());
+        assertThat(refreshed.accessToken()).isNotBlank();
 
         StaffMember suspended = directory.suspend(superAdmin, UUID.randomUUID(), member.id(), member.version(), "Left");
         assertThat(suspended.state()).isEqualTo("SUSPENDED");
-        assertCode(() -> sessions.refresh(session.session().refreshToken()), ErrorCode.UNAUTHENTICATED);
+        assertCode(() -> sessions.refresh(refreshed.refreshToken()), ErrorCode.UNAUTHENTICATED);
         assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null), ErrorCode.ACCESS_DENIED);
 
         StaffMember restored = directory.restore(superAdmin, UUID.randomUUID(), member.id(), suspended.version(), "Back");

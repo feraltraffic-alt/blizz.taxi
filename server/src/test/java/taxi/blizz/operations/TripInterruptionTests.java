@@ -101,6 +101,9 @@ class TripInterruptionTests {
         GeoPoint stop = TestRides.north(PICKUP, 300);
         rides.moveTo(broken, stop);
         TestRides.Driver rescue = rides.driverNear(stop);
+        // The driver ends the shift during the trip: the session waits for the trip to end (CLOSING).
+        assertThat(sessions.close(broken.actor(), UUID.randomUUID(), broken.device(),
+                sessions.availability(broken.actor().id()).sessionVersion()).sessionState()).isEqualTo("CLOSING");
         long version = orders.get(ride.order().id()).version();
 
         assertCode(() -> orders.interrupt(staff(Orders.CANCEL_PERMISSION), UUID.randomUUID(), ride.order().id(), version,
@@ -123,6 +126,9 @@ class TripInterruptionTests {
                         + "(interrupted_at_point is not null) from trip where id = :id")
                 .param("id", ride.trip().id()).query(String.class).single()).isEqualTo("ABORTED true true");
         assertThat(occupancy(broken.actor())).isEqualTo("FREE");
+        assertThat(jdbc.sql("select state from work_session where driver_id = :id order by opened_at desc limit 1")
+                .param("id", broken.actor().id()).query(String.class).single())
+                .as("the closing session closes with the interrupted trip (review of 28.10.2026)").isEqualTo("CLOSED");
 
         OrderView followUp = result.followUp();
         assertThat(followUp.relatedOrderId()).isEqualTo(ride.order().id());

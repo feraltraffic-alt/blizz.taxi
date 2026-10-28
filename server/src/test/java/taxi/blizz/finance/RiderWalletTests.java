@@ -197,6 +197,27 @@ class RiderWalletTests {
     }
 
     @Test
+    void aNoShowGivesTheBonusesBack() {
+        deliverEvents();
+        Actor rider = rides.client();
+        wallets.topUp(admin, UUID.randomUUID(), rider.id(), "UAH", 5_000, "Welcome bonus");
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        OrderView order = orderWithBonuses(rider, PaymentMethod.CASH, 3_000);
+        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        TripView trip = trips.current(driver.actor()).orElseThrow();
+        rides.moveTo(driver, TestRides.north(PICKUP, 30));
+        TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
+        jdbc.sql("update trip set arrived_at = arrived_at - interval '30 minutes' where id = :id")
+                .param("id", waiting.id()).update();
+        trips.reportNoShow(driver.actor(), UUID.randomUUID(), waiting.id(), waiting.version());
+        deliverEvents();
+
+        assertThat(orders.get(order.id()).status()).isEqualTo("CANCELLED");
+        assertThat(wallets.mine(rider, 10).balances()).as("the reservation is released (review of 28.10.2026)")
+                .singleElement().isEqualTo(new RiderWallets.Balance("UAH", 5_000, 0, 5_000));
+    }
+
+    @Test
     void aCancelledOrderGivesTheBonusesBackAndTheyNeverPayMoreThanThePrice() {
         deliverEvents();
         Actor rider = rides.client();

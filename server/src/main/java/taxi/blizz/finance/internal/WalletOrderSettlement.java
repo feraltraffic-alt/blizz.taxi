@@ -50,7 +50,9 @@ class WalletOrderSettlement implements OutboxHandler {
     @Override
     public boolean supports(String eventType) {
         return switch (eventType) {
-            case "TripCompleted", "OrderCancelled", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted" -> true;
+            // PassengerNoShow cancels the order too (review of 28.10.2026: its reservation was never released).
+            case "TripCompleted", "OrderCancelled", "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined",
+                 "TripInterrupted" -> true;
             default -> false;
         };
     }

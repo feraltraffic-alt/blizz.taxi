@@ -66,7 +66,7 @@ class NotificationFeed implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "OfferMade", "AssignmentCommitted", "DriverArrived", "TripCompleted", "OrderCancelled",
-                 "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted" -> true;
+                 "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted" -> true;
             default -> false;
         };
     }
@@ -104,7 +104,7 @@ class NotificationFeed implements OutboxHandler {
             case "CardHoldDeclined" -> toRider.accept("rider.payment-declined");
             case "TripInterrupted" -> toRider.accept(payload.followUpOrderId() != null ? "rider.trip-interrupted"
                     : "rider.order-cancelled");
-            case "OrderCancelled" -> {
+            case "OrderCancelled", "PassengerNoShow" -> {
                 // Whoever cancelled knows it already.
                 if (!"RIDER".equals(payload.cancelledBy())) {
                     toRider.accept("rider.order-cancelled");

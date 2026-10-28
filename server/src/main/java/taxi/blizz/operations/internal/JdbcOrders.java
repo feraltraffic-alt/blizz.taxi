@@ -627,7 +627,9 @@ class JdbcOrders implements Orders {
                                     where id = :id and state = 'COMMITTED'""")
                             .param("now", now).param("reason", "INTERRUPTED: " + reason.code())
                             .param("id", assignment.id()).update();
-                    core.setOccupancy(assignment.driverId(), "FREE", null);
+                    // Like every other end of a trip: a session waiting to close closes, a pause asked for applies
+                    // (review of 28.10.2026: the driver stayed in a CLOSING session for good).
+                    core.releaseDriver(assignment.driverId());
                     UUID followUpId = interruption.followUp() ? UUID.randomUUID() : null;
                     Map<String, Object> details = new java.util.LinkedHashMap<>();
                     details.put("trip_id", assignment.tripId().toString());
