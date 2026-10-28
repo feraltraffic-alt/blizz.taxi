@@ -97,10 +97,13 @@ class CallerTextTests {
                 null, false));
     }
 
-    private TestRides.Driver accept() {
-        TestRides.Driver driver = rides.driverNear(PICKUP);
+    /** A driver online before the order: the offer goes out when the order is made. */
+    private TestRides.Driver online() {
+        return rides.driverNear(PICKUP);
+    }
+
+    private void accept(TestRides.Driver driver) {
         dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
-        return driver;
     }
 
     private List<String> textsTo(String phone) {
@@ -110,8 +113,9 @@ class CallerTextTests {
     @Test
     void theCallerIsToldTheCarAndWhenItIsThere() {
         String caller = phone("+38067", "1234");
+        TestRides.Driver driver = online();
         OrderView order = phoneOrder(caller);
-        TestRides.Driver driver = accept();
+        accept(driver);
         drain();
 
         assertThat(textsTo(caller)).singleElement().satisfies(text -> assertThat(text)
@@ -132,16 +136,18 @@ class CallerTextTests {
     @Test
     void aPolishNumberIsWrittenToInPolish() {
         String caller = phone("+48600", "1234");
+        TestRides.Driver driver = online();
         phoneOrder(caller);
-        accept();
+        accept(driver);
         drain();
         assertThat(textsTo(caller)).singleElement().asString().startsWith("Jedzie do Ciebie").contains("AA4000AA");
     }
 
     @Test
     void anAppOrderGetsNoSms() {
+        TestRides.Driver driver = online();
         OrderView order = rides.order(rides.client(), cityId, PICKUP, DROPOFF);
-        accept();
+        accept(driver);
         drain();
         assertThat(jdbc.sql("select count(*) from notification where recipient_id = :order and channel = 'SMS'")
                 .param("order", order.id()).query(Long.class).single()).isZero();
@@ -150,8 +156,9 @@ class CallerTextTests {
     @Test
     void anSmsThatCannotGoThroughBecomesATaskAndTheAssignmentStays() {
         String caller = phone("+38067", "0000"); // the fake provider refuses numbers ending in 0000
+        TestRides.Driver driver = online();
         OrderView order = phoneOrder(caller);
-        accept();
+        accept(driver);
         drain();
         assertThat(textsTo(caller)).isEmpty();
         UUID smsId = jdbc.sql("select id from notification where recipient_id = :order and channel = 'SMS'")
