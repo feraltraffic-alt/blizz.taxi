@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.telephony.FakeCallEvents;
 import taxi.blizz.telephony.FakeOtpCodes;
+import taxi.blizz.telephony.FakeTextMessages;
 
 /**
  * {@code GET /sandbox/v1/otp?phone=…}: the last code the fake provider "sent" to the phone, by SMS or by a call
@@ -20,10 +21,21 @@ class SandboxController {
 
     private final FakeOtpCodes codes;
     private final FakeCallEvents calls;
+    private final FakeTextMessages texts;
 
-    SandboxController(FakeOtpCodes codes, FakeCallEvents calls) {
+    SandboxController(FakeOtpCodes codes, FakeCallEvents calls, FakeTextMessages texts) {
         this.codes = codes;
         this.calls = calls;
+        this.texts = texts;
+    }
+
+    /**
+     * {@code GET /sandbox/v1/sms?phone=…}: the texts the fake provider "sent" to the phone (a phone order's caller,
+     * REQ-NTF-08), oldest first; codes are at {@code /sandbox/v1/otp}.
+     */
+    @GetMapping("/sandbox/v1/sms")
+    java.util.List<FakeTextMessages.Sent> sms(@RequestParam String phone) {
+        return texts.to(phone);
     }
 
     /**

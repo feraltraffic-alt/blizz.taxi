@@ -62,14 +62,17 @@ class PushConfiguration {
     static class WorkerSchedule {
 
         private final PushWorker worker;
+        private final SmsWorker sms;
 
-        WorkerSchedule(PushWorker worker) {
+        WorkerSchedule(PushWorker worker, SmsWorker sms) {
             this.worker = worker;
+            this.sms = sms;
         }
 
         @Scheduled(fixedDelayString = "${blizz.push.poll-interval:PT1S}")
         void poll() {
             worker.runOnce();
+            sms.runOnce();
         }
     }
 }

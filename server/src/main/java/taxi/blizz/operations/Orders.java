@@ -122,4 +122,14 @@ public interface Orders {
 
     /** Empty when the order does not exist. */
     Optional<Origin> origin(UUID orderId);
+
+    /**
+     * What a phone order's caller is told by SMS (REQ-NTF-08, section 20): the caller's phone and the driver and car of
+     * the current or last assignment (null before one). Empty unless it is a PHONE order with a contact phone. The
+     * same view of the driver as the rider's history (ADR 0004).
+     */
+    record CallerNotice(UUID orderId, UUID cityId, String contactPhone, String driverName, HistoryVehicle vehicle) {
+    }
+
+    Optional<CallerNotice> callerNotice(UUID orderId);
 }

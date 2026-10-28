@@ -37,6 +37,10 @@ class ProblemQueues implements OutboxHandler {
     record StaffSuspended(UUID staffId) {
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CallerNotNotified(UUID orderId, String template, String outcome) {
+    }
+
     @Override
     public String consumerId() {
         return "backoffice.problem-queues";
@@ -44,11 +48,20 @@ class ProblemQueues implements OutboxHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return "TripCompleted".equals(eventType) || "StaffSuspended".equals(eventType);
+        return "TripCompleted".equals(eventType) || "StaffSuspended".equals(eventType)
+                || "CallerNotNotified".equals(eventType);
     }
 
     @Override
     public void handle(OutboxMessage message) {
+        if ("CallerNotNotified".equals(message.type())) {
+            // REQ-NTF-08: a phone order's caller the SMS did not reach is called by a dispatcher. One task per order.
+            CallerNotNotified event = json.readValue(message.payload(), CallerNotNotified.class);
+            cases.openFromSystem("caller-not-notified:" + event.orderId(), orders.get(event.orderId()).cityId(),
+                    Category.OTHER, event.orderId(), "Phone order: call the caller, the SMS did not reach them",
+                    Priority.HIGH, "SMS " + event.template() + " " + event.outcome());
+            return;
+        }
         if ("StaffSuspended".equals(message.type())) {
             StaffSuspended event = json.readValue(message.payload(), StaffSuspended.class);
             cases.returnToQueue(event.staffId(), "Returned to the queue: the owner was suspended");

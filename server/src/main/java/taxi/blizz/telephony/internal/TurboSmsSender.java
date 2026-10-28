@@ -46,6 +46,11 @@ class TurboSmsSender implements OtpSender {
 
     @Override
     public Result send(PhoneNumber phone, String code, OtpAudience audience) {
+        return sendText(phone, text(code, phone));
+    }
+
+    /** Any text: a code, or a notice to a phone order's caller (REQ-NTF-08). */
+    Result sendText(PhoneNumber phone, String text) {
         String token = integrations.value(Integrations.OTP_TURBOSMS_TOKEN).orElse(null);
         String sender = integrations.value(Integrations.OTP_TURBOSMS_SENDER).orElse(null);
         if (token == null || sender == null) {
@@ -53,7 +58,7 @@ class TurboSmsSender implements OtpSender {
         }
         String body = json.writeValueAsString(Map.of(
                 "recipients", List.of(phone.e164().substring(1)),
-                "sms", Map.of("sender", sender, "text", text(code, phone))));
+                "sms", Map.of("sender", sender, "text", text)));
         HttpTransport.Response response;
         try {
             response = http.send("POST", properties.turbosmsBaseUrl() + "/message/send.json",

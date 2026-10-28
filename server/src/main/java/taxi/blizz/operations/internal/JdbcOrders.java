@@ -814,4 +814,28 @@ class JdbcOrders implements Orders {
     private static String label(String value) {
         return value == null || value.isBlank() ? "" : value.strip();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CallerNotice> callerNotice(UUID orderId) {
+        return jdbc.sql("""
+                        select o.id, o.city_id, c.phone, d.name as driver_name, v.make, v.model, v.color,
+                               v.registration_number, a.id as assignment_id
+                        from ride_order o
+                        join order_contact c on c.order_id = o.id
+                        left join lateral (
+                            select id, driver_id, vehicle_id from assignment where order_id = o.id
+                            order by created_at desc, id desc limit 1
+                        ) a on true
+                        left join driver d on d.id = a.driver_id
+                        left join vehicle v on v.id = a.vehicle_id
+                        where o.id = :id and o.channel = 'PHONE' and c.phone is not null""")
+                .param("id", orderId)
+                .query((rs, i) -> new CallerNotice(rs.getObject("id", UUID.class), rs.getObject("city_id", UUID.class),
+                        rs.getString("phone"), rs.getString("driver_name"),
+                        rs.getObject("assignment_id", UUID.class) == null ? null
+                                : new HistoryVehicle(rs.getString("make"), rs.getString("model"), rs.getString("color"),
+                                rs.getString("registration_number"))))
+                .optional();
+    }
 }
