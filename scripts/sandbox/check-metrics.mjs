@@ -2,16 +2,16 @@
 import { readFileSync } from 'node:fs';
 
 const definitions = {
-  blizz_orders_total: { channel: ['APP', 'WEB', 'PHONE'], preorder: ['true', 'false'] },
-  blizz_orders_cancelled_total: { by: ['RIDER', 'STAFF', 'DRIVER'], reason: ['CHANGED_MIND', 'WAIT_TOO_LONG',
+  blizz_orders_total: { channel: ['APP', 'WEB', 'PHONE', 'OTHER'], preorder: ['true', 'false'] },
+  blizz_orders_cancelled_total: { by: ['RIDER', 'STAFF', 'DRIVER', 'OTHER'], reason: ['CHANGED_MIND', 'WAIT_TOO_LONG',
     'WRONG_ADDRESS', 'OTHER_TRANSPORT', 'NO_SHOW', 'PASSENGER_ASKED', 'VEHICLE_PROBLEM', 'CANNOT_REACH',
     'DUPLICATE', 'NO_CARS', 'TEST_ORDER', 'OTHER'] },
   blizz_orders_unfulfilled_total: {},
   blizz_dispatch_first_offer_seconds_count: {},
-  blizz_dispatch_assigned_seconds_count: { source: ['OFFER', 'BROADCAST', 'RESERVATION'] },
-  blizz_offers_total: { outcome: ['ACCEPTED', 'DECLINED', 'EXPIRED', 'REVOKED'] },
+  blizz_dispatch_assigned_seconds_count: { source: ['OFFER', 'BROADCAST', 'RESERVATION', 'OTHER'] },
+  blizz_offers_total: { outcome: ['ACCEPTED', 'DECLINED', 'EXPIRED', 'REVOKED', 'OTHER'] },
   blizz_dispatch_excluded_total: { reason: ['STALE_LOCATION', 'PAUSED', 'NOT_ADMITTED', 'CLASS', 'PAYMENT',
-    'RESTRICTED', 'PREVIOUS_DRIVER', 'ALREADY_OFFERED', 'BUSY', 'TOO_FAR'] },
+    'RESTRICTED', 'PREVIOUS_DRIVER', 'ALREADY_OFFERED', 'BUSY', 'TOO_FAR', 'OTHER'] },
   blizz_sms_sent_total: { purpose: ['OTP', 'CALLER'], state: ['SENT', 'FAILED', 'UNKNOWN'] },
 };
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -49,6 +49,9 @@ if (process.argv.includes('--self-test')) {
   const valid = Object.entries(definitions).map(([name, tags]) => `${name}{${Object.entries({ ...tags, application: ['blizz-taxi-server'] })
     .map(([key, values]) => `${key}="${values[0]}"`).join(',')}} 1`).join('\n');
   validate(valid);
+  for (const [key, value] of [['channel', 'APP'], ['by', 'RIDER'], ['source', 'OFFER'], ['outcome', 'ACCEPTED'], ['reason', 'STALE_LOCATION']]) {
+    validate(valid.replace(`${key}="${value}"`, `${key}="OTHER"`));
+  }
   const withTimerSum = validate(valid + '\nblizz_dispatch_assigned_seconds_sum{source="RESERVATION",application="blizz-taxi-server"} 0');
   if (Object.keys(withTimerSum).length !== Object.keys(definitions).length) throw Error('Unexpected totals');
   for (const bad of [valid.replace('blizz_offers_total', 'missing'), valid.replace('outcome="ACCEPTED"', 'outcome="ARBITRARY"'),

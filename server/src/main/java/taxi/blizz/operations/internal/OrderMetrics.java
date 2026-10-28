@@ -6,6 +6,8 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import taxi.blizz.platform.CommittedMetrics;
@@ -13,6 +15,7 @@ import taxi.blizz.platform.CommittedMetrics;
 /** REQ-OBS-02: bounded labels and search timestamps, captured under the order lock. */
 @Component
 class OrderMetrics {
+    private static final Logger log = LoggerFactory.getLogger(OrderMetrics.class);
     private static final Set<String> CANCELLATIONS = Set.of("CHANGED_MIND", "WAIT_TOO_LONG", "WRONG_ADDRESS",
             "OTHER_TRANSPORT", "NO_SHOW", "PASSENGER_ASKED", "VEHICLE_PROBLEM", "CANNOT_REACH", "DUPLICATE",
             "NO_CARS", "TEST_ORDER");
@@ -43,7 +46,7 @@ class OrderMetrics {
                 }
             }
             case "AssignmentCommitted" -> {
-                String source = bounded((String) payload.get("source"), Set.of("OFFER", "BROADCAST", "RESERVATION"));
+                String source = bounded("blizz.dispatch.assigned", payload.get("source") instanceof String value ? value : null, Set.of("OFFER", "BROADCAST", "RESERVATION"));
                 metrics.timer("blizz.dispatch.assigned", searched(order), "source", source);
                 if ("OFFER".equals(source)) offer("ACCEPTED");
             }
@@ -53,21 +56,21 @@ class OrderMetrics {
     }
 
     void created(String channel, boolean preorder) {
-        metrics.counter("blizz.orders.created", "channel", bounded(channel, Set.of("APP", "WEB", "PHONE")),
+        metrics.counter("blizz.orders.created", "channel", bounded("blizz.orders.created", channel, Set.of("APP", "WEB", "PHONE")),
                 "preorder", Boolean.toString(preorder));
     }
 
     void cancelled(String by, String reason) {
-        metrics.counter("blizz.orders.cancelled", "by", bounded(by, Set.of("RIDER", "STAFF", "DRIVER")),
-                "reason", CANCELLATIONS.contains(reason) ? reason : "OTHER");
+        metrics.counter("blizz.orders.cancelled", "by", bounded("blizz.orders.cancelled", by, Set.of("RIDER", "STAFF", "DRIVER")),
+                "reason", bounded("blizz.orders.cancelled", reason, CANCELLATIONS));
     }
 
     void offer(String outcome) {
-        metrics.counter("blizz.offers", "outcome", bounded(outcome, Set.of("ACCEPTED", "DECLINED", "EXPIRED", "REVOKED")));
+        metrics.counter("blizz.offers", "outcome", bounded("blizz.offers", outcome, Set.of("ACCEPTED", "DECLINED", "EXPIRED", "REVOKED")));
     }
 
     void excluded(String reason) {
-        metrics.counter("blizz.dispatch.excluded", "reason", bounded(reason, EXCLUSIONS));
+        metrics.counter("blizz.dispatch.excluded", "reason", bounded("blizz.dispatch.excluded", reason, EXCLUSIONS));
     }
 
     private Duration searched(UUID order) {
@@ -79,8 +82,11 @@ class OrderMetrics {
                 }).single();
     }
 
-    private static String bounded(String value, Set<String> allowed) {
-        if (!allowed.contains(value)) throw new IllegalArgumentException("Unknown metric label value");
-        return value;
+    private static String bounded(String metric, String value, Set<String> allowed) {
+        if (value != null && (allowed.contains(value) || value.equals("OTHER"))) return value;
+        // Unexpected values may be identifiers or phone numbers; only enum-style words are safe to log.
+        String safe = value == null ? "<null>" : value.matches("[A-Z][A-Z_]{0,63}") ? value : "[REDACTED]";
+        log.warn("Unknown label for metric {}: {} -> OTHER", metric, safe);
+        return "OTHER";
     }
 }

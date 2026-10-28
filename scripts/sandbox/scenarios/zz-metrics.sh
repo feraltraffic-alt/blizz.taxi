@@ -37,11 +37,11 @@ for _ in $(seq 45); do
 done
 [[ "$(jq -r .status <<<"$CURRENT")" == UNFULFILLED ]]
 say "All eight metrics are non-zero, with closed labels and no ids/phones"
-node "$(dirname "$0")/../check-metrics.mjs" --self-test
+node "$(dirname "$0")/../check-metrics.mjs" --self-test 2>&1 | tee -a "$TRANSCRIPT"
 SCRAPE=$(mktemp)
 # The management port is deliberately local to the workflow machine.
 curl -fsS "http://localhost:${MANAGEMENT_PORT:-8081}/actuator/prometheus" > "$SCRAPE"
-node "$(dirname "$0")/../check-metrics.mjs" < "$SCRAPE" | tee -a "$TRANSCRIPT"
+node "$(dirname "$0")/../check-metrics.mjs" < "$SCRAPE" 2>&1 | tee -a "$TRANSCRIPT"
 {
     printf '\n```prometheus\n'
     grep -E '^blizz_(orders(_total|_(cancelled|unfulfilled)_total)|dispatch_(first_offer_seconds|assigned_seconds|excluded_total)|offers_total|sms_sent_total)' "$SCRAPE"
