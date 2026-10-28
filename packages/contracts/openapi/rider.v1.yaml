@@ -1944,14 +1944,16 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         source:
           type: string
+          enum: [OFFER, BROADCAST, RESERVATION]
         trip_id:
-          oneOf:
-            - $ref: "./common.yaml#/components/schemas/Uuid"
-            - type: "null"
+          type: [string, "null"]
+          format: uuid
         state:
           type: string
+          enum: [RESERVED, COMMITTED, RELEASED, REVOKED, COMPLETED]
         trip_phase:
           type: [string, "null"]
+          enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
 
     HistoryVehicle:
       type: object
