@@ -1,5 +1,11 @@
 # Tests drive the outbox relay explicitly instead of on a timer.
 blizz:
+  finance:
+    invariants:
+      enabled: false
+  operations:
+    invariants:
+      enabled: false
   location:
     retention:
       # Tests run the track clean-up themselves.
@@ -25,6 +31,8 @@ blizz:
     provider: FAKE
     worker-enabled: false
   payments:
+    invariants:
+      enabled: false
     fake-merchants-allowed: true
     public-base-url: http://blizz.test
     secrets:

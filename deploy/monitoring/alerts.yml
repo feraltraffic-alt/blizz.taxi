@@ -115,3 +115,19 @@ groups:
         annotations:
           summary: "GPS points outside trips are kept longer than their retention: the clean-up stopped"
           runbook: docs/runbooks/orders-and-gps.md
+
+      - alert: InvariantViolation
+        expr: blizz_invariant_violations > 0
+        for: 20m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "Invariant {{ $labels.check }} found inconsistent objects for 20 minutes"
+          runbook: docs/runbooks/invariants.md
+
+      - alert: InvariantCheckFailed
+        expr: increase(blizz_invariant_failures_total[30m]) > 0 or blizz_invariant_violations != blizz_invariant_violations
+        for: 20m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "Invariant {{ $labels.check }} cannot produce a reliable result"
+          runbook: docs/runbooks/invariants.md

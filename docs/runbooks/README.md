@@ -7,6 +7,7 @@
 | [database-and-server.md](database-and-server.md) | Сервер не отвечает, много ошибок 5xx, метрики не читаются |
 | [outbox.md](outbox.md) | События застряли или не доставляются |
 | [payment-unknown.md](payment-unknown.md) | Исход оплаты картой неизвестен дольше 5 минут |
+| [invariants.md](invariants.md) | Проверки нашли несогласованные данные или не смогли завершиться |
 | [ledger.md](ledger.md) | Проводка в журнале не сходится |
 | [clock.md](clock.md) | Часы экземпляра расходятся с базой |
 | [sms.md](sms.md) | Коды для входа не уходят |

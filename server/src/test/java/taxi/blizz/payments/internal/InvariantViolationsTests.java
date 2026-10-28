@@ -3,10 +3,16 @@ package taxi.blizz.payments.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +42,8 @@ import taxi.blizz.operations.Trips;
 import taxi.blizz.operations.WorkSessions;
 import taxi.blizz.payments.CardPayments;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.InvariantChecks;
+import taxi.blizz.platform.InvariantReports;
 import taxi.blizz.platform.internal.OutboxRelay;
 import taxi.blizz.pricing.QuoteService;
 
@@ -57,6 +65,7 @@ class InvariantViolationsTests {
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
     @Autowired Trips trips;
+    @Autowired taxi.blizz.operations.Tips tips;
     @Autowired WorkSessions sessions;
     @Autowired SessionService auth;
     @Autowired QuoteService quotes;
@@ -155,6 +164,82 @@ class InvariantViolationsTests {
         editJournal(() -> jdbc.sql("update journal_transaction set occurred_at=now()-interval '3 minutes'").update());
     }
 
+    @Autowired DataSource dataSource;
+    @Autowired InvariantReports reports;
+    @Autowired Clock clock;
+
+    class Probe extends InvariantChecks {
+        Probe(java.util.function.Supplier<List<Violation>> first, java.util.function.Supplier<List<Violation>> second) {
+            super(dataSource, reports, context.getBeanProvider(MeterRegistry.class), InvariantViolationsTests.this.clock);
+            check(Check.I1, ObjectType.JOURNAL_TRANSACTION, first);
+            check(Check.I3, ObjectType.ORDER, second);
+        }
+    }
+
+    @Test
+    void failedSqlIsNotZeroAndDoesNotPreventTheNextReadOnlyCheck() {
+        var registry = new SimpleMeterRegistry();
+        var probe = new Probe(() -> {
+            jdbc.sql("select * from deliberately_missing_invariant_table").query().listOfRows();
+            return List.of();
+        }, () -> {
+            assertThat(jdbc.sql("select current_setting('transaction_read_only')").query(String.class).single()).isEqualTo("on");
+            return List.of();
+        });
+        probe.bindTo(registry);
+        double before = meters.counter("blizz.invariant.failures", "check", "I1").count();
+        probe.runChecks();
+        assertThat(registry.get("blizz.invariant.violations").tag("check", "I1").gauge().value()).isNaN();
+        assertThat(registry.get("blizz.invariant.violations").tag("check", "I3").gauge().value()).isZero();
+        assertThat(meters.counter("blizz.invariant.failures", "check", "I1").count()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void readOnlyScanCompletesWhileBusinessRowIsWriteLocked() throws Exception {
+        var order = rides.order(rides.client(), city, PICKUP, DROPOFF);
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var writer = pool.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("update ride_order set updated_at=now() where id=:id").param("id", order.id()).update();
+                locked.countDown();
+                try { assertThat(release.await(5, TimeUnit.SECONDS)).isTrue(); }
+                catch (InterruptedException e) { throw new IllegalStateException(e); }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                var reader = pool.submit(() -> {
+                    scan("operations");
+                    assertThat(gauge("I3")).isZero();
+                });
+                reader.get(2, TimeUnit.SECONDS);
+            } finally { release.countDown(); }
+            writer.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void concurrentReportersCommitOneReceiptEventAndCase() throws Exception {
+        var id = UUID.randomUUID();
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var tasks = new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for (int i = 0; i < 8; i++) tasks.add(pool.submit(() -> {
+                start.await();
+                return reports.reportOnce(InvariantChecks.Check.I1, InvariantChecks.ObjectType.JOURNAL_TRANSACTION,
+                        id, "CONCURRENT_REPORT_FIXTURE");
+            }));
+            start.countDown();
+            int created = 0;
+            for (var task : tasks) if (task.get(10, TimeUnit.SECONDS)) created++;
+            assertThat(created).isEqualTo(1);
+        }
+        drain();
+        assertThat(events("I1", id)).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from support_case where source_key=:key")
+                .param("key", "invariant:I1:" + id).query(Long.class).single()).isEqualTo(1);
+    }
+
     @Test
     void i1UnbalancedPostingIsReportedOnceAndNeverRepaired() {
         String key = "invariant-fixture-" + UUID.randomUUID();
@@ -201,10 +286,21 @@ class InvariantViolationsTests {
 
     record CardRide(Actor rider, TestRides.Driver driver, OrderView order, UUID intent) { }
 
-    CardRide completedCardRide(boolean extraWaiting) {
+    CardRide completedCardRide(boolean extraWaiting) { return completedCardRide(extraWaiting, false); }
+
+    CardRide completedCardRide(boolean extraWaiting, boolean bonusPaid) {
         var driver = rides.driverNear(PICKUP);
         Actor rider = riderWithCard();
-        OrderView order = heldOrder(rider);
+        OrderView order;
+        if (bonusPaid) {
+            var quote = new TestQuotes(jdbc, quotes).quote(rider, city, "STANDARD", PICKUP, DROPOFF);
+            long wallet = quote.toPayMinor();
+            ledger.post(new Ledger.Posting("bonus-fixture:" + UUID.randomUUID(), "PROMOTION", UUID.randomUUID(), "UAH",
+                    "Test bonuses", List.of(Ledger.Line.debit(Ledger.Account.PROMO_EXPENSE, null, wallet),
+                    Ledger.Line.credit(Ledger.Account.RIDER_WALLET, rider.id(), wallet))));
+            order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
+                    "Home", DROPOFF, "Work", PaymentMethod.CARD, quote.id(), null, null, null, null, false, wallet));
+        } else order = heldOrder(rider);
         drain();
         dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
@@ -212,7 +308,7 @@ class InvariantViolationsTests {
         var waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
         if (extraWaiting) jdbc.sql("update trip set arrived_at=now()-interval '10 minutes' where id=:id").param("id", trip.id()).update();
         var started = trips.start(driver.actor(), UUID.randomUUID(), trip.id(), waiting.version(), null);
-        trips.complete(driver.actor(), UUID.randomUUID(), trip.id(), started.version(), OffsetDateTime.now(), null);
+        trips.complete(driver.actor(), UUID.randomUUID(), trip.id(), started.version(), OffsetDateTime.now(), bonusPaid ? true : null);
         drain();
         for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
         assertThat(cards.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
@@ -231,6 +327,49 @@ class InvariantViolationsTests {
     }
 
     @Test
+    void i4SuccessfulSettleCannotExceedItsAuthorization() {
+        var ride = completedCardRide(false);
+        var operation = jdbc.sql("select id,amount_minor from payment_operation where intent_id=:id and type='SETTLE' and state='SUCCEEDED'")
+                .param("id", ride.intent()).query().singleRow();
+        UUID operationId = (UUID) operation.get("id");
+        long amount = ((Number) operation.get("amount_minor")).longValue();
+        long hold = jdbc.sql("select hold_minor from payment_intent where id=:id").param("id", ride.intent()).query(Long.class).single();
+        jdbc.sql("update payment_operation set amount_minor=:amount where id=:id").param("amount", hold + 1).param("id", operationId).update();
+        restore.add(() -> jdbc.sql("update payment_operation set amount_minor=:amount,updated_at=now() where id=:id")
+                .param("amount", amount).param("id", operationId).update());
+        ageData();
+        assertOneReport("payments", "I4", ride.intent());
+        assertThat(jdbc.sql("select payload->>'detail' from outbox where event_type='InvariantViolated' and aggregate_id=:id and payload->>'check'='I4'")
+                .param("id", ride.intent()).query(String.class).single()).contains("SETTLE_EXCEEDS_AUTH");
+    }
+
+    @Test
+    void i3TerminalOrderCannotKeepACommittedAssignment() {
+        var ride = rides.started(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        rides.complete(ride, true);
+        drain();
+        UUID assignment = jdbc.sql("select id from assignment where order_id=:id").param("id", ride.order().id()).query(UUID.class).single();
+        jdbc.sql("update assignment set state='COMMITTED' where id=:id").param("id", assignment).update();
+        restore.add(() -> jdbc.sql("update assignment set state='COMPLETED',closed_at=now() where id=:id").param("id", assignment).update());
+        ageData();
+        assertOneReport("operations", "I3", ride.order().id());
+    }
+
+    @Test
+    void bonusOnlyCardLegNeedsNoAuthorizationOrCapture() {
+        var card = completedCardRide(false, true);
+        assertThat(cards.intent(card.order().id()).orElseThrow().holdMinor()).isZero();
+        assertThat(jdbc.sql("select capture_minor from payment_intent where id=:id").param("id", card.intent())
+                .query().singleRow().get("capture_minor")).isNull();
+        assertThat(jdbc.sql("select count(*) from payment_operation where intent_id=:id").param("id", card.intent())
+                .query(Long.class).single()).isZero();
+        ageData();
+        scan("payments");
+        assertThat(gauge("I4")).isZero();
+        assertThat(events("I4", card.intent())).isZero();
+    }
+
+    @Test
     void finishedCashAndAboveHoldCardRidesAreCleanAfterTheSettlingMargin() {
         var cashDriver = rides.driverNear(PICKUP);
         var cash = rides.started(city, cashDriver, PICKUP, DROPOFF);
@@ -238,6 +377,9 @@ class InvariantViolationsTests {
         drain();
         sessions.close(cashDriver.actor(), UUID.randomUUID(), cashDriver.device(), sessions.availability(cashDriver.actor().id()).sessionVersion());
         var card = completedCardRide(true);
+        tips.leave(card.rider(), UUID.randomUUID(), card.order().id(), 100);
+        for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
+        assertThat(tips.options(card.rider(), card.order().id()).tip().state()).isEqualTo("PAID");
         assertThat(jdbc.sql("select count(*) from payment_operation where intent_id=:id and type='CHARGE' and state='SUCCEEDED'")
                 .param("id", card.intent()).query(Long.class).single()).isPositive();
         ageData();
