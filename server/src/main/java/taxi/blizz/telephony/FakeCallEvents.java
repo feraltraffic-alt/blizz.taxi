@@ -13,4 +13,11 @@ public interface FakeCallEvents {
 
     /** The call whose first channel is {@code channelId} has no recording, as when Asterisk recorded nothing. */
     void withoutRecording(String channelId);
+
+    /** An outgoing call the server asked Asterisk for (issue #67); {@code dial} is the other side's number. */
+    record Originated(String channelId, String endpoint, String context, String dial, java.time.OffsetDateTime at) {
+    }
+
+    /** The outgoing calls asked for, oldest first; empty on an instance with a real Asterisk. */
+    java.util.List<Originated> originated();
 }

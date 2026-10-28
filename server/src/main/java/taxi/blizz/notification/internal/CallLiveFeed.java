@@ -18,12 +18,14 @@ import taxi.blizz.platform.OutboxHandler;
 import taxi.blizz.platform.OutboxMessage;
 import taxi.blizz.platform.SubjectType;
 import taxi.blizz.telephony.Calls;
+import taxi.blizz.telephony.Operators;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The card-pop (REQ-OPS-01/08, issue #64): when a call rings, the operators who take calls in its city get, on
  * /ws/v1/operator, who calls and — when the number belongs to a rider — the rider's id, name and open orders. Nothing
- * else personal; the outbox event itself carries only ids. A call that is no longer ringing when the event is handled
+ * else personal; the outbox event itself carries only ids. Of those operators, only the AVAILABLE ones get it when
+ * at least one is (issue #67). A call that is no longer ringing when the event is handled
  * (the relay was late) pops nothing.
  */
 @Component
@@ -33,15 +35,17 @@ class CallLiveFeed implements OutboxHandler {
     private final AccountDirectory accounts;
     private final Orders orders;
     private final StaffAccess staff;
+    private final Operators operators;
     private final LiveBus bus;
     private final JsonMapper json;
 
-    CallLiveFeed(Calls calls, AccountDirectory accounts, Orders orders, StaffAccess staff, LiveBus bus,
-                 JsonMapper json) {
+    CallLiveFeed(Calls calls, AccountDirectory accounts, Orders orders, StaffAccess staff, Operators operators,
+                 LiveBus bus, JsonMapper json) {
         this.calls = calls;
         this.accounts = accounts;
         this.orders = orders;
         this.staff = staff;
+        this.operators = operators;
         this.bus = bus;
         this.json = json;
     }
@@ -67,10 +71,13 @@ class CallLiveFeed implements OutboxHandler {
             return;
         }
         Calls.Call call = found.get();
-        Set<UUID> to = staff.holders(Calls.ANSWER_PERMISSION, call.cityId());
-        if (to.isEmpty()) {
+        Set<UUID> holders = staff.holders(Calls.ANSWER_PERMISSION, call.cityId());
+        if (holders.isEmpty()) {
             return;
         }
+        // The AVAILABLE ones when there is one; otherwise everyone, so a call never pops to nobody (issue #67).
+        Set<UUID> available = operators.available(holders);
+        Set<UUID> to = available.isEmpty() ? holders : available;
         UUID client = call.callerPhone() == null ? null
                 : accounts.clientByPhone(new PhoneNumber(call.callerPhone())).orElse(null);
         Map<String, Object> payload = new LinkedHashMap<>();

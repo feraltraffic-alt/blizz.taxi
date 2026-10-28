@@ -33,14 +33,17 @@ class AriEventStream implements SmartLifecycle {
     private final Integrations integrations;
     private final TelephonyProperties properties;
     private final AriCallEvents events;
+    private final CallReconciliation reconciliation;
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean connected = new AtomicBoolean();
     private Thread worker;
 
-    AriEventStream(Integrations integrations, TelephonyProperties properties, AriCallEvents events) {
+    AriEventStream(Integrations integrations, TelephonyProperties properties, AriCallEvents events,
+                   CallReconciliation reconciliation) {
         this.integrations = integrations;
         this.properties = properties;
         this.events = events;
+        this.reconciliation = reconciliation;
     }
 
     @Override
@@ -87,6 +90,9 @@ class AriEventStream implements SmartLifecycle {
                 connected.set(true);
                 pause = FIRST_PAUSE;
                 log.info("Listening to Asterisk's calls");
+                if (reconciliation != null) {
+                    reconciliation.afterConnect(); // calls that ended while nobody listened
+                }
                 waitUntilClosed(closed);
                 socket.abort();
             } catch (RuntimeException e) {
