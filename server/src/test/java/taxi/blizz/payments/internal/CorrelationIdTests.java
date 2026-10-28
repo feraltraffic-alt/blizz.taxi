@@ -51,8 +51,8 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(OutputCaptureExtension.class)
 class CorrelationIdTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.5, 50.5);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 50.55);
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, 56.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 56.55);
 
     @Value("${local.server.port}")
     int port;
@@ -86,7 +86,7 @@ class CorrelationIdTests {
     @BeforeEach
     void setUp() {
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
-        cityId = rides.city("test-correlation", "UAH", 50);
+        cityId = rides.city("test-correlation", "UAH", 56);
         merchantId = jdbc.sql("select merchant_id from payment_merchant_city where city_id = :city")
                 .param("city", cityId).query(UUID.class).optional().orElseGet(() -> {
                     UUID id = UUID.randomUUID();
