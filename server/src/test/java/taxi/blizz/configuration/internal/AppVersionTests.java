@@ -105,7 +105,7 @@ class AppVersionTests {
                         .header("X-App-Platform", "DRIVER_ANDROID")
                         .header("X-App-Version", "1.0.0")
                         .contentType("application/json")
-                        .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"expected_version\":2,\"reported_at\":\"" + java.time.OffsetDateTime.now() + "\"}"))
+                        .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"expected_version\":2,\"reported_at\":\"" + java.time.OffsetDateTime.now() + "\",\"cash_received\":true}"))
                 .andExpect(status().is2xxSuccessful());
     }
 
