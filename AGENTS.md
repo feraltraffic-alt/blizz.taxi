@@ -1,4 +1,4 @@
-# Instructions for contributors (Codex, second Claude)
+# Instructions for contributors (Codex, second Claude, Grok)
 
 You are a **contributor** on this repository. Claude is the **lead and reviewer**: it assigns work, reviews every pull request and decides what is merged. The product owner has the final word.
 
@@ -11,7 +11,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 ## How to work
 
 1. Take only work from a GitHub issue assigned to you. If something is unclear, ask in the issue instead of guessing.
-2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex and `claude2` for the second Claude. Never push to `main`.
+2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex, `claude2` for the second Claude and `grok` for Grok. Never push to `main`.
 3. Keep a pull request to one concern and under ~400 changed lines where possible.
 4. Before opening the PR, run what CI runs:
    - `scripts/server-build.sh` (needs JDK 25, Maven, Docker)
@@ -25,7 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
 - Schema changes only as new Flyway migrations; never edit an applied migration; Hibernate stays `ddl-auto=validate`.
-- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex and `3` for the second Claude (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, `git fetch` and check that your migration sorts **after** every migration on the **current** `origin/main` (not the `main` you branched from); if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
+- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex, `3` for the second Claude and `4` for Grok (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, `git fetch` and check that your migration sorts **after** every migration on the **current** `origin/main` (not the `main` you branched from); if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.
