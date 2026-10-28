@@ -86,8 +86,13 @@ function buildIndex(specs) {
       }
     }
   }
-  // Longer / more specific templates first
-  index.sort((a, b) => b.template.length - a.template.length);
+  // Prefer more specific templates (fewer parameters, then longer)
+  index.sort((a, b) => {
+    const pa = (a.template.match(/\{/g) || []).length;
+    const pb = (b.template.match(/\{/g) || []).length;
+    if (pa !== pb) return pa - pb; // fewer params first
+    return b.template.length - a.template.length;
+  });
   return index;
 }
 
