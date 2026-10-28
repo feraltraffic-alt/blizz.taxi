@@ -21,6 +21,17 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
 8. Do not merge your own PR. Address review comments in new commits on the same branch.
 
+## Done means proven
+
+A green build is the start of your own review, not the end of it. Read [`docs/contributors/lessons.md`](docs/contributors/lessons.md) before your first task: real cases where green PRs were still wrong.
+
+1. **Before you write code**, post a plan in the issue that ends with *"How my result could be green and still wrong"*: two or three ways your change could pass every test and still miss the issue's goal, and how you will rule each out.
+2. **Go through the issue line by line.** Every Scope bullet and every Acceptance bullet gets a line in the PR's *Acceptance* table, with the evidence (a test name, a sandbox run link, a command and its output). A bullet you did not do is written as not done.
+3. **A check, a validator, a guard or a filter you add is proven both ways.** Show it passing the good case **and** failing on one deliberate example of every kind of error the issue names. "It found nothing" is a finding about the check until proven otherwise.
+4. **No silent skips.** Code that cannot classify something (an unknown path, a status not in the contract, an unexpected state) fails or reports it; it never returns success by default.
+5. **Name what you chose.** Anything the issue left open goes into the PR's *Notes* as "chose X because Y", or into the issue as a question.
+6. **Read your own diff** (`git diff origin/main...HEAD`) as if you were the reviewer, before you ask for review.
+
 ## Rules that must not be broken
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
