@@ -39,6 +39,7 @@ class OperatorBonusTests {
         jdbc.sql("delete from operator_bonus_entry").update();
         jdbc.sql("delete from operator_bonus_account").update();
         jdbc.sql("delete from operator_bonus_settings where version > 0").update();
+        jdbc.sql("delete from staff_user where login like 'op-%'").update();
         jdbc.sql("""
                 update operator_bonus_settings set m = 1, g = 10, count_cancellations = true,
                     reset_day = 1, time_rules = '[]'::jsonb where version = 0
@@ -157,7 +158,7 @@ class OperatorBonusTests {
     private OutboxMessage event(String type, UUID orderId, String reasonCode) {
         String payload = reasonCode == null
                 ? "{\"order_id\":\"" + orderId + "\"}"
-                : "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode + "\"}";
+                : "{\"order_id\":\"" + orderId + "\",\"reason_code\":\"" + reasonCode + "\",\"cancelled_by\":\"STAFF\"}";
         return new OutboxMessage(UUID.randomUUID(), type, 1, "Order", orderId, 1, payload,
                 UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
     }
@@ -192,6 +193,10 @@ class OperatorBonusTests {
 
     @Test
     void point2_settingsChangeIsAudited() {
+        jdbc.sql("""
+                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                """).param("id", operator.id()).param("login", "op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
         bonuses.changeSettings(operator, UUID.randomUUID(), before.version(), next, "raise points");
@@ -205,6 +210,10 @@ class OperatorBonusTests {
 
     @Test
     void point3_twoConcurrentSettingsChangesOneSucceedsOneConflicts() throws Exception {
+        jdbc.sql("""
+                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                """).param("id", operator.id()).param("login", "op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
         var barrier = new java.util.concurrent.CyclicBarrier(2);
