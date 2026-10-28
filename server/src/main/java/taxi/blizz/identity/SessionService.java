@@ -40,4 +40,7 @@ public interface SessionService {
 
     /** Whether the session is still open (not logged out, revoked or expired); e.g. before a push to its device. */
     boolean isOpen(java.util.UUID sessionId);
+
+    /** Of these sessions, the ones still open; one query for many, e.g. the live connections of an instance. */
+    java.util.Set<java.util.UUID> openOf(java.util.Collection<java.util.UUID> sessionIds);
 }

@@ -61,7 +61,7 @@ class RiderQuoteController {
      * what the rider pays (before bonuses of the account).
      */
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
-                     long distanceM, long durationS, Instant expiresAt, WaitingTerms waiting, Instant pickupAt,
+                     long distanceM, long durationS, String routeSource, Instant expiresAt, WaitingTerms waiting, Instant pickupAt,
                      boolean preorder, long discountMinor, long toPayMinor, List<PromotionView> promotions) {
     }
 
@@ -80,7 +80,7 @@ class RiderQuoteController {
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
                 vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor(), body.pickupAt()));
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
-                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
+                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.route().source().name(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
                         quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(),
                 quote.breakdown().preorder(), quote.discountMinor(), quote.toPayMinor(),
