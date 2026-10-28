@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
  * The FAKE provider's "add a card" page: works only for merchants with provider FAKE (tests, sandbox). It checks the
  * form like WayForPay does, approves (or declines when {@code fake_decline} is sent) and delivers a signed
  * notification exactly as the provider would, then sends the web view to returnUrl. Also the FAKE payment page of a
- * top-up, below.
+ * top-up, below. Exists only where FAKE merchants are allowed ({@code blizz.payments.fake-merchants-allowed}); on a real
+ * server these paths answer 404 (audit of 28.10.2026).
  */
 @RestController
+@ConditionalOnProperty(prefix = "blizz.payments", name = "fake-merchants-allowed", havingValue = "true")
 class FakeVerifyController {
 
     private final Merchants merchants;

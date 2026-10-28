@@ -38,7 +38,7 @@ class StraightLineRouteEstimator implements RouteEstimator {
                 .param("bLat", dropOff.lat())
                 .param("detour", properties.detourFactor())
                 .param("speed", properties.averageSpeedKmh())
-                .query((rs, i) -> new Estimate(rs.getLong(1), rs.getLong(2)))
+                .query((rs, i) -> new Estimate(rs.getLong(1), rs.getLong(2), Source.STRAIGHT_LINE))
                 .single();
     }
 }

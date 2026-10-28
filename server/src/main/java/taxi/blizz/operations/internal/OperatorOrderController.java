@@ -74,7 +74,7 @@ class OperatorOrderController {
     }
 
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
-                     long distanceM, long durationS, java.time.Instant expiresAt, WaitingTerms waiting,
+                     long distanceM, long durationS, String routeSource, java.time.Instant expiresAt, WaitingTerms waiting,
                      java.time.Instant pickupAt, boolean preorder) {
     }
 
@@ -127,7 +127,7 @@ class OperatorOrderController {
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
                 vehicleClass.id(), body.pickup(), body.dropoff(), claims.actor(), body.pickupAt()));
         return new QuoteView(quote.id(), vehicleClass.code(), city.id(), quote.amountMinor(), quote.currency(),
-                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.expiresAt(),
+                quote.route().distanceMetres(), quote.route().durationSeconds(), quote.route().source().name(), quote.expiresAt(),
                 new WaitingTerms(quote.terms().freeWaitingMinutes(), quote.terms().waitingPerMinuteMinor(),
                         quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(), quote.breakdown().preorder());
     }

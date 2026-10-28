@@ -306,4 +306,17 @@ class JdbcSessionService implements SessionService {
                 .param("id", sessionId).param("now", java.time.OffsetDateTime.now(clock))
                 .query(Long.class).single() > 0;
     }
+
+    @Override
+    public java.util.Set<java.util.UUID> openOf(java.util.Collection<java.util.UUID> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(jdbc.sql("""
+                        select id from device_session
+                        where id = any(:ids) and revoked_at is null and expires_at > :now""")
+                .param("ids", sessionIds.toArray(java.util.UUID[]::new))
+                .param("now", java.time.OffsetDateTime.now(clock))
+                .query(java.util.UUID.class).list());
+    }
 }

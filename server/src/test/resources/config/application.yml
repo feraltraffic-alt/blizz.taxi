@@ -37,6 +37,9 @@ blizz:
       order: {max: 100000, window: PT1M}
       offer-accept: {max: 100000, window: PT1M}
       file-upload: {max: 100000, window: PT1M}
+  live:
+    # Live connections are rechecked every second, so a revoked session is seen closing quickly.
+    recheck: PT1S
   security:
     # Fake Asterisk and GraphHopper servers of the tests listen on this machine.
     outbound-private-hosts: 127.0.0.1,localhost
@@ -54,3 +57,4 @@ management:
   server:
     # A free port per test context: several contexts with a web server run side by side.
     port: 0
+

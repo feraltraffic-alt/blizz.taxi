@@ -9,7 +9,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import taxi.blizz.identity.SessionService;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -25,13 +27,55 @@ class LiveSessions {
     /** The client reconnects with a fresh access token (REQ-AUTH-07: an expired or revoked session gets nothing). */
     static final CloseStatus TOKEN_EXPIRED = new CloseStatus(4401, "Access token expired");
 
+    /** The session was revoked or a right it needs was taken away (REQ-NTF-05); signing in again may help. */
+    static final CloseStatus ACCESS_REVOKED = new CloseStatus(4403, "Access revoked");
+
     static final String DECORATED = "blizz.live.decorated";
 
     private final Map<UUID, Set<WebSocketSession>> bySubject = new ConcurrentHashMap<>();
     private final Clock clock;
+    private final SessionService auth;
+    private final LiveAccess access;
 
-    LiveSessions(Clock clock) {
+    LiveSessions(Clock clock, SessionService auth, LiveAccess access) {
         this.clock = clock;
+        this.auth = auth;
+        this.access = access;
+    }
+
+    /**
+     * Closes the connections whose session was revoked (logout, a blocked account, a suspended staff member) or that
+     * lost the right they need, every {@code blizz.live.recheck} (15 s) — not only when the token expires (REQ-NTF-05).
+     * One query for all the sessions of this instance. Returns how many were closed.
+     */
+    @Scheduled(fixedDelayString = "${blizz.live.recheck:PT15S}", initialDelayString = "${blizz.live.recheck:PT15S}")
+    int recheck() {
+        java.util.List<WebSocketSession> all = bySubject.values().stream().flatMap(Set::stream)
+                .filter(WebSocketSession::isOpen).toList();
+        if (all.isEmpty()) {
+            return 0;
+        }
+        Set<UUID> open;
+        try {
+            open = auth.openOf(all.stream().map(LiveSessions::claims).filter(java.util.Objects::nonNull)
+                    .map(AccessClaims::sessionId).collect(java.util.stream.Collectors.toSet()));
+        } catch (RuntimeException e) {
+            log.warn("Live connections not rechecked: {}", e.getClass().getSimpleName());
+            return 0;
+        }
+        int closed = 0;
+        for (WebSocketSession session : all) {
+            AccessClaims claims = claims(session);
+            try {
+                if (claims == null || !open.contains(claims.sessionId()) || !access.allowed(claims)) {
+                    session.close(ACCESS_REVOKED);
+                    closed++;
+                }
+            } catch (IOException | RuntimeException e) {
+                log.debug("Live connection not closed: {}", e.toString());
+            }
+        }
+        return closed;
     }
 
     WebSocketSession add(WebSocketSession raw) {

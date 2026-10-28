@@ -38,7 +38,7 @@ jobs:
           --health-cmd "pg_isready -U blizz -d blizz" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
@@ -116,7 +116,7 @@ jobs:
           echo "Results: branch **sandbox-runs**, runs/${GITHUB_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-transcript
           path: |

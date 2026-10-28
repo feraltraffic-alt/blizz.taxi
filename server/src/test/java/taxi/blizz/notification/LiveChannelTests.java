@@ -164,6 +164,28 @@ class LiveChannelTests {
         assertThat(String.join("", driverInbox.messages)).as("nothing personal").doesNotContain("+380", "+48");
     }
 
+    /** Remembers how the server closed the connection. */
+    static final class Closing implements WebSocket.Listener {
+        final java.util.concurrent.CompletableFuture<Integer> closedWith = new java.util.concurrent.CompletableFuture<>();
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket socket, int status, String reason) {
+            closedWith.complete(status);
+            return null;
+        }
+    }
+
+    @Test
+    void aRevokedSessionLosesItsConnectionWithinSecondsNotWhenTheTokenExpires() throws Exception {
+        Actor rider = rides.client();
+        Closing closing = new Closing();
+        HttpClient.newHttpClient().newWebSocketBuilder().header("Authorization", "Bearer " + token(rider))
+                .buildAsync(URI.create("ws://localhost:" + port + "/ws/v1/rider"), closing).join();
+        auth.revokeAll(rider, "test: account blocked");
+        // The tests recheck every second (blizz.live.recheck); a real server every 15 s.
+        assertThat(closing.closedWith.get(10, TimeUnit.SECONDS)).isEqualTo(4403);
+    }
+
     @Test
     void wrongAudienceOrNoTokenIsRefused() {
         Actor rider = rides.client();

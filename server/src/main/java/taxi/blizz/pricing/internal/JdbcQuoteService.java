@@ -1,5 +1,7 @@
 package taxi.blizz.pricing.internal;
 
+import org.springframework.beans.factory.annotation.Value;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -32,6 +34,9 @@ import tools.jackson.databind.json.JsonMapper;
 class JdbcQuoteService implements QuoteService {
 
     private final taxi.blizz.platform.RateLimits rateLimits;
+    private final ObjectProvider<MeterRegistry> meters;
+    /** Whether a straight-line estimate may become a quote, marked as such (REQ-GEO-08). */
+    private final boolean straightLineQuotes;
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
     private final JsonMapper json;
@@ -43,9 +48,12 @@ class JdbcQuoteService implements QuoteService {
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
-                     taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits) {
-
+                     taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits,
+                     ObjectProvider<MeterRegistry> meters,
+                     @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes) {
         this.rateLimits = rateLimits;
+        this.meters = meters;
+        this.straightLineQuotes = straightLineQuotes;
         this.promotions = promotions;
         this.zones = zones;
         this.settings = settings;
@@ -71,6 +79,11 @@ class JdbcQuoteService implements QuoteService {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
         }
         RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
+        meters.ifAvailable(m -> m.counter("blizz.quotes", "route_source", route.source().name()).increment());
+        if (route.source() == RouteEstimator.Source.STRAIGHT_LINE && !straightLineQuotes) {
+            // REQ-GEO-08: without a road route the service may refuse a fixed price instead of guessing one.
+            throw error(ErrorCode.PROVIDER_UNAVAILABLE, "No road route right now; a price cannot be fixed");
+        }
         // Where the trip is, for in-city / out-of-city rates and zone surcharges (owner decision 27.10.2026).
         GeoZones.Split split = zones.splitByCityLimits(request.cityId(), request.pickup(), request.dropOff());
         FareCalculator.Facts facts = new FareCalculator.Facts(
