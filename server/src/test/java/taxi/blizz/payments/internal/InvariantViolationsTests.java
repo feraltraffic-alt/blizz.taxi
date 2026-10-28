@@ -108,6 +108,10 @@ class InvariantViolationsTests {
     }
 
     void scan(String owner) {
+        if ("all".equals(owner)) {
+            for (String module : List.of("finance", "operations", "payments")) scan(module);
+            return;
+        }
         // Reflection lets the tests-only commit compile before the new scanners exist.
         ReflectionTestUtils.invokeMethod(context.getBean(owner + "Invariants"), "runChecks");
     }
@@ -256,6 +260,51 @@ class InvariantViolationsTests {
     }
 
     @Test
+    void i2BusyCapacityWithoutCommittedAssignmentIsReportedOnce() {
+        var driver = rides.driverNear(PICKUP);
+        UUID id = driver.actor().id();
+        jdbc.sql("update driver_capacity set occupancy='TO_PICKUP',assignment_id=null where driver_id=:id")
+                .param("id", id).update();
+        restore.add(() -> jdbc.sql("update driver_capacity set occupancy='FREE',assignment_id=null,updated_at=now() where driver_id=:id")
+                .param("id", id).update());
+        ageData();
+        assertOneReport("operations", "I2", id);
+        assertThat(jdbc.sql("select occupancy from driver_capacity where driver_id=:id").param("id", id)
+                .query(String.class).single()).isEqualTo("TO_PICKUP");
+    }
+
+    @Test
+    void i5CancelledOrderStillHasStandingAuthorizationAfterOneHour() {
+        var order = heldOrder(riderWithCard());
+        UUID intent = cards.intent(order.id()).orElseThrow().id();
+        restore.add(() -> {
+            tx.executeWithoutResult(status -> cards.releaseHold(order.id(), "INVARIANT_TEST_CLEANUP"));
+            for (int i = 0; i < 4; i++) { payments.runOnce(); drain(); }
+        });
+        // Simulate a hand edit/crash that lost cancellation's hold-release step.
+        jdbc.sql("update ride_order set status='CANCELLED',updated_at=now()-interval '2 hours' where id=:id")
+                .param("id", order.id()).update();
+        jdbc.sql("update payment_intent set created_at=now()-interval '2 hours',updated_at=now()-interval '2 hours' where id=:id")
+                .param("id", intent).update();
+        jdbc.sql("update payment_operation set created_at=now()-interval '2 hours',updated_at=now()-interval '2 hours' where intent_id=:id")
+                .param("id", intent).update();
+        assertOneReport("all", "I5", intent);
+        assertThat(cards.intent(order.id()).orElseThrow().state()).isEqualTo("AUTHORIZED");
+    }
+
+    @Test
+    void anActiveRealRideHasOneCommittedAssignmentAndMatchingBusyCapacity() {
+        var ride = rides.started(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        restore.add(() -> { rides.complete(ride, true); drain(); });
+        ageData();
+        scan("operations");
+        assertThat(gauge("I2")).isZero();
+        assertThat(gauge("I3")).isZero();
+        assertThat(events("I2", ride.driver().actor().id())).isZero();
+        assertThat(events("I3", ride.order().id())).isZero();
+    }
+
+    @Test
     void i3AssignedOrderWithoutAnAssignmentIsReportedOnce() {
         Actor payer = rides.client();
         OrderView order = rides.order(payer, city, PICKUP, DROPOFF);
@@ -385,6 +434,8 @@ class InvariantViolationsTests {
         ageData();
         for (String owner : List.of("finance", "operations", "payments")) scan(owner);
         assertThat(gauge("I1")).isZero();
+        assertThat(gauge("I2")).isZero();
+        assertThat(gauge("I5")).isZero();
         assertThat(gauge("I3")).isZero();
         assertThat(gauge("I4")).isZero();
         drain();
