@@ -49,18 +49,18 @@ class AppVersionTests {
     @Test
     void outdatedRiderQuoteAndOrderAre426() throws Exception {
         setMinimum("RIDER_ANDROID", "2.0.0");
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "1.0.0")
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.0.0")
                 .andExpect(status().is(426)).andExpect(jsonPath("$.minimum_version").value("2.0.0"));
-        post("/api/rider/v1/orders", "RIDER_ANDROID", "1.0.0")
+        postReq("/api/rider/v1/orders", "RIDER_ANDROID", "1.0.0")
                 .andExpect(status().is(426)).andExpect(jsonPath("$.minimum_version").value("2.0.0"));
     }
 
     @Test
     void outdatedDriverOnlineAndAcceptAre426() throws Exception {
         setMinimum("DRIVER_ANDROID", "2.0.0");
-        post("/api/driver/v1/work-sessions", "DRIVER_ANDROID", "1.0.0")
+        postReq("/api/driver/v1/work-sessions", "DRIVER_ANDROID", "1.0.0")
                 .andExpect(status().is(426)).andExpect(jsonPath("$.minimum_version").value("2.0.0"));
-        post("/api/driver/v1/offers/" + UUID.randomUUID() + "/accept", "DRIVER_ANDROID", "1.0.0")
+        postReq("/api/driver/v1/offers/" + UUID.randomUUID() + "/accept", "DRIVER_ANDROID", "1.0.0")
                 .andExpect(status().is(426)).andExpect(jsonPath("$.minimum_version").value("2.0.0"));
     }
 
@@ -83,9 +83,9 @@ class AppVersionTests {
             }
             String path = pattern.replaceAll("\\{[^}]+}", UUID.randomUUID().toString());
             try {
-                int status = post(path, "RIDER_ANDROID", "1.0.0").andReturn().getResponse().getStatus();
+                int status = postReq(path, "RIDER_ANDROID", "1.0.0").andReturn().getResponse().getStatus();
                 assertThat(status).as("outdated on " + path).isNotEqualTo(426);
-                int bad = post(path, "RIDER_ANDROID", "1.2.x").andReturn().getResponse().getStatus();
+                int bad = postReq(path, "RIDER_ANDROID", "1.2.x").andReturn().getResponse().getStatus();
                 assertThat(bad).as("malformed on " + path).isNotEqualTo(400);
             } catch (Exception e) {
                 throw new RuntimeException(path, e);
@@ -96,28 +96,28 @@ class AppVersionTests {
     @Test
     void noHeaderAllowedUnlessRequired() throws Exception {
         setRequireHeader(false);
-        post("/api/rider/v1/quotes", null, null).andExpect(status().is(401));
+        postReq("/api/rider/v1/quotes", null, null).andExpect(status().is(401));
         setRequireHeader(true);
-        post("/api/rider/v1/quotes", null, null).andExpect(status().is(426));
+        postReq("/api/rider/v1/quotes", null, null).andExpect(status().is(426));
     }
 
     @Test
     void adminAndOperatorNeverChecked() throws Exception {
         setMinimum("RIDER_ANDROID", "9.0.0");
-        post("/api/admin/v1/settings", "RIDER_ANDROID", "1.0.0").andExpect(status().is(401));
-        post("/api/operator/v1/orders", "RIDER_ANDROID", "1.0.0").andExpect(status().is(401));
+        postReq("/api/admin/v1/settings", "RIDER_ANDROID", "1.0.0").andExpect(status().is(401));
+        postReq("/api/operator/v1/orders", "RIDER_ANDROID", "1.0.0").andExpect(status().is(401));
     }
 
     @Test
     void versionComparison() throws Exception {
         setMinimum("RIDER_ANDROID", "1.9.3");
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "1.10.0").andExpect(status().is(401));
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.10.0").andExpect(status().is(401));
         setMinimum("RIDER_ANDROID", "10.0.0");
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "2.0.0").andExpect(status().is(426));
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "2.0.0").andExpect(status().is(426));
         setMinimum("RIDER_ANDROID", "1.5.0");
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "1.5.0").andExpect(status().is(401));
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "1.2").andExpect(status().is(400));
-        post("/api/rider/v1/quotes", "RIDER_ANDROID", "1.2.x").andExpect(status().is(400));
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.5.0").andExpect(status().is(401));
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.2").andExpect(status().is(400));
+        postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.2.x").andExpect(status().is(400));
     }
 
     @Test
@@ -148,7 +148,7 @@ class AppVersionTests {
                 || path.matches("/api/driver/v1/offers/\\{[^}]+}/accept");
     }
 
-    private ResultActions post(String path, String platform, String version) throws Exception {
+    private ResultActions postReq(String path, String platform, String version) throws Exception {
         var builder = post(path).contentType("application/json").content("{}");
         if (platform != null) builder = builder.header("X-App-Platform", platform);
         if (version != null) builder = builder.header("X-App-Version", version);
