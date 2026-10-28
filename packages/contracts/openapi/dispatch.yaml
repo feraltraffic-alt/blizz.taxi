@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — dispatch journal components
+  version: 1.0.0
+  description: >-
+    Why a driver did or did not get an order (REQ-DSP-12, issue #71): the search attempts of an order, the offers and
+    their results, and every round of choosing the next driver with the candidates considered and why each was left
+    out. Driver ids and distances only — no positions, phones or names (REQ-PRV-02). Rounds are kept for a configured
+    time (90 days by default); attempts and offers are part of the order. Part of the order's timeline in the operator
+    API.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    DispatchJournal:
+      type: object
+      additionalProperties: false
+      required: [attempts]
+      properties:
+        attempts:
+          description: The order's search attempts, the first first (a new one after a driver was released).
+          type: array
+          items:
+            $ref: "#/components/schemas/DispatchAttempt"
+
+    DispatchAttempt:
+      type: object
+      additionalProperties: false
+      required: [attempt_id, generation, started_at, first_offer_at, broadcast_at, assigned_at, ended_at, outcome,
+                 offers, rounds]
+      properties:
+        attempt_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        generation:
+          type: integer
+          minimum: 1
+        started_at:
+          type: string
+          format: date-time
+        first_offer_at:
+          type: [string, "null"]
+          format: date-time
+        broadcast_at:
+          description: When the order went to every nearby driver after the personal phase.
+          type: [string, "null"]
+          format: date-time
+        assigned_at:
+          type: [string, "null"]
+          format: date-time
+        ended_at:
+          type: [string, "null"]
+          format: date-time
+        outcome:
+          description: >-
+            SEARCHING — still going; ASSIGNED — a driver took it; EXHAUSTED — the search time ran out; STOPPED —
+            ended otherwise (cancelled, interrupted).
+          type: string
+          enum: [SEARCHING, ASSIGNED, EXHAUSTED, STOPPED]
+        offers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DispatchOffer"
+        rounds:
+          type: array
+          items:
+            $ref: "#/components/schemas/DispatchRound"
+
+    DispatchOffer:
+      type: object
+      additionalProperties: false
+      required: [offer_id, driver_id, distance_m, result, offered_at, closed_at]
+      properties:
+        offer_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        distance_m:
+          type: [integer, "null"]
+        result:
+          description: OPEN — still waiting for the driver.
+          type: string
+          enum: [OPEN, ACCEPTED, DECLINED, EXPIRED, REVOKED]
+        offered_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: [string, "null"]
+          format: date-time
+
+    DispatchRound:
+      description: >-
+        One choice of the next driver for a personal offer: the nearest drivers with an open shift in the order's city
+        (at most 50), and for each the outcome. A round where nobody was OFFERED ends the personal phase.
+      type: object
+      additionalProperties: false
+      required: [at, phase, radius_m, candidates]
+      properties:
+        at:
+          type: string
+          format: date-time
+        phase:
+          type: string
+          enum: [PERSONAL, BROADCAST]
+        radius_m:
+          description: The largest search radius of the round; farther drivers are TOO_FAR.
+          type: integer
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/DispatchCandidate"
+
+    DispatchCandidate:
+      type: object
+      additionalProperties: false
+      required: [driver_id, distance_m, outcome, reason]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        distance_m:
+          description: From the driver's last position to the pickup, in metres.
+          type: integer
+        outcome:
+          description: OFFERED — got the offer; ELIGIBLE — would have qualified but someone nearer got it; EXCLUDED.
+          type: string
+          enum: [OFFERED, ELIGIBLE, EXCLUDED]
+        reason:
+          description: Why an EXCLUDED driver was left out (the first check that failed); null otherwise.
+          oneOf:
+            - $ref: "#/components/schemas/ExclusionReason"
+            - type: "null"
+
+    ExclusionReason:
+      description: >-
+        STALE_LOCATION — no recent heartbeat or position; PAUSED — the shift does not take orders now; NOT_ADMITTED —
+        the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT —
+        no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an
+        active restriction (debt); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released
+        from this order (or its related one); TOO_FAR — beyond the search radius.
+      type: string
+      enum: [STALE_LOCATION, PAUSED, NOT_ADMITTED, CLASS, PAYMENT, BUSY, RESTRICTED, ALREADY_OFFERED, PREVIOUS_DRIVER,
+             TOO_FAR]
