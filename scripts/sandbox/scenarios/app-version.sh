@@ -17,7 +17,7 @@ restore() {
 }
 trap restore EXIT
 
-UPDATED=$(jq -c '.settings | .app_versions //= {} | .app_versions.driver_android //= {} | .app_versions.driver_android.minimum_version = "9.0.0"' <<<"$CURRENT")
+UPDATED=$(jq -c '.settings | .app_versions //= {} | .app_versions.driver_android //= {} | .app_versions.driver_android.minimum_version = "9.0.0" | .app_versions.driver_android.latest_version = "9.0.0"' <<<"$CURRENT")
 api POST /api/admin/v1/settings "$ADMIN" \
   "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"settings\":$UPDATED,\"reason\":\"Sandbox: force update\"}" >/dev/null
 expect 200
