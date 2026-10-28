@@ -56,6 +56,9 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 - An address staff type in the admin panel that the server connects to goes through `platform.OutboundAddresses.check` on save and again before connecting (REQ-SEC-05); never `URI.create` of an admin value straight into an HTTP client.
 - Never log a phone number, token, one-time code, card data or a precise position. `LogRedaction` in the log layout is a safety net, not a permission: write the log line without them.
 - A new action a rider or driver can repeat cheaply but that costs us (a provider call, a file, a write) gets a `platform.RateLimits` bucket, counted per account, never per IP.
+- No foreign key to another module's table, also in a brand-new table: check every `references` in a migration (`driver_risk_flag` once pointed at `driver`).
+- A sandbox scenario that changes shared sandbox data (drivers online, an order searching, a suspended driver, a legal text in force) restores it in a `trap … EXIT`, so a failure does not break the scenarios after it.
+- A time sent by a phone is compared with a server time with a tolerance: phones send whole seconds and keep their own clock.
 
 ## Trying the system by hand
 
