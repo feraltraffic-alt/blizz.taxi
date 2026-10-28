@@ -75,9 +75,9 @@ class AppVersionTests {
 
     @Test
     void outdatedDriverCompletesTripUnderWay() throws Exception {
-        UUID city = jdbc.sql("select id from city where state = 'PUBLISHED' limit 1").query(UUID.class).single();
         taxi.blizz.TestRides rides = new taxi.blizz.TestRides(jdbc, orders, dispatch, trips, workSessions, sessions, quotes);
-        taxi.blizz.geo.GeoPoint pickup = new taxi.blizz.geo.GeoPoint(-39.5, 120.5);
+        UUID city = rides.city("av-trip", "UAH", 70);
+        taxi.blizz.geo.GeoPoint pickup = new taxi.blizz.geo.GeoPoint(-39.5, 70.5);
         taxi.blizz.TestRides.Driver driver = rides.driverNear(pickup);
         taxi.blizz.TestRides.Ride ride = rides.assigned(city, driver, pickup, new taxi.blizz.geo.GeoPoint(-39.45, 120.55));
         setMinimum("DRIVER_ANDROID", "9.0.0");
