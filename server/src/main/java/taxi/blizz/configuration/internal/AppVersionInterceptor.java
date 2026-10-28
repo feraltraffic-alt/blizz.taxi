@@ -32,10 +32,11 @@ class AppVersionInterceptor implements HandlerInterceptor {
             return true;
         }
         boolean checked = isChecked(path, method);
-        System.err.println("AppVersionInterceptor: " + method + " " + path + " checked=" + checked);
+        ServiceSettings.AppVersions policy = settings.current().settings().appVersions();
+        System.err.println("AppVersionInterceptor: " + method + " " + path + " checked=" + checked
+                + " policy=" + (policy == null ? "null" : policy.driverAndroid()));
         String platform = request.getHeader("X-App-Platform");
         String version = request.getHeader("X-App-Version");
-        ServiceSettings.AppVersions policy = settings.current().settings().appVersions();
         if (!checked) {
             return true;
         }
