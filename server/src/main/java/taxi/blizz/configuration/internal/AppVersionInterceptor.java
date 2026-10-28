@@ -7,21 +7,16 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.UpgradeRequiredException;
 
 /**
- * Checks {@code X-App-Platform} and {@code X-App-Version} on every request (REQ-API-10).
- * An outdated app is refused only on the four actions that start new work; everything else,
- * including trip commands and location, still works so a trip under way is not stranded.
+ * Checks {@code X-App-Platform} and {@code X-App-Version} (REQ-API-10).
+ * An outdated or missing (when required) version is refused only on the four actions that start
+ * new work. Everything else, including trip commands, heartbeats and location, still works.
  */
 class AppVersionInterceptor implements HandlerInterceptor {
 
     private static final Pattern VERSION = Pattern.compile("^[0-9]+\\.[0-9]+\\.[0-9]+$");
-    private static final String[] BLOCKED = {
-            "/api/rider/v1/quotes",
-            "/api/rider/v1/orders",
-            "/api/driver/v1/work-sessions",
-            "/api/driver/v1/offers/"
-    };
 
     private final ServiceSettings settings;
 
@@ -32,20 +27,25 @@ class AppVersionInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String path = request.getRequestURI();
+        String method = request.getMethod();
         if (path.startsWith("/api/admin/") || path.startsWith("/api/operator/") || path.startsWith("/api/config/")) {
             return true;
         }
+        boolean checked = isChecked(path, method);
         String platform = request.getHeader("X-App-Platform");
         String version = request.getHeader("X-App-Version");
         ServiceSettings.AppVersions policy = settings.current().settings().appVersions();
-        if (platform == null && version == null) {
-            if (policy != null && policy.requireVersionHeader() && isBlocked(path, request.getMethod())) {
-                throw new DomainException(ErrorCode.UPGRADE_REQUIRED, "App version header is required");
-            }
+        if (!checked) {
             return true;
         }
         if (version != null && !VERSION.matcher(version).matches()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "X-App-Version must be MAJOR.MINOR.PATCH");
+        }
+        if (platform == null && version == null) {
+            if (policy != null && policy.requireVersionHeader()) {
+                throw new UpgradeRequiredException("0.0.0");
+            }
+            return true;
         }
         if (platform == null || version == null) {
             return true;
@@ -54,25 +54,21 @@ class AppVersionInterceptor implements HandlerInterceptor {
         if (pv == null || pv.minimumVersion() == null) {
             return true;
         }
-        if (JdbcServiceSettings.compareVersions(version, pv.minimumVersion()) < 0
-                && isBlocked(path, request.getMethod())) {
-            throw new DomainException(ErrorCode.UPGRADE_REQUIRED,
-                    "Update required: minimum " + pv.minimumVersion());
+        if (JdbcServiceSettings.compareVersions(version, pv.minimumVersion()) < 0) {
+            throw new UpgradeRequiredException(pv.minimumVersion());
         }
         return true;
     }
 
-    private static boolean isBlocked(String path, String method) {
-        if ("POST".equals(method) && (path.equals("/api/rider/v1/quotes") || path.equals("/api/rider/v1/orders"))) {
-            return true;
+    /** Exactly the four actions that start new work. */
+    private static boolean isChecked(String path, String method) {
+        if (!"POST".equals(method)) {
+            return false;
         }
-        if ("POST".equals(method) && path.startsWith("/api/driver/v1/work-sessions")) {
-            return true;
-        }
-        if ("POST".equals(method) && path.matches("/api/driver/v1/offers/[^/]+/accept")) {
-            return true;
-        }
-        return false;
+        return path.equals("/api/rider/v1/quotes")
+                || path.equals("/api/rider/v1/orders")
+                || path.equals("/api/driver/v1/work-sessions")
+                || path.matches("/api/driver/v1/offers/[^/]+/accept");
     }
 
     private static ServiceSettings.PlatformVersions platformOf(ServiceSettings.AppVersions policy, String platform) {
