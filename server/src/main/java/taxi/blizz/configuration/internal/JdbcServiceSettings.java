@@ -31,6 +31,9 @@ class JdbcServiceSettings implements ServiceSettings {
      * Until the admin saves settings: a neutral brand, every language with Russian by default (owner decision
      * 27.10.2026), direct calls.
      */
+    /** A platform without a version policy: every build is allowed (REQ-API-10). */
+    static final PlatformVersions NO_POLICY = new PlatformVersions("0.0.0", "0.0.0");
+
     static final Settings DEFAULTS = new Settings(
             new Brand("Blizz Taxi", "#111111", "#FFFFFF", null, null, null, null, null, null, null),
             new Languages("ru", SUPPORTED_LANGUAGES),
@@ -39,7 +42,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Ratings(24),
             new Tips(24),
             new Orders(3),
-            new CashNotReceived(true, 100));
+            new CashNotReceived(true, 100),
+            new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -185,8 +189,44 @@ class JdbcServiceSettings implements ServiceSettings {
             throw invalid("Cash not received: driver_share_percent must be between 0 and 100");
         }
         cash = new CashNotReceived(cash.creditDriver(), cash.creditDriver() ? cash.driverSharePercent() : 0);
+        AppVersions versions = s.appVersions() == null ? DEFAULTS.appVersions() : s.appVersions();
+        versions = new AppVersions(validatePlatform(versions.riderAndroid(), "rider_android"),
+                validatePlatform(versions.riderIos(), "rider_ios"),
+                validatePlatform(versions.driverAndroid(), "driver_android"),
+                validatePlatform(versions.driverIos(), "driver_ios"), versions.requireVersionHeader());
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash);
+                orders, cash, versions);
+    }
+
+    /** No policy for a platform is "0.0.0": every build allowed. */
+    private static PlatformVersions validatePlatform(PlatformVersions v, String name) {
+        if (v == null) {
+            return NO_POLICY;
+        }
+        if (v.minimumVersion() == null || v.latestVersion() == null || !VERSION.matcher(v.minimumVersion()).matches()
+                || !VERSION.matcher(v.latestVersion()).matches()) {
+            throw invalid(name + ": versions must be MAJOR.MINOR.PATCH");
+        }
+        if (compareVersions(v.minimumVersion(), v.latestVersion()) > 0) {
+            throw invalid(name + ": minimum_version must not exceed latest_version");
+        }
+        return v;
+    }
+
+    private static final Pattern VERSION = Pattern.compile("^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}$");
+
+    /** Numeric per part: 1.10.0 is after 1.9.3 (REQ-API-10). Both must match {@link #VERSION}. */
+    static int compareVersions(String a, String b) {
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int ca = Integer.parseInt(pa[i]);
+            int cb = Integer.parseInt(pb[i]);
+            if (ca != cb) {
+                return Integer.compare(ca, cb);
+            }
+        }
+        return 0;
     }
 
     /** Versions saved before a section existed get its defaults. */
@@ -202,7 +242,8 @@ class JdbcServiceSettings implements ServiceSettings {
         Tips tips = s.tips() == null ? DEFAULTS.tips() : s.tips();
         Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
         CashNotReceived cash = s.cashNotReceived() == null ? DEFAULTS.cashNotReceived() : s.cashNotReceived();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash);
+        AppVersions versions = s.appVersions() == null ? DEFAULTS.appVersions() : s.appVersions();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions);
     }
 
     private static String color(String value, boolean required) {

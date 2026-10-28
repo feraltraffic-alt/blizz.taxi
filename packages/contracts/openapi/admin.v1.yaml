@@ -4589,6 +4589,19 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    PlatformVersions:
+      type: object
+      additionalProperties: false
+      required: [minimum_version, latest_version]
+      properties:
+        minimum_version:
+          type: string
+          pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          description: Lowest build still allowed. Below this the four checked actions return 426.
+        latest_version:
+          type: string
+          pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          description: Current recommended build. The app may show "update available".
     OtpDelivery:
       type: object
       additionalProperties: false
@@ -4689,6 +4702,32 @@ components:
               description: >-
                 The part of the driver's share credited when credit_driver is true; the rest is held in suspense
                 until support settles the dispute. Ignored (0) when credit_driver is false.
+        app_versions:
+          description: >-
+            Per-platform version policy (REQ-API-10). Omitted when saving: no policy (every build allowed, "0.0.0").
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            rider_android:
+              oneOf:
+                - $ref: "#/components/schemas/PlatformVersions"
+                - type: "null"
+            rider_ios:
+              oneOf:
+                - $ref: "#/components/schemas/PlatformVersions"
+                - type: "null"
+            driver_android:
+              oneOf:
+                - $ref: "#/components/schemas/PlatformVersions"
+                - type: "null"
+            driver_ios:
+              oneOf:
+                - $ref: "#/components/schemas/PlatformVersions"
+                - type: "null"
+            require_version_header:
+              type: boolean
+              default: false
+              description: When true, the four checked actions refuse a request with no version header.
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

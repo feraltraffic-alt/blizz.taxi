@@ -28,11 +28,17 @@ api() {
     local args=(-sS -X "$method" -o /tmp/sandbox-body -w '%{http_code}' -H 'Accept: application/json'
                 -H "X-Correlation-Id: $(uuid)")
     [[ -n "$token" ]] && args+=(-H "Authorization: Bearer $token")
+    # Extra headers for the next calls, e.g. API_HEADERS=("X-App-Platform: DRIVER_ANDROID" "X-App-Version: 1.0.0").
+    if declare -p API_HEADERS &>/dev/null; then
+        for header in "${API_HEADERS[@]}"; do args+=(-H "$header"); done
+    fi
     [[ -n "$body" ]] && args+=(-H 'Content-Type: application/json' --data "$body")
     STATUS=$(curl "${args[@]}" "$BASE$path")
     echo "$STATUS" >/tmp/sandbox-status # api often runs in $(...); expect reads the status from here
     {
-        printf '\n`%s %s` → **%s**\n' "$method" "$path" "$STATUS"
+        printf '\n`%s %s`%s → **%s**\n' "$method" "$path" \
+            "$(declare -p API_HEADERS &>/dev/null && [[ ${#API_HEADERS[@]} -gt 0 ]] && printf ' (%s)' "${API_HEADERS[*]}")" \
+            "$STATUS"
         if [[ -n "$body" ]]; then printf '\n```json\n%s\n```\n' "$(jq . <<<"$body" 2>/dev/null || echo "$body")"; fi
         if [[ -s /tmp/sandbox-body ]]; then
             printf '\n```json\n%s\n```\n' "$(jq . /tmp/sandbox-body 2>/dev/null | head -80 || head -c 4000 /tmp/sandbox-body)"

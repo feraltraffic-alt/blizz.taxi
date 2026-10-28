@@ -89,28 +89,43 @@ public interface ServiceSettings {
         }
     }
 
+    /** Per-platform version policy (REQ-API-10). */
+    record PlatformVersions(String minimumVersion, String latestVersion) {
+    }
+
+    record AppVersions(PlatformVersions riderAndroid, PlatformVersions riderIos,
+                       PlatformVersions driverAndroid, PlatformVersions driverIos,
+                       boolean requireVersionHeader) {
+    }
+
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
-                    Orders orders, CashNotReceived cashNotReceived) {
-        /** Source compatibility for callers written before the cash dispute setting. */
+                    Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions) {
+        /** Source compatibility for callers written before app versions became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
-                        Orders orders) {
-            this(brand, languages, calls, preorders, ratings, tips, orders, null);
+                        Orders orders, CashNotReceived cashNotReceived) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, null);
         }
 
         /** Source compatibility for callers written before ratings became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
-            this(brand, languages, calls, preorders, null, null, null);
+            this(brand, languages, calls, preorders, null, null, null, null, null);
         }
 
         /** Source compatibility for callers written before tips became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
-            this(brand, languages, calls, preorders, ratings, null, null);
+            this(brand, languages, calls, preorders, ratings, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the order limit became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings,
                         Tips tips) {
-            this(brand, languages, calls, preorders, ratings, tips, null);
+            this(brand, languages, calls, preorders, ratings, tips, null, null, null);
+        }
+
+        /** Source compatibility for callers written before the cash dispute setting. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings,
+                        Tips tips, Orders orders) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, null, null);
         }
     }
 

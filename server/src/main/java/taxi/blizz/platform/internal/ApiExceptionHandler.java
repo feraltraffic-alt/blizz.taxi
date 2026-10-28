@@ -61,6 +61,9 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<Object> respond(
             Exception exception, ErrorCode code, int status, HttpHeaders headers, WebRequest request) {
         ProblemDetail problem = problem(exception, code, status);
+        if (exception instanceof taxi.blizz.platform.UpgradeRequiredException upgrade) {
+            problem.setProperty("minimum_version", upgrade.minimumVersion());
+        }
         if (exception instanceof RateLimitedException limited) {
             long seconds = limited.retryAfter().toSeconds();
             if (limited.retryAfter().getNano() != 0) seconds++; // Round up, never suggest an early retry.
