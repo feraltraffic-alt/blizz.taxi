@@ -132,13 +132,21 @@ components:
           additionalProperties: false
           properties:
             rider_android:
-              $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+              oneOf:
+                - $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+                - type: "null"
             rider_ios:
-              $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+              oneOf:
+                - $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+                - type: "null"
             driver_android:
-              $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+              oneOf:
+                - $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+                - type: "null"
             driver_ios:
-              $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+              oneOf:
+                - $ref: "./admin.v1.yaml#/components/schemas/PlatformVersions"
+                - type: "null"
             require_version_header:
               type: boolean
         cities:
