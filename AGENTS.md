@@ -31,6 +31,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 4. **No silent skips.** Code that cannot classify something (an unknown path, a status not in the contract, an unexpected state) fails or reports it; it never returns success by default.
 5. **Name what you chose.** Anything the issue left open goes into the PR's *Notes* as "chose X because Y", or into the issue as a question.
 6. **Read your own diff** (`git diff origin/main...HEAD`) as if you were the reviewer, before you ask for review.
+7. **Answer every review point**: "done" with the evidence, or "not doing, because …". A point dropped without a word is worse than a refusal with a reason.
+8. **Evidence is proof, not a location**: a run link, a test name, a command with its output. "See `file.mjs`" is not evidence.
 
 ## Rules that must not be broken
 
