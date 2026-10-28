@@ -10,9 +10,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.audit.AuditEntry;
+import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.CancelReasons;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityCatalog;
@@ -34,6 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(JdbcOperatorBonuses.class);
     private static final String DEFAULT_RULE = "default";
     private static final int MAX_POINTS = 100_000;
 
@@ -43,17 +48,19 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     private final CityCatalog cities;
     private final StaffAccess staff;
     private final IdempotentCommands commands;
+    private final AuditLog audit;
     private final JsonMapper json;
     private final Clock clock;
 
     JdbcOperatorBonuses(JdbcClient jdbc, Orders orders, CancelReasons cancelReasons, CityCatalog cities,
-                        StaffAccess staff, IdempotentCommands commands, JsonMapper json, Clock clock) {
+                        StaffAccess staff, IdempotentCommands commands, AuditLog audit, JsonMapper json, Clock clock) {
         this.jdbc = jdbc;
         this.orders = orders;
         this.cancelReasons = cancelReasons;
         this.cities = cities;
         this.staff = staff;
         this.commands = commands;
+        this.audit = audit;
         this.json = json;
         this.clock = clock;
     }
@@ -80,6 +87,10 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         if ("TripCompleted".equals(event.type())) {
             apply(orderId, "FULFILLED", null, event.occurredAt());
         } else if ("OrderCancelled".equals(event.type())) {
+            Object cancelledBy = body.get("cancelled_by");
+            if (cancelledBy == null || !"STAFF".equals(cancelledBy.toString())) {
+                return;
+            }
             Object reason = body.get("reason_code");
             apply(orderId, "OPERATOR_FAULT_CANCELLATION", reason == null ? null : reason.toString(), event.occurredAt());
         }
@@ -108,6 +119,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
     @Transactional
     SettingsVersion changeInside(Actor actor, long expectedVersion, Settings settings, String reason) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtext('operator-bonus-settings'))").query().singleRow();
         SettingsVersion current = jdbc.sql("select version, m, g, count_cancellations, reset_day, time_rules::text, "
                         + "effective_at, changed_by, reason from operator_bonus_settings order by version desc limit 1 for update")
                 .query((rs, i) -> mapSettings(rs)).single();
@@ -116,15 +128,21 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         }
         long version = current.version() + 1;
         OffsetDateTime now = now();
-        jdbc.sql("""
-                        insert into operator_bonus_settings
-                            (version, m, g, count_cancellations, reset_day, time_rules, effective_at, changed_by, reason)
-                        values (:version, :m, :g, :count, :reset, cast(:rules as jsonb), :at, :by, :reason)
-                        """)
-                .param("version", version).param("m", settings.m()).param("g", settings.g())
-                .param("count", settings.countCancellations()).param("reset", settings.resetDay())
-                .param("rules", json.writeValueAsString(settings.timeRules())).param("at", now)
-                .param("by", actor.id()).param("reason", reason).update();
+        try {
+            jdbc.sql("""
+                            insert into operator_bonus_settings
+                                (version, m, g, count_cancellations, reset_day, time_rules, effective_at, changed_by, reason)
+                            values (:version, :m, :g, :count, :reset, cast(:rules as jsonb), :at, :by, :reason)
+                            """)
+                    .param("version", version).param("m", settings.m()).param("g", settings.g())
+                    .param("count", settings.countCancellations()).param("reset", settings.resetDay())
+                    .param("rules", json.writeValueAsString(settings.timeRules())).param("at", now)
+                    .param("by", actor.id()).param("reason", reason).update();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new DomainException(ErrorCode.VERSION_CONFLICT, "Operator bonus settings changed");
+        }
+        audit.record(new AuditEntry(actor, "operator_bonus.settings.change", "operator_bonus_settings",
+                Long.toString(version), reason, current.settings(), settings));
         return readSettings(version);
     }
 
@@ -228,37 +246,74 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                 return;
             }
         }
-        City city = cities.published().stream().filter(c -> c.id().equals(origin.cityId())).findFirst()
-                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order city not found"));
-        RuleValue selected = selectRule(version.settings(), origin.createdAt(), city.timezone(), kind);
+        String timezone = cities.timezone(origin.cityId()).orElse(null);
+        if (timezone == null) {
+            log.warn("Skipping operator bonus for order {}: city {} not found", orderId, origin.cityId());
+            return;
+        }
+        RuleValue selected = selectRule(version.settings(), origin.createdAt(), timezone, kind);
+        LocalDate periodKey = periodFor(origin.createdById(), occurredAt);
         int inserted = jdbc.sql("""
                         insert into operator_bonus_entry
-                            (id, staff_id, order_id, kind, rule_key, settings_version, points, occurred_at, created_at)
-                        values (:id, :staff, :order, :kind, :rule, :version, :points, :occurred, :created)
+                            (id, staff_id, order_id, kind, rule_key, settings_version, points, occurred_at, created_at, period_key)
+                        values (:id, :staff, :order, :kind, :rule, :version, :points, :occurred, :created, :period)
                         on conflict (order_id, kind) do nothing
                         """)
                 .param("id", UUID.randomUUID()).param("staff", origin.createdById()).param("order", orderId)
                 .param("kind", kind).param("rule", selected.key()).param("version", version.version())
-                .param("points", selected.points()).param("occurred", occurredAt).param("created", now()).update();
+                .param("points", selected.points()).param("occurred", occurredAt).param("created", now())
+                .param("period", periodKey).update();
         if (inserted == 0) {
             return;
         }
         int fulfilled = "FULFILLED".equals(kind) ? 1 : 0;
         int cancelled = "OPERATOR_FAULT_CANCELLATION".equals(kind) ? 1 : 0;
-        jdbc.sql("""
-                        insert into operator_bonus_account
-                            (staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone, updated_at)
-                        values (:staff, :points, :fulfilled, :cancelled, :started, :timezone, :now)
-                        on conflict (staff_id) do update set
-                            balance = operator_bonus_account.balance + excluded.balance,
-                            fulfilled_count = operator_bonus_account.fulfilled_count + excluded.fulfilled_count,
-                            cancelled_count = operator_bonus_account.cancelled_count + excluded.cancelled_count,
-                            timezone = excluded.timezone,
-                            updated_at = excluded.updated_at
+        if (periodKey != null) {
+            jdbc.sql("""
+                            update operator_bonus_period set points = points + :points,
+                                fulfilled_count = fulfilled_count + :fulfilled,
+                                cancelled_count = cancelled_count + :cancelled
+                            where staff_id = :staff and period_key = :period
+                            """)
+                    .param("points", selected.points()).param("fulfilled", fulfilled)
+                    .param("cancelled", cancelled).param("staff", origin.createdById())
+                    .param("period", periodKey).update();
+        } else {
+            jdbc.sql("""
+                            insert into operator_bonus_account
+                                (staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone, updated_at)
+                            values (:staff, :points, :fulfilled, :cancelled, :started, :timezone, :now)
+                            on conflict (staff_id) do update set
+                                balance = operator_bonus_account.balance + excluded.balance,
+                                fulfilled_count = operator_bonus_account.fulfilled_count + excluded.fulfilled_count,
+                                cancelled_count = operator_bonus_account.cancelled_count + excluded.cancelled_count,
+                                timezone = excluded.timezone,
+                                updated_at = excluded.updated_at
+                            """)
+                    .param("staff", origin.createdById()).param("points", selected.points())
+                    .param("fulfilled", fulfilled).param("cancelled", cancelled).param("started", occurredAt)
+                    .param("timezone", timezone).param("now", now()).update();
+        }
+    }
+
+    /** Closed period that owns this occurred_at, or null if it belongs to the open period.
+     *  Locks the account row so a concurrent reset cannot close the period between this
+     *  decision and the subsequent write. */
+    private LocalDate periodFor(UUID staffId, OffsetDateTime occurredAt) {
+        Optional<OffsetDateTime> started = jdbc.sql("""
+                        select period_started_at from operator_bonus_account where staff_id = :staff for update
                         """)
-                .param("staff", origin.createdById()).param("points", selected.points())
-                .param("fulfilled", fulfilled).param("cancelled", cancelled).param("started", occurredAt)
-                .param("timezone", city.timezone()).param("now", now()).update();
+                .param("staff", staffId).query(OffsetDateTime.class).optional();
+        if (started.isEmpty() || !occurredAt.isBefore(started.get())) {
+            return null;
+        }
+        return jdbc.sql("""
+                        select period_key from operator_bonus_period
+                        where staff_id = :staff and period_started_at <= :at and period_ended_at > :at
+                        order by period_key desc limit 1
+                        """)
+                .param("staff", staffId).param("at", occurredAt)
+                .query(LocalDate.class).optional().orElse(null);
     }
 
     private RuleValue selectRule(Settings settings, OffsetDateTime createdAt, String timezone, String kind) {

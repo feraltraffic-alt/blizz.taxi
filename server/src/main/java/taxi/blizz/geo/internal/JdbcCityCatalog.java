@@ -27,4 +27,11 @@ class JdbcCityCatalog implements CityCatalog {
                         rs.getString(4), rs.getString(5), rs.getInt(6), rs.getLong(7)))
                 .list();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> timezone(java.util.UUID cityId) {
+        return jdbc.sql("select timezone from city where id = :id")
+                .param("id", cityId).query(String.class).optional();
+    }
 }
