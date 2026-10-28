@@ -161,3 +161,33 @@ class OperatorBonusTests {
                 UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
     }
 }
+
+    @Test
+    void finding1_lateEventAfterResetAddsPointsToNewPeriod() {
+        OffsetDateTime old = OffsetDateTime.now(ZoneOffset.UTC).minusDays(40);
+        UUID order = phoneOrder(operator.id(), old);
+        bonuses.handle(event("TripCompleted", order, null));
+        jdbc.sql("update operator_bonus_account set period_started_at = :started where staff_id = :staff")
+                .param("started", old).param("staff", operator.id()).update();
+        bonuses.resetDueAccounts();
+        assertThat(bonuses.mine(operator, 10).balance()).isZero();
+
+        UUID lateOrder = phoneOrder(operator.id(), old.plusHours(1));
+        bonuses.handle(event("TripCompleted", lateOrder, null));
+
+        assertThat(bonuses.mine(operator, 10).balance())
+                .as("late points from a previous period must not be added to the new period")
+                .isZero();
+    }
+
+    @Test
+    void finding2_unprocessableEventWithMissingCityIsNotRetriedForever() {
+        UUID order = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        jdbc.sql("delete from city where id = :id").param("id", city).update();
+        // The handler must not throw on an event it cannot process (city gone).
+        // Currently it throws DomainException, so the outbox will retry forever.
+        bonuses.handle(event("TripCompleted", order, null));
+        // If we reach here, the handler swallowed the problem. The assertion below
+        // fails because the current code throws before this line.
+        assertThat(bonuses.mine(operator, 10).balance()).isZero();
+    }
