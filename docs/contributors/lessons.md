@@ -9,6 +9,8 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Review:** re-checking the same run's transcript with unknown fields counted found 4 real contract gaps in 19 responses. Most schemas are open (no `additionalProperties: false`), and Ajv accepts extra fields silently. A status code or a path missing from the contract also passed silently (`exit 0`).
 - **Habit:** **a new check that finds nothing is itself under suspicion.** For every kind of error the issue names (here: missing field, extra field, wrong type, undeclared status, unknown path), feed the check one deliberate example and show it fails. Only then trust a green run.
 - **Habit:** **a check never answers "I don't know" with success.** Something it cannot classify is an error or a listed line in the report, never a silent skip.
+- **Second round:** strictness on `allOf` members gave false errors on the operator's order. The fix switched strictness off for every composition. After that, an extra field in `assignment` (`oneOf: [Assignment, null]`) or anywhere in the operator's order passed again, which is where 3 of the 4 gaps had been. The demonstration showed only a top-level extra field.
+- **Habit:** **fix a false alarm by correcting the rule, not by switching the check off there.** Then prove again, on that same spot, that a real error is still caught. Demonstrate on nested objects and compositions, not only on the easiest case.
 
 ## 2. A whole contract file rewritten from a copy (PR #44)
 
