@@ -43,6 +43,13 @@ jobs:
           distribution: temurin
           java-version: "25"
           cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/contracts/package-lock.json
+      - name: Install contract tools
+        run: cd packages/contracts && npm ci --no-fund --no-audit
       - name: Build the server
         run: cd server && mvn -B -q -ntp -DskipTests package
       - name: Start the server (profile sandbox)
@@ -76,6 +83,10 @@ jobs:
           done
           { echo "## Sandbox results"; cat results.txt; echo; echo "Full transcript: artifact **sandbox-transcript**."; } \
             >> "$GITHUB_STEP_SUMMARY"
+          # Contract validation coverage (issue #84)
+          if [ -f /tmp/sandbox-ops-checked.txt ]; then
+            node scripts/sandbox/coverage.mjs >> "$GITHUB_STEP_SUMMARY" || true
+          fi
           exit $failed
       - name: Keep it up behind a temporary public address
         if: always() && inputs.minutes != '0'
