@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(JdbcOperatorBonuses.class);
     private static final String DEFAULT_RULE = "default";
     private static final int MAX_POINTS = 100_000;
 
@@ -243,10 +246,9 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                 return;
             }
         }
-        String timezone = cityTimezone(origin.cityId());
+        String timezone = cities.timezone(origin.cityId()).orElse(null);
         if (timezone == null) {
-            org.slf4j.LoggerFactory.getLogger(JdbcOperatorBonuses.class)
-                    .warn("Skipping operator bonus for order {}: city {} not found", orderId, origin.cityId());
+            log.warn("Skipping operator bonus for order {}: city {} not found", orderId, origin.cityId());
             return;
         }
         RuleValue selected = selectRule(version.settings(), origin.createdAt(), timezone, kind);
@@ -294,15 +296,12 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         }
     }
 
-    private String cityTimezone(UUID cityId) {
-        return jdbc.sql("select timezone from city where id = :id")
-                .param("id", cityId).query(String.class).optional().orElse(null);
-    }
-
-    /** Closed period that owns this occurred_at, or null if it belongs to the open period. */
+    /** Closed period that owns this occurred_at, or null if it belongs to the open period.
+     *  Locks the account row so a concurrent reset cannot close the period between this
+     *  decision and the subsequent write. */
     private LocalDate periodFor(UUID staffId, OffsetDateTime occurredAt) {
         Optional<OffsetDateTime> started = jdbc.sql("""
-                        select period_started_at from operator_bonus_account where staff_id = :staff
+                        select period_started_at from operator_bonus_account where staff_id = :staff for update
                         """)
                 .param("staff", staffId).query(OffsetDateTime.class).optional();
         if (started.isEmpty() || !occurredAt.isBefore(started.get())) {

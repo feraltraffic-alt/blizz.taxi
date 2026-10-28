@@ -39,7 +39,7 @@ class OperatorBonusTests {
         jdbc.sql("delete from operator_bonus_entry").update();
         jdbc.sql("delete from operator_bonus_account").update();
         jdbc.sql("delete from operator_bonus_settings where version > 0").update();
-        jdbc.sql("delete from staff_user where login like 'op-%'").update();
+        jdbc.sql("delete from staff_user where login like 'bonus-op-%'").update();
         jdbc.sql("""
                 update operator_bonus_settings set m = 1, g = 10, count_cancellations = true,
                     reset_day = 1, time_rules = '[]'::jsonb where version = 0
@@ -189,6 +189,7 @@ class OperatorBonusTests {
         assertThat(bonuses.mine(operator, 10).balance())
                 .as("rider cancellation with a staff operator-fault reason must not penalise")
                 .isEqualTo(-10);
+        jdbc.sql("delete from cancel_reason where audience = 'STAFF' and code = 'WRONG_ADDRESS'").update();
     }
 
     @Test
@@ -196,7 +197,7 @@ class OperatorBonusTests {
         jdbc.sql("""
                 insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
                 values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
-                """).param("id", operator.id()).param("login", "op-" + operator.id()).update();
+                """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
         bonuses.changeSettings(operator, UUID.randomUUID(), before.version(), next, "raise points");
@@ -213,7 +214,7 @@ class OperatorBonusTests {
         jdbc.sql("""
                 insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
                 values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
-                """).param("id", operator.id()).param("login", "op-" + operator.id()).update();
+                """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
         var barrier = new java.util.concurrent.CyclicBarrier(2);
@@ -275,6 +276,7 @@ class OperatorBonusTests {
         assertThat(bonuses.mine(operator, 10).balance())
                 .as("archived city still yields the bonus (timezone known)")
                 .isEqualTo(1);
+        jdbc.sql("update city set state = 'PUBLISHED' where id = :id").param("id", city).update();
     }
 
     private OutboxMessage eventWithCancelledBy(String type, UUID orderId, String reasonCode, String cancelledBy) {
