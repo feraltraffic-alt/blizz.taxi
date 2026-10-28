@@ -110,6 +110,8 @@ components:
         included (ADR 0012); it replaces ORDER_ALREADY_ACTIVE, which is no longer returned.
         ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
         pending), from the app or by an operator; a caller without an account is not affected.
+        ACCEPTANCE_REQUIRED (403): a rider's new order or a driver going online while a legal text in force that must
+        be accepted is not (REQ-PRV-08); GET /api/{rider|driver}/v1/legal tells which.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
         payment still in progress. A command whose own payment is pending answers 202 with AcceptedOperation,
         never with a Problem (docs/decisions/0003).
@@ -139,6 +141,7 @@ components:
         - UNAUTHENTICATED
         - ACCESS_DENIED
         - ACCOUNT_NOT_ACTIVE
+        - ACCEPTANCE_REQUIRED
         - NOT_FOUND
         - PROVIDER_UNAVAILABLE
         - OTP_INVALID

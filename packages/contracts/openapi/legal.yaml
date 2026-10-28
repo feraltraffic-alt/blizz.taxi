@@ -1,0 +1,215 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — legal text components
+  version: 1.0.0
+  description: >-
+    The service's legal texts with their versions and who accepted which (REQ-PRV-08). A published version never
+    changes; a correction is a new version. The version in force is the published one with the latest effective
+    moment that has come.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    LegalAudience:
+      type: string
+      enum: [RIDER, DRIVER]
+
+    LegalKind:
+      description: DRIVER_AGREEMENT is for drivers only.
+      type: string
+      enum: [TERMS, PRIVACY_NOTICE, DRIVER_AGREEMENT]
+
+    LegalLanguage:
+      type: string
+      enum: [uk, pl, ru, en]
+
+    LegalTexts:
+      description: Language → text, at least one, each 1 to 200 000 characters.
+      type: object
+      minProperties: 1
+      propertyNames:
+        $ref: "#/components/schemas/LegalLanguage"
+      additionalProperties:
+        type: string
+        minLength: 1
+        maxLength: 200000
+
+    LegalDocumentVersion:
+      type: object
+      additionalProperties: false
+      required: [id, audience, kind, number, state, texts, acceptance_required, effective_from, published_at, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          $ref: "#/components/schemas/LegalAudience"
+        kind:
+          $ref: "#/components/schemas/LegalKind"
+        number:
+          description: 1, 2, 3… per audience and kind.
+          type: integer
+          minimum: 1
+        state:
+          description: DRAFT — staff may still change it; PUBLISHED — never changes.
+          type: string
+          enum: [DRAFT, PUBLISHED]
+        texts:
+          $ref: "#/components/schemas/LegalTexts"
+        acceptance_required:
+          description: While a version in force that must be accepted is not, riders cannot order and drivers cannot go online (403 ACCEPTANCE_REQUIRED).
+          type: boolean
+        effective_from:
+          description: Publishing moves a moment in the past to the moment of publication.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        published_at:
+          type: [string, "null"]
+          format: date-time
+        version:
+          description: Optimistic lock of the draft.
+          type: integer
+          format: int64
+
+    LegalDocumentVersionList:
+      type: object
+      additionalProperties: false
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegalDocumentVersion"
+
+    CreateLegalDraft:
+      type: object
+      additionalProperties: false
+      required: [command_id, audience, kind, texts, acceptance_required, effective_from]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          $ref: "#/components/schemas/LegalAudience"
+        kind:
+          $ref: "#/components/schemas/LegalKind"
+        texts:
+          $ref: "#/components/schemas/LegalTexts"
+        acceptance_required:
+          type: boolean
+        effective_from:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    UpdateLegalDraft:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, texts, acceptance_required, effective_from]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        texts:
+          $ref: "#/components/schemas/LegalTexts"
+        acceptance_required:
+          type: boolean
+        effective_from:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    PublishLegalDraft:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+
+    LegalText:
+      description: One text to show, in the language asked for or the first of uk, pl, ru, en the version has.
+      type: object
+      additionalProperties: false
+      required: [version_id, audience, kind, number, language, text, effective_from]
+      properties:
+        version_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          $ref: "#/components/schemas/LegalAudience"
+        kind:
+          $ref: "#/components/schemas/LegalKind"
+        number:
+          type: integer
+        language:
+          $ref: "#/components/schemas/LegalLanguage"
+        text:
+          type: string
+        effective_from:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+
+    LegalInForce:
+      type: object
+      additionalProperties: false
+      required: [version_id, audience, kind, number, acceptance_required, accepted, effective_from, languages]
+      properties:
+        version_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        audience:
+          $ref: "#/components/schemas/LegalAudience"
+        kind:
+          $ref: "#/components/schemas/LegalKind"
+        number:
+          type: integer
+        acceptance_required:
+          type: boolean
+        accepted:
+          description: Whether this person accepted this very version.
+          type: boolean
+        effective_from:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegalLanguage"
+
+    LegalInForceList:
+      type: object
+      additionalProperties: false
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/LegalInForce"
+
+    AcceptLegalText:
+      type: object
+      additionalProperties: false
+      required: [command_id, version_id, language]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        version_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        language:
+          description: The language the text was shown in; one the version has.
+          $ref: "#/components/schemas/LegalLanguage"
+
+    LegalAcceptance:
+      type: object
+      additionalProperties: false
+      required: [version_id, kind, number, language, accepted_at]
+      properties:
+        version_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          $ref: "#/components/schemas/LegalKind"
+        number:
+          type: integer
+        language:
+          $ref: "#/components/schemas/LegalLanguage"
+        accepted_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"

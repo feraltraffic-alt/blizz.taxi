@@ -31,6 +31,44 @@ paths:
                 $ref: "#/components/schemas/Bootstrap"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
+  /api/config/v1/legal/{audience}/{kind}:
+    get:
+      operationId: getLegalText
+      summary: A legal text in force
+      description: >-
+        For showing before sign-in: the version in force of a document, in the language asked for or the first of uk, pl, ru, en it has. 404 when no version is in force.
+      tags: [Config]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: audience
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [rider, driver]
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [terms, privacy_notice, driver_agreement]
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            default: en
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalText"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
 
 tags:
   - name: Config

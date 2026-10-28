@@ -19,6 +19,7 @@ import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.identity.AccountDirectory;
+import taxi.blizz.configuration.LegalDocuments;
 import taxi.blizz.operations.DriverAvailability;
 import taxi.blizz.operations.LocationFix;
 import taxi.blizz.operations.WorkSessions;
@@ -40,6 +41,8 @@ import taxi.blizz.platform.SubjectType;
 @Service
 class JdbcWorkSessions implements WorkSessions {
 
+    private final LegalDocuments legal;
+
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
     private final Outbox outbox;
@@ -52,7 +55,8 @@ class JdbcWorkSessions implements WorkSessions {
 
     JdbcWorkSessions(JdbcClient jdbc, IdempotentCommands commands, Outbox outbox, AuditLog auditLog,
                      AccountDirectory accounts, DriverAdmission admission, CityResolver cities,
-                     PresenceProperties presence, Clock clock) {
+                     PresenceProperties presence, LegalDocuments legal, Clock clock) {
+        this.legal = legal;
         this.jdbc = jdbc;
         this.commands = commands;
         this.outbox = outbox;
@@ -89,6 +93,8 @@ class JdbcWorkSessions implements WorkSessions {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Another device controls the open session; use handover");
                     }
+                    // A driver goes online only after accepting the legal texts in force (REQ-PRV-08).
+                    legal.requireAccepted(driver);
                     List<String> reasons = admissionReasons(driver, vehicleId);
                     if (!reasons.isEmpty()) {
                         throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, String.join(", ", reasons));
