@@ -13,9 +13,9 @@ cleanup() {
     local admin profile
     admin=$(admin_token)
     profile=$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$admin")
-    if [[ "$(jq -r .review_status <<<"$profile")" == SUSPENDED ]]; then
+    if [[ "$(jq -r .profile.review_status <<<"$profile")" == SUSPENDED ]]; then
         api POST "/api/admin/v1/drivers/$DRIVER_ID/reinstate" "$admin" "{\"command_id\":\"$(uuid)\",
-          \"expected_version\":$(jq -r .version <<<"$profile"),\"reason\":\"Sandbox clean-up\"}" >/dev/null
+          \"expected_version\":$(jq -r .profile.version <<<"$profile"),\"reason\":\"Sandbox clean-up\"}" >/dev/null
     fi
     [[ -n "${DRIVER:-}" ]] && go_offline "$DRIVER"
 }
@@ -50,7 +50,7 @@ FLAG_ID=$(jq -r .id <<<"$FLAG")
 [[ "$(jq -r '.evidence.speed_kph > 2000' <<<"$FLAG")" == true ]]
 [[ "$(jq -r '.evidence | has("lat") or has("lon")' <<<"$FLAG")" == false ]]
 PROFILE=$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$ADMIN"); expect 200
-[[ "$(jq -r .review_status <<<"$PROFILE")" == APPROVED ]]
+[[ "$(jq -r .profile.review_status <<<"$PROFILE")" == APPROVED ]]
 
 say "Support confirms it with a reason — once"
 api POST "/api/admin/v1/driver-risk-flags/$FLAG_ID/confirm" "$ADMIN" "{\"command_id\":\"$(uuid)\",
@@ -69,9 +69,9 @@ api POST "/api/admin/v1/driver-risk-flags/$(jq -r .id <<<"$MANUAL")/dismiss" "$A
 expect 200
 
 say "The suspension is a separate action and names the confirmed flag; the clean-up reinstates the driver"
-VERSION=$(jq -r .version <<<"$PROFILE")
+VERSION=$(jq -r .profile.version <<<"$PROFILE")
 api POST "/api/admin/v1/drivers/$DRIVER_ID/suspend" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
   \"reason\":\"Sandbox: impossible movement confirmed\",\"risk_flag_id\":\"$FLAG_ID\"}" >/dev/null
 expect 200
-[[ "$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$ADMIN" | jq -r .review_status)" == SUSPENDED ]]
+[[ "$(api GET "/api/admin/v1/drivers/$DRIVER_ID" "$ADMIN" | jq -r .profile.review_status)" == SUSPENDED ]]
 note "Done: flag $FLAG_ID confirmed, suspension named it, driver reinstated."
