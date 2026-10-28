@@ -64,6 +64,28 @@ class OtpDeliveryTests {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
+
+    @Test
+    void smsAttemptMetricsFollowCommitAndExcludeVoiceFallback() {
+        set(Map.of(Integrations.OTP_FALLBACK, "NONE"));
+        for (OtpSender.State state : OtpSender.State.values()) {
+            var existing = meters.find("blizz.sms.sent").tags("purpose", "OTP", "state", state.name()).counter();
+            double before = existing == null ? 0 : existing.count();
+            tx.executeWithoutResult(status -> {
+                otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null);
+                status.setRollbackOnly();
+            });
+            var afterRollback = meters.find("blizz.sms.sent").tags("purpose", "OTP", "state", state.name()).counter();
+            assertThat(afterRollback == null ? 0 : afterRollback.count()).isEqualTo(before);
+            fake.next(state);
+            otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null);
+            assertThat(meters.get("blizz.sms.sent").tags("purpose", "OTP", "state", state.name()).counter().count())
+                    .isEqualTo(before + 1);
+        }
+    }
+
     Actor keys;
     Actor support;
 
