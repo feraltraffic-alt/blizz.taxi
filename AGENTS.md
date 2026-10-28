@@ -10,7 +10,12 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 ## How to work
 
-1. Take only work from a GitHub issue assigned to you. If something is unclear, ask in the issue instead of guessing.
+1. Take only work from a GitHub issue meant for you: open issues with your label (`codex`, `grok`). **At every start, without waiting to be told:**
+   1. first answer the reviews of your open PRs (new comments since your last commit);
+   2. then continue your open issue;
+   3. when none is left, take the oldest open issue with your label.
+
+   Say in the issue that you took it. The lead writes issues and reviews in GitHub and does not repeat them elsewhere, so GitHub is where you read your work. If something is unclear, ask in the issue instead of guessing.
 2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex, `claude2` for the second Claude and `grok` for Grok. Never push to `main`.
 3. Keep a pull request to one concern and under ~400 changed lines where possible.
 4. Before opening the PR, run what CI runs:
