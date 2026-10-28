@@ -35,6 +35,19 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Pattern:** the issue leaves a choice open, or the spec has a Q-xx. The contributor picks one and does not say so, and the reviewer finds out from the code.
 - **Habit:** **a choice the issue did not make goes into the issue as a question, or into the PR's "Notes" as "I chose X because Y".** Never only into the code. The second Claude did this well on #64, posting three questions with a proposed answer each.
 
+## 6. "Checked, fine" without the check (issue #89, a review task)
+
+- **Task:** review the operator bonus module in six named areas, and prove each finding with a failing test.
+- **Handed in:** 2 findings, and "fine" for the other areas. 1 of the 4 major defects was found.
+- **Missed:**
+  - "all three cancellation paths go through one method, fine". The handler never reads `cancelled_by`, and reason codes are unique only per audience.
+  - Audit was not looked at.
+  - "a database constraint is handled by idempotency". Two admins send different `command_id`s, so two concurrent settings changes end in a 500.
+- **Proofs:** the tests were added after the class's closing brace and never compiled, yet the findings quoted their failing assertions. One test deleted a city that orders reference by foreign key, so it would fail for another reason. The findings came one minute after the plan.
+- **Habit:** **"fine" is a finding too, and needs its evidence.** Name the line or query that makes it fine.
+- **Habit:** **for every write path, ask "what if two come at once" and "what if it comes late".**
+- **Habit:** **never quote a test result you have not seen.** Run it, and check that it fails on the line and for the reason you claim.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
