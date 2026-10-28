@@ -27,10 +27,30 @@ server:
   shutdown: graceful
 
 management:
+  # Metrics and details on a port of their own that is never published (REQ-OBS-02, REQ-OBS-05); the main port
+  # keeps only /livez and /readyz for the load balancer and the orchestrator.
+  server:
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: never
+  health:
+    readiness-state:
+      enabled: true
+  metrics:
+    tags:
+      application: blizz-taxi-server
+    distribution:
+      # Latency percentiles of the API (REQ-NFR-02: p95 targets) from histograms Prometheus can aggregate.
+      percentiles-histogram:
+        http.server.requests: true
 
 blizz:
   telephony:
@@ -64,5 +84,8 @@ blizz:
     fcm-credentials: ${FCM_CREDENTIALS:}
 
 logging:
+  pattern:
+    # Every line carries the correlation id of its request or event (REQ-OBS-01).
+    correlation: "[%X{correlation_id:-}] "
   # Stack traces go through the redaction of logback-spring.xml as the messages do (REQ-SEC-08).
   exception-conversion-word: "%redactedEx"

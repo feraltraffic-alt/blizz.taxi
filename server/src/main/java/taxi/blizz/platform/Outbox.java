@@ -4,10 +4,14 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -20,11 +24,13 @@ public class Outbox {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final Clock clock;
+    private final ObjectProvider<MeterRegistry> meters;
 
-    Outbox(JdbcClient jdbc, JsonMapper json, Clock clock) {
+    Outbox(JdbcClient jdbc, JsonMapper json, Clock clock, ObjectProvider<MeterRegistry> meters) {
         this.jdbc = jdbc;
         this.json = json;
         this.clock = clock;
+        this.meters = meters;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -47,6 +53,16 @@ public class Outbox {
                 .param("correlationId", CorrelationId.currentOrNew())
                 .param("now", now)
                 .update();
+        // Business events per type (REQ-OBS-02: orders created, cancelled, unfulfilled…), counted once committed.
+        String type = event.type();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    meters.ifAvailable(m -> m.counter("blizz.events", "type", type).increment());
+                }
+            });
+        }
         return eventId;
     }
 }

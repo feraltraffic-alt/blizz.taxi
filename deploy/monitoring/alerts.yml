@@ -1,0 +1,99 @@
+# Prometheus alert rules of the server (REQ-OBS-03). Every alert names its owner and its runbook; thresholds are the
+# starting ones of the specification, to be tuned on real traffic. Scrape the management port (MANAGEMENT_PORT,
+# default 8081) at /actuator/prometheus; never publish that port.
+groups:
+  - name: blizz-server
+    rules:
+      - alert: ServerDown
+        expr: up{job="blizz-server"} == 0
+        for: 2m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "An instance of the server does not answer"
+          runbook: docs/runbooks/database-and-server.md
+
+      - alert: ServerErrors
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1e-9) > 0.01
+        for: 5m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "More than 1 % of requests fail with a server error"
+          runbook: docs/runbooks/database-and-server.md
+
+      - alert: OutboxStuck
+        expr: max(blizz_outbox_oldest_seconds) > 60
+        for: 2m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "An event has waited for delivery for more than a minute"
+          runbook: docs/runbooks/outbox.md
+
+      - alert: OutboxFailed
+        expr: max(blizz_outbox_failed) > 0
+        for: 5m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "Events could not be delivered"
+          runbook: docs/runbooks/outbox.md
+
+      - alert: PaymentOutcomeUnknown
+        expr: max(blizz_payments_unknown_oldest_seconds) > 300
+        for: 1m
+        labels: {severity: critical, owner: payments-oncall}
+        annotations:
+          summary: "A card operation's outcome has been unknown for more than 5 minutes"
+          runbook: docs/runbooks/payment-unknown.md
+
+      - alert: LedgerUnbalanced
+        expr: max(blizz_ledger_unbalanced) > 0
+        for: 1m
+        labels: {severity: critical, owner: finance-oncall}
+        annotations:
+          summary: "A journal transaction does not balance"
+          runbook: docs/runbooks/ledger.md
+
+      - alert: ClockSkew
+        expr: max(abs(blizz_clock_skew_seconds)) > 2
+        for: 5m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "An instance's clock is more than 2 s away from the database's"
+          runbook: docs/runbooks/clock.md
+
+      - alert: SignInCodesFailing
+        expr: |
+          max(blizz_otp_failed_last_15m) >= 5
+            and max(blizz_otp_failed_last_15m) / clamp_min(max(blizz_otp_sent_last_15m), 1) > 0.2
+        for: 5m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "More than 20 % of sign-in codes do not go out"
+          runbook: docs/runbooks/sms.md
+
+      - alert: OrdersWaitingLong
+        expr: max(blizz_orders_searching_oldest_seconds) > 900
+        for: 5m
+        labels: {severity: warning, owner: operations}
+        annotations:
+          summary: "An order has looked for a driver for more than 15 minutes"
+          runbook: docs/runbooks/orders-and-gps.md
+
+      - alert: DriversLosingGps
+        expr: |
+          max(blizz_drivers_online) >= 10
+            and max(blizz_drivers_online_stale_location) / max(blizz_drivers_online) > 0.5
+        for: 10m
+        labels: {severity: warning, owner: operations}
+        annotations:
+          summary: "More than half of the drivers on the line have no fresh position"
+          runbook: docs/runbooks/orders-and-gps.md
+
+      - alert: MetricsMissing
+        expr: absent(blizz_outbox_pending) or max(blizz_outbox_pending) != max(blizz_outbox_pending)
+        for: 10m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "The server's own metrics are not read (the database may be unreachable)"
+          runbook: docs/runbooks/database-and-server.md

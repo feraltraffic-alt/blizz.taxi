@@ -27,6 +27,13 @@ resolves to such an address, on save and again before every connection (REQ-SEC-
 private network — usually Asterisk — are listed in `BLIZZ_OUTBOUND_PRIVATE_HOSTS` (comma-separated, as typed in the
 address, e.g. `asterisk,10.0.0.7`).
 
+## Monitoring
+
+Metrics are on the management port only — `MANAGEMENT_PORT` (default 8081), `/actuator/prometheus` — and that port
+is never published; the main port answers `/livez` and `/readyz` for the load balancer. Alert rules with owners and
+runbooks: `deploy/monitoring/alerts.yml`, `docs/runbooks/`. Every log line carries `[correlation_id]`; phones, tokens,
+codes and precise positions are taken out by the server itself (REQ-SEC-08).
+
 ## Call recordings
 
 Every call the call centre takes through the service's Asterisk is recorded (issue #60). The dialplan records it

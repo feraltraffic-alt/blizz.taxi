@@ -50,7 +50,7 @@ jobs:
           cd server
           nohup java -jar target/server-*[0-9T].jar --spring.profiles.active=sandbox > ../server.log 2>&1 &
           for i in $(seq 1 90); do
-            if curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then echo "up after ${i}s"; exit 0; fi
+            if curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; then echo "up after ${i}s"; exit 0; fi
             sleep 1
           done
           tail -100 ../server.log; exit 1
@@ -99,9 +99,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Sandbox: $url"
           for i in $(seq 1 30); do
-            curl -fsS "$url/actuator/health" >/dev/null 2>&1 && break; sleep 2
+            curl -fsS "$url/readyz" >/dev/null 2>&1 && break; sleep 2
           done
-          if curl -fsS "$url/actuator/health" >/dev/null 2>&1; then
+          if curl -fsS "$url/readyz" >/dev/null 2>&1; then
             echo "::notice title=Sandbox is up for $minutes minutes::$url (admin / Sandbox-Admin-2026-ok)"
           else
             echo "::error title=Sandbox address does not answer::$url"; exit 1
