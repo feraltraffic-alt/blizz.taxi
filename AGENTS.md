@@ -78,6 +78,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - No foreign key to another module's table, also in a brand-new table: check every `references` in a migration (`driver_risk_flag` once pointed at `driver`).
 - A sandbox scenario that changes shared sandbox data (drivers online, an order searching, a suspended driver, a legal text in force) restores it in a `trap … EXIT`, so a failure does not break the scenarios after it.
 - A time sent by a phone is compared with a server time with a tolerance: phones send whole seconds and keep their own clock.
+- Metrics, logs and traces never fail the operation they observe: an unexpected label value becomes `OTHER` with a warning, never an exception in the business transaction.
+- No database transaction is held open around a call to an outside provider (SMS, payments, maps): call first, then record the result in a short transaction.
 
 ## Trying the system by hand
 
