@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,24 +42,70 @@ class AppVersionTests {
 
     MockMvc mvc;
 
+    ServiceSettings.Version saved;
+
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).build();
+        saved = settings.current();
     }
+
+    @AfterEach
+    void restore() {
+        if (saved != null) {
+            ServiceSettings.Version now = settings.current();
+            if (now.version() != saved.version()) {
+                settings.change(staffWithPermission(), UUID.randomUUID(), now.version(), saved.settings(), "restore");
+            }
+        }
+    }
+
+    @Autowired
+    taxi.blizz.identity.SessionService sessions;
+    @Autowired
+    taxi.blizz.operations.WorkSessions workSessions;
+    @Autowired
+    taxi.blizz.operations.Orders orders;
+    @Autowired
+    taxi.blizz.operations.Dispatch dispatch;
+    @Autowired
+    taxi.blizz.operations.Trips trips;
+    @Autowired
+    taxi.blizz.pricing.QuoteService quotes;
 
     @Test
     void outdatedDriverCompletesTripUnderWay() throws Exception {
+        UUID city = jdbc.sql("select id from city where state = 'PUBLISHED' limit 1").query(UUID.class).single();
+        taxi.blizz.TestRides rides = new taxi.blizz.TestRides(jdbc, orders, dispatch, trips, workSessions, sessions, quotes);
+        taxi.blizz.geo.GeoPoint pickup = new taxi.blizz.geo.GeoPoint(-39.5, 120.5);
+        taxi.blizz.TestRides.Driver driver = rides.driverNear(pickup);
+        taxi.blizz.TestRides.Ride ride = rides.assigned(city, driver, pickup, new taxi.blizz.geo.GeoPoint(-39.45, 120.55));
         setMinimum("DRIVER_ANDROID", "9.0.0");
-        UUID trip = UUID.randomUUID();
-        // Phase commands and location are not in the checked list, so they must not be 426.
-        postReq("/api/driver/v1/trips/" + trip + "/arrive", "DRIVER_ANDROID", "1.0.0")
-                .andExpect(status().is(401));
-        postReq("/api/driver/v1/trips/" + trip + "/start", "DRIVER_ANDROID", "1.0.0")
-                .andExpect(status().is(401));
-        postReq("/api/driver/v1/trips/" + trip + "/complete", "DRIVER_ANDROID", "1.0.0")
-                .andExpect(status().is(401));
-        postReq("/api/driver/v1/location-batches", "DRIVER_ANDROID", "1.0.0")
-                .andExpect(status().is(401));
+        taxi.blizz.identity.IssuedSession session = sessions.open(
+                new taxi.blizz.identity.VerifiedSubject(driver.actor(), "ACTIVE", false), "phone");
+        String token = session.accessToken();
+        UUID trip = ride.trip().id();
+        mvc.perform(post("/api/driver/v1/trips/" + trip + "/arrive")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-App-Platform", "DRIVER_ANDROID")
+                        .header("X-App-Version", "1.0.0")
+                        .contentType("application/json")
+                        .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"expected_version\":0}"))
+                .andExpect(status().is2xxSuccessful());
+        mvc.perform(post("/api/driver/v1/trips/" + trip + "/start")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-App-Platform", "DRIVER_ANDROID")
+                        .header("X-App-Version", "1.0.0")
+                        .contentType("application/json")
+                        .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"expected_version\":1}"))
+                .andExpect(status().is2xxSuccessful());
+        mvc.perform(post("/api/driver/v1/trips/" + trip + "/complete")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-App-Platform", "DRIVER_ANDROID")
+                        .header("X-App-Version", "1.0.0")
+                        .contentType("application/json")
+                        .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"expected_version\":2,\"reported_at\":\"" + java.time.OffsetDateTime.now() + "\"}"))
+                .andExpect(status().is2xxSuccessful());
     }
 
     @Test
