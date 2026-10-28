@@ -25,6 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 6. Open or update a PR only when the build is green; a PR with a compile error is not ready for review. The reviewer brings `main` in before merging and resolves trivial conflicts himself.
 7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
 8. Do not merge your own PR. Address review comments in new commits on the same branch.
+9. **Do not stop when a step is done; wait for the next one.** After you ask for review, answer a review, or find no open issue with your label, run `scripts/wait-for-work.sh <your label>` (e.g. `grok`). It returns as soon as there is something new for you (a review or comment on your PR, the PR merged or closed, a new or commented issue with your label) and prints what; then start again from step 1. It ends after about nine minutes with nothing new (exit code 2): run it again. Keep the loop going until the person who started you stops you; never end your session with "waiting for review".
 
 ## Done means proven
 
