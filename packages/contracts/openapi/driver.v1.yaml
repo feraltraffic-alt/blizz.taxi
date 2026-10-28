@@ -1005,7 +1005,7 @@ paths:
     post:
       operationId: arriveAtPickup
       summary: I have arrived
-      description: TO_PICKUP → WAITING. The last server-side position must be fresh and within 150 m of the pickup; otherwise PICKUP_TOO_FAR or LOCATION_NOT_FRESH — repeat with exception_reason to confirm, the trip is then flagged for review (REQ-ASG-06).
+      description: TO_PICKUP → WAITING. The last server-side position must be fresh, accurate to 100 m and within 150 m of the pickup; otherwise PICKUP_TOO_FAR, or LOCATION_NOT_FRESH for a stale or inaccurate position — repeat with exception_reason to confirm, the trip is then flagged for review (REQ-ASG-06).
       tags: [Trip]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

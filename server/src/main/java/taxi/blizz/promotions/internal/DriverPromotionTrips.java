@@ -88,6 +88,11 @@ class DriverPromotionTrips implements OutboxHandler {
             if (counted == 0) {
                 continue;
             }
+            // Two trips of the same driver finishing at once must not both see the target reached and both pay
+            // (or both miss it): count and reward under a lock per promotion and driver, held until commit.
+            jdbc.sql("select pg_advisory_xact_lock(hashtextextended(:key, 0))")
+                    .param("key", "driver-promotion:" + p.id() + ":" + trip.driverId())
+                    .query((rs, i) -> 1).single();
             long done = jdbc.sql("""
                             select count(*) from driver_promotion_trip
                             where promotion_id = :p and driver_id = :driver and period_index = :period""")

@@ -188,6 +188,35 @@ class SupportCasesTests {
         assertThat(queue(agent, null).getFirst().priority()).as("urgent first").isEqualTo(Priority.URGENT);
     }
 
+    /** A case without an order has no city: only staff with all cities see or work it (issue #86). */
+    @Test
+    void aCaseWithoutACityIsForStaffWithAllCities() {
+        Actor rider = rides.client();
+        Case noCity = cases.open(rider, UUID.randomUUID(), Category.APP_PROBLEM, null, "App crashes", "On start");
+        assertThat(noCity.cityId()).isNull();
+        QueueFilter cityless = new QueueFilter(null, null, null, null, null, false, null, 100);
+
+        Actor cityAgent = agent();
+        assertCode(() -> cases.get(cityAgent, noCity.id()), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> cases.queue(cityAgent, cityless), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> cases.assign(cityAgent, UUID.randomUUID(), noCity.id(), noCity.version(), cityAgent.id(), "x"),
+                ErrorCode.ACCESS_DENIED);
+
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Support', 'OPERATOR', :permissions, true, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "support-all-" + id)
+                .param("permissions", new String[] {SupportCases.MANAGE_PERMISSION}).update();
+        Actor everywhere = new Actor(SubjectType.STAFF, id);
+        assertThat(cases.get(everywhere, noCity.id()).id()).isEqualTo(noCity.id());
+        assertThat(cases.queue(everywhere, cityless)).extracting(Case::id).contains(noCity.id());
+        assertCode(() -> cases.assign(everywhere, UUID.randomUUID(), noCity.id(), noCity.version(), cityAgent.id(),
+                "x"), ErrorCode.VALIDATION_FAILED);
+        assertThat(cases.assign(everywhere, UUID.randomUUID(), noCity.id(), noCity.version(), everywhere.id(), "mine")
+                .assignedStaffId()).isEqualTo(everywhere.id());
+    }
+
     @Test
     void cashNotReceivedAndFlaggedTripsFeedTheProblemQueuesOnce() {
         Ride unpaid = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);

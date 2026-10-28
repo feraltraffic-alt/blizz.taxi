@@ -135,7 +135,7 @@ class JdbcSupportCases implements SupportCases {
     @Override
     @Transactional(readOnly = true)
     public List<Case> queue(Actor actor, QueueFilter f) {
-        staff.require(actor, MANAGE_PERMISSION, f.cityId());
+        requireCity(actor, f.cityId());
         return jdbc.sql(SELECT + """
                         where city_id is not distinct from :city
                           and (cast(:state as text) is null or state = :state)
@@ -159,7 +159,7 @@ class JdbcSupportCases implements SupportCases {
     @Transactional(readOnly = true)
     public Case get(Actor actor, UUID caseId) {
         Case c = read(caseId);
-        staff.require(actor, MANAGE_PERMISSION, c.cityId());
+        requireCity(actor, c.cityId());
         return c;
     }
 
@@ -171,7 +171,7 @@ class JdbcSupportCases implements SupportCases {
         Case current = authorize(actor, caseId);
         if (assigneeId != null) {
             try {
-                staff.require(new Actor(SubjectType.STAFF, assigneeId), MANAGE_PERMISSION, current.cityId());
+                requireCity(new Actor(SubjectType.STAFF, assigneeId), current.cityId());
             } catch (DomainException noRight) {
                 throw invalid("The assignee cannot work on this case");
             }
@@ -388,11 +388,23 @@ class JdbcSupportCases implements SupportCases {
     private Case authorize(Actor actor, UUID caseId) {
         Case c = jdbc.sql(SELECT + " where id = :id").param("id", caseId).query((rs, i) -> map(rs, List.of()))
                 .optional().orElse(null);
-        staff.require(actor, MANAGE_PERMISSION, c == null ? null : c.cityId());
         if (c == null) {
+            staff.require(actor, MANAGE_PERMISSION);
             throw new DomainException(ErrorCode.NOT_FOUND, "Case not found");
         }
+        requireCity(actor, c.cityId());
         return c;
+    }
+
+    /**
+     * A case of a city needs support access there; a case without a city (no order behind it) is open only to staff
+     * with all cities, since it may belong to any of them (issue #86).
+     */
+    private void requireCity(Actor actor, UUID cityId) {
+        staff.require(actor, MANAGE_PERMISSION, cityId);
+        if (cityId == null && !staff.scope(actor, MANAGE_PERMISSION).allCities()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Cases without a city are for staff with all cities");
+        }
     }
 
     private Case lock(UUID caseId) {
