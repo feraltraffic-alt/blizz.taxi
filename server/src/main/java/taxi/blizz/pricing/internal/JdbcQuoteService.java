@@ -48,9 +48,12 @@ class JdbcQuoteService implements QuoteService {
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
-                     taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits) {
-
+                     taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits,
+                     ObjectProvider<MeterRegistry> meters,
+                     @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes) {
         this.rateLimits = rateLimits;
+        this.meters = meters;
+        this.straightLineQuotes = straightLineQuotes;
         this.promotions = promotions;
         this.zones = zones;
         this.settings = settings;
