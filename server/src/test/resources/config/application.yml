@@ -26,6 +26,13 @@ blizz:
     secrets:
       test: test-merchant-secret-0123456789
     worker-enabled: false
+  rate-limits:
+    # Tests make many requests as one rider or driver; RateLimitTests sets small budgets in its own context.
+    buckets:
+      quote: {max: 100000, window: PT1M}
+      order: {max: 100000, window: PT1M}
+      offer-accept: {max: 100000, window: PT1M}
+      file-upload: {max: 100000, window: PT1M}
   security:
     # Fake Asterisk and GraphHopper servers of the tests listen on this machine.
     outbound-private-hosts: 127.0.0.1,localhost

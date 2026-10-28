@@ -30,6 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class JdbcQuoteService implements QuoteService {
+
+    private final taxi.blizz.platform.RateLimits rateLimits;
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
     private final JsonMapper json;
@@ -41,7 +43,9 @@ class JdbcQuoteService implements QuoteService {
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
-                     taxi.blizz.promotions.RiderPromotions promotions) {
+                     taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits) {
+
+        this.rateLimits = rateLimits;
         this.promotions = promotions;
         this.zones = zones;
         this.settings = settings;
@@ -56,6 +60,8 @@ class JdbcQuoteService implements QuoteService {
     @Transactional(propagation = Propagation.NEVER)
     public Quote create(UUID commandId, Request request) {
         payer(request.payer());
+        // Before the router is asked: a bot must not spend the routing budget (REQ-SEC-03).
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.QUOTE, request.payer());
         if (commandId == null || request.cityId() == null || request.classId() == null
                 || request.pickup() == null || request.dropOff() == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "Incomplete quote request");
