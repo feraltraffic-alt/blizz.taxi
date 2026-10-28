@@ -191,6 +191,7 @@ class AppVersionTests {
                 s.ratings(), s.tips(), s.orders(), av);
     }
 
+    /** staff_user requires state and timestamps (see V5__identity_subjects_and_otp.sql). */
     private Actor staffWithPermission() {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
