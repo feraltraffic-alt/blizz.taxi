@@ -160,6 +160,9 @@ class JdbcOrders implements Orders {
             PaymentMethod method = order.paymentMethod() == PaymentMethod.CARD && wallet == toPay
                     ? PaymentMethod.CASH : order.paymentMethod();
             boolean cardHold = method == PaymentMethod.CARD;
+            if (card && !cardHold) {
+                cardPayments.rememberCard(id, order.payerClientId(), city.id(), quote.currency());
+            }
             OffsetDateTime now = core.now();
             // The quote decided whether this is a pre-order, with the settings in force then (ADR 0006).
             boolean preorder = quote.breakdown().preorder();
@@ -183,14 +186,15 @@ class JdbcOrders implements Orders {
             jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
-                                                        dropoff_label, payment_method, payment_state, price_minor, currency,
+                                                        dropoff_label, payment_method, selected_payment_method,
+                                                        payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
                                                         terminal_fallback_cash, wallet_minor, discount_minor, created_at,
                                                         updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
-                                        :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
+                                        :payment, :selectedPayment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
                                         :releaseAt, :fallback, :wallet, :discount, :now, :now)""")
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
                         .param("status", cardHold ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
@@ -211,6 +215,7 @@ class JdbcOrders implements Orders {
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", method.name())
+                        .param("selectedPayment", order.paymentMethod().name())
                         .param("paymentState", cardHold ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
                         .param("wallet", wallet)
                         .param("discount", quote.discountMinor())

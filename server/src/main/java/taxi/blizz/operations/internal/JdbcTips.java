@@ -58,7 +58,7 @@ class JdbcTips implements Tips {
 
     /** The fulfilled order as the tip sees it. */
     record Trip(UUID orderId, UUID payerId, UUID driverId, String paymentMethod, String currency, long finalMinor,
-                long discountMinor, long walletMinor, OffsetDateTime completedAt) {
+                long discountMinor, long walletMinor, OffsetDateTime completedAt, String selectedPaymentMethod) {
 
         /** What the trip cost the rider: the final fare less the service's discount. */
         long costMinor() {
@@ -98,7 +98,7 @@ class JdbcTips implements Tips {
         long max = max(cost);
         List<Preset> presets = PERCENTS.stream().map(p -> new Preset(p, preset(cost, p))).toList();
         Tip tip = current(orderId).orElse(null);
-        boolean open = tip == null && now().isBefore(until) && max >= UNIT;
+        boolean open = !"SERVICE".equals(trip.paymentMethod()) && tip == null && now().isBefore(until) && max >= UNIT;
         return new Options(orderId, trip.currency(), cost, presets, UNIT, max, method(trip, UNIT), until, open, tip);
     }
 
@@ -120,6 +120,9 @@ class JdbcTips implements Tips {
 
     private Tip leaveInsideCommand(Actor rider, UUID orderId, long amountMinor) {
         Trip trip = trip(rider, orderId, true);
+        if ("SERVICE".equals(trip.paymentMethod())) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "A service-paid follow-up cannot be tipped");
+        }
         if (!now().isBefore(until(trip))) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "The time to leave a tip is over");
         }
@@ -205,10 +208,13 @@ class JdbcTips implements Tips {
      * whose tip comes from the bonus account when it has enough.
      */
     private String method(Trip trip, long amountMinor) {
+        if ("SERVICE".equals(trip.paymentMethod())) {
+            return null;
+        }
         if (trip.paidWithBonuses() && wallets.available(trip.payerId(), trip.currency()) >= amountMinor) {
             return "WALLET";
         }
-        return trip.paymentMethod();
+        return trip.paidWithBonuses() ? trip.selectedPaymentMethod() : trip.paymentMethod();
     }
 
     private OffsetDateTime until(Trip trip) {
@@ -219,7 +225,8 @@ class JdbcTips implements Tips {
     private Trip trip(Actor rider, UUID orderId, boolean lock) {
         Optional<Trip> trip = jdbc.sql("""
                         select o.id, o.payer_client_id, a.driver_id, o.payment_method, o.currency,
-                               o.final_price_minor, o.discount_minor, o.wallet_minor, t.completed_at
+                               o.final_price_minor, o.discount_minor, o.wallet_minor, t.completed_at,
+                               coalesce(o.selected_payment_method, o.payment_method) as selected_payment_method
                         from ride_order o
                         join trip t on t.order_id = o.id and t.phase = 'COMPLETED'
                         join assignment a on a.id = t.assignment_id
@@ -228,7 +235,7 @@ class JdbcTips implements Tips {
                 .param("order", orderId).param("payer", rider.id())
                 .query((rs, i) -> new Trip(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getLong(7),
-                        rs.getLong(8), rs.getObject(9, OffsetDateTime.class)))
+                        rs.getLong(8), rs.getObject(9, OffsetDateTime.class), rs.getString(10)))
                 .optional();
         return trip.orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No fulfilled trip of yours"));
     }

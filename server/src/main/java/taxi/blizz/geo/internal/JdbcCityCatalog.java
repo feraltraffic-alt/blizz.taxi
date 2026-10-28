@@ -1,6 +1,8 @@
 package taxi.blizz.geo.internal;
 
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,13 @@ class JdbcCityCatalog implements CityCatalog {
 
     JdbcCityCatalog(JdbcClient jdbc) {
         this.jdbc = jdbc;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ZoneId> timezone(UUID cityId) {
+        return jdbc.sql("select timezone from city where id = :id").param("id", cityId)
+                .query(String.class).optional().map(ZoneId::of);
     }
 
     @Override
