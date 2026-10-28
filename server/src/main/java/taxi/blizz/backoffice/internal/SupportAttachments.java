@@ -36,7 +36,7 @@ class SupportAttachments {
     record Case(UUID id, long number, UUID cityId, SupportCases.Category category, UUID orderId, String requesterType,
                 UUID requesterId, String subject, SupportCases.Priority priority, SupportCases.State state,
                 UUID assignedStaffId, String resolution, long version, OffsetDateTime createdAt,
-                OffsetDateTime updatedAt, List<Message> messages) {
+                OffsetDateTime updatedAt, OffsetDateTime respondBy, List<Message> messages) {
     }
 
     private final JdbcClient jdbc;
@@ -101,7 +101,7 @@ class SupportAttachments {
         return new Case(source.id(), source.number(), source.cityId(), source.category(), source.orderId(),
                 source.requesterType(), source.requesterId(), source.subject(), source.priority(), source.state(),
                 source.assignedStaffId(), source.resolution(), source.version(), source.createdAt(), source.updatedAt(),
-                messages);
+                source.respondBy(), messages);
     }
 
     @Transactional(readOnly = true)

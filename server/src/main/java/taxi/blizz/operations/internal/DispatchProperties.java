@@ -25,6 +25,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param noShowMinimumWait    a no-show can be reported only after waiting this long (REQ-CAN-06; value per Q-07)
  * @param journalRetention     how long the rounds of the dispatch journal are kept (REQ-DSP-12, issue #71)
  * @param journalCandidates    drivers recorded per round, nearest first
+ * @param lostDriverAfter      a driver on an order whose last position is older than this is reported lost, once
+ *                             per assignment, to the problem queue (REQ-OPS-06)
  */
 @ConfigurationProperties("blizz.dispatch")
 public record DispatchProperties(
@@ -43,5 +45,6 @@ public record DispatchProperties(
         @DefaultValue("PT5M") Duration reportedTimeTolerance,
         @DefaultValue("PT5M") Duration noShowMinimumWait,
         @DefaultValue("P90D") Duration journalRetention,
-        @DefaultValue("50") int journalCandidates) {
+        @DefaultValue("50") int journalCandidates,
+        @DefaultValue("PT3M") Duration lostDriverAfter) {
 }

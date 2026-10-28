@@ -24,10 +24,12 @@ class PaymentsConfiguration {
 
         private final PaymentWorker worker;
         private final JdbcCardTopUps topUps;
+        private final UnknownPayments unknown;
 
-        WorkerSchedule(PaymentWorker worker, JdbcCardTopUps topUps) {
+        WorkerSchedule(PaymentWorker worker, JdbcCardTopUps topUps, UnknownPayments unknown) {
             this.worker = worker;
             this.topUps = topUps;
+            this.unknown = unknown;
         }
 
         @org.springframework.scheduling.annotation.Scheduled(
@@ -35,6 +37,7 @@ class PaymentsConfiguration {
         void poll() {
             worker.runOnce();
             topUps.reconcile();
+            unknown.report();
         }
     }
 

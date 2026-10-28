@@ -39,13 +39,24 @@ class CardHoldOutcome implements OutboxHandler {
     @Override
     public boolean supports(String eventType) {
         return CardPayments.HOLD_AUTHORIZED.equals(eventType) || CardPayments.HOLD_DECLINED.equals(eventType)
-                || CardPayments.PAYMENT_SETTLED.equals(eventType);
+                || CardPayments.PAYMENT_SETTLED.equals(eventType)
+                || taxi.blizz.payments.PaymentOperations.DEBT_PAID.equals(eventType);
     }
 
     @Override
     public void handle(OutboxMessage message) {
         Hold hold = json.readValue(message.payload(), Hold.class);
         OrderCore.LockedOrder order = core.lockOrder(hold.orderId());
+        if (taxi.blizz.payments.PaymentOperations.DEBT_PAID.equals(message.type())) {
+            // A staff member's retry took the rest of the fare (REQ-PAY-14).
+            if ("PARTIALLY_PAID".equals(core.paymentState(order.id())) && hold.paidMinor() != null
+                    && hold.dueMinor() != null && hold.paidMinor() >= hold.dueMinor()) {
+                core.setPaymentState(order.id(), "PAID");
+                core.recordEvent(order.id(), core.touch(order.id()), "OrderDebtPaid", OrderCore.system(), null,
+                        Map.of("paid_minor", hold.paidMinor(), "due_minor", hold.dueMinor()));
+            }
+            return;
+        }
         if (CardPayments.PAYMENT_SETTLED.equals(message.type())) {
             if ("PAID".equals(core.paymentState(order.id())) || "PARTIALLY_PAID".equals(core.paymentState(order.id()))) {
                 return; // a repeated delivery

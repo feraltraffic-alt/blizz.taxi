@@ -48,6 +48,18 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **for every write path, ask "what if two come at once" and "what if it comes late".**
 - **Habit:** **never quote a test result you have not seen.** Run it, and check that it fails on the line and for the reason you claim.
 
+## 7. A side check that can break the main path (PR #97, issue #96)
+
+- **Task:** count orders, offers, exclusions and SMS for monitoring, with bounded labels.
+- **Handed in:** strong tests (red first, then green) and an honest "sandbox not finished yet". Still three problems.
+- **Missed:**
+  - An unknown label value threw an exception inside the order transaction. The first new exclusion reason would have stopped dispatch, not just the metric.
+  - The sandbox check printed its error to stderr, so the red run explained nothing, to the author or to the reviewer.
+  - A new transaction was opened around a network call to the SMS provider, holding a second database connection for seconds per sign-in.
+- **Habit:** **observability never fails the business.** Metrics, logs and traces map the unexpected to `OTHER` and warn; they never throw into the work they observe.
+- **Habit:** **a check's failure must be readable in the evidence.** Send its errors to the transcript or the PR.
+- **Habit:** **no transaction around a network call.** Call outside, then write the result in a short transaction.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

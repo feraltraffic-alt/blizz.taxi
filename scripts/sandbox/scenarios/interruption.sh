@@ -62,4 +62,12 @@ api GET /api/rider/v1/orders "$RIDER" >/dev/null; expect 200
 sleep 3
 api GET /api/driver/v1/balance "$OLEH" >/dev/null; expect 200
 api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR" >/dev/null; expect 200
+trap 'go_offline "$IVAN"; go_offline "$OLEH"' EXIT
+say "A service-paid follow-up cannot be tipped"
+TIPS=$(api GET "/api/rider/v1/orders/$FOLLOW_UP/tip" "$RIDER"); expect 200
+[[ "$(jq -r .open <<<"$TIPS")" == false && "$(jq -r .method <<<"$TIPS")" == null ]]
+REJECTED=$(api POST "/api/rider/v1/orders/$FOLLOW_UP/tip" "$RIDER" \
+  "{\"command_id\":\"$(uuid)\",\"amount_minor\":100}")
+expect 409
+[[ "$(jq -r .code <<<"$REJECTED")" == STATE_CONFLICT ]]
 note "Done: interrupted $ORDER, follow-up $FOLLOW_UP."

@@ -11,7 +11,9 @@ components:
   schemas:
     Category:
       type: string
-      enum: [LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER]
+      enum: [LOST_ITEM, PAYMENT, CASH_DISPUTE, DRIVER_BEHAVIOUR, RIDER_BEHAVIOUR, SAFETY, TRIP_REVIEW, APP_PROBLEM, OTHER, NO_DRIVER,
+             LOST_CONNECTION, PAYMENT_UNKNOWN]
+      description: TRIP_REVIEW, NO_DRIVER, LOST_CONNECTION and PAYMENT_UNKNOWN are opened by the system only (REQ-OPS-06).
     Priority:
       type: string
       enum: [LOW, NORMAL, HIGH, URGENT]
@@ -123,7 +125,8 @@ components:
     Case:
       type: object
       additionalProperties: false
-      required: [id, number, category, requester_type, subject, priority, state, version, created_at, updated_at, messages]
+      required: [id, number, category, requester_type, subject, priority, state, respond_by, version, created_at, updated_at,
+                 messages]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -158,6 +161,9 @@ components:
           format: uuid
         resolution:
           type: [string, "null"]
+        respond_by:
+          description: When the first answer is due, from the priority (URGENT 5 min, HIGH 15 min, NORMAL 4 h, LOW 24 h after the case was opened; REQ-OPS-06).
+          $ref: "./common.yaml#/components/schemas/Timestamp"
         version:
           type: integer
           format: int64
@@ -187,7 +193,7 @@ components:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         category:
-          description: Any category except TRIP_REVIEW (system only). SAFETY cases start URGENT.
+          description: Any category except the system-only ones (TRIP_REVIEW, NO_DRIVER, LOST_CONNECTION, PAYMENT_UNKNOWN). SAFETY cases start URGENT.
           $ref: "#/components/schemas/Category"
         order_id:
           description: One of the requester's own orders (rider) or trips (driver).

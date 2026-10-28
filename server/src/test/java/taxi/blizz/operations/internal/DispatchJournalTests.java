@@ -41,6 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class DispatchJournalTests {
 
     static final String AREA = "SRID=4326;MULTIPOLYGON(((112 -40,113 -40,113 -39,112 -39,112 -40)))";
@@ -55,7 +56,7 @@ class DispatchJournalTests {
     WorkSessions sessions;
     @Autowired
     DispatchWorker worker;
-    @Autowired
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     OrderCore core;
     @Autowired
     JdbcDispatchJournal journal;
@@ -172,6 +173,73 @@ class DispatchJournalTests {
     private Map<UUID, String> reasons(UUID orderId) {
         return core.explain(orderId, 5000, 50).stream().collect(Collectors.toMap(OrderCore.Considered::driverId,
                 c -> c.reason() == null ? "OK" : c.reason()));
+    }
+
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean OrderMetrics metricEvents;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"channel,FUTURE_VALUE", "by,FUTURE_VALUE", "source,FUTURE_VALUE",
+            "outcome,FUTURE_VALUE", "reason,FUTURE_VALUE", "reason,+380671234567", "reason,12345678-abcd-abcd-abcd-123456789abc"})
+    void unknownLabelsBecomeOtherAndDoNotRollbackTheBusiness(String label, String future,
+            org.springframework.boot.test.system.CapturedOutput output) {
+        String name = switch (label) {
+            case "channel" -> "blizz.orders.created";
+            case "by" -> "blizz.orders.cancelled";
+            case "source" -> "blizz.dispatch.assigned";
+            case "outcome" -> "blizz.offers";
+            default -> "blizz.dispatch.excluded";
+        };
+        double before = observation(name, label);
+        Actor payer = client();
+        Driver driver = label.equals("channel") || label.equals("by") ? null : driverAt(north(100));
+        switch (label) {
+            case "channel" -> org.mockito.Mockito.doAnswer(i -> {
+                metricEvents.created(future, i.getArgument(1)); return null;
+            }).when(metricEvents).created(org.mockito.ArgumentMatchers.eq("APP"), org.mockito.ArgumentMatchers.anyBoolean());
+            case "by" -> org.mockito.Mockito.doAnswer(i -> {
+                metricEvents.cancelled(future, i.getArgument(1)); return null;
+            }).when(metricEvents).cancelled(org.mockito.ArgumentMatchers.eq("RIDER"), org.mockito.ArgumentMatchers.anyString());
+            case "source" -> org.mockito.Mockito.doAnswer(i -> {
+                Map<String, Object> payload = new java.util.LinkedHashMap<>(i.getArgument(2));
+                payload.put("source", future);
+                metricEvents.event(i.getArgument(0), "AssignmentCommitted", payload); return null;
+            }).when(metricEvents).event(org.mockito.ArgumentMatchers.any(UUID.class),
+                    org.mockito.ArgumentMatchers.eq("AssignmentCommitted"),
+                    org.mockito.ArgumentMatchers.argThat(p -> p != null && "OFFER".equals(p.get("source"))));
+            case "outcome" -> org.mockito.Mockito.doAnswer(i -> {
+                metricEvents.offer(future); return null;
+            }).when(metricEvents).offer(org.mockito.ArgumentMatchers.eq("DECLINED"));
+            case "reason" -> org.mockito.Mockito.doReturn(List.of(new OrderCore.Considered(driver.id(), 100, future)))
+                    .when(core).explain(org.mockito.ArgumentMatchers.any(UUID.class),
+                            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+            default -> throw new AssertionError(label);
+        }
+        UUID quote = new TestQuotes(jdbc, quoteService).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF).id();
+        UUID id = tx.execute(status -> {
+            OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP,
+                    "Pickup", DROPOFF, "Dropoff", PaymentMethod.CASH, quote));
+            if (label.equals("by")) orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
+            if (label.equals("source")) dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+            if (label.equals("outcome")) dispatch.reject(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+            assertThat(observation(name, label)).isEqualTo(before);
+            return order.id();
+        });
+        assertThat(orders.get(id).status()).isEqualTo(label.equals("by") ? "CANCELLED" : label.equals("source") ? "ASSIGNED" : "SEARCHING");
+        assertThat(observation(name, label)).isEqualTo(before + 1);
+        assertThat(output.getOut()).contains(name, "OTHER");
+        if (future.equals("FUTURE_VALUE")) assertThat(output.getOut()).contains(future);
+        else assertThat(output.getOut()).doesNotContain(future).contains("REDACTED");
+    }
+
+    private double observation(String name, String label) {
+        if (label.equals("source")) {
+            var timer = meters.find(name).tag(label, "OTHER").timer();
+            return timer == null ? 0 : timer.count();
+        }
+        var counter = meters.find(name).tag(label, "OTHER").counter();
+        return counter == null ? 0 : counter.count();
     }
 
     // ------------------------------------------------------------ reasons

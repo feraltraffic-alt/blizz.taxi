@@ -6,8 +6,9 @@ import taxi.blizz.platform.Actor;
 /**
  * A rider's or driver's phone change (REQ-AUTH-08). By the person: a code to the current phone and one to the new
  * phone, both needed, so neither a stolen session nor a stolen SIM alone moves the account. The other sessions end.
- * When the old phone is lost: support sets the new phone with a reason, audited; every session ends and the person
- * signs in with the new phone, which proves it. Accounts are never merged: a phone of another account is refused.
+ * When the old phone is lost: support sends a code to the new phone, the person tells it, and support sets the phone
+ * with the code and a reason (owner decision 28.10.2026: no change without a code to the new phone), audited; every
+ * session ends. Accounts are never merged: a phone of another account is refused.
  */
 public interface PhoneChanges {
 
@@ -31,9 +32,16 @@ public interface PhoneChanges {
                    UUID newChallengeId, String newCode);
 
     /**
-     * Support, when the old phone is lost: {@code clients.manage} for a rider, {@link #DRIVER_PHONE_PERMISSION} for a
-     * driver. Reason required, audited with masked numbers; every session of the account ends.
+     * Support, step one: a code of purpose NEW_PHONE to the new phone of the person (who reads it to support). Same
+     * rights as {@link #changeBySupport}.
      */
-    Changed changeBySupport(Actor staff, UUID commandId, Actor subject, long expectedVersion, String rawNewPhone,
-                            String reason);
+    ChallengeIssued codeToNewBySupport(Actor staff, Actor subject, String rawNewPhone, String clientIp);
+
+    /**
+     * Support, when the old phone is lost: {@code clients.manage} for a rider, {@link #DRIVER_PHONE_PERMISSION} for a
+     * driver. The code sent by {@link #codeToNewBySupport} proves the new phone; reason required, audited with masked
+     * numbers; every session of the account ends.
+     */
+    Changed changeBySupport(Actor staff, UUID commandId, Actor subject, long expectedVersion, UUID newChallengeId,
+                            String newCode, String reason);
 }

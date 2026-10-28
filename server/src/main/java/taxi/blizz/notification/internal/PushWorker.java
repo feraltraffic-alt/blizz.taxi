@@ -72,8 +72,9 @@ class PushWorker {
         List<Claimed> claimed = tx.execute(status -> jdbc.sql("""
                         with due as (
                             select id from notification
-                            where (state = 'PENDING' and next_attempt_at <= :now)
-                               or (state = 'SENDING' and lease_until < :now)
+                            where channel = 'PUSH'
+                              and ((state = 'PENDING' and next_attempt_at <= :now)
+                                   or (state = 'SENDING' and lease_until < :now))
                             order by next_attempt_at limit :limit
                             for update skip locked)
                         update notification n

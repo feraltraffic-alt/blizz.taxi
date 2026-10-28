@@ -94,22 +94,43 @@ class JdbcPhoneChanges implements PhoneChanges {
                 });
     }
 
-    record SupportCommand(UUID subjectId, String subjectType, long expectedVersion, String phone, String reason) {
+    record SupportCommand(UUID subjectId, String subjectType, long expectedVersion, UUID newChallengeId,
+                          String newCode, String reason) {
+    }
+
+    private void requireSupport(Actor actor, Actor subject) {
+        requirePerson(subject);
+        staff.require(actor, subject.type() == SubjectType.CLIENT ? ClientAccounts.MANAGE_PERMISSION
+                : DRIVER_PHONE_PERMISSION);
+    }
+
+    @Override
+    public ChallengeIssued codeToNewBySupport(Actor actor, Actor subject, String rawNewPhone, String clientIp) {
+        requireSupport(actor, subject);
+        PhoneNumber phone = PhoneNumber.parse(rawNewPhone);
+        if (phone.e164().equals(jdbc.sql("select phone_normalized from " + table(subject) + " where id = :id")
+                .param("id", subject.id()).query(String.class).optional().orElse(null))) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "This is already the account's phone");
+        }
+        audit.record(new AuditEntry(actor, "phone.code_by_support", table(subject), subject.id().toString(),
+                "A code to the new phone, for a change by support", Map.of(), Map.of("phone", phone.masked())));
+        return otp.requestForNewPhone(subject, phone.e164(), "support:" + actor.id(), clientIp);
     }
 
     @Override
     public Changed changeBySupport(Actor actor, UUID commandId, Actor subject, long expectedVersion,
-                                   String rawNewPhone, String reason) {
-        requirePerson(subject);
-        staff.require(actor, subject.type() == SubjectType.CLIENT ? ClientAccounts.MANAGE_PERMISSION
-                : DRIVER_PHONE_PERMISSION);
+                                   UUID newChallengeId, String newCode, String reason) {
+        requireSupport(actor, subject);
         if (blank(reason)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
         }
-        PhoneNumber phone = PhoneNumber.parse(rawNewPhone);
+        if (newChallengeId == null || blank(newCode)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The code sent to the new phone is required");
+        }
         String why = reason.strip();
         return commands.execute(new CommandKey(actor, "phone.change_by_support", commandId),
-                new SupportCommand(subject.id(), subject.type().name(), expectedVersion, phone.e164(), why),
+                new SupportCommand(subject.id(), subject.type().name(), expectedVersion, newChallengeId,
+                        newCode.strip(), why),
                 Changed.class, () -> {
                     Account before = lock(subject);
                     if (before.version() != expectedVersion) {
@@ -118,8 +139,11 @@ class JdbcPhoneChanges implements PhoneChanges {
                     if ("ANONYMIZED".equals(before.state())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "The account is anonymized");
                     }
+                    // After the account checks, so a stale version does not use the code up. Checked in its own
+                    // transaction: a wrong code counts as an attempt even though this fails.
+                    PhoneNumber phone = otp.confirmNewPhone(subject, newChallengeId, newCode);
                     Changed changed = write(subject, before, phone);
-                    // The new phone is proved by the next sign-in; nobody keeps a session opened with the old one.
+                    // Nobody keeps a session opened with the old phone.
                     sessions.revokeAll(subject, "PHONE_CHANGED_BY_SUPPORT");
                     audit.record(new AuditEntry(actor, "phone.change_by_support", table(subject),
                             subject.id().toString(), why, Map.of("phone", before.phone().masked()),

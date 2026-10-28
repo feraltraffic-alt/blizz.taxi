@@ -37,6 +37,15 @@ class ProblemQueues implements OutboxHandler {
     record StaffSuspended(UUID staffId) {
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CallerNotNotified(UUID orderId, String template, String outcome) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record OrderProblem(UUID orderId, UUID assignmentId, String phase, String lastSeenAt, UUID operationId,
+                        String type, Long amountMinor, String currency, Long paidMinor, Long dueMinor) {
+    }
+
     @Override
     public String consumerId() {
         return "backoffice.problem-queues";
@@ -44,11 +53,36 @@ class ProblemQueues implements OutboxHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return "TripCompleted".equals(eventType) || "StaffSuspended".equals(eventType);
+        return switch (eventType) {
+            case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue" -> true;
+            default -> false;
+        };
     }
 
     @Override
     public void handle(OutboxMessage message) {
+        if (problem(message)) {
+            return;
+        }
+        if ("CashDisputeOverdue".equals(message.type())) {
+            OrderProblem p = json.readValue(message.payload(), OrderProblem.class);
+            UUID orderId = p.orderId() != null ? p.orderId() : message.aggregateId();
+            // Owner decision 28.10.2026: past the deadline nothing moves by itself; a manager decides.
+            cases.openFromSystem("cash-dispute-overdue:" + orderId, cityOf(orderId), Category.CASH_DISPUTE, orderId,
+                    "A cash dispute was not decided in time", Priority.URGENT,
+                    "The driver reported the fare as not paid and nobody decided within 14 days. Decide it in the"
+                            + " order's cash dispute: the rider paid, pay the driver, or keep the held part.");
+            return;
+        }
+        if ("CallerNotNotified".equals(message.type())) {
+            // REQ-NTF-08: a phone order's caller the SMS did not reach is called by a dispatcher. One task per order.
+            CallerNotNotified event = json.readValue(message.payload(), CallerNotNotified.class);
+            cases.openFromSystem("caller-not-notified:" + event.orderId(), orders.get(event.orderId()).cityId(),
+                    Category.OTHER, event.orderId(), "Phone order: call the caller, the SMS did not reach them",
+                    Priority.HIGH, "SMS " + event.template() + " " + event.outcome());
+            return;
+        }
         if ("StaffSuspended".equals(message.type())) {
             StaffSuspended event = json.readValue(message.payload(), StaffSuspended.class);
             cases.returnToQueue(event.staffId(), "Returned to the queue: the owner was suspended");
@@ -75,5 +109,55 @@ class ProblemQueues implements OutboxHandler {
                     "The arrival or the start was confirmed with an exception, or the completion time differs from the"
                             + " server time. Check the order timeline.");
         }
+    }
+
+    /**
+     * The rest of the problem queues (REQ-OPS-06): no driver found, the driver lost during the order, a card
+     * operation's result still unknown, a card fare left partly unpaid. One case per problem, redelivery included.
+     */
+    private boolean problem(OutboxMessage message) {
+        String type = message.type();
+        if (!java.util.Set.of("OrderUnfulfilled", "DriverLostDuringOrder", "PaymentResultUnknown",
+                "CardPaymentSettled").contains(type)) {
+            return false;
+        }
+        OrderProblem p = json.readValue(message.payload(), OrderProblem.class);
+        UUID orderId = p.orderId() != null ? p.orderId() : message.aggregateId();
+        switch (type) {
+            case "OrderUnfulfilled" -> cases.openFromSystem("no-driver:" + orderId, cityOf(orderId),
+                    Category.NO_DRIVER, orderId, "No driver was found for the order", Priority.NORMAL,
+                    "The search ended without a driver. Call back if it was a phone order or the rider asks.");
+            case "DriverLostDuringOrder" -> {
+                boolean riding = "IN_PROGRESS".equals(p.phase());
+                cases.openFromSystem("lost-driver:" + p.assignmentId() + ":" + (p.lastSeenAt() == null ? "never"
+                        : p.lastSeenAt()), cityOf(orderId), Category.LOST_CONNECTION,
+                        orderId, riding ? "The driver is not heard from during the ride"
+                                : "The assigned driver is not heard from", riding ? Priority.URGENT : Priority.HIGH,
+                        "No position from the driver since " + (p.lastSeenAt() == null ? "the session ended"
+                                : p.lastSeenAt()) + " (phase " + p.phase() + "). Call the driver"
+                                + (riding ? " and the rider" : "") + "; take the order off the driver if needed.");
+            }
+            case "PaymentResultUnknown" -> cases.openFromSystem("payment-unknown:" + p.operationId(),
+                    cityOf(orderId), Category.PAYMENT_UNKNOWN, orderId,
+                    "A card operation's result is still unknown", Priority.HIGH,
+                    p.type() + " of " + p.amountMinor() + " " + p.currency() + " minor units: the provider has not "
+                            + "answered. It is still being asked; never charge again by hand before it is known.");
+            default -> {
+                // CardPaymentSettled: only the payment's own event counts, and only when part of the fare is unpaid.
+                if (!"PaymentIntent".equals(message.aggregateType()) || p.paidMinor() == null || p.dueMinor() == null
+                        || p.paidMinor() >= p.dueMinor()) {
+                    return true;
+                }
+                cases.openFromSystem("card-debt:" + orderId, cityOf(orderId), Category.PAYMENT, orderId,
+                        "The card did not cover the fare", Priority.HIGH,
+                        "Paid " + p.paidMinor() + " of " + p.dueMinor() + " minor units; the rest is the rider's debt."
+                                + " A declined charge can be retried by hand (payments.retry) once the rider agrees.");
+            }
+        }
+        return true;
+    }
+
+    private UUID cityOf(UUID orderId) {
+        return orders.get(orderId).cityId();
     }
 }

@@ -33,6 +33,10 @@ public interface CardPayments {
     UUID requestHold(UUID orderId, UUID clientId, UUID cityId, long amountMinor, String currency,
                      OffsetDateTime holdUntil);
 
+    /** Within the caller's transaction: retain an available saved card for tips when bonuses pay the whole fare.
+     * No hold or other provider operation is requested; no card is required for a zero card obligation. */
+    void rememberCard(UUID orderId, UUID clientId, UUID cityId, String currency);
+
     /**
      * Within the caller's transaction: the order no longer needs the money. A hold is released; a hold still being
      * asked for is released as soon as it succeeds (T-23). Nothing happens when there is no hold.

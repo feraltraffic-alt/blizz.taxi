@@ -127,7 +127,9 @@ components:
             web_key:
               type: [string, "null"]
         app_versions:
-          description: Per-platform version policy (REQ-API-10). Null until staff set it.
+          description: >-
+            Per-platform version policy (REQ-API-10): below minimum_version the app must update, below
+            latest_version it may. "0.0.0" means no policy.
           type: [object, "null"]
           additionalProperties: false
           properties:
@@ -249,9 +251,10 @@ components:
           minimum: 15
           maximum: 1440
         max_days_ahead:
+          description: Two weeks at most (owner decision 28.10.2026).
           type: integer
           minimum: 1
-          maximum: 30
+          maximum: 14
         dispatch:
           type: string
           enum: [RESERVATION, BROADCAST_BEFORE]

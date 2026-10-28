@@ -2,6 +2,7 @@ package taxi.blizz.configuration.internal;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.web.servlet.HandlerInterceptor;
 import taxi.blizz.configuration.ServiceSettings;
@@ -10,13 +11,28 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.UpgradeRequiredException;
 
 /**
- * Checks {@code X-App-Platform} and {@code X-App-Version} (REQ-API-10).
- * An outdated or missing (when required) version is refused only on the four actions that start
- * new work. Everything else, including trip commands, heartbeats and location, still works.
+ * App version and forced update (REQ-API-10). Only the four actions that start new work are checked: a rider's quote
+ * and order, a driver going online and accepting an offer. An app below its platform's minimum gets 426
+ * UPGRADE_REQUIRED there. Everything else, a trip under way included, never looks at the version, so an outdated app
+ * finishes what it started. On a checked action a malformed version or a platform of the other app is 400; a missing
+ * header passes unless staff require it.
  */
 class AppVersionInterceptor implements HandlerInterceptor {
 
-    private static final Pattern VERSION = Pattern.compile("^[0-9]+\\.[0-9]+\\.[0-9]+$");
+    static final String PLATFORM = "X-App-Platform";
+    static final String VERSION_HEADER = "X-App-Version";
+    private static final Pattern VERSION = Pattern.compile("^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}$");
+    private static final Pattern ACCEPT = Pattern.compile("^/api/driver/v1/offers/[^/]+/accept$");
+
+    private enum App {
+        RIDER(Set.of("RIDER_ANDROID", "RIDER_IOS")), DRIVER(Set.of("DRIVER_ANDROID", "DRIVER_IOS"));
+
+        final Set<String> platforms;
+
+        App(Set<String> platforms) {
+            this.platforms = platforms;
+        }
+    }
 
     private final ServiceSettings settings;
 
@@ -26,63 +42,59 @@ class AppVersionInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        String path = request.getRequestURI();
-        String method = request.getMethod();
-        if (path.startsWith("/api/admin/") || path.startsWith("/api/operator/") || path.startsWith("/api/config/")) {
+        App app = checked(request.getMethod(), request.getRequestURI());
+        if (app == null) {
             return true;
         }
-        boolean checked = isChecked(path, method);
         ServiceSettings.AppVersions policy = settings.current().settings().appVersions();
-        System.err.println("AppVersionInterceptor: " + method + " " + path + " checked=" + checked
-                + " policy=" + (policy == null ? "null" : policy.driverAndroid()));
-        String platform = request.getHeader("X-App-Platform");
-        String version = request.getHeader("X-App-Version");
-        if (!checked) {
-            return true;
-        }
-        if (version != null && !VERSION.matcher(version).matches()) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "X-App-Version must be MAJOR.MINOR.PATCH");
-        }
-        if (platform == null && version == null) {
-            if (policy != null && policy.requireVersionHeader()) {
-                throw new UpgradeRequiredException("0.0.0");
+        String platform = request.getHeader(PLATFORM);
+        String version = request.getHeader(VERSION_HEADER);
+        if (platform == null || version == null) {
+            if (policy.requireVersionHeader()) {
+                throw new UpgradeRequiredException(highestMinimum(policy, app));
             }
             return true;
         }
-        if (platform == null || version == null) {
-            return true;
+        if (!VERSION.matcher(version).matches()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, VERSION_HEADER + " must be MAJOR.MINOR.PATCH");
         }
-        ServiceSettings.PlatformVersions pv = platformOf(policy, platform);
-        if (pv == null || pv.minimumVersion() == null) {
-            return true;
+        if (!app.platforms.contains(platform)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, PLATFORM + " must be one of " + app.platforms);
         }
-        if (JdbcServiceSettings.compareVersions(version, pv.minimumVersion()) < 0) {
-            throw new UpgradeRequiredException(pv.minimumVersion());
+        String minimum = of(policy, platform).minimumVersion();
+        if (JdbcServiceSettings.compareVersions(version, minimum) < 0) {
+            throw new UpgradeRequiredException(minimum);
         }
         return true;
     }
 
-    /** Exactly the four actions that start new work. */
-    private static boolean isChecked(String path, String method) {
+    /** Exactly the four actions that start new work; null for everything else. */
+    private static App checked(String method, String path) {
         if (!"POST".equals(method)) {
-            return false;
-        }
-        return path.equals("/api/rider/v1/quotes")
-                || path.equals("/api/rider/v1/orders")
-                || path.equals("/api/driver/v1/work-sessions")
-                || path.matches("/api/driver/v1/offers/[^/]+/accept");
-    }
-
-    private static ServiceSettings.PlatformVersions platformOf(ServiceSettings.AppVersions policy, String platform) {
-        if (policy == null) {
             return null;
         }
+        if (path.equals("/api/rider/v1/quotes") || path.equals("/api/rider/v1/orders")) {
+            return App.RIDER;
+        }
+        if (path.equals("/api/driver/v1/work-sessions") || ACCEPT.matcher(path).matches()) {
+            return App.DRIVER;
+        }
+        return null;
+    }
+
+    private static ServiceSettings.PlatformVersions of(ServiceSettings.AppVersions policy, String platform) {
         return switch (platform) {
             case "RIDER_ANDROID" -> policy.riderAndroid();
             case "RIDER_IOS" -> policy.riderIos();
             case "DRIVER_ANDROID" -> policy.driverAndroid();
-            case "DRIVER_IOS" -> policy.driverIos();
-            default -> null;
+            default -> policy.driverIos();
         };
+    }
+
+    /** Without the headers the platform is unknown: the higher of the app's two minimums is what it needs. */
+    private static String highestMinimum(ServiceSettings.AppVersions policy, App app) {
+        String a = app == App.RIDER ? policy.riderAndroid().minimumVersion() : policy.driverAndroid().minimumVersion();
+        String b = app == App.RIDER ? policy.riderIos().minimumVersion() : policy.driverIos().minimumVersion();
+        return JdbcServiceSettings.compareVersions(a, b) >= 0 ? a : b;
     }
 }

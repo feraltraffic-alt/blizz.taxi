@@ -43,6 +43,10 @@ class CardPaymentPosting implements OutboxHandler {
 
     @Override
     public void handle(OutboxMessage message) {
+        // The order records an event of the same name in its own history (aggregate Order); only the payment's counts.
+        if (!"PaymentIntent".equals(message.aggregateType())) {
+            return;
+        }
         Settled s = json.readValue(message.payload(), Settled.class);
         if (s.paidMinor() <= 0) {
             return;

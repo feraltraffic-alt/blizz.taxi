@@ -10,7 +10,12 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 ## How to work
 
-1. Take only work from a GitHub issue assigned to you. If something is unclear, ask in the issue instead of guessing.
+1. Take only work from a GitHub issue meant for you: open issues with your label (`codex`, `grok`). **At every start, without waiting to be told:**
+   1. first answer the reviews of your open PRs (new comments since your last commit);
+   2. then continue your open issue;
+   3. when none is left, take the oldest open issue with your label.
+
+   Say in the issue that you took it. The lead writes issues and reviews in GitHub and does not repeat them elsewhere, so GitHub is where you read your work. If something is unclear, ask in the issue instead of guessing.
 2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex, `claude2` for the second Claude and `grok` for Grok. Never push to `main`.
 3. Keep a pull request to one concern and under ~400 changed lines where possible.
 4. Before opening the PR, run what CI runs:
@@ -20,6 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 6. Open or update a PR only when the build is green; a PR with a compile error is not ready for review. The reviewer brings `main` in before merging and resolves trivial conflicts himself.
 7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
 8. Do not merge your own PR. Address review comments in new commits on the same branch.
+9. **Do not stop when a step is done; wait for the next one.** After you ask for review, answer a review, or find no open issue with your label, run `scripts/wait-for-work.sh <your label>` (e.g. `grok`). It returns as soon as there is something new for you (a review or comment on your PR, the PR merged or closed, a new or commented issue with your label) and prints what; then start again from step 1. It ends after about nine minutes with nothing new (exit code 2): run it again. Keep the loop going until the person who started you stops you; never end your session with "waiting for review".
 
 ## Done means proven
 
@@ -58,7 +64,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - Do not make an existing request field required. A new field in a request is optional with a default, so current clients keep working.
 - JSON in tests (request bodies, `jsonb` literals read through the application's mapper) uses `snake_case`: the global mapper reads nothing else, and a camelCase key is silently ignored.
 - A test of time-based behaviour sets the state it depends on (e.g. backdates a period start); it never assumes "now" is far enough from the boundary.
-- Push a commit only after the build of step 4 passes locally. A series of tiny commits each waiting for CI is slower than one green one.
+- Push a commit only after the build of step 4 passes locally. A series of tiny commits each waiting for CI is slower than one green one. **Without Docker** (the PostgreSQL tests cannot run): compile and run everything that can run, push the branch, and let CI run the database tests. Open the PR, or say "done", only when that CI is green, and write in the PR which checks ran locally and which only in CI.
 - Simple class names of Spring beans are unique across the whole application, not only within a module: Spring names a bean after its simple class name, so two `AnonymizedClients` in different modules break the context. Prefix them with what they handle (`AnonymizedClientCards`, `AnonymizedClientWallet`).
 - When you change what a shared method means (e.g. `Orders.active()` once multiple orders exist), grep every caller and check that each still wants the new meaning; fix or switch the ones that do not.
 - Texts a person receives (SMS, pushes, voice, e-mails) are in that person's language, or the language of their number's country when the person is not known; never one string for everybody — the markets are Poland and Ukraine.
@@ -72,6 +78,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - No foreign key to another module's table, also in a brand-new table: check every `references` in a migration (`driver_risk_flag` once pointed at `driver`).
 - A sandbox scenario that changes shared sandbox data (drivers online, an order searching, a suspended driver, a legal text in force) restores it in a `trap … EXIT`, so a failure does not break the scenarios after it.
 - A time sent by a phone is compared with a server time with a tolerance: phones send whole seconds and keep their own clock.
+- Metrics, logs and traces never fail the operation they observe: an unexpected label value becomes `OTHER` with a warning, never an exception in the business transaction.
+- No database transaction is held open around a call to an outside provider (SMS, payments, maps): call first, then record the result in a short transaction.
 
 ## Trying the system by hand
 

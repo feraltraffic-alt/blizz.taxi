@@ -46,6 +46,30 @@ class JdbcCardPayments implements CardPayments {
     @Transactional(propagation = Propagation.MANDATORY)
     public UUID requestHold(UUID orderId, UUID clientId, UUID cityId, long amountMinor, String currency,
                             OffsetDateTime holdUntil) {
+        UUID intentId = createIntent(orderId, clientId, cityId, amountMinor, currency, holdUntil, "AUTH_PENDING");
+        UUID operationId = UUID.randomUUID();
+        createOperation(operationId, intentId, "AUTH", "auth-" + operationId, null, amountMinor);
+        return intentId;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rememberCard(UUID orderId, UUID clientId, UUID cityId, String currency) {
+        Optional<Merchant> merchant = merchants.forCity(cityId).filter(m -> m.currency().equals(currency));
+        if (merchant.isEmpty() || jdbc.sql("""
+                        select count(*) from payment_card
+                        where client_id = :client and merchant_id = :merchant and state = 'ACTIVE'""")
+                .param("client", clientId).param("merchant", merchant.get().id()).query(Long.class).single() == 0) {
+            // A bonus-only fare never required a card. Its selected method is still retained by operations;
+            // a later CARD tip without a saved card is rejected by requestTip, never silently recorded as cash.
+            return;
+        }
+        // Nothing is due on the fare's card leg; the intent retains the card for a later, separate tip.
+        createIntent(orderId, clientId, cityId, 0, currency, null, "PAID");
+    }
+
+    private UUID createIntent(UUID orderId, UUID clientId, UUID cityId, long amountMinor, String currency,
+                              OffsetDateTime holdUntil, String state) {
         Merchant merchant = merchants.forCity(cityId)
                 .orElseThrow(() -> invalid("Card payment is not available in this city"));
         if (!merchant.currency().equals(currency)) {
@@ -62,14 +86,12 @@ class JdbcCardPayments implements CardPayments {
         jdbc.sql("""
                         insert into payment_intent (id, order_id, client_id, merchant_id, card_id, currency, hold_minor,
                                                     hold_until, state, created_at, updated_at, correlation_id)
-                        values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, 'AUTH_PENDING',
+                        values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, :state,
                                 :now, :now, :correlation)""")
                 .param("id", intentId).param("order", orderId).param("client", clientId)
                 .param("correlation", CorrelationId.currentOrNew())
                 .param("merchant", merchant.id()).param("card", cardId).param("currency", currency)
-                .param("amount", amountMinor).param("until", holdUntil).param("now", now).update();
-        UUID operationId = UUID.randomUUID();
-        createOperation(operationId, intentId, "AUTH", "auth-" + operationId, null, amountMinor);
+                .param("amount", amountMinor).param("until", holdUntil).param("state", state).param("now", now).update();
         return intentId;
     }
 
@@ -239,6 +261,30 @@ class JdbcCardPayments implements CardPayments {
                 "currency", done.currency(), "payer_client_id", done.clientId().toString()));
     }
 
+    /** A retried charge succeeded: the intent is paid as far as it now is, and the ledger and the order hear of it. */
+    private void debtPaid(UUID intentId, UUID operationId) {
+        record Done(UUID orderId, UUID clientId, long capture, String currency, long amount) {
+        }
+        Done done = jdbc.sql("""
+                        select i.order_id, i.client_id, i.capture_minor, i.currency, o.amount_minor
+                        from payment_intent i join payment_operation o on o.intent_id = i.id
+                        where i.id = :intent and o.id = :op""")
+                .param("intent", intentId).param("op", operationId)
+                .query((rs, i) -> new Done(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getLong(3),
+                        rs.getString(4), rs.getLong(5)))
+                .single();
+        long paid = paid(intentId);
+        intentState(intentId, paid >= done.capture() ? "PAID" : "PARTIALLY_PAID");
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("operation_id", operationId.toString());
+        payload.put("amount_minor", done.amount());
+        payload.put("currency", done.currency());
+        payload.put("payer_client_id", done.clientId().toString());
+        payload.put("paid_minor", paid);
+        payload.put("due_minor", done.capture());
+        publish(taxi.blizz.payments.PaymentOperations.DEBT_PAID, done.orderId(), intentId, payload);
+    }
+
     private void requestVoid(UUID intentId, long amountMinor, String reason) {
         UUID id = UUID.randomUUID();
         createOperation(id, intentId, "REFUND", "void-" + id, authReference(intentId), amountMinor);
@@ -313,7 +359,15 @@ class JdbcCardPayments implements CardPayments {
                 }
             }
             case "SETTLE", "CHARGE" -> {
-                if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
+                UUID retryOf = "CHARGE".equals(op.type()) ? jdbc.sql(
+                                "select retry_of from payment_operation where id = :id")
+                        .param("id", operationId).query(UUID.class).optional().orElse(null) : null;
+                if (retryOf != null) {
+                    // A staff member's retry after the fare was settled (REQ-PAY-14): it pays the rider's debt.
+                    if ("SUCCEEDED".equals(state)) {
+                        debtPaid(intent.id(), operationId);
+                    }
+                } else if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
                     continueCapture(intent.id(), op.type(), state, 0);
                 }
             }

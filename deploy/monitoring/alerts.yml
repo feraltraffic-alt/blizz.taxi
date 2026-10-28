@@ -80,6 +80,16 @@ groups:
           summary: "An order has looked for a driver for more than 15 minutes"
           runbook: docs/runbooks/orders-and-gps.md
 
+      - alert: OrdersUnfulfilledRate
+        expr: |
+          sum(rate(blizz_orders_unfulfilled_total[5m]))
+            / clamp_min(sum(rate(blizz_orders_total[5m])), 1e-9) > 0.2
+        for: 15m
+        labels: {severity: warning, owner: operations}
+        annotations:
+          summary: "More than 20 % of orders end without a car for 15 minutes"
+          runbook: docs/runbooks/orders-and-gps.md
+
       - alert: DriversLosingGps
         expr: |
           max(blizz_drivers_online) >= 10

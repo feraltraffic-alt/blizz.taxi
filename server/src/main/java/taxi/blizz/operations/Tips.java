@@ -32,7 +32,7 @@ public interface Tips {
 
     /**
      * What the tip screen shows: the presets, the bounds of an own amount, how it would be paid and until when;
-     * {@code tip} — the one already left, if any.
+     * {@code tip} — the one already left, if any. A SERVICE order is closed with a null method.
      */
     record Options(UUID orderId, String currency, long tripCostMinor, List<Preset> presets, long minMinor,
                    long maxMinor, String method, OffsetDateTime availableUntil, boolean open, Tip tip) {

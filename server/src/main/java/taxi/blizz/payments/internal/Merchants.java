@@ -30,6 +30,27 @@ class Merchants {
         return "payments.merchant." + merchantId + ".secret";
     }
 
+    /** Where the panel keeps the key a merchant had before the last change (REQ-SEC-09). */
+    static String previousSecretName(UUID merchantId) {
+        return "payments.merchant." + merchantId + ".previous-secret";
+    }
+
+    /**
+     * The merchant as it was signed with its previous key, while that key is still accepted for notifications
+     * (REQ-SEC-09); empty when there is none or its window has passed. Never used for requests to the provider.
+     */
+    Optional<Merchant> withPreviousKey(Merchant merchant, java.time.OffsetDateTime now) {
+        boolean open = jdbc.sql("select previous_secret_until from payment_merchant where id = :id")
+                .param("id", merchant.id()).query(java.time.OffsetDateTime.class).optional()
+                .filter(until -> until != null && now.isBefore(until)).isPresent();
+        if (!open) {
+            return Optional.empty();
+        }
+        return integrations.value(previousSecretName(merchant.id())).filter(s -> !s.isBlank())
+                .map(previous -> new Merchant(merchant.id(), merchant.provider(), merchant.account(),
+                        merchant.domain(), previous, merchant.currency()));
+    }
+
     /** PANEL, ENVIRONMENT or NONE. */
     String secretSource(UUID merchantId, String secretRef) {
         if (integrations.secretHint(secretName(merchantId)).isPresent()) {

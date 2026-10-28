@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/caller-not-notified.v1.schema.json",
+  "title": "CallerNotNotified v1 payload",
+  "description": "Published by notification once per SMS to a phone order's caller that failed for good or passed its deadline unsent (REQ-NTF-08, section 20). Aggregate Order. backoffice opens one task per order for the dispatchers to call the caller. The assignment stays as it is. Ids and codes only, never the number or the text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "notification_id", "template", "outcome"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "notification_id": { "type": "string", "format": "uuid" },
+    "template": { "type": "string", "enum": ["caller.driver-assigned", "caller.driver-arrived", "caller.no-driver"] },
+    "outcome": { "type": "string", "enum": ["FAILED", "EXPIRED"] }
+  },
+  "examples": [
+    {
+      "order_id": "7b000000-0000-4000-8000-000000000081",
+      "notification_id": "7c000000-0000-4000-8000-000000000081",
+      "template": "caller.driver-assigned",
+      "outcome": "FAILED"
+    }
+  ]
+}

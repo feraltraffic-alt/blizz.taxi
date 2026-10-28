@@ -2,6 +2,7 @@ package taxi.blizz.finance.internal;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.finance.DriverBalances;
 import taxi.blizz.finance.DriverDebts;
+import taxi.blizz.finance.DriverTransferTimeZone;
 import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.finance.Ledger.Line;
@@ -42,9 +44,11 @@ class JdbcDriverBalances implements DriverBalances {
     private final CityCatalog cities;
     private final AuditLog audit;
     private final Clock clock;
+    private final DriverTransferTimeZone transferTimeZone;
 
     JdbcDriverBalances(JdbcClient jdbc, Ledger ledger, DriverDebts debts, IdempotentCommands commands,
-                       StaffAccess staff, AccountDirectory accounts, CityCatalog cities, AuditLog audit, Clock clock) {
+                       StaffAccess staff, AccountDirectory accounts, CityCatalog cities, AuditLog audit, Clock clock,
+                       DriverTransferTimeZone transferTimeZone) {
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.debts = debts;
@@ -54,6 +58,7 @@ class JdbcDriverBalances implements DriverBalances {
         this.cities = cities;
         this.audit = audit;
         this.clock = clock;
+        this.transferTimeZone = transferTimeZone;
     }
 
     // ---------------------------------------------------------------- statements
@@ -199,11 +204,15 @@ class JdbcDriverBalances implements DriverBalances {
                     lock(first);
                     lock(second);
                     OffsetDateTime now = now();
+                    ZoneId zone = transferTimeZone.zone(driver.id()).orElseThrow(() ->
+                            new DomainException(ErrorCode.STATE_CONFLICT, "No work-session city for the daily limit"));
+                    OffsetDateTime since = now.atZoneSameInstant(zone).toLocalDate().atStartOfDay(zone)
+                            .toOffsetDateTime();
                     long today = jdbc.sql("""
                                     select coalesce(sum(amount_minor), 0) from driver_transfer
                                     where from_driver = :driver and currency = :currency and created_at >= :since""")
                             .param("driver", driver.id()).param("currency", currency)
-                            .param("since", now.toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC))
+                            .param("since", since)
                             .query(Long.class).single();
                     if (today + amountMinor > rule.maxPerDayMinor()) {
                         throw invalid("At most " + rule.maxPerDayMinor() + " a day; " + today + " sent today");

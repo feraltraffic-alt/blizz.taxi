@@ -290,4 +290,31 @@ class SupportCasesTests {
         assertThat((List<Map<String, Object>>) json.readValue(queue.getResponse().getContentAsString(), Map.class)
                 .get("cases")).anySatisfy(c -> assertThat(c).containsEntry("id", caseId));
     }
+
+    /** REQ-OPS-06: every case has an answer-by time from its priority; the queue can show only the overdue ones. */
+    @Test
+    void casesCarryAnAnswerByTimeAndTheOverdueOnesCanBeListed() {
+        Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        for (Category system : List.of(Category.NO_DRIVER, Category.LOST_CONNECTION, Category.PAYMENT_UNKNOWN,
+                Category.TRIP_REVIEW)) {
+            assertCode(() -> cases.open(ride.payer(), UUID.randomUUID(), system, ride.order().id(), "x", "y"),
+                    ErrorCode.VALIDATION_FAILED);
+        }
+        Case late = cases.open(ride.payer(), UUID.randomUUID(), Category.OTHER, ride.order().id(), "Late", "Still here");
+        Case fresh = cases.open(ride.payer(), UUID.randomUUID(), Category.OTHER, ride.order().id(), "Fresh", "Hi");
+        assertThat(java.time.Duration.between(fresh.createdAt(), fresh.respondBy()))
+                .as("NORMAL: four hours").isEqualTo(java.time.Duration.ofHours(4));
+        jdbc.sql("update support_case set respond_by = now() - interval '1 minute' where id = :id")
+                .param("id", late.id()).update();
+
+        Actor agent = agent();
+        List<Case> overdue = cases.queue(agent, new QueueFilter(cityId, State.OPEN, null, null, null, false, null, 100,
+                true));
+        assertThat(overdue).extracting(Case::id).contains(late.id()).doesNotContain(fresh.id());
+
+        Case urgent = cases.prioritize(agent, UUID.randomUUID(), fresh.id(), fresh.version(), Priority.URGENT,
+                "Rider is stuck");
+        assertThat(java.time.Duration.between(urgent.createdAt(), urgent.respondBy()))
+                .as("a new priority moves the answer-by time").isEqualTo(java.time.Duration.ofMinutes(5));
+    }
 }

@@ -87,6 +87,8 @@ class FareLedgerTests {
     WebApplicationContext context;
     @Autowired
     JsonMapper json;
+    @Autowired
+    taxi.blizz.configuration.ServiceSettings settings;
 
     UUID cityId;
 
@@ -336,6 +338,74 @@ class FareLedgerTests {
         Fare fare = fare(ride.order().id());
         assertThat(net(Account.RIDER_RECEIVABLE, ride.payer().id())).isEqualTo(fare.amount());
         assertThat(net(Account.DRIVER_PAYABLE, ride.driver().id())).isEqualTo(-fare.share());
+    }
+
+    private Actor settingsAdmin() {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Admin', 'ADMIN', '{settings.manage}', true, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "cash-rule-" + id).update();
+        return new Actor(taxi.blizz.platform.SubjectType.STAFF, id);
+    }
+
+    /** Ends the free driver's shift, so the next ride of this test gets its own driver (the offer goes to the nearest). */
+    private void offline(Ride ride) {
+        long version = jdbc.sql("select version from work_session where driver_id = :d and state = 'OPEN'")
+                .param("d", ride.driver().id()).query(Long.class).single();
+        sessions.close(ride.driver(), UUID.randomUUID(), ride.device(), version);
+    }
+
+    /** Sets the cash-not-received rule and returns the version to restore from. */
+    private taxi.blizz.configuration.ServiceSettings.Version cashRule(Actor admin, boolean credit, int percent) {
+        var now = settings.current();
+        var s = now.settings();
+        return settings.change(admin, UUID.randomUUID(), now.version(), new taxi.blizz.configuration.ServiceSettings.Settings(
+                s.brand(), s.languages(), s.calls(), s.preorders(), s.ratings(), s.tips(), s.orders(),
+                new taxi.blizz.configuration.ServiceSettings.CashNotReceived(credit, percent)), "Cash rule test");
+    }
+
+    /** Owner decision 28.10.2026: what the driver gets for an unpaid cash trip is the service's setting. */
+    @Test
+    void cashNotReceivedCreditsTheDriverOnlyThePartTheSettingAllowsAndHoldsTheRest() {
+        Actor admin = settingsAdmin();
+        try {
+            cashRule(admin, true, 50);
+            Ride half = started();
+            complete(half, false);
+            offline(half);
+            deliverEvents();
+            Fare halfFare = fare(half.order().id());
+            long credited = halfFare.share() * 50 / 100;
+            assertThat(net(Account.DRIVER_PAYABLE, half.driver().id())).isEqualTo(-credited);
+            assertThat(net(Account.SUSPENSE, half.driver().id())).as("held for support")
+                    .isEqualTo(-(halfFare.share() - credited));
+            assertThat(net(Account.RIDER_RECEIVABLE, half.payer().id())).isEqualTo(halfFare.amount());
+
+            cashRule(admin, false, 70);
+            assertThat(settings.current().settings().cashNotReceived().driverSharePercent())
+                    .as("ignored when the driver is not credited").isZero();
+            Ride none = started();
+            complete(none, false);
+            offline(none);
+            deliverEvents();
+            Fare noneFare = fare(none.order().id());
+            assertThat(net(Account.DRIVER_PAYABLE, none.driver().id())).isZero();
+            assertThat(net(Account.SUSPENSE, none.driver().id())).isEqualTo(-noneFare.share());
+
+            // A trip paid in cash as reported is not touched by the rule.
+            Ride paid = started();
+            complete(paid, true);
+            offline(paid);
+            deliverEvents();
+            assertThat(net(Account.DRIVER_PAYABLE, paid.driver().id())).isEqualTo(fare(paid.order().id()).commission());
+            assertThat(net(Account.SUSPENSE, paid.driver().id())).isZero();
+
+            assertThatThrownBy(() -> cashRule(admin, true, 101)).isInstanceOf(DomainException.class)
+                    .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+        } finally {
+            cashRule(admin, true, 100);
+        }
     }
 
     @Test

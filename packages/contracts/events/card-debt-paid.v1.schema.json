@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/card-debt-paid.v1.schema.json",
+  "title": "CardDebtPaid v1 payload",
+  "description": "Published by payments when a staff member's manual retry of a declined charge succeeds (REQ-PAY-14). Aggregate PaymentIntent. finance posts the amount from PROVIDER_CLEARING against the rider's RIDER_RECEIVABLE once per operation; operations marks the order PAID when paid_minor reaches due_minor (and records OrderDebtPaid).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "intent_id", "operation_id", "amount_minor", "currency", "payer_client_id", "paid_minor", "due_minor"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "operation_id": { "type": "string", "format": "uuid" },
+    "amount_minor": { "type": "integer", "minimum": 1 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "payer_client_id": { "type": "string", "format": "uuid" },
+    "paid_minor": { "type": "integer", "minimum": 0 },
+    "due_minor": { "type": "integer", "minimum": 0 }
+  },
+  "examples": [
+    {
+      "order_id": "7b000000-0000-4000-8000-000000000091",
+      "intent_id": "7c000000-0000-4000-8000-000000000091",
+      "operation_id": "7d000000-0000-4000-8000-000000000091",
+      "amount_minor": 700,
+      "currency": "UAH",
+      "payer_client_id": "7e000000-0000-4000-8000-000000000091",
+      "paid_minor": 15700,
+      "due_minor": 15700
+    }
+  ]
+}

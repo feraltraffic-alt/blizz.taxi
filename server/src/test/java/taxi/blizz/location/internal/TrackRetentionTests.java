@@ -133,8 +133,9 @@ class TrackRetentionTests {
         UUID flaggedTrip = tripBetween(driver, longAgo.plusHours(4), longAgo.plusHours(4).plusMinutes(30));
         jdbc.sql("""
                         insert into support_case (id, category, order_id, requester_type, subject, priority, state,
-                                                  created_at, updated_at)
-                        values (:id, 'LOST_ITEM', :o, 'STAFF', 'Lost phone', 'NORMAL', 'OPEN', now(), now())""")
+                                                  created_at, updated_at, respond_by)
+                        values (:id, 'LOST_ITEM', :o, 'STAFF', 'Lost phone', 'NORMAL', 'OPEN', now(), now(),
+                                now() + interval '4 hours')""")
                 .param("id", UUID.randomUUID()).param("o", supportTrip).update();
         jdbc.sql("""
                         insert into driver_risk_flag (id, driver_id, city_id, kind, raised_by, raised_at, reason)

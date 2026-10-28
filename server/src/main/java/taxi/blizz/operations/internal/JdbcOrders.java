@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.CancelReasons;
+import taxi.blizz.configuration.FeatureFlags;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.payments.CardPayments;
 import taxi.blizz.geo.City;
@@ -69,13 +70,17 @@ class JdbcOrders implements Orders {
     /** Pre-orders a rider may have waiting at a time; keeps a single account from booking the fleet. */
     static final int MAX_SCHEDULED_PER_PAYER = 5;
 
+    private final FeatureFlags flags;
+
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
-               taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations) {
+               taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
+               FeatureFlags flags) {
 
+        this.flags = flags;
         this.cityOperations = cityOperations;
         this.rateLimits = rateLimits;
         this.calls = calls;
@@ -123,6 +128,10 @@ class JdbcOrders implements Orders {
             // A phone order is paid in cash or by a payment link (REQ-PAY-17, later).
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Only a rider pays by a saved card");
         }
+        // A switch for the whole service (REQ-ENG-14): read only here, where a card payment starts.
+        if (card && !flags.enabled(FeatureFlags.Flag.CARD_PAYMENTS)) {
+            throw new DomainException(ErrorCode.PAYMENT_METHOD_NOT_OFFERED, "Card payments are switched off; pay in cash");
+        }
         boolean terminal = order.paymentMethod() == PaymentMethod.TERMINAL;
         if (terminal && actor.type() != SubjectType.STAFF) {
             // Card at the driver's terminal is arranged by the operator on the phone (owner decision 27.10.2026).
@@ -160,6 +169,9 @@ class JdbcOrders implements Orders {
             PaymentMethod method = order.paymentMethod() == PaymentMethod.CARD && wallet == toPay
                     ? PaymentMethod.CASH : order.paymentMethod();
             boolean cardHold = method == PaymentMethod.CARD;
+            if (card && !cardHold) {
+                cardPayments.rememberCard(id, order.payerClientId(), city.id(), quote.currency());
+            }
             OffsetDateTime now = core.now();
             // The quote decided whether this is a pre-order, with the settings in force then (ADR 0006).
             boolean preorder = quote.breakdown().preorder();
@@ -183,14 +195,15 @@ class JdbcOrders implements Orders {
             jdbc.sql("""
                                 insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                         city_id, vehicle_class, pickup, pickup_label, dropoff,
-                                                        dropoff_label, payment_method, payment_state, price_minor, currency,
+                                                        dropoff_label, payment_method, selected_payment_method,
+                                                        payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
                                                         terminal_fallback_cash, wallet_minor, discount_minor, created_at,
                                                         updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
-                                        :payment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
+                                        :payment, :selectedPayment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
                                         :releaseAt, :fallback, :wallet, :discount, :now, :now)""")
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
                         .param("status", cardHold ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
@@ -211,6 +224,7 @@ class JdbcOrders implements Orders {
                         .param("dropoffLat", order.dropoff().lat())
                         .param("dropoffLabel", label(order.dropoffLabel()))
                         .param("payment", method.name())
+                        .param("selectedPayment", order.paymentMethod().name())
                         .param("paymentState", cardHold ? "AUTH_PENDING" : terminal ? "TERMINAL_EXPECTED" : "CASH_EXPECTED")
                         .param("wallet", wallet)
                         .param("discount", quote.discountMinor())
@@ -437,6 +451,72 @@ class JdbcOrders implements Orders {
                         audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reason.code(),
                                 Map.of("status", order.status()), Map.of("status", "CANCELLED")));
                     }
+                    return core.view(orderId);
+                });
+    }
+
+    record SwitchToCashRequest(UUID orderId, long expectedVersion, String reason) {
+    }
+
+    @Override
+    public OrderView switchToCash(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reason) {
+        String why = reason == null || reason.isBlank() ? null : reason.strip();
+        if (actor.type() == SubjectType.STAFF) {
+            UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                    .query(UUID.class).optional()
+                    .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+            requireStaff(actor, CREATE_PERMISSION, cityId);
+            if (why == null) {
+                throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+            }
+        } else if (actor.type() != SubjectType.CLIENT) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only the rider or an operator switches to cash");
+        }
+        return commands.execute(new CommandKey(actor, "order.switch_to_cash", commandId),
+                new SwitchToCashRequest(orderId, expectedVersion, why), OrderView.class, () -> {
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (actor.type() == SubjectType.CLIENT && !actor.id().equals(order.payerClientId())) {
+                        throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");
+                    }
+                    if (order.version() != expectedVersion) {
+                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                    }
+                    if (!java.util.Set.of("AWAITING_PAYMENT", "SCHEDULED", "READY", "SEARCHING", "ASSIGNED", "IN_SERVICE")
+                            .contains(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "An order in " + order.status() + " cannot switch to cash");
+                    }
+                    String method = jdbc.sql("select payment_method from ride_order where id = :id")
+                            .param("id", orderId).query(String.class).single();
+                    if (!"CARD".equals(method)) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The order is not paid by card");
+                    }
+                    var intent = cardPayments.intent(orderId);
+                    String held = intent.map(taxi.blizz.payments.CardPayments.Intent::state).orElse(null);
+                    if (held == null || "PAID".equals(held)) {
+                        // Wholly paid by bonuses: nothing to pay in cash.
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Nothing is left to pay by card");
+                    }
+                    if (java.util.Set.of("AUTH_PENDING", "UNKNOWN").contains(held)) {
+                        throw new DomainException(ErrorCode.PAYMENT_UNKNOWN,
+                                "The card hold is not settled yet; switch once it is");
+                    }
+                    if (!"AUTHORIZED".equals(held)) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The card payment is " + held);
+                    }
+                    // One way of paying at a time (REQ-PAY-20): the hold goes before the order becomes cash.
+                    core.releaseCardHold(orderId, "Switched to cash");
+                    jdbc.sql("""
+                                    update ride_order set payment_method = 'CASH', payment_state = 'CASH_EXPECTED',
+                                                          selected_payment_method = 'CASH', updated_at = :now
+                                    where id = :id""")
+                            .param("now", core.now()).param("id", orderId).update();
+                    String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
+                    core.recordEvent(orderId, core.touch(orderId), "PaymentSwitchedToCash", actor, why,
+                            Map.of("from", "CARD", "to", "CASH", "by", by));
+                    audit.record(new AuditEntry(actor, "order.switch_to_cash", "ride_order", orderId.toString(),
+                            why == null ? "By the rider" : why, Map.of("payment_method", "CARD"),
+                            Map.of("payment_method", "CASH")));
                     return core.view(orderId);
                 });
     }
@@ -813,5 +893,29 @@ class JdbcOrders implements Orders {
 
     private static String label(String value) {
         return value == null || value.isBlank() ? "" : value.strip();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CallerNotice> callerNotice(UUID orderId) {
+        return jdbc.sql("""
+                        select o.id, o.city_id, c.phone, d.name as driver_name, v.make, v.model, v.color,
+                               v.registration_number, a.id as assignment_id
+                        from ride_order o
+                        join order_contact c on c.order_id = o.id
+                        left join lateral (
+                            select id, driver_id, vehicle_id from assignment where order_id = o.id
+                            order by created_at desc, id desc limit 1
+                        ) a on true
+                        left join driver d on d.id = a.driver_id
+                        left join vehicle v on v.id = a.vehicle_id
+                        where o.id = :id and o.channel = 'PHONE' and c.phone is not null""")
+                .param("id", orderId)
+                .query((rs, i) -> new CallerNotice(rs.getObject("id", UUID.class), rs.getObject("city_id", UUID.class),
+                        rs.getString("phone"), rs.getString("driver_name"),
+                        rs.getObject("assignment_id", UUID.class) == null ? null
+                                : new HistoryVehicle(rs.getString("make"), rs.getString("model"), rs.getString("color"),
+                                rs.getString("registration_number"))))
+                .optional();
     }
 }

@@ -175,23 +175,45 @@ class PhoneChangeTests {
         assertThat(versionOf(driver.actor())).isEqualTo(first.version());
     }
 
+    /** Owner decision 28.10.2026: support changes a phone only with a code the person got on the new phone. */
     @Test
-    void supportSetsThePhoneWhenTheOldOneIsLost() {
+    void supportSetsThePhoneWhenTheOldOneIsLostWithACodeToTheNewPhone() {
         Person rider = signedIn(OtpAudience.CLIENT, freshPhone("+38067"));
         String newPhone = freshPhone("+38063");
         Actor support = staff(ClientAccounts.MANAGE_PERMISSION);
         Actor driverSupport = staff(PhoneChanges.DRIVER_PHONE_PERMISSION);
         long version = versionOf(rider.actor());
 
-        assertCode(() -> phones.changeBySupport(driverSupport, UUID.randomUUID(), rider.actor(), version, newPhone,
-                "Passport checked"), ErrorCode.ACCESS_DENIED);
-        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version, newPhone, " "),
-                ErrorCode.VALIDATION_FAILED);
-        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version + 1, newPhone,
-                "Passport checked"), ErrorCode.VERSION_CONFLICT);
+        assertCode(() -> phones.codeToNewBySupport(driverSupport, rider.actor(), newPhone, null),
+                ErrorCode.ACCESS_DENIED);
+        assertCode(() -> phones.codeToNewBySupport(support, rider.actor(), rider.phone(), null),
+                ErrorCode.STATE_CONFLICT);
+        UUID challenge = phones.codeToNewBySupport(support, rider.actor(), newPhone, null).challengeId();
+        String code = codeTo(newPhone);
+        String wrong = String.format("%06d", (Integer.parseInt(code) + 1) % 1_000_000);
 
+        assertCode(() -> phones.changeBySupport(driverSupport, UUID.randomUUID(), rider.actor(), version, challenge,
+                code, "Passport checked"), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version, challenge, code,
+                " "), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version, null, code,
+                "Passport checked"), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version, challenge, wrong,
+                "Passport checked"), ErrorCode.OTP_INVALID);
+        assertThat(phoneOf(rider.actor())).as("a wrong code changes nothing").isEqualTo(rider.phone());
+
+        // A code another account asked for does not move this one.
+        Person other = signedIn(OtpAudience.CLIENT, freshPhone("+38068"));
+        String otherNew = freshPhone("+38063");
+        UUID otherChallenge = phones.codeToNewBySupport(support, other.actor(), otherNew, null).challengeId();
+        String otherCode = codeTo(otherNew);
+        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version, otherChallenge,
+                otherCode, "Passport checked"), ErrorCode.OTP_INVALID);
+
+        assertCode(() -> phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version + 1, challenge,
+                code, "Passport checked"), ErrorCode.VERSION_CONFLICT);
         PhoneChanges.Changed changed = phones.changeBySupport(support, UUID.randomUUID(), rider.actor(), version,
-                newPhone, "Passport checked at the office");
+                challenge, code, "Passport checked at the office");
 
         assertThat(changed.phone()).isEqualTo(newPhone);
         assertThat(sessions.isOpen(rider.here().sessionId())).isFalse();

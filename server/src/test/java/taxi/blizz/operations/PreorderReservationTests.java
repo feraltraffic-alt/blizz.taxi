@@ -57,6 +57,32 @@ class PreorderReservationTests {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
+
+    @Test
+    void reservationAssignmentMetricCountsOnlyCommitAndNotReplay() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        OrderView order = preorder(rides.client());
+        var reservation = preorders.reserve(driver.actor(), UUID.randomUUID(), order.id());
+        pickupIn(order.id(), 25);
+        var existing = meters.find("blizz.dispatch.assigned").tag("source", "RESERVATION").timer();
+        long before = existing == null ? 0 : existing.count();
+        UUID command = UUID.randomUUID();
+        tx.executeWithoutResult(status -> {
+            preorders.confirm(driver.actor(), command, reservation.id());
+            var timer = meters.find("blizz.dispatch.assigned").tag("source", "RESERVATION").timer();
+            assertThat(timer == null ? 0 : timer.count()).isEqualTo(before);
+            status.setRollbackOnly();
+        });
+        preorders.confirm(driver.actor(), command, reservation.id());
+        assertThat(meters.get("blizz.dispatch.assigned").tag("source", "RESERVATION").timer().count())
+                .isEqualTo(before + 1);
+        preorders.confirm(driver.actor(), command, reservation.id());
+        assertThat(meters.get("blizz.dispatch.assigned").tag("source", "RESERVATION").timer().count())
+                .isEqualTo(before + 1);
+    }
+
     TestRides rides;
     UUID cityId;
     Actor admin;
