@@ -34,6 +34,7 @@ class StaffPermissionCatalogTests {
                 ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION,
                 Calls.ANSWER_PERMISSION, Calls.LISTEN_PERMISSION,
                 Calls.SUPERVISE_PERMISSION, taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION,
-                taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION));
+                taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION,
+                taxi.blizz.configuration.FeatureFlags.MANAGE_PERMISSION));
     }
 }

@@ -67,6 +67,8 @@ class CardCaptureTests {
     @Autowired
     taxi.blizz.payments.PaymentOperations paymentOperations;
     @Autowired
+    taxi.blizz.configuration.FeatureFlags flags;
+    @Autowired
     UnknownPayments unknown;
 
     TestRides rides;
@@ -520,5 +522,37 @@ class CardCaptureTests {
         // Back to a finished state, so later tests' workers do not ask the fake provider about it.
         jdbc.sql("update payment_operation set state = 'SUCCEEDED' where id in (:old, :fresh)")
                 .param("old", oldAuth).param("fresh", freshAuth).update();
+    }
+
+    /** REQ-ENG-14: switching card payments off refuses new card orders but never stops a payment already begun. */
+    @Test
+    void cardPaymentsSwitchedOffRefuseNewCardOrdersButFinishTheOnesBegun() {
+        var card = taxi.blizz.configuration.FeatureFlags.Flag.CARD_PAYMENTS;
+        Actor admin = staffWith(taxi.blizz.configuration.FeatureFlags.MANAGE_PERMISSION);
+        Actor rider = riderWithCard();
+        OrderView begun = heldOrder(rider);
+        var before = flags.all(admin).stream().filter(s -> s.flag() == card).findFirst().orElseThrow();
+        assertThat(before.enabled()).isTrue();
+        var off = flags.change(admin, UUID.randomUUID(), card.key(), before.version(), false, "Provider incident");
+        try {
+            assertThat(flags.enabled(card)).isFalse();
+            UUID quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
+            assertCode(() -> orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
+                    "Home", DROPOFF, "Work", PaymentMethod.CARD, quote)),
+                    taxi.blizz.platform.ErrorCode.PAYMENT_METHOD_NOT_OFFERED);
+            UUID cashQuote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
+            OrderView cash = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
+                    "Home", DROPOFF, "Work", PaymentMethod.CASH, cashQuote));
+            assertThat(cash.paymentMethod()).isEqualTo(PaymentMethod.CASH);
+            orders.cancel(rider, UUID.randomUUID(), cash.id(), orders.get(cash.id()).version(), "CHANGED_MIND");
+
+            // The order made before the switch is paid as begun.
+            tx.executeWithoutResult(s -> internal.startCapture(begun.id(), begun.priceMinor(), "UAH"));
+            settlePayments();
+            assertThat(payments.intent(begun.id()).orElseThrow().state()).isEqualTo("PAID");
+        } finally {
+            flags.change(admin, UUID.randomUUID(), card.key(), off.version(), true, "Incident over");
+        }
+        assertThat(flags.enabled(card)).isTrue();
     }
 }

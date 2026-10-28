@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.CancelReasons;
+import taxi.blizz.configuration.FeatureFlags;
 import taxi.blizz.configuration.ServiceSettings;
 import taxi.blizz.payments.CardPayments;
 import taxi.blizz.geo.City;
@@ -69,13 +70,17 @@ class JdbcOrders implements Orders {
     /** Pre-orders a rider may have waiting at a time; keeps a single account from booking the fleet. */
     static final int MAX_SCHEDULED_PER_PAYER = 5;
 
+    private final FeatureFlags flags;
+
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
-               taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations) {
+               taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
+               FeatureFlags flags) {
 
+        this.flags = flags;
         this.cityOperations = cityOperations;
         this.rateLimits = rateLimits;
         this.calls = calls;
@@ -122,6 +127,10 @@ class JdbcOrders implements Orders {
         if (card && (actor.type() != SubjectType.CLIENT || order.payerClientId() == null)) {
             // A phone order is paid in cash or by a payment link (REQ-PAY-17, later).
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Only a rider pays by a saved card");
+        }
+        // A switch for the whole service (REQ-ENG-14): read only here, where a card payment starts.
+        if (card && !flags.enabled(FeatureFlags.Flag.CARD_PAYMENTS)) {
+            throw new DomainException(ErrorCode.PAYMENT_METHOD_NOT_OFFERED, "Card payments are switched off; pay in cash");
         }
         boolean terminal = order.paymentMethod() == PaymentMethod.TERMINAL;
         if (terminal && actor.type() != SubjectType.STAFF) {

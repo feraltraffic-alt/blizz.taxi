@@ -1,0 +1,22 @@
+# Production (REQ-ENG-13). Every secret comes from the environment and has no default here: a missing one stops the
+# start. platform's ProductionSafety refuses fake providers, any key published in this repository and a temporary
+# erasure journal, and lists every problem at once. Never combine with dev, sandbox or test.
+blizz:
+  otp:
+    secret: ${OTP_SECRET}
+  auth:
+    instance-id: ${INSTANCE_ID}
+    access-token-secret: ${ACCESS_TOKEN_SECRET}
+  secrets:
+    master-key: ${SECRETS_MASTER_KEY}
+  privacy:
+    erasure-journal-dir: ${ERASURE_JOURNAL_DIR}
+  payments:
+    public-base-url: ${PUBLIC_BASE_URL}
+spring:
+  datasource:
+    password: ${DB_PASSWORD}
+logging:
+  level:
+    root: INFO
+    taxi.blizz: INFO
