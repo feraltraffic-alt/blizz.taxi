@@ -4256,6 +4256,19 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    PlatformVersions:
+      type: object
+      additionalProperties: false
+      required: [minimum_version, latest_version]
+      properties:
+        minimum_version:
+          type: string
+          pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          description: Lowest build still allowed. Below this the four checked actions return 426.
+        latest_version:
+          type: string
+          pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          description: Current recommended build. The app may show "update available".
     OtpDelivery:
       type: object
       additionalProperties: false
@@ -4336,6 +4349,23 @@ components:
               description: >-
                 How many orders not in a final state (pre-orders included) one paying rider may have at once
                 (active_orders_per_payer, ADR 0012 Q-03); one more is refused with 409 ACTIVE_ORDER_LIMIT.
+        app_versions:
+          description: Per-platform version policy (REQ-API-10). Omitted — no minimum enforced.
+          type: object
+          additionalProperties: false
+          properties:
+            rider_android:
+              $ref: "#/components/schemas/PlatformVersions"
+            rider_ios:
+              $ref: "#/components/schemas/PlatformVersions"
+            driver_android:
+              $ref: "#/components/schemas/PlatformVersions"
+            driver_ios:
+              $ref: "#/components/schemas/PlatformVersions"
+            require_version_header:
+              type: boolean
+              default: false
+              description: When true, the four checked actions refuse a request with no version header.
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

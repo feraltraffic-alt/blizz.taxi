@@ -266,6 +266,8 @@ paths:
       tags: [Pricing]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "./common.yaml#/components/parameters/AppPlatform"
+        - $ref: "./common.yaml#/components/parameters/AppVersion"
       requestBody:
         required: true
         content:
@@ -289,6 +291,12 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "426":
+          description: App build is below the minimum for its platform (REQ-API-10).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/Problem"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
@@ -339,6 +347,8 @@ paths:
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "./common.yaml#/components/parameters/AppPlatform"
+        - $ref: "./common.yaml#/components/parameters/AppVersion"
       requestBody:
         required: true
         content:
@@ -362,6 +372,12 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "426":
+          description: App build is below the minimum for its platform (REQ-API-10).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "./common.yaml#/components/schemas/Problem"
 
   /api/rider/v1/orders/current:
     get:
