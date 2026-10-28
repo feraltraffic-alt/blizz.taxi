@@ -1851,6 +1851,137 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/legal-documents:
+    get:
+      operationId: listLegalDocumentVersions
+      summary: Versions of the legal texts
+      description: Newest first per document; filter by audience and kind. Requires legal.manage.
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: audience
+          in: query
+          required: false
+          schema:
+            $ref: "./legal.yaml#/components/schemas/LegalAudience"
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "./legal.yaml#/components/schemas/LegalKind"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalDocumentVersionList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createLegalDraft
+      summary: A new version of a legal text, as a draft
+      description: The next number of the document. Requires legal.manage. Audited (languages and lengths, not the text).
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./legal.yaml#/components/schemas/CreateLegalDraft"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalDocumentVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/legal-documents/{version_id}:
+    post:
+      operationId: updateLegalDraft
+      summary: Change a draft
+      description: Only a DRAFT (a published version → 409 STATE_CONFLICT). Requires legal.manage. Audited.
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./legal.yaml#/components/schemas/UpdateLegalDraft"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalDocumentVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/legal-documents/{version_id}/publish:
+    post:
+      operationId: publishLegalDraft
+      summary: Publish a draft
+      description: >-
+        DRAFT → PUBLISHED; from then on it never changes. An effective moment in the past becomes the moment of publication. Once in force and with acceptance_required, riders cannot order and drivers cannot go online until they accept it. Requires legal.manage. Audited.
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./legal.yaml#/components/schemas/PublishLegalDraft"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalDocumentVersion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/clients:
     get:
       operationId: searchClients
@@ -3530,6 +3661,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
 
 tags:
+  - name: Legal
+    description: Legal texts and their versions (REQ-PRV-08)
   - name: Clients
     description: Riders' accounts — deletion requests (REQ-RID-10)
   - name: Promotions

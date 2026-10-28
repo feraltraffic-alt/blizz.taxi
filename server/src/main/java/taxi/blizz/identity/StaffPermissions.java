@@ -48,7 +48,8 @@ public final class StaffPermissions {
             new Permission("integrations.manage", "Settings",
                     "Keys of integrations: Firebase, GraphHopper, maps, payment merchants"),
             new Permission(StaffPermissions.AUDIT_VIEW, "Logs", "Logs of staff actions and changes, by role"),
-            new Permission(StaffPermissions.REPORTS_VIEW, "Reports", "Reports of orders and money per city and day"));
+            new Permission(StaffPermissions.REPORTS_VIEW, "Reports", "Reports of orders and money per city and day"),
+            new Permission("legal.manage", "Settings", "Legal texts for riders and drivers: versions and publication"));
 
     public static final Set<String> CODES = CATALOG.stream().map(Permission::code).collect(Collectors.toUnmodifiableSet());
 

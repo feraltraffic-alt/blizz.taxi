@@ -38,8 +38,8 @@ class PersonalDataExportTests {
 
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 35.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 35.55);
-    static final List<String> SECTIONS = List.of("calls", "card_payments", "codes_sent", "money", "orders",
-            "profile", "promotion_bonuses", "push_devices", "support_cases");
+    static final List<String> SECTIONS = List.of("calls", "card_payments", "codes_sent", "legal_acceptances",
+            "money", "orders", "profile", "promotion_bonuses", "push_devices", "support_cases");
 
     @Autowired PersonalDataExports exports;
     @Autowired FakeOtpCodes codes;

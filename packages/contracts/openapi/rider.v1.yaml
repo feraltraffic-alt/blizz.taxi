@@ -41,6 +41,56 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/rider/v1/legal:
+    get:
+      operationId: getLegalInForce
+      summary: Legal texts in force and what I still have to accept
+      description: >-
+        The versions in force for riders. One with acceptance_required and not accepted blocks new orders (403 ACCEPTANCE_REQUIRED); a trip in progress goes on. The text itself — GET /api/config/v1/legal/{audience}/{kind}.
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalInForceList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/legal/acceptances:
+    post:
+      operationId: acceptLegalText
+      summary: Accept a legal text
+      description: >-
+        A command: records that the person accepted the version in force, shown in the language given, from this session. Accepted once: a repeat, also with another language, returns the first acceptance. A version that is no longer in force → 409 STATE_CONFLICT. Kept as a legal fact, also after the account is deleted.
+      tags: [Legal]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./legal.yaml#/components/schemas/AcceptLegalText"
+      responses:
+        "200":
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "./legal.yaml#/components/schemas/LegalAcceptance"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/rider/v1/me:
     get:
       operationId: getRiderMe
@@ -1486,6 +1536,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
 
 tags:
+  - name: Legal
+    description: Legal texts in force and their acceptance (REQ-PRV-08)
   - name: Places
     description: Address search (ADR 0012, Q-08)
   - name: Tips

@@ -21,6 +21,7 @@ import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.telephony.Calls;
+import taxi.blizz.configuration.LegalDocuments;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.CallerContact;
@@ -58,6 +59,7 @@ class JdbcOrders implements Orders {
     private final ServiceSettings settings;
     private final AccountDirectory accounts;
     private final Calls calls;
+    private final LegalDocuments legal;
     private final CardPayments cardPayments;
     private final taxi.blizz.finance.RiderWallets wallets;
 
@@ -68,8 +70,9 @@ class JdbcOrders implements Orders {
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
-               AccountDirectory accounts, Calls calls) {
+               AccountDirectory accounts, Calls calls, LegalDocuments legal) {
         this.calls = calls;
+        this.legal = legal;
         this.accounts = accounts;
         this.cardPayments = cardPayments;
         this.wallets = wallets;
@@ -98,6 +101,8 @@ class JdbcOrders implements Orders {
                     "A contact is the caller of a phone order or the recipient of a rider's order");
         }
         String channel = authorizeCreate(actor, order, city);
+        // A rider orders only after accepting the legal texts in force that must be accepted (REQ-PRV-08).
+        legal.requireAccepted(actor);
         if (order.paymentMethod() == PaymentMethod.SERVICE) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "SERVICE is set only for a follow-up order");
         }
