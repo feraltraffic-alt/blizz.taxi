@@ -64,6 +64,8 @@ class CardCaptureTests {
     TransactionTemplate tx;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    taxi.blizz.payments.PaymentOperations paymentOperations;
 
     TestRides rides;
     UUID cityId;
@@ -368,5 +370,98 @@ class CardCaptureTests {
                         where i.order_id = :order and o.state <> 'SUCCEEDED'""")
                 .param("order", order.id()).query(Long.class).single()).as("every operation stays SUCCEEDED")
                 .isZero();
+    }
+
+    private Actor staffWith(String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Finance', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "capture-finance-" + id).param("permissions", permissions).update();
+        return new Actor(taxi.blizz.platform.SubjectType.STAFF, id);
+    }
+
+    private static void assertCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call,
+                                   taxi.blizz.platform.ErrorCode code) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(call)
+                .isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(e -> ((taxi.blizz.platform.DomainException) e).code()).isEqualTo(code);
+    }
+
+    /** A fare whose rest the card refused: PARTIALLY_PAID, the declined CHARGE returned. */
+    private taxi.blizz.payments.PaymentOperations.Operation declinedRest(OrderView order, Actor finance) {
+        long hold = order.priceMinor();
+        gateway.next("Approved", "Declined");
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PARTIALLY_PAID");
+        return paymentOperations.ofOrder(finance, order.id()).stream()
+                .filter(o -> o.type().equals("CHARGE") && o.state().equals("DECLINED")).findFirst().orElseThrow();
+    }
+
+    /** REQ-PAY-14: a declined charge is retried by hand, once, by someone with the right; it pays the debt. */
+    @Test
+    void aDeclinedChargeIsRetriedByHandOnceAndPaysTheDebt() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        Actor other = staffWith("finance.manage");
+        var declined = declinedRest(order, finance);
+        long clearing = clearingFor(order);
+        assertThat(clearing).isEqualTo(hold);
+
+        assertCode(() -> paymentOperations.ofOrder(other, order.id()), taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> paymentOperations.retry(other, UUID.randomUUID(), declined.id(), "x"),
+                taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), " "),
+                taxi.blizz.platform.ErrorCode.VALIDATION_FAILED);
+        UUID settle = operations(order, "SETTLE").getFirst();
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), settle, "x"),
+                taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+
+        UUID command = UUID.randomUUID();
+        var retry = paymentOperations.retry(finance, command, declined.id(), "The rider topped up the card");
+        assertThat(retry.retryOf()).isEqualTo(declined.id());
+        assertThat(retry.initiatedBy()).isEqualTo(finance.id());
+        assertThat(retry.amountMinor()).isEqualTo(700);
+        assertThat(paymentOperations.retry(finance, command, declined.id(), "The rider topped up the card").id())
+                .as("a repeat of the command").isEqualTo(retry.id());
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), "again"),
+                taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+        assertCode(() -> paymentOperations.retry(finance, UUID.randomUUID(), retry.id(), "too early"),
+                taxi.blizz.platform.ErrorCode.PAYMENT_UNKNOWN);
+
+        settlePayments();
+
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PAID");
+        assertThat(clearingFor(order)).as("the rest is counted once").isEqualTo(hold + 700);
+        assertThat(sent()).filteredOn(r -> r.startsWith("CHARGE:SALE")).hasSize(2);
+        settlePayments();
+        assertThat(clearingFor(order)).isEqualTo(hold + 700);
+        assertThat(jdbc.sql("select count(*) from audit_log where action = 'payment.retry' and actor_id = :staff")
+                .param("staff", finance.id()).query(Long.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void aRetryThatIsDeclinedAgainLeavesTheDebtAndCanBeRetriedItself() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        Actor finance = staffWith(taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION);
+        var declined = declinedRest(order, finance);
+        long clearing = clearingFor(order);
+
+        gateway.next("Declined");
+        var retry = paymentOperations.retry(finance, UUID.randomUUID(), declined.id(), "First try");
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PARTIALLY_PAID");
+        assertThat(clearingFor(order)).isEqualTo(clearing);
+
+        var again = paymentOperations.retry(finance, UUID.randomUUID(), retry.id(), "Second try");
+        assertThat(again.retryOf()).isEqualTo(retry.id());
+        settlePayments();
+        assertThat(orders.get(order.id()).paymentState()).isEqualTo("PAID");
+        assertThat(clearingFor(order)).isEqualTo(clearing + 700);
     }
 }

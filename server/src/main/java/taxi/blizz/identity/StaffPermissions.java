@@ -40,6 +40,8 @@ public final class StaffPermissions {
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
             new Permission("wallets.manage", "Finance", "Riders' bonus accounts: view and top up"),
+            new Permission("payments.retry", "Finance",
+                    "Card operations of an order; retry a declined charge by hand (audited)"),
             new Permission("promotions.manage", "Finance", "Promotions for riders: discounts and bonuses"),
             new Permission(StaffPermissions.SUPPORT_MANAGE, "Support", "Support cases and problem queues"),
             new Permission("clients.manage", "Support", "Riders: find, see the card, block and unblock"),
