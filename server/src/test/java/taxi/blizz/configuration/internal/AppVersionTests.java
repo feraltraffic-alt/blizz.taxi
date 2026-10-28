@@ -47,6 +47,21 @@ class AppVersionTests {
     }
 
     @Test
+    void outdatedDriverCompletesTripUnderWay() throws Exception {
+        setMinimum("DRIVER_ANDROID", "9.0.0");
+        UUID trip = UUID.randomUUID();
+        // Phase commands and location are not in the checked list, so they must not be 426.
+        postReq("/api/driver/v1/trips/" + trip + "/arrive", "DRIVER_ANDROID", "1.0.0")
+                .andExpect(status().is(401));
+        postReq("/api/driver/v1/trips/" + trip + "/start", "DRIVER_ANDROID", "1.0.0")
+                .andExpect(status().is(401));
+        postReq("/api/driver/v1/trips/" + trip + "/complete", "DRIVER_ANDROID", "1.0.0")
+                .andExpect(status().is(401));
+        postReq("/api/driver/v1/location-batches", "DRIVER_ANDROID", "1.0.0")
+                .andExpect(status().is(401));
+    }
+
+    @Test
     void outdatedRiderQuoteAndOrderAre426() throws Exception {
         setMinimum("RIDER_ANDROID", "2.0.0");
         postReq("/api/rider/v1/quotes", "RIDER_ANDROID", "1.0.0")
