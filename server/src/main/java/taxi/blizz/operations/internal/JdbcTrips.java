@@ -111,9 +111,7 @@ class JdbcTrips implements Trips {
                     Arrival check = arrivalCheck(driver, trip.orderId());
                     String exception = blankToNull(exceptionReason);
                     if (exception == null && check.problem() != null) {
-                        throw new DomainException(check.problem(), check.problem() == ErrorCode.PICKUP_TOO_FAR
-                                ? "Too far from the pickup point; confirm with a reason"
-                                : "No current location; confirm with a reason");
+                        throw new DomainException(check.problem(), check.message());
                     }
                     OffsetDateTime now = core.now();
                     jdbc.sql("""
@@ -408,31 +406,38 @@ class JdbcTrips implements Trips {
         return new Locked(tripId, orderId, row.assignmentId(), row.phase(), order);
     }
 
-    private record Arrival(Integer distanceM, ErrorCode problem) {
+    private record Arrival(Integer distanceM, ErrorCode problem, String message) {
     }
 
     /** Distance from the driver's last server-side position to the pickup, and whether it is acceptable. */
     private Arrival arrivalCheck(Actor driver, UUID orderId) {
-        record Row(Integer distance, OffsetDateTime locationAt) {
+        record Row(Integer distance, OffsetDateTime locationAt, Float accuracy) {
         }
         Optional<Row> row = jdbc.sql("""
                         select cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance,
-                               ws.last_location_at
+                               ws.last_location_at, ws.last_location_accuracy
                         from work_session ws, ride_order o
                         where ws.driver_id = :driver and ws.state in ('OPEN', 'CLOSING') and o.id = :order
                           and ws.last_location is not null""")
                 .param("driver", driver.id())
                 .param("order", orderId)
-                .query((rs, i) -> new Row((Integer) rs.getObject(1), rs.getObject(2, OffsetDateTime.class)))
+                .query((rs, i) -> new Row((Integer) rs.getObject(1), rs.getObject(2, OffsetDateTime.class),
+                        (Float) rs.getObject(3)))
                 .optional();
         if (row.isEmpty() || row.get().locationAt() == null
                 || row.get().locationAt().isBefore(core.now().minus(presence.gpsMaxAge()))) {
-            return new Arrival(row.map(Row::distance).orElse(null), ErrorCode.LOCATION_NOT_FRESH);
+            return new Arrival(row.map(Row::distance).orElse(null), ErrorCode.LOCATION_NOT_FRESH,
+                    "No current location; confirm with a reason");
+        }
+        if (row.get().accuracy() != null && row.get().accuracy() > properties.arrivalAccuracyMeters()) {
+            return new Arrival(row.get().distance(), ErrorCode.LOCATION_NOT_FRESH,
+                    "The location is not accurate enough; confirm with a reason");
         }
         if (row.get().distance() > properties.arrivalRadiusMeters()) {
-            return new Arrival(row.get().distance(), ErrorCode.PICKUP_TOO_FAR);
+            return new Arrival(row.get().distance(), ErrorCode.PICKUP_TOO_FAR,
+                    "Too far from the pickup point; confirm with a reason");
         }
-        return new Arrival(row.get().distance(), null);
+        return new Arrival(row.get().distance(), null, null);
     }
 
     private void event(Locked trip, String type, Actor driver, String reason, Map<String, Object> payload) {

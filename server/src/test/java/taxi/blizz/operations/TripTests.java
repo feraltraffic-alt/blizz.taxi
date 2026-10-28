@@ -219,6 +219,21 @@ class TripTests {
     }
 
     @Test
+    void arrivalWithAPoorFixNeedsAReasonAndIsFlagged() {
+        Ride ride = assigned(PaymentMethod.CASH);
+        sessions.heartbeat(ride.driver().actor(), ride.driver().device(),
+                new LocationFix(north(30), 250.0, OffsetDateTime.now(), sequence++));
+
+        assertCode(() -> trips.arrive(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
+                null), ErrorCode.LOCATION_NOT_FRESH);
+
+        TripView flagged = trips.arrive(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                ride.trip().version(), "GPS is poor between the buildings");
+        assertThat(flagged.phase()).isEqualTo("WAITING");
+        assertThat(flagged.needsReview()).isTrue();
+    }
+
+    @Test
     void arrivalWithAStaleLocationIsRefused() {
         Ride ride = assigned(PaymentMethod.CASH);
         moveTo(ride.driver(), north(30));

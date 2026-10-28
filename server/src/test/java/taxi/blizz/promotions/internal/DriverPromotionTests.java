@@ -6,7 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.finance.DriverBalances;
@@ -27,6 +33,7 @@ import taxi.blizz.operations.WorkSessions;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.OutboxMessage;
 import taxi.blizz.platform.SubjectType;
 import taxi.blizz.platform.internal.OutboxRelay;
 import taxi.blizz.pricing.QuoteService;
@@ -63,6 +70,10 @@ class DriverPromotionTests {
     OutboxRelay relay;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    DriverPromotionTrips handler;
+    @Autowired
+    PlatformTransactionManager txManager;
 
     TestRides rides;
     UUID cityId;
@@ -134,6 +145,44 @@ class DriverPromotionTests {
         assertThat(promotions.progress(driver.actor())).filteredOn(p -> p.promotionId().equals(offHours.id()))
                 .singleElement().satisfies(p -> assertThat(p.ordersDone()).as("outside its hours")
                         .isZero());
+    }
+
+    private OutboxMessage tripCompleted(UUID driverId) {
+        UUID orderId = UUID.randomUUID();
+        OffsetDateTime at = OffsetDateTime.now(ZoneOffset.UTC);
+        String payload = """
+                {"order_id":"%s","driver_id":"%s","payment_method":"CASH","city_id":"%s","accepted_at":"%s"}"""
+                .formatted(orderId, driverId, cityId, at);
+        return new OutboxMessage(UUID.randomUUID(), "TripCompleted", 1, "Order", orderId, 1, payload, null, at, 0);
+    }
+
+    /** Two trips finishing at once: the second waits for the first's count, so the target is seen and paid once. */
+    @Test
+    void tripsCountedAtOnceStillPayTheReward() throws Exception {
+        promotions.create(admin, UUID.randomUUID(), draft("2 одночасно", 2, null, null, Repeat.ONCE), "test");
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        UUID driverId = driver.actor().id();
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+        CountDownLatch firstCounted = new CountDownLatch(1);
+        CountDownLatch commitFirst = new CountDownLatch(1);
+        CompletableFuture<Void> first = CompletableFuture.runAsync(() -> tx.executeWithoutResult(s -> {
+            handler.handle(tripCompleted(driverId));
+            firstCounted.countDown();
+            try {
+                commitFirst.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertThat(firstCounted.await(10, TimeUnit.SECONDS)).isTrue();
+        CompletableFuture<Void> second = CompletableFuture.runAsync(
+                () -> tx.executeWithoutResult(s -> handler.handle(tripCompleted(driverId))));
+        Thread.sleep(300); // the second trip is inserted and waits for the first one's lock
+        commitFirst.countDown();
+        first.get(10, TimeUnit.SECONDS);
+        second.get(10, TimeUnit.SECONDS);
+
+        assertThat(promotionMoney(driver.actor())).isEqualTo(10_000);
     }
 
     @Test

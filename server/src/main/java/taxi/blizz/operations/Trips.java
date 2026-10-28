@@ -23,8 +23,8 @@ public interface Trips {
     List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit);
 
     /**
-     * TO_PICKUP → WAITING. The driver's last server-side position must be fresh and near the pickup
-     * point; otherwise {@code PICKUP_TOO_FAR} / {@code LOCATION_NOT_FRESH}, unless the driver gives
+     * TO_PICKUP → WAITING. The driver's last server-side position must be fresh, accurate enough
+     * ({@code blizz.dispatch.arrival-accuracy-meters}) and near the pickup point; otherwise {@code PICKUP_TOO_FAR} / {@code LOCATION_NOT_FRESH}, unless the driver gives
      * an exception reason — then the arrival is accepted and flagged for review (REQ-ASG-06).
      */
     TripView arrive(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String exceptionReason);
