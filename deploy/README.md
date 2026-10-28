@@ -2,6 +2,23 @@
 
 Deployment, backup and restore for client instances: single-instance and high-availability profiles (section 26 of the specification).
 
+## Production profile
+
+A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profile has no default for any secret, and the server refuses to start, before it touches the database, while anything of development or the sandbox is left. It lists every problem at once, by name, never the value:
+
+| Variable | Rule |
+|---|---|
+| `OTP_SECRET`, `ACCESS_TOKEN_SECRET` | set, at least 32 characters, not a value from this repository |
+| `SECRETS_MASTER_KEY` | set (`openssl rand -base64 32`), not the dev or sandbox key; keep it with the database backups |
+| `DB_PASSWORD` | set |
+| `INSTANCE_ID` | set once for the instance and never changed (REQ-TEN-02); not the dev or sandbox id |
+| `PUBLIC_BASE_URL` | the instance's public `https://` address |
+| `ERASURE_JOURNAL_DIR` | a durable directory outside `/tmp`, not backed up with the database (ADR 0013) |
+| `OTP_PROVIDER`, `PUSH_PROVIDER`, geocoding provider | never `FAKE`; fake payment merchants are never allowed |
+| `STAFF_BOOTSTRAP_PASSWORD` | if set, not the sandbox password |
+
+`prod` is never combined with `dev`, `sandbox` or `test`. Without a profile the server starts as `dev`, which must never be used for real data.
+
 ## Keys of integrations
 
 Keys of Firebase, GraphHopper, the map keys of the apps and the payment merchants are entered in the admin panel

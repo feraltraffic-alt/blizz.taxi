@@ -11,6 +11,12 @@ import org.springframework.context.annotation.Configuration;
 class PlatformConfiguration {
 
     /** Server time in UTC; tests may replace it. Deadlines never use the device clock. */
+    /** Static: a bean factory post-processor runs before every other bean (REQ-ENG-13). */
+    @Bean
+    static ProductionSafetyCheck productionSafetyCheck() {
+        return new ProductionSafetyCheck();
+    }
+
     @Bean
     @ConditionalOnMissingBean
     Clock clock() {
