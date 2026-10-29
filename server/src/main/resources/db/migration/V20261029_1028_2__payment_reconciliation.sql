@@ -14,6 +14,8 @@ create table payment_reconciliation (
     open_count integer check (open_count >= 0),
     failure_code text check (failure_code ~ '^[A-Z][A-Z0-9_]{0,79}$'),
     attempts integer not null default 1 check (attempts > 0),
+    -- A failed full run is tried again only from here on, with a growing pause (review of PR #109, S1).
+    next_attempt_at timestamptz,
     lease_token uuid,
     lease_until timestamptz,
     created_at timestamptz not null,
@@ -33,8 +35,10 @@ create index payment_reconciliation_retry_idx on payment_reconciliation(updated_
 create table payment_reconciliation_item (
     id uuid primary key,
     run_id uuid not null references payment_reconciliation(id),
-    kind text not null check (kind in ('MISSING_LOCALLY','MISSING_AT_PROVIDER','AMOUNT','CURRENCY','STATE','UNKNOWN_STILL')),
+    kind text not null check (kind in ('MISSING_LOCALLY','MISSING_AT_PROVIDER','AMOUNT','CURRENCY','STATE','UNKNOWN_STILL','NOT_CHECKED')),
     reference_fingerprint text not null check (reference_fingerprint ~ '^[a-f0-9]{64}$'),
+    -- The reference as staff can look it up at the provider, every run of five or more digits or asterisks masked.
+    reference_display text check (length(reference_display) <= 80),
     local_operation_id uuid references payment_operation(id),
     local_record_id uuid,
     local_type text,
@@ -60,6 +64,8 @@ create table payment_reconciliation_item (
 );
 create index payment_reconciliation_item_open_idx on payment_reconciliation_item(kind) where state='OPEN';
 create index payment_reconciliation_item_page_idx on payment_reconciliation_item(run_id,id);
+-- A difference already reported by an earlier full run is not reported again (review of PR #109, B3).
+create index payment_reconciliation_item_seen_idx on payment_reconciliation_item(reference_fingerprint,kind);
 
 -- Accounting-only provider evidence, including fees on clean rows. Never raw bank JSON/customer data.
 create table payment_reconciliation_entry (

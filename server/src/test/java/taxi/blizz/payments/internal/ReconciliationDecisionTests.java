@@ -192,7 +192,7 @@ class ReconciliationDecisionTests {
         var failed=store.begin(merchant,java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(5),false);
         store.fail(failed,"RECONCILIATION_PROVIDER_UNAVAILABLE");
         assertThat(meters.get("blizz.payments.reconciliation.oldest.success.age").gauge().value()).isGreaterThan(29*3600);
-        assertThat(meters.find("blizz.payments.reconciliation.items").gauges()).hasSize(6);
+        assertThat(meters.find("blizz.payments.reconciliation.items").gauges()).hasSize(taxi.blizz.payments.PaymentReconciliations.Kind.values().length);
         assertThat(meters.get("blizz.payments.reconciliation.items").tag("kind","AMOUNT").gauge().value()).isGreaterThanOrEqualTo(1);
     }
 

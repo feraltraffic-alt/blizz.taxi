@@ -34,7 +34,7 @@ class CardReconciliation {
             "RECONCILIATION_INVALID_RESPONSE","RECONCILIATION_AMBIGUOUS_LOCAL_REFERENCE",
             "RECONCILIATION_CONFLICTING_BANK_EVIDENCE","RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND",
             "RECONCILIATION_TOO_MANY_WINDOWS","RECONCILIATION_UNOWNED_PENDING_TRANSACTION",
-            "RECONCILIATION_MERCHANT_UNAVAILABLE","RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK",
+            "RECONCILIATION_MERCHANT_UNAVAILABLE",
             "RECONCILIATION_LOCAL_CHANGED");
     private final Merchants merchants;
     private final Providers providers;
@@ -77,11 +77,14 @@ class CardReconciliation {
             references.addAll(bank.keySet());
             Map<String,Local> local=locals.load(merchantId,references);
             Map<LocalDate,Set<String>> missingDays=new java.util.TreeMap<>();
+            // Absent and older than the lookback (approved decision B): an item for a person, not a failed day.
+            Set<String> tooOld=new LinkedHashSet<>();
             for (String reference:cohort) {
                 Local known=local.get(reference);
                 if (known!=null && (known.succeeded() || known.uncertain()) && !bank.containsKey(reference)) {
                     if (known.createdAt().isBefore(observed.minusDays(30).toInstant())) {
-                        throw new IllegalStateException("RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
+                        tooOld.add(reference);
+                        continue;
                     }
                     LocalDate creationDay=known.createdAt().atOffset(ZoneOffset.UTC).toLocalDate();
                     if (!creationDay.equals(day)) missingDays.computeIfAbsent(creationDay,ignored->new LinkedHashSet<>()).add(reference);
@@ -110,7 +113,9 @@ class CardReconciliation {
             for (String reference:references) {
                 Local known=local.get(reference);
                 ProviderTransaction row=bank.get(reference);
-                if (known==null) {
+                if (row==null && tooOld.contains(reference)) {
+                    items.add(item(attempt.run(),reference,Kind.NOT_CHECKED,known,null));
+                } else if (known==null) {
                     if (row==null) throw new IllegalStateException("RECONCILIATION_AMBIGUOUS_LOCAL_REFERENCE");
                     String state=bankState(row.status());
                     if ("PENDING".equals(state)) throw new IllegalStateException("RECONCILIATION_UNOWNED_PENDING_TRANSACTION");
@@ -170,6 +175,7 @@ class CardReconciliation {
     }
     private static Item item(Run run,String reference,Kind kind,Local local,ProviderTransaction bank) {
         return new Item(UUID.randomUUID(),run.id(),kind,ReconciliationStore.fingerprint(run.merchantId(),reference),
+                ReconciliationStore.display(reference),
                 local==null?null:local.operationId(),local==null?null:local.recordId(),local==null?null:local.type(),
                 local==null?null:local.state(),local==null?null:(local.uncertain() && bank!=null && finalFor(local.pendingType(),bank.status())
                         ?local.pendingAmount():local.amountMinor()),local==null?null:local.currency(),

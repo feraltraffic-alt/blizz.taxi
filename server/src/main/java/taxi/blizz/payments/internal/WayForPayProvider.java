@@ -258,11 +258,17 @@ class WayForPayProvider implements PaymentProvider {
                         .contains(status.toLowerCase(Locale.ROOT))) {
                     throw new IllegalArgumentException();
                 }
-                long amount = minor(statementText(row.get("amount")));
+                // In the currency's own minor units: two decimals are not true of every currency.
+                int digits = java.util.Currency.getInstance(currency).getDefaultFractionDigits();
+                if (digits < 0) {
+                    throw new IllegalArgumentException();
+                }
+                long amount = new BigDecimal(statementText(row.get("amount"))).movePointRight(digits).longValueExact();
                 if (amount < 0) {
                     throw new IllegalArgumentException();
                 }
-                Long fee = row.get("fee") == null ? null : minor(statementText(row.get("fee")));
+                Long fee = row.get("fee") == null ? null
+                        : new BigDecimal(statementText(row.get("fee"))).movePointRight(digits).longValueExact();
                 result.add(new ProviderTransaction(reference, type, status, amount, currency, fee,
                         statementTime(row.get("createdDate"), false), statementTime(row.get("processingDate"), true)));
             }

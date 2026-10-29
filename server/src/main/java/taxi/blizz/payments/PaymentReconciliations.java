@@ -11,14 +11,18 @@ public interface PaymentReconciliations {
     String RESOLVE_PERMISSION = "payments.retry";
     String DIFFERENCES_FOUND = "PaymentReconciliationDifferencesFound";
 
-    enum Kind { MISSING_LOCALLY, MISSING_AT_PROVIDER, AMOUNT, CURRENCY, STATE, UNKNOWN_STILL }
+    /**
+     * NOT_CHECKED: the operation is absent from the statement and older than the 30-day lookback, so the provider is
+     * not asked again; staff check it in the provider's cabinet.
+     */
+    enum Kind { MISSING_LOCALLY, MISSING_AT_PROVIDER, AMOUNT, CURRENCY, STATE, UNKNOWN_STILL, NOT_CHECKED }
     enum Decision { EXPLAINED, CORRECTED_BY_HAND, ESCALATED }
 
     record Run(UUID id, UUID merchantId, LocalDate day, OffsetDateTime periodFrom, OffsetDateTime periodTo,
                OffsetDateTime observedUntil, boolean partial, String state, Integer localCount, Integer providerCount,
                Integer itemCount, Integer openCount, String failureCode, int attempts, OffsetDateTime createdAt,
                OffsetDateTime updatedAt, OffsetDateTime finishedAt, long version) { }
-    record Item(UUID id, UUID runId, Kind kind, String referenceFingerprint, UUID localOperationId, UUID localRecordId,
+    record Item(UUID id, UUID runId, Kind kind, String referenceFingerprint, String referenceDisplay, UUID localOperationId, UUID localRecordId,
                 String localType, String localState, Long localAmountMinor, String localCurrency,
                 String providerType, String providerState, String providerStatus, Long providerAmountMinor,
                 String providerCurrency, Long feeMinor, OffsetDateTime providerAt, String state, Decision decision,

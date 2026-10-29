@@ -166,7 +166,7 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
     static Item mapItem(ResultSet rs,int row) throws SQLException {
         String decision=rs.getString("decision");
         return new Item(rs.getObject("id",UUID.class),rs.getObject("run_id",UUID.class),Kind.valueOf(rs.getString("kind")),
-                rs.getString("reference_fingerprint"),rs.getObject("local_operation_id",UUID.class),rs.getObject("local_record_id",UUID.class),rs.getString("local_type"),
+                rs.getString("reference_fingerprint"),rs.getString("reference_display"),rs.getObject("local_operation_id",UUID.class),rs.getObject("local_record_id",UUID.class),rs.getString("local_type"),
                 rs.getString("local_state"),rs.getObject("local_amount_minor",Long.class),rs.getString("local_currency"),
                 rs.getString("provider_type"),rs.getString("provider_state"),rs.getString("provider_status"),
                 rs.getObject("provider_amount_minor",Long.class),rs.getString("provider_currency"),rs.getObject("fee_minor",Long.class),

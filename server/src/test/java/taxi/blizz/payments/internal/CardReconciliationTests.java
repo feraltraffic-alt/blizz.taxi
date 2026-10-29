@@ -131,6 +131,11 @@ class CardReconciliationTests {
         extra.put("transactionStatus", "Approved");
         override(List.of(statement, extra));
         differenceAlreadyOverridden("MISSING_LOCALLY");
+        // Staff can look the charge up at the provider; the phone and the card mask in it stay hidden.
+        assertThat(jdbc.sql("""
+                        select i.reference_display from payment_reconciliation_item i
+                        join payment_reconciliation r on r.id=i.run_id where r.merchant_id=:merchant""")
+                .param("merchant", merchant).query(String.class).single()).isEqualTo("external-+#####-#####");
     }
     @Test void aFinalProviderAnswerDoesNotApplyAnUnknownLocalOperation() {
         jdbc.sql("update payment_operation set state='UNKNOWN' where id=:id").param("id", operation).update();
@@ -214,6 +219,14 @@ class CardReconciliationTests {
                 .query(String.class).single()).isEqualTo("RECONCILIATION_PROVIDER_UNAVAILABLE");
         assertThat(meters.get("blizz.payments.reconciliation.failures").counter().count()).isEqualTo(failures+1);
         assertThat(meters.get("blizz.payments.reconciliation.failed").gauge().value()).isGreaterThanOrEqualTo(1);
+        // Not before its pause: no second provider call, still FAILED.
+        long lists=listRequests();
+        assertThat(run(completedDay,false)).isEqualTo(id);
+        assertThat(listRequests()).isEqualTo(lists);
+        assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
+                .query(String.class).single()).isEqualTo("FAILED");
+        jdbc.sql("update payment_reconciliation set next_attempt_at=now()-interval '1 second' where id=:id")
+                .param("id",id).update();
         assertThat(run(completedDay,false)).isEqualTo(id);
         assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
                 .query(String.class).single()).isEqualTo("CLEAN");
@@ -406,15 +419,129 @@ class CardReconciliationTests {
     }
 
     @Test
-    void missingAnchorOlderThanThirtyDaysFailsWithoutAnOutOfRangeProviderRead() {
+    void missingAnchorOlderThanThirtyDaysIsAnItemForAPersonWithoutAnOutOfRangeProviderRead() {
         jdbc.sql("update payment_operation set created_at=now()-interval '31 days' where id=:id")
                 .param("id",operation).update();override(List.of());
         UUID id=run();
-        assertThat(jdbc.sql("select failure_code from payment_reconciliation where id=:id").param("id",id)
-                .query(String.class).single()).isEqualTo("RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
+        // Approved decision B: an item staff can acknowledge, not a day that fails on every retry.
+        assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
+                .query(String.class).single()).isEqualTo("OPEN");
         assertThat(gateway.requests().stream().filter(r->"TRANSACTION_LIST".equals(r.get("transactionType")))).hasSize(1);
-        assertThat(jdbc.sql("select count(*) from payment_reconciliation_item where run_id=:id").param("id",id)
-                .query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select kind from payment_reconciliation_item where run_id=:id").param("id",id)
+                .query(String.class).list()).containsExactly("NOT_CHECKED");
+    }
+
+    private long listRequests() {
+        return gateway.requests().stream().filter(r->"TRANSACTION_LIST".equals(r.get("transactionType"))).count();
+    }
+
+    /** Puts the AUTH of the test at {@code at} (created and last changed) and forgets earlier runs' findings. */
+    private void authAt(OffsetDateTime at) {
+        jdbc.sql("update payment_operation set created_at=:at,updated_at=:at where id=:id")
+                .param("at",at).param("id",operation).update();
+        jdbc.sql("""
+                delete from payment_reconciliation_item where run_id in
+                    (select id from payment_reconciliation where merchant_id=:merchant)""")
+                .param("merchant",merchant).update();
+    }
+
+    private List<String> kinds(UUID run) {
+        return jdbc.sql("select kind from payment_reconciliation_item where run_id=:id order by kind").param("id",run)
+                .query(String.class).list();
+    }
+
+    @Test
+    void aFullDayTakesItsOperationsFromTwoHoursBeforeToTwoHoursAfterAndAsksTheProviderForExactlyThat() {
+        override(List.of());
+        LocalDate today=LocalDate.now(ZoneOffset.UTC);
+        // Each day below sees the AUTH at an edge of its window; the bank list is empty, so "in" is a finding.
+        record Edge(LocalDate day, OffsetDateTime at, boolean in) { }
+        for (Edge edge:List.of(
+                new Edge(today.minusDays(2),today.minusDays(3).atTime(22,0).atOffset(ZoneOffset.UTC),true),
+                new Edge(today.minusDays(3),today.minusDays(4).atTime(21,59,59).atOffset(ZoneOffset.UTC),false),
+                new Edge(today.minusDays(4),today.minusDays(3).atTime(1,59,59).atOffset(ZoneOffset.UTC),true),
+                new Edge(today.minusDays(5),today.minusDays(4).atTime(2,0).atOffset(ZoneOffset.UTC),false))) {
+            authAt(edge.at());
+            long before=listRequests();
+            UUID id=run(edge.day(),false);
+            assertThat(kinds(id)).as("%s at %s",edge.day(),edge.at())
+                    .isEqualTo(edge.in()?List.of("MISSING_AT_PROVIDER"):List.of());
+            Map<String,Object> primary=gateway.requests().stream()
+                    .filter(r->"TRANSACTION_LIST".equals(r.get("transactionType"))).skip(before).findFirst().orElseThrow();
+            assertThat(((Number)primary.get("dateBegin")).longValue())
+                    .isEqualTo(edge.day().atStartOfDay().toEpochSecond(ZoneOffset.UTC)-7200);
+            assertThat(((Number)primary.get("dateEnd")).longValue())
+                    .isEqualTo(edge.day().plusDays(1).atStartOfDay().toEpochSecond(ZoneOffset.UTC)+7200);
+        }
+    }
+
+    @Test
+    void anAmountOffByOneMinorUnitIsADifference() {
+        long hold=WayForPayProvider.minor((String)statement.get("amount"));
+        statement.put("amount",WayForPayProvider.amount(hold+1));
+        difference("AMOUNT");
+    }
+
+    @Test
+    void theSameBankOnlyChargeSeenByTwoFullDaysIsReportedOnceWithOneCase() {
+        Map<String,Object> extra=new LinkedHashMap<>(statement);
+        extra.put("orderReference","bank-only-"+UUID.randomUUID());
+        extra.put("transactionStatus","Approved");
+        override(List.of(extra));
+        LocalDate today=LocalDate.now(ZoneOffset.UTC);
+        UUID first=run(today.minusDays(3),false);
+        UUID second=run(today.minusDays(2),false);
+        assertThat(kinds(first)).containsExactly("MISSING_LOCALLY");
+        assertThat(kinds(second)).as("reported by the day before").isEmpty();
+        assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",second)
+                .query(String.class).single()).isEqualTo("CLEAN");
+        drain();drain();
+        assertThat(jdbc.sql("select count(*) from support_case where source_key in (:a,:b)")
+                .param("a","reconciliation:"+first).param("b","reconciliation:"+second).query(Long.class).single())
+                .isOne();
+    }
+
+    @Test
+    void aFailedFullRunStopsAfterItsLastAttemptAndStaysForAPerson() {
+        LocalDate day=LocalDate.now(ZoneOffset.UTC).minusDays(2);
+        override(Map.of("reasonCode", 1113, "transactionList", List.of()));
+        UUID id=run(day,false);
+        jdbc.sql("update payment_reconciliation set attempts=:max,next_attempt_at=now()-interval '1 second' where id=:id")
+                .param("max",ReconciliationStore.MAX_ATTEMPTS).param("id",id).update();
+        override(List.of());
+        long before=listRequests();
+        assertThat(run(day,false)).isEqualTo(id);
+        assertThat(listRequests()).isEqualTo(before);
+        assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
+                .query(String.class).single()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void theScheduleCatchesUpOnTheDaysTheServiceMissedWithinTheLookback() {
+        var schedule=new ReconciliationSchedule(jdbc,context.getBean(CardReconciliation.class),
+                context.getBean(ReconciliationMetrics.class),java.time.Clock.systemUTC());
+        LocalDate latest=ReconciliationSchedule.latestCompletedDay(java.time.Instant.now());
+        assertThat(schedule.daysToRun(merchant,latest)).as("a new merchant starts now").containsExactly(latest);
+        lastRun(latest.minusDays(3));
+        assertThat(schedule.daysToRun(merchant,latest))
+                .containsExactly(latest.minusDays(2),latest.minusDays(1),latest);
+        double failures=meters.get("blizz.payments.reconciliation.failures").counter().count();
+        lastRun(latest.minusDays(40));
+        jdbc.sql("delete from payment_reconciliation where merchant_id=:m and day>:d").param("m",merchant)
+                .param("d",latest.minusDays(40)).update();
+        List<LocalDate> days=schedule.daysToRun(merchant,latest);
+        assertThat(days).hasSize(ReconciliationSchedule.LOOKBACK_DAYS);
+        assertThat(days.getFirst()).isEqualTo(latest.minusDays(ReconciliationSchedule.LOOKBACK_DAYS-1));
+        assertThat(meters.get("blizz.payments.reconciliation.failures").counter().count()).as("the lost days are reported")
+                .isEqualTo(failures+1);
+    }
+
+    private void lastRun(LocalDate day) {
+        jdbc.sql("""
+                insert into payment_reconciliation(id,merchant_id,day,period_from,period_to,partial,state,attempts,
+                    created_at,updated_at,finished_at)
+                values (:id,:merchant,:day,now()-interval '1 day',now(),false,'CLEAN',1,now(),now(),now())""")
+                .param("id",UUID.randomUUID()).param("merchant",merchant).param("day",day).update();
     }
 
     @Test

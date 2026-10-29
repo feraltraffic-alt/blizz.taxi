@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,9 +38,10 @@ class ReconciliationSchedule {
         latestDay(attempted);
         var due=jdbc.sql("""
                 select merchant_id,day from payment_reconciliation
-                where not partial and (state='FAILED' or (state='RUNNING' and lease_until<=:now))
+                where not partial and ((state='FAILED' and attempts<:max and (next_attempt_at is null or next_attempt_at<=:now))
+                    or (state='RUNNING' and lease_until<=:now))
                 order by updated_at limit 100
-                """).param("now",OffsetDateTime.now(clock)).query((rs,n)->
+                """).param("now",OffsetDateTime.now(clock)).param("max",ReconciliationStore.MAX_ATTEMPTS).query((rs,n)->
                 new Due(rs.getObject("merchant_id",UUID.class),rs.getObject("day",LocalDate.class))).list();
         for (Due row:due) if (attempted.add(row)) safely(row.merchant(),row.day());
     }
@@ -48,9 +50,33 @@ class ReconciliationSchedule {
         LocalDate day=latestCompletedDay(clock.instant());
         // Current merchant configuration is bounded; completed run identity prevents repeat provider calls.
         for (UUID merchant:jdbc.sql("select id from payment_merchant order by id").query(UUID.class).list()) {
-            if (attempted.add(new Due(merchant,day))) safely(merchant,day);
+            for (LocalDate missed:daysToRun(merchant,day)) {
+                if (attempted.add(new Due(merchant,missed))) safely(merchant,missed);
+            }
         }
     }
+
+    /**
+     * Every day since the merchant's last full run up to {@code latest}, so days the service was down are reconciled
+     * too (review of PR #109, B1); a merchant without runs starts at {@code latest}. At most LOOKBACK_DAYS: older days
+     * cannot be asked for any more and are reported in the log and the failure counter.
+     */
+    List<LocalDate> daysToRun(UUID merchant,LocalDate latest) {
+        LocalDate last=jdbc.sql("select max(day) from payment_reconciliation where merchant_id=:merchant and not partial")
+                .param("merchant",merchant).query((rs,n)->rs.getObject(1,LocalDate.class)).list().getFirst();
+        LocalDate from=last==null?latest:last.plusDays(1);
+        LocalDate floor=latest.minusDays(LOOKBACK_DAYS-1);
+        if (from.isBefore(floor)) {
+            metrics.failure();
+            log.warn("Card reconciliation: days before {} are beyond the {}-day lookback and were not reconciled",floor,
+                    LOOKBACK_DAYS);
+            from=floor;
+        }
+        List<LocalDate> days=new java.util.ArrayList<>();
+        for (LocalDate d=from;!d.isAfter(latest);d=d.plusDays(1)) days.add(d);
+        return days;
+    }
+    static final int LOOKBACK_DAYS=30;
     private void safely(UUID merchant,LocalDate day) {
         try { reconciliation.run(merchant,day,false); }
         catch (RuntimeException ignored) {

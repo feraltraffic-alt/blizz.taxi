@@ -5355,11 +5355,18 @@ components:
         run_id: {type: string, format: uuid}
         kind:
           type: string
-          enum: [MISSING_LOCALLY, MISSING_AT_PROVIDER, AMOUNT, CURRENCY, STATE, UNKNOWN_STILL]
+          enum: [MISSING_LOCALLY, MISSING_AT_PROVIDER, AMOUNT, CURRENCY, STATE, UNKNOWN_STILL, NOT_CHECKED]
         reference_fingerprint:
           type: string
           pattern: "^[a-f0-9]{64}$"
           description: Merchant-scoped safe identity of the provider reference; arbitrary external reference strings may contain personal data and are not persisted.
+        reference_display:
+          type: [string, "null"]
+          maxLength: 80
+          description: >-
+            The provider reference for looking the transaction up in the provider's cabinet, at most 80 characters, with
+            every run of five or more digits or asterisks replaced by #####. Our own references (operation type and id) stay
+            readable.
         local_operation_id: {type: [string, "null"], format: uuid}
         local_record_id:
           type: [string, "null"]

@@ -145,6 +145,25 @@ class ReconciliationProviderTests {
         assertThat(bank.transactions(MERCHANT,FROM,TO)).isEmpty();
     }
 
+    @Test
+    void amountsAreReadInTheMinorUnitsOfTheirOwnCurrency() {
+        Clock clock=Clock.fixed(FROM.plusSeconds(3600),ZoneOffset.UTC);
+        FakeProvider.Gateway gateway=new FakeProvider.Gateway(account->"unit-secret",clock);
+        FakeProvider bank=new FakeProvider(gateway,clock,"http://example.test");
+        Map<String,Object> yen=row();
+        yen.put("currency","JPY");yen.put("amount","1500");yen.put("fee","15");
+        gateway.reconciliationList(MERCHANT.account(),Map.of("reasonCode",1100,"transactionList",List.of(yen)));
+        assertThat(bank.transactions(MERCHANT,FROM,TO).getFirst().amountMinor()).as("no decimals in yen").isEqualTo(1500);
+        assertThat(bank.transactions(MERCHANT,FROM,TO).getFirst().feeMinor()).isEqualTo(15);
+        yen.put("amount","1500.5");
+        gateway.reconciliationList(MERCHANT.account(),Map.of("reasonCode",1100,"transactionList",List.of(yen)));
+        assertThatThrownBy(()->bank.transactions(MERCHANT,FROM,TO)).hasMessage("RECONCILIATION_INVALID_RESPONSE");
+        Map<String,Object> unknown=row();
+        unknown.put("currency","XXX");
+        gateway.reconciliationList(MERCHANT.account(),Map.of("reasonCode",1100,"transactionList",List.of(unknown)));
+        assertThatThrownBy(()->bank.transactions(MERCHANT,FROM,TO)).hasMessage("RECONCILIATION_INVALID_RESPONSE");
+    }
+
     private static Map<String, Object> row() {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("orderReference", "known-anchor");
