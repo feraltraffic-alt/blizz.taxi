@@ -3,7 +3,7 @@
 #
 #   scripts/wait-for-work.sh <label> [max-seconds]
 #
-# <label> is the contributor's label and branch prefix (grok, codex). Watches, from the moment it starts:
+# <label> is the contributor's label and branch prefix (e.g. codex). Watches, from the moment it starts:
 #   - open issues with the label: a new issue or a new comment on one;
 #   - pull requests from branches <label>/…: a new comment, a review, a review comment, or the PR closed/merged.
 # Exit 0 and print what changed as soon as something does. Exit 2 when max-seconds (default 540, under the usual
