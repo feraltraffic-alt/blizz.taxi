@@ -77,6 +77,17 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Missed:** at launch scale (more than 10,000 drivers) the scans would pass their own timeout within weeks. A check that always times out finds nothing.
 - **Habit:** **bound every periodic query by what can still change.** Use a lookback window, active rows only, and an index, and prove it with a volume test (`generate_series`) and `EXPLAIN`.
 
+## 10. A daily job that loses days and repeats findings (PR #109, issue #100)
+
+- **Task:** reconcile each day's card statement with our operations; one case per difference; no silent skips.
+- **Handed in:** a strong PR: no transaction around the provider, the signature checked, decisions audited, six kinds of difference proven one by one. Green CI and sandbox.
+- **Missed:**
+  - Only the latest day got a run. Days the service was down were never reconciled, and the freshness alert cleared once the next day succeeded.
+  - The overlapping ±2 h windows and a cohort driven by `updated_at` reported the same difference in consecutive runs, each with its own case.
+  - The approved decision "an anchor outside the lookback is a FAILED item" became "the whole day fails", announced in the issue but not approved. Every retry then failed the same way, and the day's real differences stayed hidden.
+- **Habit:** **a periodic job is tested across days, not inside one.** Ask: what if a run is missed, what if the same fact appears in two runs, and what if one bad record repeats forever?
+- **Habit:** **an approved decision changes only with a new approval.** Ask in the issue and wait for the answer before the code.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

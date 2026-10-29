@@ -35,7 +35,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 2. **Go through the issue line by line.** Every Scope bullet and every Acceptance bullet gets a line in the PR's *Acceptance* table, with the evidence (a test name, a sandbox run link, a command and its output). A bullet you did not do is written as not done.
 3. **A check, a validator, a guard or a filter you add is proven both ways.** Show it passing the good case **and** failing on one deliberate example of every kind of error the issue names. "It found nothing" is a finding about the check until proven otherwise.
 4. **No silent skips.** Code that cannot classify something (an unknown path, a status not in the contract, an unexpected state) fails or reports it; it never returns success by default.
-5. **Name what you chose.** Anything the issue left open goes into the PR's *Notes* as "chose X because Y", or into the issue as a question.
+5. **Name what you chose.** Anything the issue left open goes into the PR's *Notes* as "chose X because Y", or into the issue as a question. A decision the lead or the owner has already approved changes only after a new approval in the issue; announcing a different choice is not enough.
 6. **Read your own diff** (`git diff origin/main...HEAD`) as if you were the reviewer, before you ask for review.
 7. **Answer every review point**: "done" with the evidence, or "not doing, because …". A point dropped without a word is worse than a refusal with a reason.
 8. **Evidence is proof, not a location**: a run link, a test name, a command with its output. "See `file.mjs`" is not evidence.
@@ -83,6 +83,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - No database transaction is held open around a call to an outside provider (SMS, payments, maps): call first, then record the result in a short transaction.
 - Inside your transaction, never catch a `DomainException` thrown by another bean's `@Transactional` method to carry on: it has already marked the transaction for rollback, and the request ends in 500 at commit. Ask first with a read (e.g. `CardPayments.intent(orderId).isEmpty()`), then call.
 - A list setting's `@DefaultValue` takes one value per element: `@DefaultValue({"48", "380"})`. `@DefaultValue("48,380")` is a single element `"48,380"`.
+- A job that runs per period (a day, an hour) catches up on the periods it missed, and reports a fact seen by two periods once.
 - A query that runs on a schedule or on every request reads a bounded set (a lookback window, active rows, an index), never the whole history; prove it with a volume test and its `EXPLAIN`.
 
 ## Trying the system by hand
