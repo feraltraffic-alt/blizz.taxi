@@ -77,7 +77,21 @@ const visited = new Set();
 function trace(expr, owner, location) {
   expr=expr.trim();
   const literals = strings(expr);
-  if (/^"[^"\\]+"$/.test(expr) || expr.includes('?')) {
+  const question = mask(expr).indexOf('?');
+  if (question >= 0) {
+    let nested = 0;
+    for (let i = question; i < expr.length; i++) {
+      if (mask(expr)[i] === '?') nested++;
+      if (mask(expr)[i] === ':' && --nested === 0) {
+        trace(expr.slice(question + 1, i), owner, location);
+        trace(expr.slice(i + 1), owner, location);
+        return;
+      }
+    }
+    errors.push(`${location} unresolved conditional event expression ${expr}`);
+    return;
+  }
+  if (/^"[^"\\]+"$/.test(expr)) {
     if (!literals.length) errors.push(`${location} unresolved event expression ${expr}`);
     for(const value of literals) events.set(value,[...(events.get(value)??[]),location]);
     return;

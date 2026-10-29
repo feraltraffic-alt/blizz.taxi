@@ -65,8 +65,9 @@ class DriverBalanceApiTests {
         String token = sessions.openStaff(new VerifiedSubject(actor, "ACTIVE", false), ApiAudience.ADMIN, null)
                 .accessToken();
         UUID command = UUID.randomUUID();
-        String body = json.writeValueAsString(Map.of("command_id", command, "currency", "UAH", "amount_minor", 1234,
-                "kind", "DEPOSIT", "reference", "fictional receipt", "reason", "HTTP audit"));
+        Map<String, Object> request = Map.of("command_id", command, "currency", "UAH", "amount_minor", 1234,
+                "kind", "DEPOSIT", "reference", "fictional receipt", "reason", "HTTP audit");
+        String body = json.writeValueAsString(request);
         for (int i = 0; i < 2; i++) {
             MvcResult result = mvc.perform(post("/api/admin/v1/drivers/" + driver + "/balance/top-ups")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
@@ -81,9 +82,11 @@ class DriverBalanceApiTests {
         assertThat(statement.getResponse().getStatus()).isEqualTo(200);
         assertThat(json.readTree(statement.getResponse().getContentAsString()).get("driver_id").asText())
                 .isEqualTo(driver.toString());
+        Map<String, Object> changed = new java.util.LinkedHashMap<>(request);
+        changed.put("amount_minor", 1235);
         assertThat(mvc.perform(post("/api/admin/v1/drivers/" + driver + "/balance/top-ups")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
-                .content(body.replace("1234", "1235"))).andReturn().getResponse().getStatus()).isEqualTo(409);
+                .content(json.writeValueAsString(changed))).andReturn().getResponse().getStatus()).isEqualTo(409);
 
         jdbc.sql("update staff_user set permissions = '{}' where id = :id").param("id", staff).update();
         assertThat(mvc.perform(get("/api/admin/v1/drivers/" + driver + "/balance")
