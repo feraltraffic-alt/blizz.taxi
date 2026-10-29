@@ -40,6 +40,8 @@ public enum ErrorCode {
     LOCATION_NOT_FRESH(422),
     /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */
     PICKUP_TOO_FAR(422),
+    /** A one-time code for a number outside the served countries (blizz.otp.allowed-country-codes, issue #101). */
+    PHONE_COUNTRY_NOT_SERVED(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

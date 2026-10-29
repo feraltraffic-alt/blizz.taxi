@@ -58,6 +58,9 @@ blizz:
     otp-provider: ${OTP_PROVIDER:LIVE}
   otp:
     secret: ${OTP_SECRET:}
+    # Country calling codes whose numbers get one-time codes (issue #101): Poland and Ukraine. Any other number is
+    # refused, so expensive international routes cannot run up the SMS bill. Narrow it in an emergency, e.g. 380.
+    allowed-country-codes: ${OTP_ALLOWED_COUNTRY_CODES:48,380}
   auth:
     instance-id: ${INSTANCE_ID:}
     access-token-secret: ${ACCESS_TOKEN_SECRET:}

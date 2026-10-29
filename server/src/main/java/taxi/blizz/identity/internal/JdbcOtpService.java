@@ -151,7 +151,8 @@ class JdbcOtpService implements OtpService {
                     delivery.send(challengeId, phone, code, audience, preferred);
                 }
             });
-            return new ChallengeIssued(challengeId, expiresAt, now.plus(properties.resendAfter()));
+            return new ChallengeIssued(challengeId, expiresAt, now.plus(properties.resendAfter()),
+                    preferred != null ? preferred : OtpChannel.SMS);
         });
     }
 
