@@ -59,6 +59,7 @@ class CardReconciliationTests {
     @Autowired ApplicationContext context;
     @Autowired OutboxRelay relay;
     @Autowired PaymentWorker worker;
+    @Autowired JdbcCardPayments cardCommands;
     @Autowired taxi.blizz.payments.PaymentCards cards;
     @Autowired taxi.blizz.payments.CardTopUps topUps;
     @Autowired FakeVerifyController pages;
@@ -414,6 +415,37 @@ class CardReconciliationTests {
         assertThat(gateway.requests().stream().filter(r->"TRANSACTION_LIST".equals(r.get("transactionType")))).hasSize(1);
         assertThat(jdbc.sql("select count(*) from payment_reconciliation_item where run_id=:id").param("id",id)
                 .query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void captureDuringStatementFetchNeverCreatesAFalseDifference() {
+        long hold=WayForPayProvider.minor((String)statement.get("amount"));
+        assertThat(hold).isGreaterThan(100);
+        WayForPayProvider bank=(WayForPayProvider)providers.byName().get("FAKE");
+        var previous=(WayForPayProvider.Transport)ReflectionTestUtils.getField(bank,"transport");
+        var captured=new java.util.concurrent.atomic.AtomicBoolean();
+        ReflectionTestUtils.setField(bank,"transport",(WayForPayProvider.Transport)(url,body)->{
+            Map<String,Object> snapshot=previous.post(url,body);
+            if ("TRANSACTION_LIST".equals(body.get("transactionType")) && captured.compareAndSet(false,true)) {
+                // A real worker commits its capture after the bank snapshot, before the final local read.
+                tx.executeWithoutResult(status->cardCommands.startCapture(orderId,hold-100,"UAH"));
+                worker.processOrder(orderId);
+            }
+            return snapshot;
+        });
+        try {
+            UUID id=run();
+            assertThat(captured.get()).isTrue();
+            assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
+                    .query(String.class).single()).isEqualTo("FAILED");
+            assertThat(jdbc.sql("select failure_code from payment_reconciliation where id=:id").param("id",id)
+                    .query(String.class).single()).isEqualTo("RECONCILIATION_LOCAL_CHANGED");
+            assertThat(run()).isEqualTo(id);
+            assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
+                    .query(String.class).single()).isEqualTo("CLEAN");
+            assertThat(jdbc.sql("select count(*) from outbox where aggregate_id=:id and event_type='PaymentReconciliationDifferencesFound'")
+                    .param("id",id).query(Long.class).single()).isZero();
+        } finally { ReflectionTestUtils.setField(bank,"transport",previous); }
     }
 
     private void drain() { while(relay.runOnce()>0) { /* actual module consumers */ } }

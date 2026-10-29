@@ -34,7 +34,8 @@ class CardReconciliation {
             "RECONCILIATION_INVALID_RESPONSE","RECONCILIATION_AMBIGUOUS_LOCAL_REFERENCE",
             "RECONCILIATION_CONFLICTING_BANK_EVIDENCE","RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND",
             "RECONCILIATION_TOO_MANY_WINDOWS","RECONCILIATION_UNOWNED_PENDING_TRANSACTION",
-            "RECONCILIATION_MERCHANT_UNAVAILABLE","RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
+            "RECONCILIATION_MERCHANT_UNAVAILABLE","RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK",
+            "RECONCILIATION_LOCAL_CHANGED");
     private final Merchants merchants;
     private final Providers providers;
     private final ReconciliationStore store;
@@ -67,6 +68,7 @@ class CardReconciliation {
             PaymentProvider provider=providers.of(merchant);
             OffsetDateTime until=observed.isBefore(end)?observed:end;
             Set<String> cohort=locals.candidates(merchantId,attempt.run().periodFrom(),until);
+            Map<String,Local> beforeBank=locals.load(merchantId,cohort);
             Map<String,ProviderTransaction> bank=new LinkedHashMap<>();
             for (ProviderTransaction row:provider.transactions(merchant,attempt.run().periodFrom().toInstant(),until.toInstant())) {
                 merge(bank,row);
@@ -98,6 +100,12 @@ class CardReconciliation {
             }
             // A worker may have completed a callback while we fetched. Read the selected chains again, never apply.
             local=locals.load(merchantId,references);
+            for (String reference:cohort) {
+                if (!java.util.Objects.equals(beforeBank.get(reference),local.get(reference))) {
+                    // A capture/void may finish while the bank snapshot is in flight; compare a stable retry.
+                    throw new IllegalStateException("RECONCILIATION_LOCAL_CHANGED");
+                }
+            }
             List<Item> items=new ArrayList<>();
             for (String reference:references) {
                 Local known=local.get(reference);
