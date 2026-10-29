@@ -382,6 +382,9 @@ class ChargebackEvidenceTests {
         assertThat(code(tooMuch)).isEqualTo("CHARGEBACK_NOT_ALLOWED");
         assertThat(code(record(finance, orderId, UUID.randomUUID(), 100, "PLN"))).isEqualTo("CHARGEBACK_NOT_ALLOWED");
 
+        // The card ride's driver is free again: off the line, so the cash order goes to the new one.
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where city_id = :c and state <> 'CLOSED'")
+                .param("c", cityId).update();
         TestRides.Ride cash = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
         rides.complete(cash, true);
         Response onCash = record(finance, cash.order().id(), UUID.randomUUID(), 100, "UAH");
