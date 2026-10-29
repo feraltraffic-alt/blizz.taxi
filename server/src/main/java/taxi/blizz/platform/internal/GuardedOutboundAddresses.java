@@ -77,6 +77,12 @@ class GuardedOutboundAddresses implements OutboundAddresses {
                         + "BLIZZ_OUTBOUND_PRIVATE_HOSTS");
             }
         }
+        // Keys and positions never cross the internet in clear (threat model W3): plain http only inside the
+        // deployment's own private network, to a host it lists.
+        if (!listed && ("http".equals(scheme) || "ws".equals(scheme))) {
+            throw refused("plain " + scheme + " is allowed only to a private host listed in "
+                    + "BLIZZ_OUTBOUND_PRIVATE_HOSTS; use https");
+        }
         return uri;
     }
 

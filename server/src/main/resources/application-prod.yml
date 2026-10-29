@@ -20,3 +20,9 @@ logging:
   level:
     root: INFO
     taxi.blizz: INFO
+server:
+  # Behind the load balancer every request comes from its address: take the client's from X-Forwarded-For
+  # (threat model A4), so rate limits per IP (one-time codes) count clients, not the balancer. Tomcat trusts the
+  # header only from the private-network proxies of server.tomcat.remoteip.internal-proxies (the default: 10/8,
+  # 172.16/12, 192.168/16, loopback); a request from anywhere else keeps its own address, so nobody spoofs it.
+  forward-headers-strategy: native
