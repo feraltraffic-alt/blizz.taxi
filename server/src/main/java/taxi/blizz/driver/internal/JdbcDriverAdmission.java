@@ -377,6 +377,13 @@ class JdbcDriverAdmission implements DriverAdmission {
                     if (locked.status() != ReviewStatus.SUSPENDED) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a suspended driver can be reinstated");
                     }
+                    // A licence may have ended during the suspension; the expiry check skips suspended drivers
+                    // (audit 29.10.2026). Back to work only if no current document has ended.
+                    List<String> ended = endedDocuments(driverId);
+                    if (!ended.isEmpty()) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "Documents have ended: " + String.join(", ", ended));
+                    }
                     transition(driverId, ReviewStatus.SUSPENDED, ReviewStatus.APPROVED, reviewer, reason);
                     return profile(driverId);
                 });
@@ -605,6 +612,20 @@ class JdbcDriverAdmission implements DriverAdmission {
             }
         }
         return missing;
+    }
+
+    /** The types whose latest document has a validity that ended before today in the market's time zone. */
+    private List<String> endedDocuments(UUID driverId) {
+        LocalDate today = LocalDate.now(clock.withZone(properties.marketTimeZone()));
+        return jdbc.sql("""
+                        select type from (
+                            select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
+                                   type, valid_to
+                            from driver_document where driver_id = :id
+                            order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type,
+                                     created_at desc) latest
+                        where valid_to is not null and valid_to < :today order by type""")
+                .param("id", driverId).param("today", today).query(String.class).list();
     }
 
     private record CurrentDocument(UUID vehicleId, String type, String decision, LocalDate validTo) {
