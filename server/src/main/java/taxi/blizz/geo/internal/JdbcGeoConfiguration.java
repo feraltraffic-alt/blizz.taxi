@@ -39,6 +39,10 @@ class JdbcGeoConfiguration implements GeoConfiguration {
 
     @Override
     public Revision createCityDraft(CityDraft c) {
+        // A new city belongs to nobody's scope yet: only staff of all cities create one (audit 29.10.2026).
+        if (!staff.scope(c.actor(), MANAGE_PERMISSION).allCities()) {
+            throw error(ErrorCode.ACCESS_DENIED, "Creating a city needs " + MANAGE_PERMISSION + " for all cities");
+        }
         return commands.execute(key(c.actor(), "city.createDraft", c.commandId()), c, Revision.class, () -> {
             initialVersion(c.expectedVersion());
             text(c.code());
@@ -75,7 +79,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
 
     @Override
     public Revision createZoneDraft(ZoneDraft c) {
-        return commands.execute(key(c.actor(), "zone.createDraft", c.commandId()), c, Revision.class, () -> {
+        return commands.execute(key(c.actor(), "zone.createDraft", c.commandId(), c.cityId()), c, Revision.class, () -> {
             initialVersion(c.expectedVersion());
             text(c.type());
             if (c.cityId() == null || !jdbc.sql("select exists(select 1 from city where id = :id)")
@@ -119,7 +123,14 @@ class JdbcGeoConfiguration implements GeoConfiguration {
         // Table and operation come only from the named methods above, never from caller-supplied SQL.
         String table = city ? "city" : "zone";
         String operation = table + (publish ? ".publish" : ".archive");
-        return commands.execute(key(c.actor(), operation, c.commandId()), c, Revision.class, () -> {
+        // The city the object belongs to decides, as in city operations (audit 29.10.2026: a member of one city
+        // archived another city's zones).
+        UUID cityId = city ? c.id() : jdbc.sql("select city_id from zone where id = :id").param("id", c.id())
+                .query(UUID.class).optional().orElse(null);
+        if (cityId == null && !staff.scope(c.actor(), MANAGE_PERMISSION).allCities()) {
+            throw error(ErrorCode.ACCESS_DENIED, "Missing permission " + MANAGE_PERMISSION + " for all cities");
+        }
+        return commands.execute(key(c.actor(), operation, c.commandId(), cityId), c, Revision.class, () -> {
             if (city && publish) {
                 // One transaction-scoped publication mutex prevents equal-priority write skew.
                 // Take it before reading polygons, so concurrent publishers see the committed predecessor.
@@ -176,8 +187,8 @@ class JdbcGeoConfiguration implements GeoConfiguration {
         });
     }
 
-    private CommandKey key(Actor actor, String operation, UUID commandId) {
-        staff.require(actor, MANAGE_PERMISSION);
+    private CommandKey key(Actor actor, String operation, UUID commandId, UUID... cityIds) {
+        staff.require(actor, MANAGE_PERMISSION, cityIds);
         if (commandId == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }

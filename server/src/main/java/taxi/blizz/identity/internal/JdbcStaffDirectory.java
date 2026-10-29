@@ -240,6 +240,9 @@ class JdbcStaffDirectory implements StaffDirectory {
     }
 
     private void keepOneSuperAdmin(UUID leaving) {
+        // One check at a time: two super admins suspending each other at once both counted the other as remaining
+        // and left none (audit 29.10.2026). The count runs after the earlier change has committed.
+        jdbc.sql("select pg_advisory_xact_lock(hashtext('staff:last-super-admin'))").query().singleRow();
         int others = jdbc.sql("""
                         select count(*) from staff_user
                         where role = 'SUPER_ADMIN' and state = 'ACTIVE' and id <> :id""")

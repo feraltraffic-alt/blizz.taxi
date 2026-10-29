@@ -42,7 +42,10 @@ class AppVersionInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        App app = checked(request.getMethod(), request.getRequestURI());
+        // The decoded path, as the handler mapping sees it: a percent-encoded "/api/rider/v1/%6Frders" is routed to
+        // the orders handler and must be checked like it (audit 29.10.2026).
+        App app = checked(request.getMethod(),
+                org.springframework.web.util.UrlPathHelper.defaultInstance.getPathWithinApplication(request));
         if (app == null) {
             return true;
         }
