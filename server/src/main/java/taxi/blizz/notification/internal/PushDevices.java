@@ -26,7 +26,9 @@ import taxi.blizz.platform.SubjectType;
 class PushDevices {
 
     static final Set<String> PLATFORMS = Set.of("ANDROID", "IOS", "WEB");
-    static final int MAX_TOKEN_LENGTH = 4096;
+    static final int MAX_TOKEN_LENGTH = 1024;
+    /** Active devices one person keeps; FCM tokens are about 160 characters, APNs 64. */
+    static final int MAX_DEVICES = 5;
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -58,7 +60,7 @@ class PushDevices {
         }
         String token = registration.token() == null ? "" : registration.token().strip();
         if (token.isEmpty() || token.length() > MAX_TOKEN_LENGTH) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "token is required (at most 4096 characters)");
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "token is required (at most " + MAX_TOKEN_LENGTH + " characters)");
         }
         String locale = registration.locale() == null || registration.locale().isBlank() ? null
                 : registration.locale().strip();
@@ -92,6 +94,16 @@ class PushDevices {
                             .param("id", id).param("type", subject.type().name()).param("subject", subject.id())
                             .param("session", sessionId).param("platform", platform).param("token", token)
                             .param("locale", locale).param("now", now).update();
+                    // A person has a few phones, not thousands: past MAX_DEVICES the longest unused go, so one
+                    // account cannot make every push fan out to invented tokens (audit 29.10.2026).
+                    jdbc.sql("""
+                                    update push_device set state = 'REVOKED', updated_at = :now
+                                    where id in (select id from push_device
+                                                 where subject_type = :type and subject_id = :subject
+                                                   and state = 'ACTIVE'
+                                                 order by updated_at desc, id desc offset :keep)""")
+                            .param("now", now).param("type", subject.type().name()).param("subject", subject.id())
+                            .param("keep", MAX_DEVICES).update();
                     return device(id);
                 });
     }

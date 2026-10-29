@@ -25,10 +25,11 @@ components:
         token:
           type: string
           minLength: 1
-          maxLength: 4096
+          maxLength: 1024
           description: >-
             The Firebase Cloud Messaging registration token of the app. Registered again whenever it changes and
-            after every sign-in; the same token for another person moves to them.
+            after every sign-in; the same token for another person moves to them. A person keeps at most 5 active
+            devices: registering a sixth revokes the one unused the longest.
         locale:
           type: [string, "null"]
           maxLength: 35

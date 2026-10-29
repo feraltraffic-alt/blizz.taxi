@@ -29,6 +29,22 @@ class PushWorker {
     static final int BATCH = 50;
     static final int MAX_ATTEMPTS = 6;
     static final Duration LEASE = Duration.ofSeconds(30);
+    /** Longer than sending to all of a recipient's devices takes (5 s connect + 10 s answer each). */
+    static final Duration ITEM_LEASE = Duration.ofMinutes(5);
+
+    /**
+     * Renews the claim of one notification just before it is sent, if it is still this claim's (its attempt count is
+     * the claim's token). A batch is sent one by one and a provider may take its whole timeout, so the batch's short
+     * lease could lapse and a second instance send it again (audit 29.10.2026).
+     */
+    static boolean takeOver(JdbcClient jdbc, UUID id, int attempts, Clock clock, Duration lease) {
+        OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(java.time.ZoneOffset.UTC);
+        return jdbc.sql("""
+                        update notification set lease_until = :lease
+                        where id = :id and state = 'SENDING' and attempts = :attempts""")
+                .param("lease", now.plus(lease)).param("id", id).param("attempts", attempts)
+                .update() == 1;
+    }
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -58,6 +74,9 @@ class PushWorker {
         List<Claimed> claimed = claim();
         for (Claimed notification : claimed) {
             try {
+                if (!takeOver(jdbc, notification.id(), notification.attempts(), clock, ITEM_LEASE)) {
+                    continue; // its claim lapsed while earlier ones were sent, and another instance took it
+                }
                 deliver(notification);
             } catch (RuntimeException e) {
                 // Stays SENDING; taken again after the lease.

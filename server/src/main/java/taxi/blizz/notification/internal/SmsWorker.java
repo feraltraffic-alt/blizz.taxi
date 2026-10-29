@@ -57,6 +57,10 @@ class SmsWorker {
         List<Claimed> claimed = claim();
         for (Claimed sms : claimed) {
             try {
+                // TurboSMS may take its whole 60 s; renew this one's claim first (see PushWorker.takeOver).
+                if (!PushWorker.takeOver(jdbc, sms.id(), sms.attempts(), clock, java.time.Duration.ofMinutes(2))) {
+                    continue;
+                }
                 deliver(sms);
             } catch (RuntimeException e) {
                 log.error("SMS notification {} failed locally", sms.id(), e); // taken again after the lease

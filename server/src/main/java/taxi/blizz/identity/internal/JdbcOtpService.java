@@ -55,9 +55,13 @@ class JdbcOtpService implements OtpService {
     /** Confirmation codes are checked in their own transaction: a wrong attempt counts even if the caller fails. */
     private final TransactionTemplate own;
     private final CommittedMetrics metrics;
+    private final java.util.concurrent.Executor sendExecutor;
 
     JdbcOtpService(JdbcClient jdbc, TransactionTemplate tx, OtpDelivery delivery, OtpProperties properties,
-                   Clock clock, CommittedMetrics metrics) {
+                   Clock clock, CommittedMetrics metrics,
+                   @org.springframework.beans.factory.annotation.Qualifier(OtpSendConfiguration.EXECUTOR)
+                   java.util.concurrent.Executor sendExecutor) {
+        this.sendExecutor = sendExecutor;
         this.metrics = metrics;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -161,7 +165,16 @@ class JdbcOtpService implements OtpService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    delivery.send(challengeId, phone, code, audience, channel);
+                    // Not on the request's thread: it keeps its database connection until these callbacks end, and
+                    // a provider may take a minute, so a few hung sends emptied the pool (audit 29.10.2026).
+                    sendExecutor.execute(() -> {
+                        try {
+                            delivery.send(challengeId, phone, code, audience, channel);
+                        } catch (RuntimeException e) {
+                            org.slf4j.LoggerFactory.getLogger(JdbcOtpService.class)
+                                    .error("Sending the code of challenge {} failed", challengeId, e);
+                        }
+                    });
                 }
             });
             // What the codes cost, by channel and country (P5): the labels are a closed set, never the number.
