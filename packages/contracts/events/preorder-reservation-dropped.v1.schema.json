@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/preorder-reservation-dropped.v1.schema.json",
+  "title": "PreorderReservationDropped v1 payload",
+  "description": "Driver dropped the reservation before the cancellation deadline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "reservation_id",
+    "driver_id",
+    "reason_code",
+    "reason_labels"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "reservation_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "reason_code": {"type": "string"},
+    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}

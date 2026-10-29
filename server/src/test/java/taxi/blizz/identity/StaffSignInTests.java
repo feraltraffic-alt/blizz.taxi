@@ -133,6 +133,61 @@ class StaffSignInTests {
     // ------------------------------------------------------------ the whole path over HTTP
 
     @Test
+    void staffManagementHttpCommandsRequireSuperAdminAndEnforceVersions() throws Exception {
+        StaffMember member = operator(uniqueLogin("http-managed"), "managed-password-123");
+        jdbc.sql("update staff_user set must_change_password = false where id = :id")
+                .param("id", member.id()).update();
+        String ordinary = signIn.signIn(member.login(), "managed-password-123", ApiAudience.ADMIN, null, null)
+                .session().accessToken();
+        String root = signIn.signIn(superLogin, SUPER_PASSWORD, ApiAudience.ADMIN, null, null).session().accessToken();
+        Map<String, Object> profile = Map.of("first_name", "Olena", "last_name", "Updated",
+                "contacts", Map.of("email", "updated@example.invalid"), "role", "OPERATOR",
+                "permissions", List.of("orders.view"), "all_cities", false, "city_ids", List.of(cityA));
+        Map<String, Object> update = Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(),
+                "profile", profile, "reason", "HTTP audit");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/update", ordinary, update)
+                .getResponse().getStatus()).isEqualTo(403);
+        MvcResult updated = postJson("/api/admin/v1/staff/" + member.id() + "/update", root, update);
+        assertThat(updated.getResponse().getStatus()).isEqualTo(200);
+        assertThat(directory.get(superAdmin, member.id()).profile().lastName()).isEqualTo("Updated");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/update", root,
+                Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(), "profile", profile,
+                        "reason", "Stale version")).getResponse().getStatus()).isEqualTo(409);
+
+        long version = directory.get(superAdmin, member.id()).version();
+        Map<String, Object> suspend = Map.of("command_id", UUID.randomUUID(), "expected_version", version,
+                "reason", "Suspend through HTTP");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/suspend", ordinary, suspend)
+                .getResponse().getStatus()).isEqualTo(403);
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/suspend", root, suspend)
+                .getResponse().getStatus()).isEqualTo(200);
+        assertThat(mvc.perform(get("/api/admin/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + ordinary))
+                .andReturn().getResponse().getStatus()).isEqualTo(401);
+
+        // A separate active non-super-admin must reach authorization for restore/reset (not a revoked token).
+        StaffMember observer = operator(uniqueLogin("http-observer"), "observer-password-123");
+        jdbc.sql("update staff_user set must_change_password = false where id = :id")
+                .param("id", observer.id()).update();
+        String observerToken = signIn.signIn(observer.login(), "observer-password-123", ApiAudience.ADMIN, null, null)
+                .session().accessToken();
+        Map<String, Object> restore = Map.of("command_id", UUID.randomUUID(), "expected_version", version + 1,
+                "reason", "Restore through HTTP");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/restore", observerToken, restore)
+                .getResponse().getStatus()).isEqualTo(403);
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/restore", root, restore)
+                .getResponse().getStatus()).isEqualTo(200);
+        assertThat(directory.get(superAdmin, member.id()).state()).isEqualTo("ACTIVE");
+        Map<String, Object> reset = Map.of("command_id", UUID.randomUUID(), "expected_version", version + 2,
+                "temporary_password", "temporary-password-456", "reason", "Reset through HTTP");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/reset-password", observerToken, reset)
+                .getResponse().getStatus()).isEqualTo(403);
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/reset-password", root, reset)
+                .getResponse().getStatus()).isEqualTo(200);
+        assertThat(signIn.signIn(member.login(), "temporary-password-456", ApiAudience.ADMIN, null, null)
+                .passwordChangeRequired()).isTrue();
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void superAdminAddsAnOperatorWhoSignsInChangesThePasswordAndGetsOnlyTheTickedFunctions() throws Exception {
         MvcResult root = postJson("/auth/v1/staff/sign-in", null,

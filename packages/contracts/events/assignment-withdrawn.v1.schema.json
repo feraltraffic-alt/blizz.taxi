@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/assignment-withdrawn.v1.schema.json",
+  "title": "AssignmentWithdrawn v1 payload",
+  "description": "Driver withdrew before pickup; search resumes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "trip_id",
+    "driver_id"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "trip_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "reason_code": {"type": "string"},
+    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}

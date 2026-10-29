@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/order-scheduled.v1.schema.json",
+  "title": "OrderScheduled v1 payload",
+  "description": "Pre-order created for a future pickup.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "channel",
+    "city_id",
+    "payment_method",
+    "quote_id",
+    "price_minor",
+    "pickup_at",
+    "preorder"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "channel": {"type": "string"},
+    "city_id": {"type": "string", "format": "uuid"},
+    "payment_method": {"type": "string"},
+    "quote_id": {"type": "string", "format": "uuid"},
+    "price_minor": {"type": "integer", "minimum": 0},
+    "pickup_at": {"type": "string", "format": "date-time"},
+    "preorder": {"type": "boolean"},
+    "discount_minor": {"type": "integer", "minimum": 0},
+    "wallet_minor": {"type": "integer", "minimum": 0}
+  }
+}

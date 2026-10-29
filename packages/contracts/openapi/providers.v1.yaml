@@ -65,3 +65,96 @@ paths:
                 type: string
         "405":
           description: Only GET and POST are served.
+    post:
+      operationId: paymentReturnPagePost
+      summary: Provider form return to the rider web view
+      description: Like GET, serves a completion page; no payment is trusted from this return request.
+      tags: [Provider]
+      responses:
+        "200":
+          description: A short completion page.
+          content:
+            text/html:
+              schema:
+                type: string
+  /payments/v1/fake/verify:
+    post:
+      operationId: fakeProviderVerify
+      summary: FAKE provider card binding form
+      description: >-
+        Available only when blizz.payments.fake-merchants-allowed is true; otherwise 404.
+        Checks the merchant signature before delivering a signed fake notification.
+        fake_decline simulates refusal. Approved bindings receive a fake recurring token.
+        returnUrl, when supplied, redirects the web view after processing.
+      tags: [Provider]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                merchantAccount: {type: string}
+                merchantDomainName: {type: string}
+                merchantSignature: {type: string}
+                orderReference: {type: string}
+                amount: {type: string}
+                currency: {type: string}
+                returnUrl: {type: string}
+                fake_decline: {type: string}
+      responses:
+        "200":
+          description: Processed without a return URL.
+        "303":
+          description: Processed; redirect to returnUrl.
+          headers:
+            Location:
+              schema: {type: string}
+              description: The supplied return URL.
+        "400":
+          description: Signature mismatch.
+        "404":
+          description: Unknown FAKE merchant, or FAKE pages disabled.
+  /payments/v1/fake/pay:
+    post:
+      operationId: fakeProviderPay
+      summary: FAKE provider top-up payment form
+      description: >-
+        Available only when blizz.payments.fake-merchants-allowed is true; otherwise 404.
+        Checks the merchant signature before delivering a signed fake notification.
+        fake_decline simulates refusal. fake_lost_notification takes payment without notifying the server.
+        returnUrl, when supplied, redirects the web view after processing.
+      tags: [Provider]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                merchantAccount: {type: string}
+                merchantDomainName: {type: string}
+                merchantSignature: {type: string}
+                orderReference: {type: string}
+                amount: {type: string}
+                currency: {type: string}
+                returnUrl: {type: string}
+                fake_decline: {type: string}
+                orderDate: {type: string}
+                productName[]: {type: string}
+                productCount[]: {type: string}
+                productPrice[]: {type: string}
+                fake_lost_notification: {type: string}
+      responses:
+        "200":
+          description: Processed without a return URL.
+        "303":
+          description: Processed; redirect to returnUrl.
+          headers:
+            Location:
+              schema: {type: string}
+              description: The supplied return URL.
+        "400":
+          description: Signature mismatch.
+        "404":
+          description: Unknown FAKE merchant, or FAKE pages disabled.

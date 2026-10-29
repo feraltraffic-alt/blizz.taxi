@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/order-cancelled.v1.schema.json",
+  "title": "OrderCancelled v1 payload",
+  "description": "Order cancelled; reason labels are a snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "cancelled_by",
+    "reason_code",
+    "reason_labels"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "cancelled_by": {"type": "string"},
+    "reason_code": {"type": "string"},
+    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "trip_id": {"type": "string", "format": "uuid"}
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/order-debt-paid.v1.schema.json",
+  "title": "OrderDebtPaid v1 payload",
+  "description": "Previously unpaid order fare was collected; amounts are minor units.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "paid_minor",
+    "due_minor"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "paid_minor": {"type": "integer", "minimum": 0},
+    "due_minor": {"type": "integer", "minimum": 0}
+  }
+}

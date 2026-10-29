@@ -32,7 +32,7 @@ jobs:
             echo "::error title=Maven build::${msg}"
           done
       - name: Upload test reports
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: surefire-reports

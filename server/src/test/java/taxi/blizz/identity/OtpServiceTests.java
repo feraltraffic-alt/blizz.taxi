@@ -49,9 +49,10 @@ class OtpServiceTests {
 
     @Test
     void firstSignInCreatesAnActiveClient() {
+        OffsetDateTime requestedAt = OffsetDateTime.now();
         ChallengeIssued issued = otp.requestChallenge(OtpAudience.CLIENT, phone, "device-1", null);
         assertThat(delivery.sent).hasSize(1);
-        assertThat(issued.resendAvailableAt()).isAfter(OffsetDateTime.now().minusSeconds(1));
+        assertThat(issued.resendAvailableAt()).isAfter(requestedAt.minusSeconds(1));
 
         VerifiedSubject subject = otp.verify(issued.challengeId(), lastCode());
 

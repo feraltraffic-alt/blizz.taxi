@@ -109,8 +109,10 @@ class DriverPromotionTests {
                 Instant.now().minus(1, ChronoUnit.HOURS), null);
     }
 
-    private void ride(TestRides.Driver driver) {
+    private void ride(TestRides.Driver driver, OffsetDateTime acceptedAt) {
         TestRides.Ride ride = rides.started(cityId, driver, PICKUP, DROPOFF);
+        jdbc.sql("update assignment set created_at = :at where id = :id")
+                .param("at", acceptedAt).param("id", ride.trip().assignmentId()).update();
         rides.complete(ride, true);
         while (relay.runOnce() > 0) {
             // deliver
@@ -128,9 +130,14 @@ class DriverPromotionTests {
                 "test");
         DriverPromotions.Promotion offHours = promotions.create(admin, UUID.randomUUID(),
                 draft("Тільки о 03:00", 1, LocalTime.of(3, 0), LocalTime.of(3, 1), Repeat.EVERY_PERIOD), "test");
+        // Test the off-hours condition at noon UTC, regardless of when CI runs.
+        OffsetDateTime acceptedAt = OffsetDateTime.now(ZoneOffset.UTC)
+                .truncatedTo(ChronoUnit.DAYS).minusDays(1).plusHours(12);
+        jdbc.sql("update driver_promotion set starts_at = :at where city_id = :city")
+                .param("at", acceptedAt.minusHours(1)).param("city", cityId).update();
         TestRides.Driver driver = rides.driverNear(PICKUP);
 
-        ride(driver);
+        ride(driver, acceptedAt);
         assertThat(promotionMoney(driver.actor())).isZero();
         assertThat(promotions.progress(driver.actor())).filteredOn(p -> p.name().startsWith("2 "))
                 .singleElement().satisfies(p -> {
@@ -138,9 +145,9 @@ class DriverPromotionTests {
                     assertThat(p.rewarded()).isFalse();
                 });
 
-        ride(driver);
+        ride(driver, acceptedAt);
         assertThat(promotionMoney(driver.actor())).isEqualTo(10_000);
-        ride(driver);
+        ride(driver, acceptedAt);
         assertThat(promotionMoney(driver.actor())).as("ONCE pays once").isEqualTo(10_000);
         assertThat(promotions.progress(driver.actor())).filteredOn(p -> p.promotionId().equals(offHours.id()))
                 .singleElement().satisfies(p -> assertThat(p.ordersDone()).as("outside its hours")
@@ -163,9 +170,12 @@ class DriverPromotionTests {
         TestRides.Driver driver = rides.driverNear(PICKUP);
         UUID driverId = driver.actor().id();
         TransactionTemplate tx = new TransactionTemplate(txManager);
+        CompletableFuture<Integer> firstPid = new CompletableFuture<>();
+        CompletableFuture<Integer> secondPid = new CompletableFuture<>();
         CountDownLatch firstCounted = new CountDownLatch(1);
         CountDownLatch commitFirst = new CountDownLatch(1);
         CompletableFuture<Void> first = CompletableFuture.runAsync(() -> tx.executeWithoutResult(s -> {
+            firstPid.complete(jdbc.sql("select pg_backend_pid()").query(Integer.class).single());
             handler.handle(tripCompleted(driverId));
             firstCounted.countDown();
             try {
@@ -175,10 +185,25 @@ class DriverPromotionTests {
             }
         }));
         assertThat(firstCounted.await(10, TimeUnit.SECONDS)).isTrue();
-        CompletableFuture<Void> second = CompletableFuture.runAsync(
-                () -> tx.executeWithoutResult(s -> handler.handle(tripCompleted(driverId))));
-        Thread.sleep(300); // the second trip is inserted and waits for the first one's lock
-        commitFirst.countDown();
+        CompletableFuture<Void> second = CompletableFuture.runAsync(() -> tx.executeWithoutResult(s -> {
+            secondPid.complete(jdbc.sql("select pg_backend_pid()").query(Integer.class).single());
+            handler.handle(tripCompleted(driverId));
+        }));
+        try {
+            int firstBackend = firstPid.get(5, TimeUnit.SECONDS);
+            int secondBackend = secondPid.get(5, TimeUnit.SECONDS);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            boolean blocked = false;
+            while (System.nanoTime() < deadline) {
+                blocked = jdbc.sql("select :first = any(pg_blocking_pids(:second))")
+                        .param("first", firstBackend).param("second", secondBackend).query(Boolean.class).single();
+                if (blocked) break;
+                TimeUnit.MILLISECONDS.sleep(10);
+            }
+            assertThat(blocked).as("PostgreSQL observed the second trip waiting for the first transaction").isTrue();
+        } finally {
+            commitFirst.countDown();
+        }
         first.get(10, TimeUnit.SECONDS);
         second.get(10, TimeUnit.SECONDS);
 
