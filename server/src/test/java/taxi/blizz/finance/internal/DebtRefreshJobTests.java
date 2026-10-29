@@ -48,8 +48,9 @@ class DebtRefreshJobTests {
         // Per-test currency and ids: one test's limit and progress cannot contaminate another.
         prefix = UUID.randomUUID().toString();
         boolean restartCase = test.getTestMethod().orElseThrow().getName().startsWith("committed");
-        currency = restartCase ? "XZA" : "XZB";
-        long phoneBase = restartCase ? 380111000000L : 380112000000L;
+        boolean registryCase = test.getTestMethod().orElseThrow().getName().startsWith("registry");
+        currency = restartCase ? "XZA" : registryCase ? "XZC" : "XZB";
+        long phoneBase = restartCase ? 380111000000L : registryCase ? 380113000000L : 380112000000L;
         UUID staff = UUID.randomUUID();
         jdbc.sql("""
                 insert into staff_user(id,login,name,role,permissions,all_cities,state,created_at,updated_at)
@@ -73,6 +74,14 @@ class DebtRefreshJobTests {
         });
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void finishThisTestsBacklog() {
+        if (!context.containsBean("driverDebtRefreshJob")) return; // red baseline has no worker yet
+        Object worker=context.getBean("driverDebtRefreshJob");
+        for(int i=0;i<40 && jdbc.sql("select exists(select 1 from driver_debt_refresh where currency=:currency)")
+                .param("currency",currency).query(Boolean.class).single();i++) batch(worker);
+    }
+
     UUID driver(int i) {
         return jdbc.sql("select md5(:prefix||'driver'||:n)::uuid").param("prefix", prefix).param("n", i)
                 .query(UUID.class).single();
@@ -92,6 +101,40 @@ class DebtRefreshJobTests {
     long blocked() {
         return jdbc.sql("select count(*) from driver_debt_status where currency=:currency and blocked")
                 .param("currency", currency).query(Long.class).single();
+    }
+
+    String registryPlan() {
+        return tx.execute(status->{
+            jdbc.sql("set local plan_cache_mode=force_generic_plan").update();
+            jdbc.sql("prepare debt_member_plan as "+DriverDebtRefreshJob.NEXT_MEMBERS_SQL
+                    .replace(":currency","$1").replace(":version","$2")).update();
+            String result=jdbc.sql("explain(analyze,buffers,format json) execute debt_member_plan('"+currency+"',1)")
+                    .query(String.class).single();
+            jdbc.sql("deallocate debt_member_plan").update();return result;
+        });
+    }
+
+    @Test
+    void registrySelectsOneIndexedBatchWithoutRevisitingCompletedHistory() {
+        jdbc.sql("""
+                insert into driver_debt_refresh_member(currency,driver_id,applied_version)
+                select :currency,md5(:prefix||'completed'||g)::uuid,1 from generate_series(1,200000) g
+                """).param("currency",currency).param("prefix",prefix).update();
+        jdbc.sql("analyze driver_debt_refresh_member").update();
+        String before=tx.execute(status->{
+            jdbc.sql("drop index driver_debt_refresh_pending_idx").update();
+            String plan=registryPlan();status.setRollbackOnly();return plan;
+        });
+        System.out.println("DEBT REGISTRY BEFORE\n"+before);
+        assertThat(tools.jackson.databind.json.JsonMapper.builder().build().readTree(before).get(0)
+                .get("Plan").toString()).contains("Seq Scan");
+        String text=registryPlan();
+        System.out.println("DEBT REGISTRY PLAN 200000 completed + 2000 pending\n"+text);
+        var plan=tools.jackson.databind.json.JsonMapper.builder().build().readTree(text).get(0);
+        assertThat(taxi.blizz.SqlPlans.indexNames(plan.get("Plan"))).contains("driver_debt_refresh_pending_idx");
+        assertThat(plan.get("Plan").toString()).doesNotContain("Seq Scan");
+        assertThat(plan.get("Plan").get("Actual Rows").asInt()).isEqualTo(200);
+        assertThat(plan.get("Execution Time").asDouble()).isLessThan(50);
     }
 
     @Test
@@ -164,12 +207,26 @@ class DebtRefreshJobTests {
                 if(waiting)break;TimeUnit.MILLISECONDS.sleep(10);
             }
             assertThat(waiting).as("worker reached the held projection in its first batch").isTrue();
+            int workerPid=jdbc.sql("select pid from pg_stat_activity where :pid=any(pg_blocking_pids(pid)) limit 1")
+                    .param("pid",rowPid.get(2,TimeUnit.SECONDS)).query(Integer.class).single();
+            CompletableFuture<Integer> postingPid=new CompletableFuture<>();
             CompletableFuture<Void> posting=CompletableFuture.runAsync(()->tx.executeWithoutResult(s->{
+                postingPid.complete(jdbc.sql("select pg_backend_pid()").query(Integer.class).single());
                 ledger.post(new Ledger.Posting(prefix+":during-refresh","DEBT_TEST",driver,currency,"Concurrent trip",
                         List.of(Ledger.Line.debit(Ledger.Account.DRIVER_PAYABLE,driver,50),
                                 Ledger.Line.credit(Ledger.Account.SERVICE_COMMISSION,null,50))));
                 debts.refresh(driver,currency);
             }));
+            int writer=postingPid.get(5,TimeUnit.SECONDS);
+            boolean postingWaits=false;
+            long postingDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+            while(System.nanoTime()<postingDeadline) {
+                postingWaits=jdbc.sql("select :worker=any(pg_blocking_pids(:writer))")
+                        .param("worker",workerPid).param("writer",writer).query(Boolean.class).single();
+                if(postingWaits)break;TimeUnit.MILLISECONDS.sleep(10);
+            }
+            assertThat(postingWaits).as("the real posting reached the worker's held registry row").isTrue();
+            assertThat(posting.isDone()).isFalse();
             finish.countDown();
             assertThat(running.get(10,TimeUnit.SECONDS)).isBetween(1,200);
             posting.get(10,TimeUnit.SECONDS);

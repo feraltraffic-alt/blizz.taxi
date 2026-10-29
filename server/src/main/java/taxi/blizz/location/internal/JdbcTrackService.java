@@ -54,7 +54,10 @@ class JdbcTrackService implements TrackService {
         }
     }
 
-    private record Previous(OffsetDateTime recordedAt, double lat, double lon, boolean good) {
+    private record Previous(OffsetDateTime recordedAt, long sequence, double lat, double lon, boolean good) {
+    }
+
+    private record PreviousForInput(int ordinal, OffsetDateTime recordedAt, Previous previous) {
     }
 
     /** A move between two points of good accuracy and no future time faster than the jump limit (issue #71). */
@@ -81,13 +84,21 @@ class JdbcTrackService implements TrackService {
         rateLimiter.acquire(driverId);
         OffsetDateTime receivedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         List<InputPoint> ordered = new ArrayList<>(input);
-        ordered.sort(Comparator.comparing(InputPoint::recordedAt).thenComparingLong(InputPoint::sequence));
+        ordered.sort(Comparator.comparing((InputPoint p) -> p.recordedAt().toInstant()).thenComparingLong(InputPoint::sequence));
+        List<PreviousForInput> persisted = new ArrayList<>(previousForBatch(deviceSessionId, ordered));
+        persisted.sort(Comparator.comparing((PreviousForInput p) -> p.recordedAt().toInstant())
+                .thenComparingLong(p -> ordered.get(p.ordinal()).sequence()));
+        Previous carried = null;
 
         int accepted = 0;
         int duplicates = 0;
         int flagged = 0;
-        for (InputPoint point : ordered) {
-            Checked checked = flagsFor(deviceSessionId, point, receivedAt);
+        for (PreviousForInput baseline : persisted) {
+            InputPoint point = ordered.get(baseline.ordinal());
+            Previous previous = baseline.previous();
+            if (carried != null && before(carried, baseline.recordedAt(), point.sequence())
+                    && (previous == null || before(previous, carried.recordedAt(), carried.sequence()))) previous = carried;
+            Checked checked = flagsFor(previous, point, receivedAt);
             Set<Flag> flags = checked.flags();
             UUID pointId = UUID.randomUUID();
             int inserted = jdbc.sql("""
@@ -115,6 +126,8 @@ class JdbcTrackService implements TrackService {
                 duplicates++;
             } else {
                 accepted++;
+                carried = new Previous(baseline.recordedAt(), point.sequence(), point.lat(), point.lon(),
+                        !flags.contains(Flag.POOR_ACCURACY) && !flags.contains(Flag.FUTURE));
                 if (!flags.isEmpty()) flagged++;
                 if (checked.jump() != null) {
                     jumped(driverId, deviceSessionId, pointId, point, checked.jump());
@@ -122,6 +135,41 @@ class JdbcTrackService implements TrackService {
             }
         }
         return new BatchResult(accepted, duplicates, flagged);
+    }
+
+    private static boolean before(Previous p, OffsetDateTime at, long sequence) {
+        int time = p.recordedAt().toInstant().compareTo(at.toInstant());
+        return time < 0 || (time == 0 && p.sequence() < sequence);
+    }
+
+    /** One bounded read, including persisted points interleaved with this backfilled batch. */
+    private List<PreviousForInput> previousForBatch(UUID device, List<InputPoint> input) {
+        StringBuilder sql = new StringBuilder("with incoming(recorded_at,sequence,ordinal) as (values ");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("session", device);
+        for (int i = 0; i < input.size(); i++) {
+            if (i > 0) sql.append(',');
+            sql.append("(cast(:at").append(i).append(" as timestamptz),cast(:seq").append(i).append(" as bigint),").append(i).append(')');
+            params.put("at" + i, input.get(i).recordedAt());
+            params.put("seq" + i, input.get(i).sequence());
+        }
+        sql.append("""
+                ) select i.ordinal,i.recorded_at as input_at,
+                    p.recorded_at as previous_at,p.sequence as previous_sequence,p.lat,p.lon,p.good
+                from incoming i left join lateral (
+                    select recorded_at,sequence,ST_Y(point) as lat,ST_X(point) as lon,
+                        not(flags && ARRAY['POOR_ACCURACY','FUTURE']::text[]) as good
+                    from track_point where device_session_id=:session
+                      and (recorded_at,sequence)<(i.recorded_at,i.sequence)
+                    order by recorded_at desc,sequence desc limit 1
+                ) p on true
+                """);
+        return jdbc.sql(sql.toString()).params(params).query((rs, i) -> {
+            OffsetDateTime previousAt = rs.getObject("previous_at", OffsetDateTime.class);
+            Previous previous = previousAt == null ? null : new Previous(previousAt, rs.getLong("previous_sequence"),
+                    rs.getDouble("lat"), rs.getDouble("lon"), rs.getBoolean("good"));
+            return new PreviousForInput(rs.getInt("ordinal"), rs.getObject("input_at", OffsetDateTime.class), previous);
+        }).list();
     }
 
     /**
@@ -140,7 +188,7 @@ class JdbcTrackService implements TrackService {
         outbox.publish(new OutboxEvent("DriverPositionJumped", 1, "Driver", driverId, 0, payload));
     }
 
-    private Checked flagsFor(UUID deviceSessionId, InputPoint point, OffsetDateTime receivedAt) {
+    private Checked flagsFor(Previous previous, InputPoint point, OffsetDateTime receivedAt) {
         EnumSet<Flag> flags = EnumSet.noneOf(Flag.class);
         if (point.recordedAt().isAfter(receivedAt.plus(properties.futureTolerance()))) {
             flags.add(Flag.FUTURE);
@@ -148,37 +196,22 @@ class JdbcTrackService implements TrackService {
         if (point.accuracyM() > properties.poorAccuracyMeters()) {
             flags.add(Flag.POOR_ACCURACY);
         }
-        Jump[] jump = new Jump[1];
-        jdbc.sql("""
-                select recorded_at, ST_Y(point) as lat, ST_X(point) as lon,
-                       not (flags && ARRAY['POOR_ACCURACY', 'FUTURE']::text[]) as good
-                from track_point
-                where device_session_id = :session
-                  and (recorded_at < :recorded or (recorded_at = :recorded and sequence < :sequence))
-                order by recorded_at desc, sequence desc
-                limit 1
-                """)
-                .param("session", deviceSessionId)
-                .param("recorded", point.recordedAt())
-                .param("sequence", point.sequence())
-                .query((rs, i) -> new Previous(rs.getObject("recorded_at", OffsetDateTime.class),
-                        rs.getDouble("lat"), rs.getDouble("lon"), rs.getBoolean("good")))
-                .optional()
-                .ifPresent(previous -> {
-                    double seconds = Duration.between(previous.recordedAt(), point.recordedAt()).toMillis() / 1000.0;
-                    if (seconds > 0) {
-                        double meters = haversineMeters(previous.lat(), previous.lon(), point.lat(), point.lon());
-                        double kph = meters / seconds * 3.6;
-                        if (kph > properties.jumpKph()) {
-                            flags.add(Flag.JUMP);
-                            if (previous.good() && !flags.contains(Flag.POOR_ACCURACY)
-                                    && !flags.contains(Flag.FUTURE)) {
-                                jump[0] = new Jump((int) Math.round(meters), seconds, (int) Math.round(kph));
-                            }
-                        }
+        Jump jump = null;
+        if (previous != null) {
+            double seconds = Duration.between(previous.recordedAt(), point.recordedAt()).toMillis() / 1000.0;
+            if (seconds > 0) {
+                double meters = haversineMeters(previous.lat(), previous.lon(), point.lat(), point.lon());
+                double kph = meters / seconds * 3.6;
+                if (kph > properties.jumpKph()) {
+                    flags.add(Flag.JUMP);
+                    if (previous.good() && !flags.contains(Flag.POOR_ACCURACY)
+                            && !flags.contains(Flag.FUTURE)) {
+                        jump = new Jump((int) Math.round(meters), seconds, (int) Math.round(kph));
                     }
-                });
-        return new Checked(flags, jump[0]);
+                }
+            }
+        }
+        return new Checked(flags, jump);
     }
 
     @Override

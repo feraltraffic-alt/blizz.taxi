@@ -89,8 +89,20 @@ class DriverDebtTests {
         return new Actor(SubjectType.STAFF, id);
     }
 
+    @Autowired org.springframework.context.ApplicationContext context;
+
     private DriverDebts.Limit setLimit(Long limit) {
-        return debts.setLimit(finance, UUID.randomUUID(), "CZK", limit, debts.limit("CZK").version(), "test");
+        DriverDebts.Limit changed = debts.setLimit(finance, UUID.randomUUID(), "CZK", limit,
+                debts.limit("CZK").version(), "test");
+        // The staff command commits first; tests drive finance's disabled scheduler explicitly.
+        Object worker = context.getBean("driverDebtRefreshJob");
+        for (int i = 0; i < 100 && jdbc.sql("select exists(select 1 from driver_debt_refresh where currency='CZK')")
+                .query(Boolean.class).single(); i++) {
+            org.springframework.test.util.ReflectionTestUtils.invokeMethod(worker, "runOnce");
+        }
+        assertThat(jdbc.sql("select exists(select 1 from driver_debt_refresh where currency='CZK')")
+                .query(Boolean.class).single()).isFalse();
+        return changed;
     }
 
     private void deliverEvents() {

@@ -56,21 +56,24 @@ class JdbcLedger implements Ledger {
                     .param("credit", line.creditMinor())
                     .update();
         }
+        posting.lines().stream().filter(line -> line.account() == Account.DRIVER_PAYABLE)
+                .map(Line::partyId).filter(java.util.Objects::nonNull).distinct().sorted()
+                .forEach(driver -> DebtRefreshWork.enroll(jdbc, driver, posting.currency()));
         return true;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Balance> balances(Account account, UUID partyId) {
-        return jdbc.sql("""
+        // A debt-refresh batch must use (account, party_id), not scan every driver's journal lines.
+        String party = partyId == null ? "l.party_id is null" : "l.party_id = :party";
+        var query = jdbc.sql("""
                         select t.currency, coalesce(sum(l.debit_minor), 0), coalesce(sum(l.credit_minor), 0)
                         from journal_line l join journal_transaction t on t.id = l.transaction_id
-                        where l.account = :account and l.party_id is not distinct from :party
-                        group by t.currency order by t.currency""")
-                .param("account", account.name())
-                .param("party", partyId)
-                .query((rs, i) -> new Balance(rs.getString(1), rs.getLong(2), rs.getLong(3)))
-                .list();
+                        where l.account = :account""" + " and " + party + " group by t.currency order by t.currency")
+                .param("account", account.name());
+        if (partyId != null) query = query.param("party", partyId);
+        return query.query((rs, i) -> new Balance(rs.getString(1), rs.getLong(2), rs.getLong(3))).list();
     }
 
     private static void validate(Posting p) {

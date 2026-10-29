@@ -60,6 +60,23 @@ class AuditHotPathVolumeTests {
     UUID order,driver,vehicle,device,city;
     Actor staff;
 
+    // Verbatim pre-#111 predicates, retained only to demonstrate the old generic prepared plan.
+    private static final String OLD_QUEUE_SQL = """
+        select id,number,city_id,category,order_id,requester_type,requester_id,subject,priority,state,
+               assigned_staff_id,resolution,version,created_at,updated_at,respond_by from support_case
+        where city_id is not distinct from :city
+          and (cast(:state as text) is null or state=:state)
+          and (cast(:priority as text) is null or priority=:priority)
+          and (cast(:category as text) is null or category=:category)
+          and (cast(:assignee as uuid) is null or assigned_staff_id=:assignee)
+          and (not :unassigned or assigned_staff_id is null)
+          and (cast(:before as timestamptz) is null or created_at<:before)
+          and (not :overdue or (state='OPEN' and respond_by<:now))
+        order by case when :overdue then respond_by end,
+                 case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
+                 created_at desc,id desc limit :limit
+        """;
+
     @BeforeAll
     void seedTwoHundredThousandRowsPerHotTable() {
         TestRides rides=new TestRides(jdbc,orders,dispatch,trips,sessions,auth,quotes);
@@ -95,14 +112,23 @@ class AuditHotPathVolumeTests {
                 .param("driver",driver).param("device",device).update();
         jdbc.sql("""
                 insert into support_case(id,city_id,category,order_id,requester_type,subject,priority,state,
-                    assigned_staff_id,created_at,updated_at,respond_by)
+                    assigned_staff_id,resolution,created_at,updated_at,respond_by)
                 select md5('audit-case-'||g)::uuid,case when g%2=0 then :city else null end,
                     case when g%5=0 then 'PAYMENT' else 'OTHER' end,
                     case when g=1 then :order else md5('unrelated-order-'||g)::uuid end,'SYSTEM','Volume case',
-                    case g%4 when 0 then 'URGENT' when 1 then 'HIGH' when 2 then 'NORMAL' else 'LOW' end,'OPEN',
-                    case when g%7=0 then :staff else null end,now()-g*interval '1 second',now(),
-                    now()+(g-100000)*interval '1 second' from generate_series(1,200000) g""")
+                    case g%4 when 0 then 'URGENT' when 1 then 'HIGH' when 2 then 'NORMAL' else 'LOW' end,case when g%11=0 then 'RESOLVED' else 'OPEN' end,
+                    case when g%7=0 then :staff else null end,case when g%11=0 then 'Volume resolution' else null end,
+                    now()-g*interval '1 second',now(),
+                    case when g<=100000 then now()-interval '1 day' else now()+interval '1 day' end
+                from generate_series(1,200000) g""")
                 .param("city",city).param("order",order).param("staff",staff.id()).update();
+        UUID otherCity=rides.city("audit-other-city","UAH",-175);
+        jdbc.sql("""
+                insert into support_case(id,city_id,category,requester_type,subject,priority,state,
+                    created_at,updated_at,respond_by)
+                select md5('audit-other-case-'||g)::uuid,:city,'OTHER','SYSTEM','Other city','URGENT','OPEN',
+                    now()-g*interval '1 second',now(),now()-interval '1 day' from generate_series(1,200) g
+                """).param("city",otherCity).update();
         jdbc.sql("""
                 insert into otp_delivery(id,phone,audience,channel,provider,state,attempted_at)
                 select md5('audit-otp-'||g)::uuid,'+'||(380200000000+g)::text,'CLIENT','SMS','FAKE','SENT',
@@ -150,6 +176,31 @@ class AuditHotPathVolumeTests {
         return json.readTree(text).get(0);
     }
 
+    JsonNode genericPlan(String label,String sql,Map<String,?> params) {
+        return tx.execute(status->{
+            var placeholders=java.util.regex.Pattern.compile("(?<!:):([A-Za-z][A-Za-z0-9_]*)").matcher(sql);
+            StringBuffer prepared=new StringBuffer();List<Object> values=new java.util.ArrayList<>();
+            while(placeholders.find()) {
+                values.add(params.get(placeholders.group(1)));
+                placeholders.appendReplacement(prepared,java.util.regex.Matcher.quoteReplacement("$"+values.size()));
+            }
+            placeholders.appendTail(prepared);
+            jdbc.sql("set local plan_cache_mode=force_generic_plan").update();
+            jdbc.sql("prepare audit_queue_plan as "+prepared).update();
+            String arguments=values.stream().map(v->{
+                    if(v==null)return "null";
+                    if(v instanceof Number || v instanceof Boolean)return v.toString();
+                    if(v instanceof String || v instanceof UUID || v instanceof OffsetDateTime)
+                        return "'"+v.toString().replace("'","''")+"'";
+                    throw new IllegalArgumentException("Unsupported test argument "+v.getClass());
+                }).collect(java.util.stream.Collectors.joining(","));
+                JsonNode result=explain(label,"execute audit_queue_plan"+
+                        (values.isEmpty()?"":"("+arguments+")"),Map.of());
+                jdbc.sql("deallocate audit_queue_plan").update();
+            return result;
+        });
+    }
+
     @ParameterizedTest(name="{0}")
     @MethodSource("hotQueries")
     void eachHotPathUsesItsIndexUnderFiftyMilliseconds(Query query) {
@@ -159,7 +210,7 @@ class AuditHotPathVolumeTests {
         });
         assertThat(before.get("Plan").toString()).as(query.name()+" baseline really scans history").contains("Seq Scan");
         JsonNode after=explain(query.name()+" AFTER",query.sql(),query.params());
-        assertThat(after.get("Plan").toString()).contains(query.index());
+        assertThat(taxi.blizz.SqlPlans.indexNames(after.get("Plan"))).contains(query.index());
         assertThat(after.get("Execution Time").asDouble()).as(query.name()+" PostgreSQL execution milliseconds").isLessThan(50);
     }
 
@@ -171,17 +222,39 @@ class AuditHotPathVolumeTests {
             new SupportCases.QueueFilter(null,null,null,null,null,false,null,50),
             new SupportCases.QueueFilter(city,SupportCases.State.OPEN,SupportCases.Priority.URGENT,
                 SupportCases.Category.PAYMENT,staff.id(),false,null,50),
-            new SupportCases.QueueFilter(null,null,null,null,null,true,null,50,true));
+            new SupportCases.QueueFilter(null,null,null,null,null,true,null,50,true),
+            new SupportCases.QueueFilter(city,null,null,null,null,true,null,50,true),
+            new SupportCases.QueueFilter(null,SupportCases.State.RESOLVED,SupportCases.Priority.HIGH,
+                SupportCases.Category.OTHER,null,false,null,50));
         Object target=AopTestUtils.getUltimateTargetObject(cases);
         for(var filter:filters) {
             Object query=ReflectionTestUtils.invokeMethod(target,"queueQuery",filter);
             String sql=ReflectionTestUtils.invokeMethod(query,"sql");
             Map<String,?> params=ReflectionTestUtils.invokeMethod(query,"params");
             assertThat(sql).doesNotContain("is not distinct from", "cast(:", "not :");
-            JsonNode plan=explain("support queue "+filter,sql,params);
-            assertThat(plan.get("Plan").toString()).contains("Index");
+            Map<String,Object> oldParams=new java.util.LinkedHashMap<>();
+            oldParams.put("city",filter.cityId());oldParams.put("state",filter.state()==null?null:filter.state().name());
+            oldParams.put("priority",filter.priority()==null?null:filter.priority().name());
+            oldParams.put("category",filter.category()==null?null:filter.category().name());
+            oldParams.put("assignee",filter.assignedStaffId());oldParams.put("unassigned",filter.unassignedOnly());
+            oldParams.put("before",filter.before());oldParams.put("overdue",filter.overdueOnly());
+            oldParams.put("now",OffsetDateTime.now());oldParams.put("limit",50);
+            JsonNode before=tx.execute(status->{
+                jdbc.sql("drop index if exists support_case_queue_order_idx").update();
+                jdbc.sql("drop index if exists support_case_overdue_order_idx").update();
+                jdbc.sql("drop index if exists support_case_queue_no_city_idx").update();
+                jdbc.sql("drop index if exists support_case_overdue_no_city_idx").update();
+                JsonNode old=genericPlan("support queue BEFORE "+filter,OLD_QUEUE_SQL,oldParams);
+                status.setRollbackOnly();return old;
+            });
+            assertThat(before.get("Plan").toString()).contains("Seq Scan");
+            JsonNode plan=genericPlan("support queue AFTER "+filter,sql,params);
+            var indexes=taxi.blizz.SqlPlans.indexNames(plan.get("Plan"));
+            assertThat(indexes).isNotEmpty();
             if(filter.state()==null && !filter.overdueOnly())
-                assertThat(plan.get("Plan").toString()).contains("support_case_queue_order_idx");
+                assertThat(indexes).contains(filter.cityId()==null?"support_case_queue_no_city_idx":"support_case_queue_order_idx");
+            if(filter.overdueOnly())
+                assertThat(indexes).contains(filter.cityId()==null?"support_case_overdue_no_city_idx":"support_case_overdue_order_idx");
             assertThat(plan.get("Execution Time").asDouble()).isLessThan(50);
             var result=cases.queue(staff,filter);
             assertThat(result).hasSize(50).allSatisfy(c->{
@@ -191,8 +264,21 @@ class AuditHotPathVolumeTests {
                 if(filter.category()!=null)assertThat(c.category()).isEqualTo(filter.category());
                 if(filter.assignedStaffId()!=null)assertThat(c.assignedStaffId()).isEqualTo(filter.assignedStaffId());
                 if(filter.unassignedOnly())assertThat(c.assignedStaffId()).isNull();
-                if(filter.overdueOnly())assertThat(c.respondBy()).isBefore(OffsetDateTime.now());
+                if(filter.overdueOnly()) {
+                    assertThat(c.respondBy()).isBefore(OffsetDateTime.now());
+                    assertThat(c.state()).isEqualTo(SupportCases.State.OPEN);
+                }
             });
+            java.util.Comparator<SupportCases.Case> priority=java.util.Comparator
+                    .comparing(SupportCases.Case::priority).reversed();
+            java.util.Comparator<SupportCases.Case> ordering=filter.overdueOnly()
+                    ?java.util.Comparator.comparing(SupportCases.Case::respondBy).thenComparing(priority):priority;
+            ordering=ordering.thenComparing(SupportCases.Case::createdAt,java.util.Comparator.reverseOrder())
+                    .thenComparing(c->c.id().toString(),java.util.Comparator.reverseOrder());
+            assertThat(result).isSortedAccordingTo(ordering);
+            if(filter.state()==null && !filter.overdueOnly())
+                assertThat(result).extracting(SupportCases.Case::state)
+                        .contains(SupportCases.State.OPEN,SupportCases.State.RESOLVED);
             var page=cases.queue(staff,new SupportCases.QueueFilter(filter.cityId(),filter.state(),filter.priority(),
                 filter.category(),filter.assignedStaffId(),filter.unassignedOnly(),result.getLast().createdAt(),50,
                 filter.overdueOnly()));

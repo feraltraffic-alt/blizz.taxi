@@ -25,7 +25,7 @@ public interface DriverDebts {
 
     /**
      * Sets the debt limit for a currency; {@code limitMinor} null removes it. Every driver's status in
-     * that currency is recomputed. {@code expectedVersion} is 0 for a currency without a limit yet.
+     * that currency is recomputed in durable background batches after this command commits. {@code expectedVersion} is 0 for a currency without a limit yet.
      */
     Limit setLimit(Actor staff, UUID commandId, String currency, Long limitMinor, long expectedVersion, String reason);
 
