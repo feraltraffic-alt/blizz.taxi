@@ -42,6 +42,8 @@ public enum ErrorCode {
     PICKUP_TOO_FAR(422),
     /** A one-time code for a number outside the served countries (blizz.otp.allowed-country-codes, issue #101). */
     PHONE_COUNTRY_NOT_SERVED(422),
+    /** A chargeback above what is left of the order's card payment, or on an order not paid by card (issue #103). */
+    CHARGEBACK_NOT_ALLOWED(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

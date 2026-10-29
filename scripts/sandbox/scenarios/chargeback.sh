@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # A chargeback (REQ-PAY-23, issue #103): a card ride, then the bank disputes it. Finance exports the order's
-# evidence for the provider's risk managers — no phone or card digits in it, whatever people typed.
+# evidence for the provider's risk managers — no phone or card digits in it, whatever people typed — records the
+# chargeback (the rider owes the fare again) and, when the provider wins it back, the outcome (the debt is gone).
 source "$(dirname "$0")/../lib.sh"
 
 KYIV=5a000000-0000-4000-8000-000000000001
@@ -89,4 +90,37 @@ if grep -qE '\+\s*(380|48)|(380|48)[0-9]{9}|4111|\*\*\*\*' <<<"$EVIDENCE"; then
     note "**The evidence carries a phone or card number.**"; exit 1
 fi
 [[ "$(jq '[.chat[].body | select(contains("[number hidden]"))] | length' <<<"$EVIDENCE")" == 2 ]]
-note "Done: the evidence of card order $ORDER, without phone or card digits."
+
+say "Finance records the chargeback: the rider owes the fare again, a case opens"
+PAID=$(jq '.order.final_price_minor' <<<"$EVIDENCE")
+CLIENT_ID=$(jq -r '.rider.id' <<<"$EVIDENCE")
+YESTERDAY=$(date -u -d yesterday +%Y-%m-%d)
+api POST "/api/admin/v1/orders/$ORDER/chargebacks" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"amount_minor\":$((PAID + 1)),
+  \"currency\":\"UAH\",\"bank_reason\":\"4837 No cardholder authorization\",\"received_on\":\"$YESTERDAY\"}" >/dev/null
+expect 422
+jq -e '.code == "CHARGEBACK_NOT_ALLOWED"' /tmp/sandbox-body >/dev/null
+COMMAND=$(uuid)
+CHARGEBACK=$(api POST "/api/admin/v1/orders/$ORDER/chargebacks" "$ADMIN" "{\"command_id\":\"$COMMAND\",
+  \"amount_minor\":$PAID,\"currency\":\"UAH\",\"bank_reason\":\"4837 No cardholder authorization\",
+  \"received_on\":\"$YESTERDAY\"}")
+expect 201
+CHARGEBACK_ID=$(jq -r .id <<<"$CHARGEBACK")
+# The same command again is the same chargeback.
+AGAIN=$(api POST "/api/admin/v1/orders/$ORDER/chargebacks" "$ADMIN" "{\"command_id\":\"$COMMAND\",
+  \"amount_minor\":$PAID,\"currency\":\"UAH\",\"bank_reason\":\"4837 No cardholder authorization\",
+  \"received_on\":\"$YESTERDAY\"}")
+expect 201
+[[ "$(jq -r .id <<<"$AGAIN")" == "$CHARGEBACK_ID" ]]
+wait_for "$ADMIN" "/api/admin/v1/clients/$CLIENT_ID" '[.debt[] | select(.currency == "UAH") | .amount_minor] | add // 0' "$PAID"
+
+say "The provider's risk managers win it back: the debt is gone; a second answer is refused"
+RESOLVED=$(api POST "/api/admin/v1/orders/$ORDER/chargebacks/$CHARGEBACK_ID/resolve" "$ADMIN" \
+    "{\"command_id\":\"$(uuid)\",\"expected_version\":0,\"outcome\":\"WON\",\"reason\":\"Evidence accepted\"}")
+expect 200
+[[ "$(jq -r .state <<<"$RESOLVED")" == WON ]]
+wait_for "$ADMIN" "/api/admin/v1/clients/$CLIENT_ID" '[.debt[] | select(.currency == "UAH") | .amount_minor] | add // 0' 0
+api POST "/api/admin/v1/orders/$ORDER/chargebacks/$CHARGEBACK_ID/resolve" "$ADMIN" \
+    "{\"command_id\":\"$(uuid)\",\"expected_version\":1,\"outcome\":\"LOST\",\"reason\":\"Twice\"}" >/dev/null
+expect 409
+api GET "/api/admin/v1/orders/$ORDER/chargebacks" "$ADMIN" >/dev/null; expect 200
+note "Done: the evidence of card order $ORDER without phone or card digits; chargeback $CHARGEBACK_ID recorded and won."
