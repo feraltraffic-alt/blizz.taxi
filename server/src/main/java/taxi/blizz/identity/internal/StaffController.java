@@ -75,7 +75,7 @@ class StaffController {
     @PostMapping({"/api/admin/v1/me/password", "/api/operator/v1/me/password"})
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void changePassword(AccessClaims claims, @Valid @RequestBody ChangePassword body) {
-        signIn.changePassword(claims.actor(), body.currentPassword(), body.newPassword());
+        signIn.changePassword(claims.actor(), claims.sessionId(), body.currentPassword(), body.newPassword());
     }
 
     @GetMapping("/api/admin/v1/permissions")

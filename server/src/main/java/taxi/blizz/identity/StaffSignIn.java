@@ -18,7 +18,11 @@ public interface StaffSignIn {
      */
     Result signIn(String login, String password, ApiAudience audience, String deviceRef, String clientIp);
 
-    void changePassword(Actor staff, String currentPassword, String newPassword);
+    /**
+     * The staff member's own new password. Every other session of the account ends (threat model A5): whoever knew
+     * the old password is signed out; {@code keepSessionId}, the session making the change, stays.
+     */
+    void changePassword(Actor staff, java.util.UUID keepSessionId, String currentPassword, String newPassword);
 
     /**
      * Asks for the password again before a sensitive change, e.g. keys of integrations (REQ-ADM-10). A wrong password

@@ -31,9 +31,11 @@ class ClientCardController {
     private final Ledger ledger;
     private final RiderWallets wallets;
     private final SupportCases cases;
+    private final taxi.blizz.audit.AuditLog audit;
 
     ClientCardController(ClientAccounts clients, Orders orders, Ledger ledger, RiderWallets wallets,
-                         SupportCases cases) {
+                         SupportCases cases, taxi.blizz.audit.AuditLog audit) {
+        this.audit = audit;
         this.clients = clients;
         this.orders = orders;
         this.ledger = ledger;
@@ -60,6 +62,9 @@ class ClientCardController {
     @GetMapping("/api/admin/v1/clients/{clientId}")
     Card card(AccessClaims claims, @PathVariable UUID clientId) {
         ClientAccounts.Client client = clients.get(claims.actor(), clientId);
+        // Orders, cases and debt of one person: every look is on record (threat model I2).
+        audit.record(new taxi.blizz.audit.AuditEntry(claims.actor(), "client.card.view", "client", clientId.toString(),
+                null, null, null));
         Actor rider = new Actor(SubjectType.CLIENT, clientId);
         List<Bonuses> bonuses = ledger.balances(Ledger.Account.RIDER_WALLET, clientId).stream()
                 .map(b -> new Bonuses(b.currency(), b.creditMinor() - b.debitMinor(),

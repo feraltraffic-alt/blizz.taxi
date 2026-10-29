@@ -122,7 +122,7 @@ class JdbcStaffSignIn implements StaffSignIn {
     }
 
     @Override
-    public void changePassword(Actor staff, String currentPassword, String newPassword) {
+    public void changePassword(Actor staff, java.util.UUID keepSessionId, String currentPassword, String newPassword) {
         if (staff == null || staff.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff only");
         }
@@ -146,8 +146,10 @@ class JdbcStaffSignIn implements StaffSignIn {
                             where id = :id""")
                     .param("hash", passwords.hash(row.login(), newPassword)).param("now", now())
                     .param("id", staff.id()).update();
+            int ended = keepSessionId == null ? sessions.revokeAll(staff, "PASSWORD_CHANGED")
+                    : sessions.revokeOthers(staff, keepSessionId, "PASSWORD_CHANGED");
             audit.record(new AuditEntry(staff, "staff.changePassword", "staff_user", staff.id().toString(),
-                    "Own password changed", null, null));
+                    "Own password changed", null, java.util.Map.of("other_sessions_ended", ended)));
         });
     }
 
