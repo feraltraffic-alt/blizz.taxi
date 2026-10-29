@@ -22,6 +22,18 @@ the interval to five seconds; the two-minute settling margin is unchanged.
 | I4 | Payments PAID intent does not match SUCCEEDED SETTLE/CHARGE amounts, or a SETTLE exceeds its authorization. TIP is separate, bonus-only zero-card-leg intents need no capture, and above-hold CHARGE is legitimate. Inspect provider references and reconciled operations before retrying; never charge again merely to clear this alert. |
 | I5 | A FULFILLED, CANCELLED or UNFULFILLED order's authorization is still standing after one hour. Operations queries its orders through identifiers supplied by the read-only CardPayments API; payments reads only its own tables. A SUCCEEDED SETTLE/REFUND targeting the AUTH closes it; PENDING/UNKNOWN is handled by UnknownPayments, not this check. A separate CHARGE is not an authorization. Classification uses the successful AUTH even if the intent amount/state was hand-edited. Inspect AUTH and its target references before taking action. |
 
+## Bounded scan coverage
+
+| Check | Candidate bound |
+| --- | --- |
+| I1 | `blizz.finance.invariants.lookback`, default `PT48H`, on `journal_transaction.occurred_at`, ending at the two-minute cutoff. Append-only journal rows and commit-time balance triggers prevent older postings from changing through the application. Older hand-edited corruption is deliberately outside this operational scan; investigate it separately. |
+| I2 | Only COMMITTED/RESERVED assignments; released, completed and revoked history cannot describe current capacity. Capacity itself is one row per driver. |
+| I3 | ASSIGNED/IN_SERVICE orders plus orders with a COMMITTED assignment, through partial indexes and primary-key lookups. `ride_order_status_check` constrains the full status set, so there is no unreachable unsupported-status branch. |
+| I4 | `blizz.payments.invariants.lookback`, default `P7D`, on either intent.updated_at or operation.updated_at. A recently changed operation brings an old intent back into scope; only those candidate intents' operations are aggregated. |
+| I5 | `blizz.payments.invariants.hold-lookback`, default `P30D`, on successful AUTH.created_at. This lead-approved lifetime-plus-margin bound treats older bank authorizations as expired. Eligible order identifiers are processed in batches of 256, without truncation, so even more than 65,535 open holds cannot exceed PostgreSQL's bind-parameter limit. |
+
+Adjust lookbacks to the operational/provider lifetime policy, keeping them longer than the settling margin. The jobs are bounded operational detection, not an unlimited audit of immutable historical data. The volume regression generates 200k journal lines, 100k orders/assignments/operations and 10k capacities, asserts current violations and deliberate older exclusions, and prints the actual I3/I5 EXPLAIN plans. A second phase covers 65,536 eligible AUTHs and a leak in the last order batch.
+
 For an alert, open the OTHER/HIGH problem case whose source key is
 `invariant:<check>:<object_id>`. The case and `InvariantViolated` event contain
 only object identifiers and diagnostic codes. Find the owning module and inspect

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -29,18 +30,33 @@ import taxi.blizz.platform.OutboxEvent;
 @Service
 class JdbcCardPayments implements CardPayments {
 
+    private static final String STANDING_HOLDS_SQL = """
+                select distinct i.id,i.order_id from payment_intent i
+                join payment_operation a on a.intent_id=i.id and a.type='AUTH' and a.state='SUCCEEDED'
+                where a.created_at>=:since and greatest(i.updated_at,a.updated_at)<:before
+                  and not exists (
+                    select 1 from payment_operation c where c.intent_id=i.id and c.type in ('SETTLE','REFUND')
+                      and c.target=a.reference and c.state in ('SUCCEEDED','PENDING','UNKNOWN'))
+                  and not exists (
+                    select 1 from payment_operation recent where recent.intent_id=i.id
+                      and recent.type in ('AUTH','SETTLE','REFUND') and recent.updated_at>=:before)
+                order by i.id
+                """;
+    private final Duration holdLookback;
     private final JdbcClient jdbc;
     private final Merchants merchants;
     private final Outbox outbox;
     private final Clock clock;
     private final PaymentWorker worker;
 
-    JdbcCardPayments(JdbcClient jdbc, Merchants merchants, Outbox outbox, Clock clock, @Lazy PaymentWorker worker) {
+    JdbcCardPayments(JdbcClient jdbc, Merchants merchants, Outbox outbox, Clock clock, @Lazy PaymentWorker worker,
+                     @Value("${blizz.payments.invariants.hold-lookback:P30D}") Duration holdLookback) {
         this.jdbc = jdbc;
         this.merchants = merchants;
         this.outbox = outbox;
         this.clock = clock;
         this.worker = worker;
+        this.holdLookback = holdLookback;
     }
 
     @Override
@@ -137,17 +153,7 @@ class JdbcCardPayments implements CardPayments {
 
     @Override
     public List<StandingHold> standingHoldsOlderThan(OffsetDateTime changedBefore) {
-        return jdbc.sql("""
-                select distinct i.id,i.order_id from payment_intent i
-                join payment_operation a on a.intent_id=i.id and a.type='AUTH' and a.state='SUCCEEDED'
-                where greatest(i.updated_at,a.updated_at)<:before
-                  and not exists (
-                    select 1 from payment_operation c where c.intent_id=i.id and c.type in ('SETTLE','REFUND')
-                      and c.target=a.reference and c.state in ('SUCCEEDED','PENDING','UNKNOWN'))
-                  and not exists (
-                    select 1 from payment_operation recent where recent.intent_id=i.id
-                      and recent.type in ('AUTH','SETTLE','REFUND') and recent.updated_at>=:before)
-                """).param("before", changedBefore)
+        return jdbc.sql(STANDING_HOLDS_SQL).param("before", changedBefore).param("since", now().minus(holdLookback))
                 .query((rs, n) -> new StandingHold(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class))).list();
     }
 

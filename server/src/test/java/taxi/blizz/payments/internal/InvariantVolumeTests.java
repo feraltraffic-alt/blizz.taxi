@@ -212,6 +212,44 @@ class InvariantVolumeTests {
         assertThat(cards.standingHoldsOlderThan(OffsetDateTime.now(clock).minusMinutes(2)))
                 .extracting(CardPayments.StandingHold::intentId).containsExactly(id("volume-intent-2"));
         plans();
+        recentHoldCandidatesExceedThePostgresParameterLimit();
+    }
+
+    void recentHoldCandidatesExceedThePostgresParameterLimit() {
+        tx.executeWithoutResult(status -> {
+            jdbc.sql("update payment_operation set created_at=now()-interval '60 days',updated_at=now()-interval '60 days' where id=md5('volume-auth-2')::uuid").update();
+            jdbc.sql("""
+                    update payment_operation set created_at=now()-interval '2 hours',updated_at=now()-interval '3 minutes'
+                    where id in (select md5('volume-auth-'||n)::uuid from generate_series(4,65539) n)
+                    """).update();
+            jdbc.sql("""
+                    update ride_order set status='SCHEDULED',preorder=true,pickup_at=now()+interval '2 days',
+                        release_at=now()+interval '2 days'-interval '15 minutes',updated_at=now()-interval '3 minutes'
+                    where id in (select md5('volume-order-'||n)::uuid from generate_series(4,65539) n)
+                    """).update();
+        });
+        jdbc.sql("analyze payment_operation").update();
+        jdbc.sql("analyze ride_order").update();
+        var holds=cards.standingHoldsOlderThan(OffsetDateTime.now(clock).minusMinutes(2));
+        assertThat(holds).hasSize(65536);
+        var last=holds.getLast();
+        jdbc.sql("update ride_order set status='FULFILLED',updated_at=now()-interval '2 hours' where id=:id")
+                .param("id",last.orderId()).update();
+        long start=System.nanoTime();
+        ReflectionTestUtils.invokeMethod(context.getBean("operationsInvariants"),"runChecks");
+        Duration elapsed=Duration.ofNanos(System.nanoTime()-start);
+        System.out.printf("INVARIANT_VOLUME I5_recent_candidates=%d last_page_target=%s total_ms=%.3f%n",
+                holds.size(),last.intentId(),elapsed.toNanos()/1e6);
+        assertThat(elapsed).as("all recent candidates, including the last page, stay below the 5s budget")
+                .isLessThan(Duration.ofSeconds(4));
+        assertThat(meters.get("blizz.invariant.violations").tag("check","I5").gauge().value()).isEqualTo(1);
+        while(relay.runOnce()>0) { /* deliver final-page report */ }
+        assertThat(jdbc.sql("select count(*) from support_case where source_key=:key")
+                .param("key","invariant:I5:"+last.intentId()).query(Long.class).single()).isEqualTo(1);
+        ReflectionTestUtils.invokeMethod(context.getBean("operationsInvariants"),"runChecks");
+        assertThat(meters.get("blizz.invariant.violations").tag("check","I5").gauge().value()).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from outbox where event_type='InvariantViolated' and aggregate_id=:id and payload->>'check'='I5'")
+                .param("id",last.intentId()).query(Long.class).single()).isEqualTo(1);
     }
 
     void plans() {

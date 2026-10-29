@@ -3,6 +3,7 @@ package taxi.blizz.operations.internal;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -20,6 +21,24 @@ import taxi.blizz.platform.InvariantReports;
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 class OperationsInvariants extends InvariantChecks {
+    private static final String ORDER_ASSIGNMENTS_SQL = """
+                with candidates as materialized (
+                    select id from ride_order where status in ('ASSIGNED','IN_SERVICE')
+                    union select order_id from assignment where state='COMMITTED'
+                )
+                select o.id,'ORDER_ASSIGNMENT_MISMATCH' as detail
+                from candidates c join ride_order o on o.id=c.id
+                left join assignment a on a.order_id=o.id and a.state='COMMITTED'
+                group by o.id,o.status,o.updated_at
+                having greatest(o.updated_at,coalesce(max(a.created_at),o.updated_at)) < :cutoff
+                   and ((o.status in ('ASSIGNED','IN_SERVICE') and count(a.id)<>1)
+                     or (o.status not in ('ASSIGNED','IN_SERVICE') and count(a.id)<>0))
+                """;
+    private static final String TERMINAL_HOLDS_SQL = """
+                    select id from ride_order where id in (:orders)
+                      and status in ('FULFILLED','CANCELLED','UNFULFILLED') and updated_at<:terminalBefore
+                    """;
+    private static final int HOLD_ORDER_BATCH = 256;
     private final boolean enabled;
     OperationsInvariants(JdbcClient jdbc, CardPayments cards, DataSource dataSource, InvariantReports reports, ObjectProvider<MeterRegistry> meters,
                          Clock clock, @Value("${blizz.operations.invariants.enabled:true}") boolean enabled) {
@@ -32,7 +51,7 @@ class OperationsInvariants extends InvariantChecks {
                         max(id::text) filter(where state='COMMITTED') as committed_id,
                         max(id::text) filter(where state='RESERVED') as reserved_id,
                         max(greatest(created_at,coalesce(closed_at,created_at))) as changed_at
-                    from assignment group by driver_id
+                    from assignment where state in ('COMMITTED','RESERVED') group by driver_id
                 )
                 select coalesce(c.driver_id,a.driver_id) as driver_id
                 from driver_capacity c full join assignments a on a.driver_id=c.driver_id
@@ -48,32 +67,23 @@ class OperationsInvariants extends InvariantChecks {
                         and c.assignment_id::text=a.committed_id)),false)
                 """).param("cutoff", cutoff()).query((rs, i) -> new Violation(rs.getObject("driver_id", UUID.class),
                         "CAPACITY_ASSIGNMENT_MISMATCH")).list());
-        check(Check.I3, ObjectType.ORDER, () -> jdbc.sql("""
-                select o.id,
-                    case when o.status not in ('SCHEDULED','AWAITING_PAYMENT','READY','SEARCHING','ASSIGNED','IN_SERVICE',
-                                                'FULFILLED','CANCELLED','UNFULFILLED')
-                         then 'ORDER_STATUS_UNSUPPORTED' else 'ORDER_ASSIGNMENT_MISMATCH' end as detail
-                from ride_order o left join assignment a on a.order_id=o.id and a.state='COMMITTED'
-                group by o.id,o.status,o.updated_at
-                having greatest(o.updated_at,coalesce(max(a.created_at),o.updated_at)) < :cutoff
-                   and (o.status not in ('SCHEDULED','AWAITING_PAYMENT','READY','SEARCHING','ASSIGNED','IN_SERVICE',
-                                         'FULFILLED','CANCELLED','UNFULFILLED')
-                     or (o.status in ('ASSIGNED','IN_SERVICE') and count(a.id)<>1)
-                     or (o.status not in ('ASSIGNED','IN_SERVICE') and count(a.id)<>0))
-                """).param("cutoff", cutoff()).query((rs, i) -> new Violation(rs.getObject("id", UUID.class), rs.getString("detail"))).list());
+        check(Check.I3, ObjectType.ORDER, () -> jdbc.sql(ORDER_ASSIGNMENTS_SQL).param("cutoff", cutoff())
+                .query((rs, i) -> new Violation(rs.getObject("id", UUID.class), rs.getString("detail"))).list());
         check(Check.I5, ObjectType.PAYMENT_INTENT, () -> {
             // Payments classifies its own AUTH/SETTLE/REFUND rows. Operations reads only its terminal orders.
             var holds = cards.standingHoldsOlderThan(cutoff());
             if (holds.isEmpty()) return List.of();
-            var intentByOrder = holds.stream().collect(Collectors.toMap(CardPayments.StandingHold::orderId,
-                    CardPayments.StandingHold::intentId));
-            return jdbc.sql("""
-                    select id from ride_order where id in (:orders)
-                      and status in ('FULFILLED','CANCELLED','UNFULFILLED') and updated_at<:terminalBefore
-                    """).param("orders", intentByOrder.keySet())
-                    .param("terminalBefore", OffsetDateTime.now(clock).minusHours(1))
-                    .query((rs, i) -> new Violation(intentByOrder.get(rs.getObject("id", UUID.class)),
-                            "TERMINAL_ORDER_STANDING_HOLD")).list();
+            List<Violation> violations = new ArrayList<>();
+            for (int start = 0; start < holds.size(); start += HOLD_ORDER_BATCH) {
+                // Bound bind parameters without truncating the eligible AUTH set; the last page is checked too.
+                var intentByOrder = holds.subList(start, Math.min(start + HOLD_ORDER_BATCH, holds.size())).stream()
+                        .collect(Collectors.toMap(CardPayments.StandingHold::orderId, CardPayments.StandingHold::intentId));
+                violations.addAll(jdbc.sql(TERMINAL_HOLDS_SQL).param("orders", intentByOrder.keySet())
+                        .param("terminalBefore", OffsetDateTime.now(clock).minusHours(1))
+                        .query((rs, i) -> new Violation(intentByOrder.get(rs.getObject("id", UUID.class)),
+                                "TERMINAL_ORDER_STANDING_HOLD")).list());
+            }
+            return violations;
         });
     }
     @Scheduled(fixedDelayString = "${blizz.operations.invariants.interval:PT10M}",

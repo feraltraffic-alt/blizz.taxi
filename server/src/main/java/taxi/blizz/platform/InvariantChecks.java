@@ -47,6 +47,7 @@ public abstract class InvariantChecks implements MeterBinder {
         this.reports = reports;
         this.meters = meters;
         this.clock = clock;
+        // Keep explicit PostgreSQL READ ONLY enforcement instead of depending on the default manager's read-only hint.
         JdbcTransactionManager manager = new JdbcTransactionManager(dataSource);
         manager.setEnforceReadOnly(true);
         read = new TransactionTemplate(manager);
