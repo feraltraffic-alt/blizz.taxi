@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.platform.ProviderBreakers;
 import taxi.blizz.pricing.RouteEstimator;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,41 +29,56 @@ class GraphHopperRouteEstimator implements RouteEstimator {
     private final RouteEstimator fallback;
     private final HttpClient http;
     private final JsonMapper json;
+    private final ProviderBreakers breakers;
 
     GraphHopperRouteEstimator(GraphHopperProperties properties, RouteEstimator fallback, JsonMapper json) {
+        this(properties, fallback, json, ProviderBreakers.none());
+    }
+
+    GraphHopperRouteEstimator(GraphHopperProperties properties, RouteEstimator fallback, JsonMapper json,
+                              ProviderBreakers breakers) {
+        this.breakers = breakers;
         this.properties = properties;
         this.fallback = fallback;
         this.json = json;
         this.http = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
     }
 
+    /** A route not found or refused (4xx) is an answer; a timeout, a refused connection or a 5xx is a failure. */
+    private record Answer(Estimate estimate, boolean failure) {
+    }
+
     @Override
     public Estimate estimate(GeoPoint pickup, GeoPoint dropOff) {
-        try {
-            HttpResponse<String> response = http.send(HttpRequest.newBuilder(uri(pickup, dropOff))
-                    .timeout(properties.timeout()).header("Accept", "application/json").GET().build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() != 200) {
-                log.warn("GraphHopper answered {}; using the straight-line estimate: {}", response.statusCode(),
-                        abbreviate(response.body()));
-                return fallback.estimate(pickup, dropOff);
-            }
-            JsonNode path = json.readTree(response.body()).path("paths").path(0);
-            if (path.isMissingNode() || !path.path("distance").isNumber() || !path.path("time").isNumber()) {
-                log.warn("GraphHopper found no route; using the straight-line estimate");
-                return fallback.estimate(pickup, dropOff);
-            }
-            long metres = path.path("distance").decimalValue().setScale(0, RoundingMode.HALF_UP).longValueExact();
-            long seconds = BigDecimal.valueOf(path.path("time").longValue())
-                    .divide(BigDecimal.valueOf(1000), 0, RoundingMode.HALF_UP).longValueExact();
-            return new Estimate(metres, seconds);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return fallback.estimate(pickup, dropOff);
-        } catch (Exception e) {
-            log.warn("GraphHopper is unavailable ({}); using the straight-line estimate", e.toString());
-            return fallback.estimate(pickup, dropOff);
+        Answer answer = breakers.call(ProviderBreakers.Provider.GRAPHHOPPER, () -> ask(pickup, dropOff),
+                Answer::failure,
+                e -> {
+                    log.warn("GraphHopper is unavailable ({}); using the straight-line estimate", e.toString());
+                    return new Answer(fallback.estimate(pickup, dropOff), true);
+                },
+                () -> new Answer(fallback.estimate(pickup, dropOff), true)); // breaker open: no call, no wait
+        return answer.estimate();
+    }
+
+    private Answer ask(GeoPoint pickup, GeoPoint dropOff) throws Exception {
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(uri(pickup, dropOff))
+                .timeout(properties.timeout()).header("Accept", "application/json").GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() != 200) {
+            log.warn("GraphHopper answered {}; using the straight-line estimate: {}", response.statusCode(),
+                    abbreviate(response.body()));
+            boolean down = response.statusCode() >= 500 || response.statusCode() == 429;
+            return new Answer(fallback.estimate(pickup, dropOff), down);
         }
+        JsonNode path = json.readTree(response.body()).path("paths").path(0);
+        if (path.isMissingNode() || !path.path("distance").isNumber() || !path.path("time").isNumber()) {
+            log.warn("GraphHopper found no route; using the straight-line estimate");
+            return new Answer(fallback.estimate(pickup, dropOff), false);
+        }
+        long metres = path.path("distance").decimalValue().setScale(0, RoundingMode.HALF_UP).longValueExact();
+        long seconds = BigDecimal.valueOf(path.path("time").longValue())
+                .divide(BigDecimal.valueOf(1000), 0, RoundingMode.HALF_UP).longValueExact();
+        return new Answer(new Estimate(metres, seconds), false);
     }
 
     /** Asks /info ("check the connection"): reachable, the key accepted, the profile known. Never shows the key. */

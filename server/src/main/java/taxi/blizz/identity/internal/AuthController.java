@@ -44,7 +44,8 @@ class AuthController {
                             OtpChannel channel) {
     }
 
-    record ChallengeResponse(UUID challengeId, OffsetDateTime expiresAt, OffsetDateTime resendAvailableAt) {
+    record ChallengeResponse(UUID challengeId, OffsetDateTime expiresAt, OffsetDateTime resendAvailableAt,
+                             taxi.blizz.identity.OtpChannel channel) {
     }
 
     record VerifyRequest(@NotNull UUID challengeId, @NotBlank @Pattern(regexp = "^[0-9]{4,8}$") String code,
@@ -83,7 +84,8 @@ class AuthController {
     ChallengeResponse requestChallenge(@Valid @RequestBody ChallengeRequest body, HttpServletRequest request) {
         ChallengeIssued issued = otp.requestChallenge(body.audience(), body.phone(), body.deviceRef(),
                 request.getRemoteAddr(), body.channel());
-        return new ChallengeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt());
+        return new ChallengeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt(),
+                issued.channel());
     }
 
     @PostMapping("/otp/verify")

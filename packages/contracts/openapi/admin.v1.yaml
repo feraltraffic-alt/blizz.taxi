@@ -613,6 +613,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/admin/v1/drivers/{driver_id}/phone:
@@ -1701,6 +1703,169 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/orders/{order_id}/evidence:
+    get:
+      operationId: getOrderEvidence
+      summary: The evidence of an order for a chargeback
+      description: >-
+        REQ-PAY-23, issue #103. What the payment provider's risk managers ask for, in one document: the order with
+        its times, fare and breakdown; the driver and vehicle; a summary of the ride's GPS track (not its points);
+        the rider's registration date and trips of the last 12 months (counts and totals only); the card operations;
+        the order's chat and its support cases with what was said to and by the requester (no internal notes).
+        No phone numbers and no card data: in text people typed, every run of nine or more digits is replaced by
+        "[number hidden]". Needs payments.retry for the order's city and a reason; every export is audited
+        (order.evidence.view).
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: reason
+          in: query
+          required: true
+          description: Why the evidence is exported, e.g. the bank's request; kept in the audit log.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderEvidence"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/orders/{order_id}/chargebacks:
+    get:
+      operationId: listChargebacks
+      summary: The chargebacks of an order
+      description: Oldest first. Needs payments.retry for the order's city.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chargebacks]
+                properties:
+                  chargebacks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Chargeback"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      operationId: recordChargeback
+      summary: Record a chargeback of the order's card payment by hand
+      description: >-
+        REQ-PAY-23, issue #103. The payment provider handles chargebacks through its risk managers and tells no API, so
+        finance records what the bank took. In the journal the money leaves PROVIDER_CLEARING and the rider owes it
+        again (RIDER_RECEIVABLE); a PAYMENT case, HIGH, is opened to send the order's evidence. At most what is left of
+        the order's card payment (captures, charges and tips, less earlier chargebacks not won back), and only on an
+        order paid by card: otherwise 422 CHARGEBACK_NOT_ALLOWED. Needs payments.retry for the order's city;
+        idempotent by command_id; audited.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargebackRecordRequest"
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chargeback"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/orders/{order_id}/chargebacks/{chargeback_id}/resolve:
+    post:
+      operationId: resolveChargeback
+      summary: Record the outcome of a chargeback
+      description: >-
+        Once. WON, the money came back: the exact reverse of the recording is posted. LOST: nothing is posted, the
+        rider's debt stays and the driver's share is not touched. A resolved chargeback → 409 STATE_CONFLICT, a stale
+        version → 409 VERSION_CONFLICT. Needs payments.retry for the order's city; idempotent; audited.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: chargeback_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargebackResolveRequest"
+      responses:
+        "200":
+          description: Resolved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chargeback"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/payment-operations/{operation_id}/retry:
     post:
       operationId: retryPaymentOperation
@@ -2840,6 +3005,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/admin/v1/clients/{client_id}/phone:
@@ -5220,6 +5387,314 @@ components:
         resolved_by: {type: [string, "null"], format: uuid}
         resolved_at: {type: [string, "null"], format: date-time}
         version: {type: integer, minimum: 0}
+
+    Chargeback:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, amount_minor, currency, bank_reason, received_on, state, resolution_reason, created_at,
+                 resolved_at, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        bank_reason:
+          type: string
+        received_on:
+          type: string
+          format: date
+        state:
+          type: string
+          enum: [OPEN, WON, LOST]
+        resolution_reason:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resolved_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        version:
+          type: integer
+          minimum: 0
+    ChargebackRecordRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, amount_minor, currency, bank_reason, received_on]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        bank_reason:
+          description: The bank's reason as written in its notice.
+          type: string
+          minLength: 1
+          maxLength: 500
+        received_on:
+          description: When the bank's notice came; not in the future.
+          type: string
+          format: date
+    ChargebackResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, outcome, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          minimum: 0
+        outcome:
+          type: string
+          enum: [WON, LOST]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    OrderEvidence:
+      description: The evidence of one order for a chargeback (REQ-PAY-23). Carries no phone number and no card data.
+      type: object
+      additionalProperties: false
+      required: [generated_at, order, driver, track, rider, card_operations, chat, support_cases]
+      properties:
+        generated_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        order:
+          $ref: "#/components/schemas/EvidenceOrder"
+        driver:
+          description: The driver of the order's last assignment; null when it never had one.
+          oneOf:
+            - $ref: "#/components/schemas/EvidenceDriver"
+            - type: "null"
+        track:
+          $ref: "#/components/schemas/EvidenceTrack"
+        rider:
+          description: The payer; null for an order without one.
+          oneOf:
+            - $ref: "#/components/schemas/EvidenceRider"
+            - type: "null"
+        card_operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceCardOperation"
+        chat:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceChatMessage"
+        support_cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceSupportCase"
+    EvidenceOrder:
+      type: object
+      additionalProperties: false
+      required: [id, short_number, status, payment_method, payment_state, pickup_label, dropoff_label,
+                 quoted_price_minor, final_price_minor, currency, wallet_minor, discount_minor, fare, created_at,
+                 assigned_at, arrived_at, started_at, completed_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        short_number:
+          type: integer
+        status:
+          type: string
+        payment_method:
+          type: [string, "null"]
+        payment_state:
+          type: [string, "null"]
+        pickup_label:
+          type: [string, "null"]
+        dropoff_label:
+          type: [string, "null"]
+        quoted_price_minor:
+          type: [integer, "null"]
+        final_price_minor:
+          type: [integer, "null"]
+        currency:
+          type: string
+        wallet_minor:
+          description: Paid from the rider's bonus account.
+          type: integer
+        discount_minor:
+          type: integer
+        fare:
+          description: The final fare and its breakdown; null before the trip is completed.
+          oneOf:
+            - $ref: "#/components/schemas/EvidenceFare"
+            - type: "null"
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        assigned_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        arrived_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        started_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        completed_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+    EvidenceFare:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency, policy, agreed_minor, waiting_seconds, free_waiting_seconds,
+                 charged_waiting_seconds, waiting_minor]
+      properties:
+        amount_minor:
+          type: integer
+        currency:
+          type: string
+        policy:
+          type: string
+        agreed_minor:
+          type: integer
+        waiting_seconds:
+          type: integer
+        free_waiting_seconds:
+          type: integer
+        charged_waiting_seconds:
+          type: integer
+        waiting_minor:
+          type: integer
+    EvidenceDriver:
+      type: object
+      additionalProperties: false
+      required: [id, name, vehicle]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        vehicle:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [make, model, color, registration_number]
+              properties:
+                make:
+                  type: string
+                model:
+                  type: string
+                color:
+                  type: [string, "null"]
+                registration_number:
+                  type: string
+            - type: "null"
+    EvidenceTrack:
+      description: >-
+        The ride's GPS track from its start to its completion, summarized. length_meters is the line through the points
+        not flagged as a jump or from the future.
+      type: object
+      additionalProperties: false
+      required: [points, flagged_points, first_point_at, last_point_at, duration_seconds, length_meters]
+      properties:
+        points:
+          type: integer
+          minimum: 0
+        flagged_points:
+          type: integer
+          minimum: 0
+        first_point_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        last_point_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        duration_seconds:
+          type: integer
+          minimum: 0
+        length_meters:
+          type: integer
+          minimum: 0
+    EvidenceRider:
+      type: object
+      additionalProperties: false
+      required: [id, registered_at, trips_last_year]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        registered_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        trips_last_year:
+          description: Fulfilled orders the rider paid for in the last 12 months, per currency.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [currency, trips, total_minor]
+            properties:
+              currency:
+                type: string
+              trips:
+                type: integer
+                minimum: 0
+              total_minor:
+                type: integer
+                minimum: 0
+    EvidenceCardOperation:
+      type: object
+      additionalProperties: false
+      required: [type, state, amount_minor, currency, provider_status, created_at]
+      properties:
+        type:
+          type: string
+        state:
+          type: string
+        amount_minor:
+          type: integer
+        currency:
+          type: string
+        provider_status:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+    EvidenceChatMessage:
+      type: object
+      additionalProperties: false
+      required: [sender_role, body, sent_at]
+      properties:
+        sender_role:
+          type: string
+        body:
+          type: string
+        sent_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+    EvidenceSupportCase:
+      type: object
+      additionalProperties: false
+      required: [number, category, subject, state, resolution, created_at, messages]
+      properties:
+        number:
+          type: integer
+        category:
+          type: string
+        subject:
+          type: string
+        state:
+          type: string
+        resolution:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        messages:
+          description: What was said to and by the requester; internal notes are left out.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [author_type, body, created_at]
+            properties:
+              author_type:
+                type: string
+              body:
+                type: string
+              created_at:
+                $ref: "./common.yaml#/components/schemas/Timestamp"
     PaymentOperation:
       type: object
       additionalProperties: false

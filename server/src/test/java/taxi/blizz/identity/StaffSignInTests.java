@@ -182,7 +182,43 @@ class StaffSignInTests {
                 .andReturn().getResponse().getStatus()).as("only a super admin manages staff").isEqualTo(403);
     }
 
+    /** Threat model A5: a new password signs out whoever knew the old one; the session that changed it stays. */
+    @Test
+    void aNewPasswordEndsTheOtherSessionsOfTheAccount() throws Exception {
+        String login = uniqueLogin("pwsessions");
+        operator(login, "first-password-123", "orders.view");
+        String here = (String) body(postJson("/auth/v1/staff/sign-in", null,
+                Map.of("login", login, "password", "first-password-123", "audience", "OPERATOR"))).get("access_token");
+        String elsewhere = (String) body(postJson("/auth/v1/staff/sign-in", null,
+                Map.of("login", login, "password", "first-password-123", "audience", "OPERATOR"))).get("access_token");
+
+        assertThat(postJson("/api/operator/v1/me/password", here, Map.of("current_password", "first-password-123",
+                "new_password", "second-password-456")).getResponse().getStatus()).isEqualTo(204);
+
+        assertThat(mvc.perform(get("/api/operator/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + here))
+                .andReturn().getResponse().getStatus()).as("the session that changed it").isEqualTo(200);
+        assertThat(mvc.perform(get("/api/operator/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + elsewhere))
+                .andReturn().getResponse().getStatus()).as("another session").isEqualTo(401);
+    }
+
     // ------------------------------------------------------------ sign in
+
+    /** Threat model A3: one address trying many logins is refused for a while; another address is not. */
+    @Test
+    void oneAddressWithManyWrongSignInsIsRefusedWhateverTheLogin() {
+        String spray = "198.51.100." + (1 + Math.floorMod(UUID.randomUUID().hashCode(), 250));
+        String login = uniqueLogin("spray");
+        operator(login, "spray-password-123");
+        for (int i = 0; i < 30; i++) {
+            String guess = "nobody-" + i + "-" + login;
+            assertCode(() -> signIn.signIn(guess, "guess-password-1", ApiAudience.OPERATOR, null, spray),
+                    ErrorCode.UNAUTHENTICATED);
+        }
+        assertCode(() -> signIn.signIn(login, "spray-password-123", ApiAudience.OPERATOR, null, spray),
+                ErrorCode.RATE_LIMITED);
+        assertThat(signIn.signIn(login, "spray-password-123", ApiAudience.OPERATOR, null, "203.0.113.9"))
+                .as("the account itself is not locked").isNotNull();
+    }
 
     @Test
     void wrongLoginAndWrongPasswordLookTheSameAndTooManyLockTheAccount() {
@@ -281,7 +317,7 @@ class StaffSignInTests {
     void everyStaffActionIsLoggedWithTheRoleAndOnlyLogReadersSeeIt() throws Exception {
         String login = uniqueLogin("logop");
         StaffMember op = operator(login, "log-operator-123", "orders.view");
-        signIn.changePassword(new Actor(SubjectType.STAFF, op.id()), "log-operator-123", "log-operator-456");
+        signIn.changePassword(new Actor(SubjectType.STAFF, op.id()), null, "log-operator-123", "log-operator-456");
         assertThat(postJson("/auth/v1/staff/sign-in", null, Map.of("login", login, "password", "wrong-password-9",
                 "audience", "OPERATOR")).getResponse().getStatus()).isEqualTo(401);
         String opToken = (String) body(postJson("/auth/v1/staff/sign-in", null,

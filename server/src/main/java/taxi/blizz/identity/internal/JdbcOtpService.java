@@ -28,6 +28,7 @@ import taxi.blizz.identity.OtpService;
 import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.VerifiedSubject;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.CommittedMetrics;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.RateLimitedException;
@@ -53,9 +54,11 @@ class JdbcOtpService implements OtpService {
     private final SecretKeySpec key;
     /** Confirmation codes are checked in their own transaction: a wrong attempt counts even if the caller fails. */
     private final TransactionTemplate own;
+    private final CommittedMetrics metrics;
 
     JdbcOtpService(JdbcClient jdbc, TransactionTemplate tx, OtpDelivery delivery, OtpProperties properties,
-                   Clock clock) {
+                   Clock clock, CommittedMetrics metrics) {
+        this.metrics = metrics;
         this.jdbc = jdbc;
         this.tx = tx;
         this.delivery = delivery;
@@ -115,12 +118,17 @@ class JdbcOtpService implements OtpService {
         return issue(audience, phone, purpose, deviceRef, clientIp, null, null);
     }
 
-    /** A new challenge of the purpose; the code is sent after commit. Budgets are shared by all purposes. */
+    /**
+     * A new challenge of the purpose; the code is sent after commit by one channel. Budgets are shared by all
+     * purposes. A number outside the served countries gets nothing and leaves no challenge (issue #101, P1).
+     */
     private ChallengeIssued issue(OtpAudience audience, PhoneNumber phone, OtpPurpose purpose, String deviceRef,
                                   String clientIp, OtpChannel preferred, UUID subjectId) {
+        String country = properties.countryOf(phone).orElseThrow(() -> new DomainException(
+                ErrorCode.PHONE_COUNTRY_NOT_SERVED, "Codes are sent only to numbers of the served countries"));
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            enforceLimits(audience, phone, deviceRef, clientIp, now);
+            OtpChannel channel = enforceLimits(audience, phone, deviceRef, clientIp, preferred, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
@@ -128,11 +136,12 @@ class JdbcOtpService implements OtpService {
             jdbc.sql("""
                             insert into otp_challenge (id, audience, phone_normalized, code_hmac, expires_at,
                                                        max_attempts, device_ref, client_ip, created_at, purpose,
-                                                       subject_id)
+                                                       subject_id, channel)
                             values (:id, :audience, :phone, :hmac, :expiresAt, :maxAttempts, :deviceRef, :clientIp,
-                                    :now, :purpose, :subject)
+                                    :now, :purpose, :subject, :channel)
                             """)
                     .param("subject", subjectId)
+                    .param("channel", channel.name())
                     .param("id", challengeId)
                     .param("audience", audience.name())
                     .param("phone", phone.e164())
@@ -148,18 +157,21 @@ class JdbcOtpService implements OtpService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    delivery.send(challengeId, phone, code, audience, preferred);
+                    delivery.send(challengeId, phone, code, audience, channel);
                 }
             });
-            return new ChallengeIssued(challengeId, expiresAt, now.plus(properties.resendAfter()));
+            // What the codes cost, by channel and country (P5): the labels are a closed set, never the number.
+            metrics.counter("blizz.otp.sent", "channel", channel.name(), "country", country);
+            return new ChallengeIssued(challengeId, expiresAt, now.plus(properties.resendAfter()), channel);
         });
     }
 
-    private void enforceLimits(OtpAudience audience, PhoneNumber phone, String deviceRef, String clientIp,
-                               OffsetDateTime now) {
-        // Serializes concurrent requests for the same phone and audience within this transaction.
+    /** Checks every budget and returns the one channel this code goes by (issue #101). */
+    private OtpChannel enforceLimits(OtpAudience audience, PhoneNumber phone, String deviceRef, String clientIp,
+                                     OtpChannel requested, OffsetDateTime now) {
+        // Serializes concurrent requests for the same phone, riders and drivers together, within this transaction.
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
-                .param("key", "otp:" + audience + ":" + phone.e164())
+                .param("key", "otp:" + phone.e164())
                 .query().singleRow();
 
         Optional<OffsetDateTime> last = jdbc.sql("""
@@ -180,11 +192,25 @@ class JdbcOtpService implements OtpService {
         }
 
         OffsetDateTime hourAgo = now.minusHours(1);
+        // From one address to one number, whatever device refs it sends (P3); before the per-number budget, so the
+        // refusal names the address.
+        if (clientIp != null) {
+            int fromHere = jdbc.sql("""
+                            select count(*) from otp_challenge
+                            where phone_normalized = :phone and client_ip = :ip and created_at > :since
+                            """)
+                    .param("phone", phone.e164()).param("ip", clientIp).param("since", hourAgo)
+                    .query(Integer.class).single();
+            if (fromHere >= properties.maxPerIpAndPhonePerHour()) {
+                throw new RateLimitedException("Too many codes for this phone from this address", Duration.ofHours(1));
+            }
+        }
+
+        // One budget for the number, as a rider and as a driver together (P4).
         int perPhone = jdbc.sql("""
                         select count(*) from otp_challenge
-                        where audience = :audience and phone_normalized = :phone and created_at > :since
+                        where phone_normalized = :phone and created_at > :since
                         """)
-                .param("audience", audience.name())
                 .param("phone", phone.e164())
                 .param("since", hourAgo)
                 .query(Integer.class).single();
@@ -205,6 +231,41 @@ class JdbcOtpService implements OtpService {
         if (global >= properties.maxGlobalPerHour()) {
             throw new RateLimitedException("Code sending budget exhausted", Duration.ofMinutes(5));
         }
+
+        OtpChannel channel = channel(phone, requested, perPhone > 0, hourAgo);
+        if (channel == OtpChannel.VOICE) {
+            int calls = jdbc.sql("""
+                            select count(*) from otp_challenge
+                            where phone_normalized = :phone and channel = 'VOICE' and created_at > :since
+                            """)
+                    .param("phone", phone.e164()).param("since", hourAgo)
+                    .query(Integer.class).single();
+            if (calls >= properties.maxCallsPerPhonePerHour()) {
+                throw new RateLimitedException("Too many calls for this phone", Duration.ofHours(1));
+            }
+        }
+        return channel;
+    }
+
+    /**
+     * The one channel of this code (P2). An SMS when asked for. A call when asked for only on a resend, a second code
+     * for the number within the hour (typically after an SMS that did not arrive); a first request for a call gets the
+     * configured channel. Without a request the configured channel, or its fallback when an attempt by it to this
+     * number did not get through in the last hour.
+     */
+    private OtpChannel channel(PhoneNumber phone, OtpChannel requested, boolean resend, OffsetDateTime since) {
+        OtpChannel primary = delivery.primaryChannel();
+        if (requested == OtpChannel.SMS) {
+            return OtpChannel.SMS;
+        }
+        if (requested == OtpChannel.VOICE) {
+            return resend ? OtpChannel.VOICE : primary;
+        }
+        Optional<OtpChannel> fallback = delivery.fallbackChannel();
+        if (fallback.isPresent() && fallback.get() != primary && delivery.failedSince(phone, primary, since)) {
+            return fallback.get();
+        }
+        return primary;
     }
 
     private int countSince(String column, String value, OffsetDateTime since) {

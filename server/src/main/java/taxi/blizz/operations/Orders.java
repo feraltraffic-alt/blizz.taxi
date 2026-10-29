@@ -140,4 +140,25 @@ public interface Orders {
     }
 
     Optional<CallerNotice> callerNotice(UUID orderId);
+
+    /**
+     * The times of an order and of its last trip, for a chargeback's evidence (REQ-PAY-23): created, the last
+     * assignment, arrival, start and completion, with that assignment's driver and vehicle. The caller has checked
+     * the staff member's access to the order's city and recorded the look; empty for an unknown order.
+     */
+    record TripTimes(OffsetDateTime createdAt, OffsetDateTime assignedAt, OffsetDateTime arrivedAt,
+                     OffsetDateTime startedAt, OffsetDateTime completedAt, UUID driverId, UUID vehicleId) {
+    }
+
+    Optional<TripTimes> tripTimes(UUID orderId);
+
+    /** Fulfilled orders a client paid for, in one currency: how many and their final prices in total. */
+    record PayerTrips(String currency, long trips, long totalMinor) {
+    }
+
+    /**
+     * The client's fulfilled orders created since {@code since}, per currency, for a chargeback's evidence; no other
+     * order's details. The caller has checked access and recorded the look.
+     */
+    List<PayerTrips> payerTrips(UUID payerClientId, OffsetDateTime since);
 }

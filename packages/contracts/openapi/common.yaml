@@ -110,6 +110,10 @@ components:
         included (ADR 0012); it replaces ORDER_ALREADY_ACTIVE, which is no longer returned.
         ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
         pending), from the app or by an operator; a caller without an account is not affected.
+        PHONE_COUNTRY_NOT_SERVED (422): a one-time code was asked for a number outside the countries the service
+        sends codes to (Poland and Ukraine by default); nothing is sent and no challenge is stored.
+        CHARGEBACK_NOT_ALLOWED (422): a chargeback larger than what is left of the order's card payment (its
+        captures, charges and tips, less earlier chargebacks not won back), or on an order not paid by card.
         ACCEPTANCE_REQUIRED (403): a rider's new order or a driver going online while a legal text in force that must
         be accepted is not (REQ-PRV-08); GET /api/{rider|driver}/v1/legal tells which.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
@@ -140,6 +144,8 @@ components:
         - PAYMENT_METHOD_NOT_OFFERED
         - LOCATION_NOT_FRESH
         - PICKUP_TOO_FAR
+        - PHONE_COUNTRY_NOT_SERVED
+        - CHARGEBACK_NOT_ALLOWED
         - RATE_LIMITED
         - UNAUTHENTICATED
         - ACCESS_DENIED

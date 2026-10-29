@@ -51,8 +51,15 @@ class JdbcOrderChat implements OrderChat {
      * The rider and the driver of the order's last assignment. {@code driverLeft}: that assignment ended
      * because the driver withdrew or staff took him off — he is no longer the order's driver.
      */
-    private record Party(UUID payerClientId, UUID assignmentId, UUID driverId, boolean driverLeft) {
+    private record Party(UUID payerClientId, UUID assignmentId, UUID driverId, boolean driverLeft,
+                         OffsetDateTime assignmentClosedAt) {
     }
+
+    /**
+     * After the assignment ends (trip done or cancelled) both sides may still write this long, e.g. about a forgotten
+     * item; then the chat is read-only and contact goes through support (owner decision 29.10.2026, REQ-SEC-04).
+     */
+    static final java.time.Duration WRITE_AFTER_END = java.time.Duration.ofHours(24);
 
     @Override
     public Message post(Actor sender, UUID commandId, UUID orderId, String body) {
@@ -68,10 +75,15 @@ class JdbcOrderChat implements OrderChat {
                     core.lockOrder(orderId);
                     Party party = party(orderId);
                     String role = role(sender, party);
-                    // Open once a driver is assigned and stays open in the order history (completed or
-                    // cancelled), owner decision 27.10.2026; role() already refused anyone else.
+                    // Open once a driver is assigned (owner decision 27.10.2026); readable in the order history for
+                    // good, writable until WRITE_AFTER_END after the assignment ended (owner decision 29.10.2026).
                     if (party.assignmentId() == null) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "No driver has been assigned to this order");
+                    }
+                    if (party.assignmentClosedAt() != null
+                            && party.assignmentClosedAt().plus(WRITE_AFTER_END).isBefore(core.now())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "The chat of this order is closed; contact support");
                     }
                     long sequence = jdbc.sql("select coalesce(max(sequence), 0) + 1 from order_message where order_id = :id")
                             .param("id", orderId).query(Long.class).single();
@@ -147,6 +159,13 @@ class JdbcOrderChat implements OrderChat {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Message> transcript(UUID orderId) {
+        return jdbc.sql(SELECT + " where order_id = :order order by sequence")
+                .param("order", orderId).query((rs, i) -> map(rs)).list();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public UUID orderOfTrip(Actor driver, UUID tripId) {
         return jdbc.sql("""
                         select t.order_id from trip t join assignment a on a.id = t.assignment_id
@@ -159,14 +178,15 @@ class JdbcOrderChat implements OrderChat {
     private Party party(UUID orderId) {
         return jdbc.sql("""
                         select o.payer_client_id, a.id, a.driver_id,
-                               coalesce(a.state = 'REVOKED' or a.close_reason like 'DRIVER_WITHDREW%', false)
+                               coalesce(a.state = 'REVOKED' or a.close_reason like 'DRIVER_WITHDREW%', false),
+                               a.closed_at
                         from ride_order o
-                        left join lateral (select id, driver_id, state, close_reason from assignment
+                        left join lateral (select id, driver_id, state, close_reason, closed_at from assignment
                                            where order_id = o.id order by created_at desc limit 1) a on true
                         where o.id = :id""")
                 .param("id", orderId)
                 .query((rs, i) -> new Party(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class), rs.getBoolean(4)))
+                        rs.getObject(3, UUID.class), rs.getBoolean(4), rs.getObject(5, OffsetDateTime.class)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
     }

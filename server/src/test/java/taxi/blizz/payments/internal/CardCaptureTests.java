@@ -69,6 +69,8 @@ class CardCaptureTests {
     @Autowired
     taxi.blizz.configuration.FeatureFlags flags;
     @Autowired
+    PaymentNotifications notifications;
+    @Autowired
     UnknownPayments unknown;
 
     TestRides rides;
@@ -606,5 +608,40 @@ class CardCaptureTests {
         // Its release goes out now: a later test's scripted provider answers must not meet it.
         settlePayments();
         assertThat(payments.intent(second.id()).orElseThrow().state()).isEqualTo("VOIDED");
+    }
+
+    /** Threat model W1: a signed notification about another sum than the operation's is not applied. */
+    @Test
+    void aNotificationAboutAnotherSumIsNotApplied() {
+        OrderView order = heldOrder(riderWithCard());
+        String reference = authReference(order);
+        String account = jdbc.sql("select account from payment_merchant where id = :id").param("id", merchantId)
+                .query(String.class).single();
+        Merchant merchant = new Merchant(merchantId, "FAKE", account, "test.blizz.invalid",
+                "test-merchant-secret-0123456789", "UAH");
+        java.util.function.BiFunction<String, String, java.util.Map<String, Object>> callback = (amount, currency) -> {
+            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("merchantAccount", account);
+            body.put("orderReference", reference);
+            body.put("amount", amount);
+            body.put("currency", currency);
+            body.put("authCode", "");
+            body.put("cardPan", "41****1111");
+            body.put("transactionStatus", "Declined");
+            body.put("reasonCode", "1100");
+            body.put("merchantSignature", WayForPayProvider.sign(merchant, account, reference, amount, currency, "",
+                    "41****1111", "Declined", "1100"));
+            return body;
+        };
+        String outcome = "select outcome from payment_event where reference = :ref order by received_at desc limit 1";
+
+        assertThat(notifications.receive(merchantId, callback.apply("1.00", "UAH")).trusted()).isTrue();
+        assertThat(jdbc.sql(outcome).param("ref", reference).query(String.class).single())
+                .isEqualTo("OPERATION_AMOUNT_MISMATCH");
+        assertThat(notifications.receive(merchantId,
+                callback.apply(WayForPayProvider.amount(order.priceMinor()), "PLN")).trusted()).isTrue();
+        assertThat(jdbc.sql(outcome).param("ref", reference).query(String.class).single())
+                .isEqualTo("OPERATION_AMOUNT_MISMATCH");
+        assertThat(payments.intent(order.id()).orElseThrow().state()).as("the hold stands").isEqualTo("AUTHORIZED");
     }
 }

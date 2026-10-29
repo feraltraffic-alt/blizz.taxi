@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/invariant-violated.v1.schema.json",
+  "title": "InvariantViolated v1 payload",
+  "description": "A module found inconsistent committed data. Reported once per check/object; creates one OTHER/HIGH problem case. Nothing is repaired automatically. Detail contains only a fixed diagnostic code, never personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["check", "object_type", "object_id", "detail"],
+  "properties": {
+    "check": { "type": "string", "enum": ["I1", "I2", "I3", "I4", "I5"] },
+    "object_type": { "type": "string", "enum": ["JournalTransaction", "DriverCapacity", "Order", "PaymentIntent"] },
+    "object_id": { "type": "string", "format": "uuid" },
+    "detail": { "type": "string", "pattern": "^[A-Z][A-Z0-9_ ;=.-]{0,199}$" }
+  },
+  "examples": [
+    { "check": "I1", "object_type": "JournalTransaction", "object_id": "7b000000-0000-4000-8000-000000000099", "detail": "UNBALANCED_POSTING" }
+  ]
+}

@@ -72,6 +72,34 @@ groups:
           summary: "More than 20 % of sign-in codes do not go out"
           runbook: docs/runbooks/sms.md
 
+      # SMS pumping (issue #101): codes sent in the last hour against the same hour of the previous 7 days, and against
+      # the instance's own ceiling blizz.otp.hourly-alarm. The floor of 50 keeps a quiet first week from paging.
+      - alert: OtpVolumeSpike
+        expr: |
+          sum(increase(blizz_otp_sent_total[1h])) > 50
+            and sum(increase(blizz_otp_sent_total[1h])) > 3 * (
+              (sum(increase(blizz_otp_sent_total[1h] offset 1d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 2d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 3d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 4d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 5d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 6d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 7d)) or vector(0))
+            ) / 7
+        for: 10m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "One-time codes in the last hour are more than 3x the usual for this hour: possible SMS pumping"
+          runbook: docs/runbooks/sms.md
+
+      - alert: OtpHourlyAlarm
+        expr: sum(increase(blizz_otp_sent_total[1h])) > on() max(blizz_otp_hourly_alarm)
+        for: 5m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "More one-time codes in the last hour than blizz.otp.hourly-alarm: possible SMS pumping"
+          runbook: docs/runbooks/sms.md
+
       - alert: OrdersWaitingLong
         expr: max(blizz_orders_searching_oldest_seconds) > 900
         for: 5m
@@ -139,3 +167,27 @@ groups:
         annotations:
           summary: "Card reconciliation freshness cannot be measured"
           runbook: docs/runbooks/payment-reconciliation.md
+
+      - alert: ProviderBreakerOpen
+        expr: max by (provider) (blizz_provider_breaker_state) == 2
+        for: 5m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "Provider {{ $labels.provider }} is down: its circuit breaker has been open for 5 minutes"
+          runbook: docs/runbooks/providers.md
+
+      - alert: InvariantViolation
+        expr: blizz_invariant_violations > 0
+        for: 20m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "Invariant {{ $labels.check }} found inconsistent objects for 20 minutes"
+          runbook: docs/runbooks/invariants.md
+
+      - alert: InvariantCheckFailed
+        expr: blizz_invariant_violations != blizz_invariant_violations
+        for: 20m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "Invariant {{ $labels.check }} cannot produce a reliable result"
+          runbook: docs/runbooks/invariants.md

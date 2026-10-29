@@ -366,7 +366,7 @@ class CardReconciliationTests {
                 .param("references",candidates.toArray(String[]::new)).query(String.class).single();
         System.out.println("RECONCILIATION_OPERATIONS_VOLUME cohort_plan="+cohortPlan);
         System.out.println("RECONCILIATION_OPERATIONS_VOLUME lookup_plan="+lookupPlan);
-        assertThat(cohortPlan).contains("payment_operation_reconciliation_created_idx","payment_operation_reconciliation_updated_idx");
+        assertThat(cohortPlan).contains("payment_operation_reconciliation_created_idx","payment_operation_invariant_updated_idx");
         assertThat(lookupPlan).contains("payment_operation_reconciliation_target_idx");
     }
 

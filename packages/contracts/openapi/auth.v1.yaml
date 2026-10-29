@@ -24,7 +24,11 @@ paths:
     post:
       operationId: requestOtpChallenge
       summary: Request a one-time code
-      description: Sends a code by SMS. Limited by resend delay, per-phone and global budgets.
+      description: >-
+        Sends a code by SMS or by a call, never both for one request. Only numbers of the served countries (Poland and
+        Ukraine by default) get a code; any other is 422 PHONE_COUNTRY_NOT_SERVED. Limited by the resend delay, the
+        per-number budget (riders and drivers together), the per-address-and-number, per-address, per-device and
+        global budgets, and a per-number budget of calls (issue #101).
       tags: [OTP]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -43,6 +47,8 @@ paths:
                 $ref: "#/components/schemas/OtpChallenge"
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
         "503":
@@ -87,7 +93,7 @@ paths:
       description: |
         Into the admin panel (audience ADMIN) or the operator workstation (OPERATOR), owner decision 27.10.2026.
         A wrong login and a wrong password both give 401 UNAUTHENTICATED. After too many wrong passwords in a
-        row the account is locked for a while: 429 with Retry-After. A suspended account gets 403. When
+        row the account is locked for a while: 429 with Retry-After. So is a network address after 30 wrong sign-ins within the lockout, whatever the logins (threat model A3). A suspended account gets 403. When
         password_change_required is true the token only allows changing the password (/me/password).
       tags: [Staff]
       parameters:
@@ -194,8 +200,11 @@ components:
         channel:
           description: >-
             "Call me instead" (ADR 0012 Q-18): VOICE asks for a call that speaks the code, SMS for a text. Omitted —
-            the channel set in the admin panel. If the asked channel fails, the other configured one is tried. Same
-            resend delay and limits either way.
+            the channel set in the admin panel, or its fallback when the last code to this number did not get through.
+            A call is made only on a resend (an earlier code for this number within the hour) and only while the
+            number's hourly budget of calls lasts (429 after it); a first request for VOICE gets the configured
+            channel. One request is sent by one channel only; the response's channel tells which. Same resend delay
+            and limits either way.
           type: [string, "null"]
           enum: [SMS, VOICE, null]
 
@@ -210,6 +219,10 @@ components:
           $ref: "./common.yaml#/components/schemas/Timestamp"
         resend_available_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        channel:
+          description: The channel the code is sent by (issue #101).
+          type: string
+          enum: [SMS, VOICE]
 
     OtpVerifyRequest:
       type: object

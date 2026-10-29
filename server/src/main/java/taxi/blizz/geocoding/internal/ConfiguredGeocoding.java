@@ -53,8 +53,8 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
 
     @org.springframework.beans.factory.annotation.Autowired
     ConfiguredGeocoding(Integrations integrations, GeocodingProperties environment, AddressBook addresses,
-                        JsonMapper json, Clock clock) {
-        this(integrations, environment, addresses, json, clock, new HttpTransport(environment.timeout()));
+                        JsonMapper json, Clock clock, taxi.blizz.platform.ProviderBreakers breakers) {
+        this(integrations, environment, addresses, json, clock, new HttpTransport(environment.timeout(), breakers));
     }
 
     ConfiguredGeocoding(Integrations integrations, GeocodingProperties environment, AddressBook addresses,

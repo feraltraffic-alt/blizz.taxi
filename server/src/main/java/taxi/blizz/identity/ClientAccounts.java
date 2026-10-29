@@ -35,6 +35,12 @@ public interface ClientAccounts {
 
     Client get(Actor staff, UUID clientId);
 
+    /**
+     * When the client's account was created, for a chargeback's evidence (REQ-PAY-23); nothing else about the client.
+     * The caller has checked access and recorded the look.
+     */
+    java.util.Optional<OffsetDateTime> registeredAt(UUID clientId);
+
     /** ACTIVE → BLOCKED; {@code until} null — until unblocked by staff, otherwise in the future. */
     Client block(Actor staff, UUID commandId, UUID clientId, long expectedVersion, String reason, OffsetDateTime until);
 

@@ -77,7 +77,6 @@ create table payment_reconciliation_entry (
 
 -- Daily time cohort and bounded anchor lookup; never aggregate the complete operation history.
 create index payment_operation_reconciliation_created_idx on payment_operation(created_at,intent_id);
-create index payment_operation_reconciliation_updated_idx on payment_operation(updated_at,intent_id);
 create index payment_operation_reconciliation_target_idx on payment_operation(target,created_at,id);
 create index card_top_up_reconciliation_created_idx on card_top_up(merchant_id,created_at);
 create index card_top_up_reconciliation_completed_idx on card_top_up(merchant_id,completed_at);

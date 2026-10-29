@@ -29,12 +29,14 @@ class GraphHopperRouteEstimatorTests {
     volatile String body = "";
     volatile long delayMillis;
     volatile int infoStatus = 200;
+    final java.util.concurrent.atomic.AtomicInteger routeCalls = new java.util.concurrent.atomic.AtomicInteger();
     volatile String infoBody = "{\"profiles\":[{\"name\":\"car\"}]}";
 
     @BeforeEach
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/route", exchange -> {
+            routeCalls.incrementAndGet();
             lastQuery.set(exchange.getRequestURI().getRawQuery());
             try {
                 Thread.sleep(delayMillis);
@@ -116,6 +118,36 @@ class GraphHopperRouteEstimatorTests {
                 "car", Duration.ofMillis(500)), (a, b) -> FALLBACK, JsonMapper.builder().build());
     }
 
+    /**
+     * Issue #98 E7: while GraphHopper is down the breaker opens; a quote still gets the straight-line estimate, at
+     * once and without asking GraphHopper. "No route" is an answer and never opens it.
+     */
+    @Test
+    void aDownRouterIsNotAskedWhileItsBreakerIsOpenAndQuotesStillGetAnEstimate() {
+        GraphHopperProperties properties = new GraphHopperProperties(true,
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/", null, "car", Duration.ofMillis(500));
+        var breakers = taxi.blizz.platform.ProviderBreakers.of(2, Duration.ofMinutes(1), java.time.Clock.systemUTC());
+        GraphHopperRouteEstimator router = new GraphHopperRouteEstimator(properties, (a, b) -> FALLBACK,
+                JsonMapper.builder().build(), breakers);
+
+        body = "{\"paths\":[]}"; // no route: an answer
+        for (int i = 0; i < 5; i++) {
+            assertThat(router.estimate(MAIDAN, STATION)).isEqualTo(FALLBACK);
+        }
+        assertThat(breakers.state(taxi.blizz.platform.ProviderBreakers.Provider.GRAPHHOPPER))
+                .isEqualTo(taxi.blizz.platform.ProviderBreakers.State.CLOSED);
+
+        status = 503;
+        body = "";
+        router.estimate(MAIDAN, STATION);
+        router.estimate(MAIDAN, STATION);
+        int asked = routeCalls.get();
+        for (int i = 0; i < 5; i++) {
+            assertThat(router.estimate(MAIDAN, STATION)).as("the degradation").isEqualTo(FALLBACK);
+        }
+        assertThat(routeCalls.get()).as("not asked while open").isEqualTo(asked);
+    }
+
     @Test
     void checkingTheConnectionAsksInfoAndNeverShowsTheKey() {
         Integrations.Check ok = estimator("secret-key-1234").check();
@@ -148,7 +180,7 @@ class GraphHopperRouteEstimatorTests {
         RouteEstimator.Estimate straight = new RouteEstimator.Estimate(7, 7);
         RouteEstimator straightLine = (a, b) -> straight;
         ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(panel, environment, straightLine,
-                JsonMapper.builder().build());
+                JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none());
         assertThat(configured.estimate(MAIDAN, STATION)).as("off in the environment").isEqualTo(straight);
 
         body = """

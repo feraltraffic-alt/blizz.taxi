@@ -1,6 +1,5 @@
 package taxi.blizz.telephony.internal;
 
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -25,8 +24,17 @@ class TurboSmsSender implements OtpSender {
     private final HttpTransport http;
     private final JsonMapper json;
 
+    private final taxi.blizz.platform.ProviderBreakers breakers;
+
     TurboSmsSender(Integrations integrations, ServiceSettings settings, TelephonyProperties properties,
                    HttpTransport http, JsonMapper json) {
+        this(integrations, settings, properties, http, json, taxi.blizz.platform.ProviderBreakers.none());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    TurboSmsSender(Integrations integrations, ServiceSettings settings, TelephonyProperties properties,
+                   HttpTransport http, JsonMapper json, taxi.blizz.platform.ProviderBreakers breakers) {
+        this.breakers = breakers;
         this.integrations = integrations;
         this.settings = settings;
         this.properties = properties;
@@ -59,14 +67,14 @@ class TurboSmsSender implements OtpSender {
         String body = json.writeValueAsString(Map.of(
                 "recipients", List.of(phone.e164().substring(1)),
                 "sms", Map.of("sender", sender, "text", text)));
-        HttpTransport.Response response;
-        try {
-            response = http.send("POST", properties.turbosmsBaseUrl() + "/message/send.json",
-                    Map.of("Authorization", "Bearer " + token, "Content-Type", "application/json"), body);
-        } catch (UncheckedIOException e) {
-            return Result.unknown("No answer from TurboSMS");
-        }
-        return result(response);
+        // Behind the TURBOSMS breaker (REQ-ENG-07): while it is open nothing is sent and the result is FAILED at once,
+        // so a code goes on to the call channel and a caller's SMS to its back-off.
+        return breakers.call(taxi.blizz.platform.ProviderBreakers.Provider.TURBOSMS,
+                () -> result(http.send("POST", properties.turbosmsBaseUrl() + "/message/send.json",
+                        Map.of("Authorization", "Bearer " + token, "Content-Type", "application/json"), body)),
+                r -> r.state() == State.UNKNOWN || (r.error() != null && r.error().startsWith("TurboSMS answered HTTP 5")),
+                e -> Result.unknown("No answer from TurboSMS"),
+                () -> Result.failed("TurboSMS is unavailable (breaker open)"));
     }
 
     /**

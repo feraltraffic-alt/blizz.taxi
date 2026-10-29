@@ -32,4 +32,14 @@ public interface TrackService {
 
     /** Inclusive time window, ordered by device recorded time and sequence. */
     List<TrackPoint> points(UUID driverId, OffsetDateTime from, OffsetDateTime to);
+
+    /**
+     * A summary of the driver's track in the window, not its points (e.g. a chargeback's evidence, REQ-PAY-23):
+     * how many points, how many were flagged, the first and last time, and the length in metres of the line through
+     * the points not flagged as a jump or from the future. Zero points: the times are null and the length zero.
+     */
+    record Summary(long points, long flagged, OffsetDateTime first, OffsetDateTime last, long lengthMeters) {
+    }
+
+    Summary summary(UUID driverId, OffsetDateTime from, OffsetDateTime to);
 }

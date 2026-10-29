@@ -81,6 +81,12 @@ class JdbcClientAccounts implements ClientAccounts {
         return find(clientId, false);
     }
 
+    @Override
+    public java.util.Optional<OffsetDateTime> registeredAt(UUID clientId) {
+        return jdbc.sql("select created_at from client where id = :id").param("id", clientId)
+                .query((rs, i) -> rs.getObject(1, OffsetDateTime.class)).optional();
+    }
+
     record BlockRequest(UUID clientId, long expectedVersion, String reason, OffsetDateTime until) {
     }
 

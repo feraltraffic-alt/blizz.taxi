@@ -37,8 +37,9 @@ import taxi.blizz.telephony.OtpDeliveries;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * One-time codes by SMS (TurboSMS) or by a call (Asterisk), the channel order of the admin panel with its fallback,
- * "call me instead", and the delivery record for support (ADR 0012 Q-18, issue #59). The providers are reached through
+ * One-time codes by SMS (TurboSMS) or by a call (Asterisk), the channel of the admin panel with its fallback on a
+ * resend, "call me instead", and the delivery record for support (ADR 0012 Q-18, issues #59 and #101: one channel per
+ * request). The providers are reached through
  * a recording transport, never the network; the channel order runs on the fake provider of the test profile.
  */
 @SpringBootTest
@@ -86,7 +87,8 @@ class OtpDeliveryTests {
         }
         double beforeVoice = meters.find("blizz.sms.sent").tag("purpose", "OTP").counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count).sum();
-        otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null, OtpChannel.VOICE);
+        set(Map.of(Integrations.OTP_CHANNEL, "VOICE"));
+        otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null);
         assertThat(meters.find("blizz.sms.sent").tag("purpose", "OTP").counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count).sum()).isEqualTo(beforeVoice);
     }
@@ -105,7 +107,10 @@ class OtpDeliveryTests {
                 }
             };
             org.mockito.Mockito.doReturn(checked).when(fake).sender(channel);
-            otp.requestChallenge(OtpAudience.CLIENT, newPhone(), null, null, channel);
+            set(Map.of(Integrations.OTP_CHANNEL, channel.name()));
+            String phone = newPhone();
+            otp.requestChallenge(OtpAudience.CLIENT, phone, null, null);
+            assertThat(attempts(phone)).extracting(OtpDeliveries.Attempt::channel).containsExactly(channel.name());
         }
     }
 
@@ -185,17 +190,27 @@ class OtpDeliveryTests {
 
     // ------------------------------------------------------------ the channel order
 
+    /** Moves the number's codes back past the resend delay, inside the hour. */
+    private void rewind(String phone) {
+        jdbc.sql("update otp_challenge set created_at = created_at - interval '2 minutes' where phone_normalized = :p")
+                .param("p", phone).update();
+    }
+
     @Test
-    void smsFirstThenACallWhenTheSmsFailsAndEveryAttemptIsRecordedWithoutTheCode() {
+    void anSmsThatFailsIsFollowedByACallOnTheResendAndEveryAttemptIsRecordedWithoutTheCode() {
         String phone = newPhone();
         fake.next(OtpSender.State.FAILED);
-        UUID challenge = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId();
+        UUID first = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId();
+        assertThat(attempts(phone)).extracting(OtpDeliveries.Attempt::channel, OtpDeliveries.Attempt::state)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("SMS", "FAILED"));
 
+        rewind(phone);
+        UUID second = otp.requestChallenge(OtpAudience.CLIENT, phone, null, null).challengeId();
         List<OtpDeliveries.Attempt> attempts = attempts(phone);
         assertThat(attempts).extracting(OtpDeliveries.Attempt::channel, OtpDeliveries.Attempt::state)
                 .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("SMS", "FAILED"),
                         org.assertj.core.groups.Tuple.tuple("VOICE", "SENT"));
-        assertThat(attempts).extracting(OtpDeliveries.Attempt::challengeId).containsOnly(challenge);
+        assertThat(attempts).extracting(OtpDeliveries.Attempt::challengeId).containsExactlyInAnyOrder(first, second);
         String code = fake.last(phone).orElseThrow().code();
         assertThat(fake.last(phone).orElseThrow().channel()).isEqualTo(OtpChannel.VOICE);
         assertThat(jdbc.sql("""
@@ -205,30 +220,35 @@ class OtpDeliveryTests {
     }
 
     @Test
-    void callMeInsteadAndTheAdminPanelDecideTheOrder() {
-        assertThat(delivery.order(null)).containsExactly(OtpChannel.SMS, OtpChannel.VOICE);
-        assertThat(delivery.order(OtpChannel.VOICE)).containsExactly(OtpChannel.VOICE, OtpChannel.SMS);
+    void callMeInsteadAndTheAdminPanelDecideTheChannel() {
+        assertThat(delivery.primaryChannel()).isEqualTo(OtpChannel.SMS);
+        assertThat(delivery.fallbackChannel()).contains(OtpChannel.VOICE);
 
         set(Map.of(Integrations.OTP_CHANNEL, "voice", Integrations.OTP_FALLBACK, "NONE"));
-        assertThat(delivery.order(null)).containsExactly(OtpChannel.VOICE);
-        assertThat(delivery.order(OtpChannel.SMS)).containsExactly(OtpChannel.SMS, OtpChannel.VOICE);
+        assertThat(delivery.primaryChannel()).isEqualTo(OtpChannel.VOICE);
+        assertThat(delivery.fallbackChannel()).isEmpty();
 
-        // "Call me instead" from the sign-in screen: the first attempt is a call.
+        // "Call me instead" from the sign-in screen: the first code is an SMS, the resend a call.
         set(Map.of(Integrations.OTP_CHANNEL, "SMS", Integrations.OTP_FALLBACK, "VOICE"));
         String phone = newPhone();
-        otp.requestChallenge(OtpAudience.DRIVER, phone, null, null, OtpChannel.VOICE);
-        assertThat(attempts(phone)).singleElement().satisfies(a -> {
-            assertThat(a.channel()).isEqualTo("VOICE");
-            assertThat(a.audience()).isEqualTo("DRIVER");
-        });
+        assertThat(otp.requestChallenge(OtpAudience.DRIVER, phone, null, null, OtpChannel.VOICE).channel())
+                .isEqualTo(OtpChannel.SMS);
+        rewind(phone);
+        assertThat(otp.requestChallenge(OtpAudience.DRIVER, phone, null, null, OtpChannel.VOICE).channel())
+                .isEqualTo(OtpChannel.VOICE);
+        assertThat(attempts(phone)).extracting(OtpDeliveries.Attempt::channel, OtpDeliveries.Attempt::audience)
+                .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("SMS", "DRIVER"),
+                        org.assertj.core.groups.Tuple.tuple("VOICE", "DRIVER"));
 
-        // Without a fallback a failed channel is the end.
+        // Without a fallback the resend after a failure goes by the same channel.
         set(Map.of(Integrations.OTP_FALLBACK, "NONE"));
         String lonely = newPhone();
         fake.next(OtpSender.State.UNKNOWN);
         otp.requestChallenge(OtpAudience.CLIENT, lonely, null, null);
         assertThat(attempts(lonely)).extracting(OtpDeliveries.Attempt::state).containsExactly("UNKNOWN");
         assertThat(fake.last(lonely)).isEmpty();
+        rewind(lonely);
+        assertThat(otp.requestChallenge(OtpAudience.CLIENT, lonely, null, null).channel()).isEqualTo(OtpChannel.SMS);
 
         assertThatThrownBy(() -> set(Map.of(Integrations.OTP_CHANNEL, "PIGEON")))
                 .isInstanceOf(DomainException.class);
@@ -295,6 +315,37 @@ class OtpDeliveryTests {
         assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).as("may still arrive: no retry here")
                 .isEqualTo(OtpSender.State.UNKNOWN);
         assertThat(http.requests).hasSize(4);
+    }
+
+    /**
+     * Issue #98 E7: while TurboSMS is down its breaker opens and a send fails at once without a request, so a code
+     * goes on to the call channel; a declined number ("NOT_ALLOWED") never opens it.
+     */
+    @Test
+    void aDownSmsProviderIsNotCalledWhileItsBreakerIsOpen() {
+        set(Map.of(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-test", Integrations.OTP_TURBOSMS_SENDER, "Blizz"));
+        Recording http = new Recording(r -> new HttpTransport.Response(200, """
+                {"response_code":0,"response_status":"OK","response_result":[{"phone":"380631234567",
+                 "response_code":406,"message_id":null,"response_status":"NOT_ALLOWED_RECIPIENT_COUNTRY"}]}"""));
+        var breakers = taxi.blizz.platform.ProviderBreakers.of(3, java.time.Duration.ofMinutes(1),
+                java.time.Clock.systemUTC());
+        TurboSmsSender sms = new TurboSmsSender(integrations, settings, live(), http, json, breakers);
+        PhoneNumber phone = new PhoneNumber("+380631234567");
+        for (int i = 0; i < 5; i++) {
+            assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
+        }
+        assertThat(breakers.state(taxi.blizz.platform.ProviderBreakers.Provider.TURBOSMS))
+                .as("a declined number is an answer").isEqualTo(taxi.blizz.platform.ProviderBreakers.State.CLOSED);
+
+        http.answer = r -> new HttpTransport.Response(503, "");
+        for (int i = 0; i < 3; i++) {
+            sms.send(phone, "123456", OtpAudience.CLIENT);
+        }
+        int asked = http.requests.size();
+        OtpSender.Result refused = sms.send(phone, "123456", OtpAudience.CLIENT);
+        assertThat(refused.state()).as("so the call channel is tried").isEqualTo(OtpSender.State.FAILED);
+        assertThat(refused.error()).contains("breaker open");
+        assertThat(http.requests).as("no request while open").hasSize(asked);
     }
 
     // ------------------------------------------------------------ Asterisk
