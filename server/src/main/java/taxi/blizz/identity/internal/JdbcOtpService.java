@@ -55,9 +55,13 @@ class JdbcOtpService implements OtpService {
     /** Confirmation codes are checked in their own transaction: a wrong attempt counts even if the caller fails. */
     private final TransactionTemplate own;
     private final CommittedMetrics metrics;
+    private final java.util.concurrent.Executor sendExecutor;
 
     JdbcOtpService(JdbcClient jdbc, TransactionTemplate tx, OtpDelivery delivery, OtpProperties properties,
-                   Clock clock, CommittedMetrics metrics) {
+                   Clock clock, CommittedMetrics metrics,
+                   @org.springframework.beans.factory.annotation.Qualifier(OtpSendConfiguration.EXECUTOR)
+                   java.util.concurrent.Executor sendExecutor) {
+        this.sendExecutor = sendExecutor;
         this.metrics = metrics;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -126,9 +130,13 @@ class JdbcOtpService implements OtpService {
                                   String clientIp, OtpChannel preferred, UUID subjectId) {
         String country = properties.countryOf(phone).orElseThrow(() -> new DomainException(
                 ErrorCode.PHONE_COUNTRY_NOT_SERVED, "Codes are sent only to numbers of the served countries"));
+        if (!OtpProperties.fullNumber(phone, country)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Not a full phone number of this country");
+        }
+        String address = addressBlock(clientIp);
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            OtpChannel channel = enforceLimits(audience, phone, deviceRef, clientIp, preferred, now);
+            OtpChannel channel = enforceLimits(audience, phone, deviceRef, address, preferred, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
@@ -150,14 +158,23 @@ class JdbcOtpService implements OtpService {
                     .param("expiresAt", expiresAt)
                     .param("maxAttempts", properties.maxAttempts())
                     .param("deviceRef", deviceRef)
-                    .param("clientIp", clientIp)
+                    .param("clientIp", address)
                     .param("now", now)
                     .update();
 
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    delivery.send(challengeId, phone, code, audience, channel);
+                    // Not on the request's thread: it keeps its database connection until these callbacks end, and
+                    // a provider may take a minute, so a few hung sends emptied the pool (audit 29.10.2026).
+                    sendExecutor.execute(() -> {
+                        try {
+                            delivery.send(challengeId, phone, code, audience, channel);
+                        } catch (RuntimeException e) {
+                            org.slf4j.LoggerFactory.getLogger(JdbcOtpService.class)
+                                    .error("Sending the code of challenge {} failed", challengeId, e);
+                        }
+                    });
                 }
             });
             // What the codes cost, by channel and country (P5): the labels are a closed set, never the number.
@@ -487,6 +504,29 @@ class JdbcOtpService implements OtpService {
     private record Result(VerifiedSubject subject) {
         static Result invalid() {
             return new Result(null);
+        }
+    }
+
+    /**
+     * The address budgets count an IPv6 client by its /64, the block one subscriber gets: otherwise every address
+     * of it was a budget of its own (audit 29.10.2026). IPv4 and anything unparseable stay as they are.
+     */
+    static String addressBlock(String clientIp) {
+        if (clientIp == null || clientIp.indexOf(':') < 0) {
+            return clientIp;
+        }
+        try {
+            byte[] bytes = java.net.InetAddress.ofLiteral(clientIp).getAddress();
+            if (bytes.length != 16) {
+                return clientIp;
+            }
+            StringBuilder block = new StringBuilder();
+            for (int i = 0; i < 8; i += 2) {
+                block.append(String.format("%x", ((bytes[i] & 0xff) << 8) | (bytes[i + 1] & 0xff))).append(':');
+            }
+            return block.append(":/64").toString();
+        } catch (IllegalArgumentException e) {
+            return clientIp;
         }
     }
 }

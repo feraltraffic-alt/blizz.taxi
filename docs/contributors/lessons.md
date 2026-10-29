@@ -88,6 +88,20 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **a periodic job is tested across days, not inside one.** Ask: what if a run is missed, what if the same fact appears in two runs, and what if one bad record repeats forever?
 - **Habit:** **an approved decision changes only with a new approval.** Ask in the issue and wait for the answer before the code.
 
+## 11. What a full audit found in green code (29.10.2026)
+
+- **Task:** read all of the server's code for real defects, after every PR had been reviewed and was green.
+- **Found:** about 40 confirmed defects. Most of them repeat a few patterns:
+  - **Permission without the object's city.** `require(actor, perm)` passed a member of one city through zones, promotions, card retries and cash disputes of every city. The rule existed, but nobody checked every command against it.
+  - **"No answer" read as "no".** A provider status reply without a status (a bad signature, a gate error) was taken as a decline. A charge that had gone through could then be retried and taken twice.
+  - **Catching a database error inside a PostgreSQL transaction.** After a caught `DuplicateKeyException` the transaction is already aborted, so the outbox event failed at commit.
+  - **A lease shorter than the work it covers.** A batch claimed for 30 s while each provider call could take 60 s, so a second instance sent it again.
+  - **One shared thread.** Every `@Scheduled` worker ran on Spring's single default scheduler thread, so a slow download held back dispatch.
+  - **Order that depends on the JVM.** `Set.copyOf` inside a hashed idempotency request made a retry on another instance look like another request.
+- **Habit:** **for every staff command, name the city of the object, or say why it has none.** A command without a city needs all cities.
+- **Habit:** **only an explicit answer is a result.** Anything a provider did not state stays UNKNOWN and is asked again.
+- **Habit:** **for every job that claims work, compare its lease with the longest time the work can take.**
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

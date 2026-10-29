@@ -84,6 +84,11 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - Inside your transaction, never catch a `DomainException` thrown by another bean's `@Transactional` method to carry on: it has already marked the transaction for rollback, and the request ends in 500 at commit. Ask first with a read (e.g. `CardPayments.intent(orderId).isEmpty()`), then call.
 - A list setting's `@DefaultValue` takes one value per element: `@DefaultValue({"48", "380"})`. `@DefaultValue("48,380")` is a single element `"48,380"`.
 - A job that runs per period (a day, an hour) catches up on the periods it missed, and reports a fact seen by two periods once.
+- A staff command on an object that belongs to a city passes that city to `StaffAccess.require`; an object of no city (a promotion for every city, a new city) needs all cities. Name the city, or why there is none, in the PR.
+- A provider answer without the status you asked about is not a result: it stays UNKNOWN and is asked again. Only an explicit code (e.g. WayForPay 1127 "Order Not Found") may decide.
+- Inside a PostgreSQL transaction, a unique-key race is handled with `ON CONFLICT`, never by catching `DuplicateKeyException`: the transaction is already aborted.
+- A lease is longer than the longest work it covers (a batch of provider calls with their timeouts), or each item is re-claimed just before it is worked on.
+- Collections in a hashed idempotency request serialize the same on every instance: sorted sets or lists, never `Set.copyOf`.
 - A query that runs on a schedule or on every request reads a bounded set (a lookback window, active rows, an index), never the whole history; prove it with a volume test and its `EXPLAIN`.
 
 ## Trying the system by hand

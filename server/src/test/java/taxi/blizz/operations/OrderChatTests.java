@@ -126,6 +126,8 @@ class OrderChatTests {
         Driver second = rides.driverNear(PICKUP);
 
         trips.withdraw(first.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), "Flat tyre");
+        // Audit 29.10.2026: until a new driver comes, what the rider writes goes to nobody, not to the one who left.
+        assertCode(() -> say(ride.payer(), ride, "Entrance 2, code 4321"), ErrorCode.STATE_CONFLICT);
         OfferView offer = dispatch.offers(second.actor()).getFirst();
         dispatch.accept(second.actor(), UUID.randomUUID(), offer.id());
 

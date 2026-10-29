@@ -13,6 +13,15 @@ spring:
     hikari:
       # Facts are stored in UTC (REQ-DATA-01) regardless of the server's local time zone.
       connection-init-sql: SET TIME ZONE 'UTC'
+      # Requests and the scheduled workers share it; keep instances x size under PostgreSQL's max_connections.
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+  task:
+    scheduling:
+      # Workers run side by side: on Spring's single default thread a slow one (a recording download, a provider
+      # outage) held back dispatch and the outbox relay (audit 29.10.2026).
+      pool:
+        size: 10
+      thread-name-prefix: blizz-worker-
   jpa:
     open-in-view: false
     hibernate:
