@@ -45,6 +45,17 @@ class OutboundAddressesTests {
         assertThat(guard.check(" https://93.184.216.34 ", HTTP)).isNotNull();
     }
 
+    /** Threat model W3: in clear only inside the listed private network; over the internet always https. */
+    @Test
+    void plainHttpGoesOnlyToAListedPrivateHost() {
+        for (String address : List.of("http://graphhopper.example.com/api", "http://93.184.216.34:8088")) {
+            assertThatThrownBy(() -> guard.check(address, HTTP)).as(address).isInstanceOf(DomainException.class)
+                    .hasMessageContaining("use https");
+        }
+        assertThat(guard.check("http://asterisk:8088", HTTP)).isNotNull();
+        assertThat(guard.check("https://graphhopper.example.com/api", HTTP)).isNotNull();
+    }
+
     @Test
     void theServersOwnNetworkIsRefused() {
         for (String address : List.of(
