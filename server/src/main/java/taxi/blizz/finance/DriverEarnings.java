@@ -19,7 +19,12 @@ public interface DriverEarnings {
      * service (card, bonuses, the service's discount); {@code adjustmentsMinor}: anything else on the balance.
      * {@code netMinor}: how the balance changed — positive, the service owes the driver more.
      */
-    record Figures(int trips, long fareMinor, long commissionMinor, long driverShareMinor, long cashMinor,
+    /**
+     * {@code heldMinor}: the driver's share of cash trips the driver reported not paid, held while support checks
+     * (SUSPENSE); not on the balance until a decision credits it (audit 29.10.2026: such a trip was missing).
+     */
+    record Figures(int trips, long fareMinor, long commissionMinor, long driverShareMinor, long heldMinor,
+                   long cashMinor,
                    long cashlessMinor, long tipsMinor, long bonusesMinor, long topUpsMinor, long transfersInMinor,
                    long transfersOutMinor, long adjustmentsMinor, long netMinor) {
     }

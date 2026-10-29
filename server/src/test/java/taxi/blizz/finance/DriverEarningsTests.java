@@ -105,6 +105,30 @@ class DriverEarningsTests {
                 .as("nothing on the 24th of Kyiv, though two postings carry that UTC date").isEmpty();
     }
 
+    /**
+     * Audit 29.10.2026: a cash trip the driver reported not paid, with the whole share held in SUSPENSE, credited
+     * nothing to the balance and was missing from the screen. It counts as a trip, with the share as held.
+     */
+    @Test
+    void aCashTripWithTheWholeShareHeldStillCounts() {
+        UUID order = UUID.randomUUID();
+        post("2026-09-10T10:00:00Z", "trip-fare:" + order, "TRIP_FARE", order,
+                Line.debit(Account.RIDER_RECEIVABLE, UUID.randomUUID(), 10_000),
+                Line.credit(Account.SUSPENSE, driver.id(), 8_000),
+                Line.credit(Account.SERVICE_COMMISSION, null, 2_000));
+
+        DriverEarnings.Figures f = earnings.mine(driver, city, LocalDate.of(2026, 9, 10), LocalDate.of(2026, 9, 10))
+                .total();
+        assertThat(f.trips()).isEqualTo(1);
+        assertThat(f.fareMinor()).isEqualTo(10_000);
+        assertThat(f.commissionMinor()).isEqualTo(2_000);
+        assertThat(f.driverShareMinor()).as("nothing credited yet").isZero();
+        assertThat(f.heldMinor()).isEqualTo(8_000);
+        assertThat(f.netMinor()).as("the balance did not change").isZero();
+        assertThat(earnings.mine(new Actor(SubjectType.DRIVER, UUID.randomUUID()), city, LocalDate.of(2026, 9, 10),
+                LocalDate.of(2026, 9, 10)).days()).as("another driver's held share is not mine").isEmpty();
+    }
+
     @Test
     void periodsCitiesAndWhoMayAsk() {
         assertCode(() -> earnings.mine(driver, city, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 3)),

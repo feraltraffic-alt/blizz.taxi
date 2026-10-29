@@ -60,7 +60,8 @@ class JdbcDriverEarnings implements DriverEarnings {
     }
 
     /** One journal transaction as the driver sees it. */
-    private record Row(LocalDate day, String basis, String topUpKind, long net, long fare, long commission) {
+    private record Row(LocalDate day, String basis, String topUpKind, long net, long fare, long commission,
+                       long held) {
     }
 
     private Earnings earnings(UUID driverId, UUID cityId, LocalDate from, LocalDate to) {
@@ -82,18 +83,23 @@ class JdbcDriverEarnings implements DriverEarnings {
                                          and l.account in ('RIDER_RECEIVABLE', 'SERVICE_EXPENSE')
                                         then l.debit_minor else 0 end) as fare,
                                sum(case when t.basis_type = 'TRIP_FARE' and l.account = 'SERVICE_COMMISSION'
-                                        then l.credit_minor else 0 end) as commission
+                                        then l.credit_minor else 0 end) as commission,
+                               sum(case when t.basis_type = 'TRIP_FARE' and l.account = 'SUSPENSE'
+                                         and l.party_id = :driver
+                                        then l.credit_minor - l.debit_minor else 0 end) as held
                         from journal_transaction t
                         join journal_line l on l.transaction_id = t.id
                         left join driver_balance_top_up u on t.basis_type = 'DRIVER_TOP_UP' and u.id = t.basis_id
                         where t.currency = :currency and t.occurred_at >= :start and t.occurred_at < :end
-                          and exists (select 1 from journal_line d where d.transaction_id = t.id
-                                      and d.account = 'DRIVER_PAYABLE' and d.party_id = :driver)
+                          and exists (select 1 from journal_line d where d.transaction_id = t.id and d.party_id = :driver
+                                      and (d.account = 'DRIVER_PAYABLE'
+                                           or (d.account = 'SUSPENSE' and t.basis_type = 'TRIP_FARE')))
                         group by t.id, t.occurred_at, t.basis_type, u.kind""")
                 .param("zone", city.timezone()).param("driver", driverId).param("currency", city.currency())
                 .param("start", start).param("end", end)
                 .query((rs, i) -> new Row(rs.getObject("day", LocalDate.class), rs.getString("basis_type"),
-                        rs.getString("top_up_kind"), rs.getLong("net"), rs.getLong("fare"), rs.getLong("commission")))
+                        rs.getString("top_up_kind"), rs.getLong("net"), rs.getLong("fare"), rs.getLong("commission"),
+                        rs.getLong("held")))
                 .list();
         Map<LocalDate, Totals> byDay = new TreeMap<>();
         Totals total = new Totals();
@@ -116,6 +122,7 @@ class JdbcDriverEarnings implements DriverEarnings {
         long fare;
         long commission;
         long driverShare;
+        long held;
         long cash;
         long tips;
         long bonuses;
@@ -133,6 +140,7 @@ class JdbcDriverEarnings implements DriverEarnings {
                     fare += row.fare();
                     commission += row.commission();
                     driverShare += row.net();
+                    held += row.held();
                 }
                 case "CASH_COLLECTED", "TERMINAL_COLLECTED" -> cash -= row.net();
                 case "TIP" -> tips += row.net();
@@ -157,7 +165,7 @@ class JdbcDriverEarnings implements DriverEarnings {
         }
 
         Figures figures() {
-            return new Figures(trips, fare, commission, driverShare, cash, fare - cash, tips, bonuses, topUps,
+            return new Figures(trips, fare, commission, driverShare, held, cash, fare - cash, tips, bonuses, topUps,
                     transfersIn, transfersOut, adjustments, net);
         }
     }

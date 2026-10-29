@@ -62,7 +62,8 @@ class AccessIsolationTests {
 
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 155.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 155.55);
-    static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
+    static final byte[] PNG = java.util.Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
     static final Pattern PARAM = Pattern.compile("\\{([a-z_]+)}");
     /**
      * Pool commands: any eligible driver may take a pre-order or an order of "ВСЕМ", so the object is not someone

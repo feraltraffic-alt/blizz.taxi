@@ -21,10 +21,31 @@ final class SecretCipher {
     private static final int TAG_BITS = 128;
 
     private final SecretKeySpec key;
+    private final SecretKeySpec macKey;
     private final SecureRandom random = new SecureRandom();
 
     private SecretCipher(byte[] key) {
         this.key = new SecretKeySpec(key, "AES");
+        this.macKey = new SecretKeySpec(hmac(new SecretKeySpec(key, "HmacSHA256"),
+                "blizz.integrations.fingerprint".getBytes(StandardCharsets.UTF_8)), "HmacSHA256");
+    }
+
+    /**
+     * HMAC-SHA256 with a key derived from the master key (audit 29.10.2026): a fingerprint of a secret that a database
+     * dump shows cannot be checked against guessed passwords without the master key.
+     */
+    byte[] fingerprint(byte[] data) {
+        return hmac(macKey, data);
+    }
+
+    private static byte[] hmac(SecretKeySpec key, byte[] data) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(key);
+            return mac.doFinal(data);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 unavailable", e);
+        }
     }
 
     /** Null when no master key is configured: secrets cannot be stored then. */
