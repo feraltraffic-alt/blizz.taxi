@@ -81,6 +81,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - A time sent by a phone is compared with a server time with a tolerance: phones send whole seconds and keep their own clock.
 - Metrics, logs and traces never fail the operation they observe: an unexpected label value becomes `OTHER` with a warning, never an exception in the business transaction.
 - No database transaction is held open around a call to an outside provider (SMS, payments, maps): call first, then record the result in a short transaction.
+- Inside your transaction, never catch a `DomainException` thrown by another bean's `@Transactional` method to carry on: it has already marked the transaction for rollback, and the request ends in 500 at commit. Ask first with a read (e.g. `CardPayments.intent(orderId).isEmpty()`), then call.
+- A list setting's `@DefaultValue` takes one value per element: `@DefaultValue({"48", "380"})`. `@DefaultValue("48,380")` is a single element `"48,380"`.
 - A query that runs on a schedule or on every request reads a bounded set (a lookback window, active rows, an index), never the whole history; prove it with a volume test and its `EXPLAIN`.
 
 ## Trying the system by hand

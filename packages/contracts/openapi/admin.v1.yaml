@@ -1746,6 +1746,126 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/orders/{order_id}/chargebacks:
+    get:
+      operationId: listChargebacks
+      summary: The chargebacks of an order
+      description: Oldest first. Needs payments.retry for the order's city.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chargebacks]
+                properties:
+                  chargebacks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Chargeback"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      operationId: recordChargeback
+      summary: Record a chargeback of the order's card payment by hand
+      description: >-
+        REQ-PAY-23, issue #103. The payment provider handles chargebacks through its risk managers and tells no API, so
+        finance records what the bank took. In the journal the money leaves PROVIDER_CLEARING and the rider owes it
+        again (RIDER_RECEIVABLE); a PAYMENT case, HIGH, is opened to send the order's evidence. At most what is left of
+        the order's card payment (captures, charges and tips, less earlier chargebacks not won back), and only on an
+        order paid by card: otherwise 422 CHARGEBACK_NOT_ALLOWED. Needs payments.retry for the order's city;
+        idempotent by command_id; audited.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargebackRecordRequest"
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chargeback"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/orders/{order_id}/chargebacks/{chargeback_id}/resolve:
+    post:
+      operationId: resolveChargeback
+      summary: Record the outcome of a chargeback
+      description: >-
+        Once. WON, the money came back: the exact reverse of the recording is posted. LOST: nothing is posted, the
+        rider's debt stays and the driver's share is not touched. A resolved chargeback → 409 STATE_CONFLICT, a stale
+        version → 409 VERSION_CONFLICT. Needs payments.retry for the order's city; idempotent; audited.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: chargeback_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargebackResolveRequest"
+      responses:
+        "200":
+          description: Resolved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chargeback"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/payment-operations/{operation_id}/retry:
     post:
       operationId: retryPaymentOperation
@@ -5075,6 +5195,78 @@ components:
           type: string
           minLength: 1
           maxLength: 1000
+    Chargeback:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, amount_minor, currency, bank_reason, received_on, state, resolution_reason, created_at,
+                 resolved_at, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        bank_reason:
+          type: string
+        received_on:
+          type: string
+          format: date
+        state:
+          type: string
+          enum: [OPEN, WON, LOST]
+        resolution_reason:
+          type: [string, "null"]
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        resolved_at:
+          oneOf: [{ $ref: "./common.yaml#/components/schemas/Timestamp" }, { type: "null" }]
+        version:
+          type: integer
+          minimum: 0
+    ChargebackRecordRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, amount_minor, currency, bank_reason, received_on]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        bank_reason:
+          description: The bank's reason as written in its notice.
+          type: string
+          minLength: 1
+          maxLength: 500
+        received_on:
+          description: When the bank's notice came; not in the future.
+          type: string
+          format: date
+    ChargebackResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, outcome, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          minimum: 0
+        outcome:
+          type: string
+          enum: [WON, LOST]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     OrderEvidence:
       description: The evidence of one order for a chargeback (REQ-PAY-23). Carries no phone number and no card data.
       type: object

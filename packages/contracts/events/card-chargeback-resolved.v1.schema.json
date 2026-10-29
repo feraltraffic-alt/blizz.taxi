@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/card-chargeback-resolved.v1.schema.json",
+  "title": "CardChargebackResolved v1 payload",
+  "description": "Published by payments when finance records the outcome of a chargeback, once (REQ-PAY-23, issue #103). Aggregate Chargeback. On WON finance posts the exact reverse of the recording (key chargeback-won:<id>): the money is back and the rider no longer owes it. On LOST nothing is posted: the rider's debt stays and the driver's share is not touched.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "chargeback_id",
+    "order_id",
+    "payer_client_id",
+    "amount_minor",
+    "currency",
+    "outcome"
+  ],
+  "properties": {
+    "chargeback_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payer_client_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount_minor": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "WON",
+        "LOST"
+      ]
+    }
+  },
+  "examples": [
+    {
+      "chargeback_id": "7f000000-0000-4000-8000-000000000103",
+      "order_id": "7b000000-0000-4000-8000-000000000103",
+      "payer_client_id": "7e000000-0000-4000-8000-000000000103",
+      "amount_minor": 15700,
+      "currency": "UAH",
+      "outcome": "WON"
+    }
+  ]
+}

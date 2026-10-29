@@ -2,6 +2,7 @@ package taxi.blizz.payments.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import jakarta.servlet.Filter;
 import java.time.OffsetDateTime;
@@ -45,8 +46,9 @@ import taxi.blizz.pricing.QuoteService;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The evidence of an order for a chargeback (REQ-PAY-23, issue #103 E1–E2), through the admin API: a finished card
- * ride with a GPS track, a chat and a support case, people typing phone and card numbers into both.
+ * Chargebacks (REQ-PAY-23, issue #103), through the admin API: the evidence of an order (E1–E2) — a finished card
+ * ride with a GPS track, a chat and a support case, people typing phone and card numbers into both — and recording
+ * and resolving a chargeback with its journal postings and case (E2–E5).
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -305,5 +307,162 @@ class ChargebackEvidenceTests {
         Map<String, Object> body = json.readValue(ofTheCity.body(), Map.class);
         assertThat((List<Object>) body.get("card_operations")).as("a cash ride").isEmpty();
         assertThat((Map<String, Object>) body.get("order")).containsEntry("payment_method", "CASH");
+    }
+
+    // ------------------------------------------------------------ chargebacks
+
+    private Response send(Actor staff, String path, Map<String, Object> body) throws Exception {
+        var result = mvc.perform(post(path).header("Authorization", "Bearer " + token(staff))
+                .contentType("application/json").content(json.writeValueAsString(body))).andReturn();
+        return new Response(result.getResponse().getStatus(), result.getResponse().getContentAsString());
+    }
+
+    private Response record(Actor staff, UUID orderId, UUID commandId, long amount, String currency)
+            throws Exception {
+        return send(staff, "/api/admin/v1/orders/" + orderId + "/chargebacks", Map.of("command_id", commandId,
+                "amount_minor", amount, "currency", currency, "bank_reason", "4837 No cardholder authorization",
+                "received_on", java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1).toString()));
+    }
+
+    private Response resolve(Actor staff, UUID orderId, UUID chargebackId, long version, String outcome)
+            throws Exception {
+        return send(staff, "/api/admin/v1/orders/" + orderId + "/chargebacks/" + chargebackId + "/resolve",
+                Map.of("command_id", UUID.randomUUID(), "expected_version", version, "outcome", outcome,
+                        "reason", "The provider's risk manager answered"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> read(Response response) {
+        return json.readValue(response.body(), Map.class);
+    }
+
+    private String code(Response response) {
+        return (String) read(response).get("code");
+    }
+
+    /** The order's journal: the payer's RIDER_RECEIVABLE and the PROVIDER_CLEARING lines of the order's postings. */
+    private Map<String, Long> journal(UUID orderId, UUID payer) {
+        long receivable = jdbc.sql("""
+                        select coalesce(sum(debit_minor) - sum(credit_minor), 0) from journal_line
+                        where account = 'RIDER_RECEIVABLE' and party_id = :payer""")
+                .param("payer", payer).query(Long.class).single();
+        long clearing = jdbc.sql("""
+                        select coalesce(sum(l.debit_minor) - sum(l.credit_minor), 0)
+                        from journal_line l join journal_transaction t on t.id = l.transaction_id
+                        where t.basis_id = :order and l.account = 'PROVIDER_CLEARING'""")
+                .param("order", orderId).query(Long.class).single();
+        long unbalanced = jdbc.sql("""
+                        select count(*) from (select t.id from journal_transaction t
+                                              join journal_line l on l.transaction_id = t.id
+                                              where t.basis_id = :order group by t.id
+                                              having sum(l.debit_minor) <> sum(l.credit_minor)) u""")
+                .param("order", orderId).query(Long.class).single();
+        return Map.of("receivable", receivable, "clearing", clearing, "unbalanced", unbalanced);
+    }
+
+    private long chargebackPostings(UUID orderId) {
+        return jdbc.sql("select count(*) from journal_transaction where basis_id = :order and basis_type = 'CHARGEBACK'")
+                .param("order", orderId).query(Long.class).single();
+    }
+
+    // E2, E3
+    @Test
+    void aChargebackIsAtMostWhatTheCardPaidOnlyByFinanceOfTheCityAndOnce() throws Exception {
+        Finished ride = finishedCardRide();
+        UUID orderId = ride.order().id();
+        long paid = orders.get(orderId).finalPriceMinor();
+        Actor finance = staffIn(cityId, PaymentOperations.RETRY_PERMISSION);
+
+        assertThat(record(staff("orders.view"), orderId, UUID.randomUUID(), 100, "UAH").status()).isEqualTo(403);
+        assertThat(record(staffIn(UUID.randomUUID(), PaymentOperations.RETRY_PERMISSION), orderId,
+                UUID.randomUUID(), 100, "UAH").status()).as("finance of another city").isEqualTo(403);
+
+        Response tooMuch = record(finance, orderId, UUID.randomUUID(), paid + 1, "UAH");
+        assertThat(tooMuch.status()).isEqualTo(422);
+        assertThat(code(tooMuch)).isEqualTo("CHARGEBACK_NOT_ALLOWED");
+        assertThat(code(record(finance, orderId, UUID.randomUUID(), 100, "PLN"))).isEqualTo("CHARGEBACK_NOT_ALLOWED");
+
+        // The card ride's driver is free again: off the line, so the cash order goes to the new one.
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where city_id = :c and state <> 'CLOSED'")
+                .param("c", cityId).update();
+        TestRides.Ride cash = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        rides.complete(cash, true);
+        Response onCash = record(finance, cash.order().id(), UUID.randomUUID(), 100, "UAH");
+        assertThat(onCash.status()).isEqualTo(422);
+        assertThat(code(onCash)).isEqualTo("CHARGEBACK_NOT_ALLOWED");
+
+        UUID command = UUID.randomUUID();
+        Response first = record(finance, orderId, command, paid - 100, "UAH");
+        assertThat(first.status()).isEqualTo(201);
+        Response again = record(finance, orderId, command, paid - 100, "UAH");
+        assertThat(again.status()).isEqualTo(201);
+        assertThat(read(again).get("id")).isEqualTo(read(first).get("id"));
+        assertThat(jdbc.sql("select count(*) from payment_chargeback where order_id = :o").param("o", orderId)
+                .query(Long.class).single()).as("a repeat is one row").isOne();
+        assertThat(code(record(finance, orderId, UUID.randomUUID(), 101, "UAH"))).as("100 is left")
+                .isEqualTo("CHARGEBACK_NOT_ALLOWED");
+        assertThat(record(finance, orderId, UUID.randomUUID(), 100, "UAH").status()).isEqualTo(201);
+
+        deliverEvents();
+        deliverEvents();
+        assertThat(jdbc.sql("""
+                        select count(*) from support_case
+                        where source_key = :key and category = 'PAYMENT' and priority = 'HIGH' and order_id = :order""")
+                .param("key", "chargeback:" + read(first).get("id")).param("order", orderId)
+                .query(Long.class).single()).isOne();
+        assertThat(jdbc.sql("""
+                        select count(*) from audit_log where action = 'payment.chargeback.record'
+                          and resource_id = :id and reason = '4837 No cardholder authorization'""")
+                .param("id", read(first).get("id")).query(Long.class).single()).isOne();
+    }
+
+    // E4, E5
+    @Test
+    @SuppressWarnings("unchecked")
+    void theJournalBalancesAndWonPutsEveryAccountBackLostLeavesTheDebtAndResolvingTwiceIsRefused()
+            throws Exception {
+        Finished ride = finishedCardRide();
+        UUID orderId = ride.order().id();
+        long paid = orders.get(orderId).finalPriceMinor();
+        Actor finance = staffIn(cityId, PaymentOperations.RETRY_PERMISSION);
+        deliverEvents();
+        Map<String, Long> before = journal(orderId, ride.rider().id());
+        assertThat(before.get("unbalanced")).isZero();
+
+        Map<String, Object> won = read(record(finance, orderId, UUID.randomUUID(), paid - 200, "UAH"));
+        Map<String, Object> lost = read(record(finance, orderId, UUID.randomUUID(), 200, "UAH"));
+        deliverEvents();
+        Map<String, Long> recorded = journal(orderId, ride.rider().id());
+        assertThat(recorded.get("unbalanced")).isZero();
+        assertThat(recorded.get("receivable")).as("the rider owes it again").isEqualTo(before.get("receivable") + paid);
+        assertThat(recorded.get("clearing")).isEqualTo(before.get("clearing") - paid);
+        assertThat(chargebackPostings(orderId)).isEqualTo(2);
+
+        Response resolved = resolve(finance, orderId, UUID.fromString((String) won.get("id")), 0, "WON");
+        assertThat(resolved.status()).isEqualTo(200);
+        assertThat(read(resolved)).containsEntry("state", "WON");
+        Response lostOne = resolve(finance, orderId, UUID.fromString((String) lost.get("id")), 0, "LOST");
+        assertThat(lostOne.status()).isEqualTo(200);
+        deliverEvents();
+        deliverEvents();
+        Map<String, Long> after = journal(orderId, ride.rider().id());
+        assertThat(after.get("unbalanced")).isZero();
+        assertThat(after.get("receivable")).as("won back; the lost 200 stays the rider's debt")
+                .isEqualTo(before.get("receivable") + 200);
+        assertThat(after.get("clearing")).isEqualTo(before.get("clearing") - 200);
+        assertThat(chargebackPostings(orderId)).as("LOST posts nothing").isEqualTo(3);
+
+        for (var twice : List.of(resolve(finance, orderId, UUID.fromString((String) won.get("id")), 1, "LOST"),
+                resolve(finance, orderId, UUID.fromString((String) won.get("id")), 0, "WON"),
+                resolve(finance, orderId, UUID.fromString((String) lost.get("id")), 1, "WON"))) {
+            assertThat(twice.status()).isEqualTo(409);
+        }
+        assertThat(resolve(staffIn(UUID.randomUUID(), PaymentOperations.RETRY_PERMISSION), orderId,
+                UUID.fromString((String) lost.get("id")), 1, "WON").status()).isEqualTo(403);
+        Response list = mvc.perform(get("/api/admin/v1/orders/" + orderId + "/chargebacks")
+                        .header("Authorization", "Bearer " + token(finance)))
+                .andReturn().getResponse().getContentAsString().transform(b -> new Response(200, b));
+        assertThat((List<Map<String, Object>>) read(list).get("chargebacks")).extracting(c -> c.get("state"))
+                .containsExactly("WON", "LOST");
     }
 }

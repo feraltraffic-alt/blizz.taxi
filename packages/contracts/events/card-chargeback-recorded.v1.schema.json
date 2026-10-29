@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/card-chargeback-recorded.v1.schema.json",
+  "title": "CardChargebackRecorded v1 payload",
+  "description": "Published by payments when finance records a chargeback of an order's card payment by hand (REQ-PAY-23, issue #103). Aggregate Chargeback. finance posts it once per chargeback (key chargeback:<id>): Dr RIDER_RECEIVABLE of the payer, Cr PROVIDER_CLEARING — the money left the provider's clearing account and the rider owes it again. backoffice opens one PAYMENT case, HIGH (chargeback:<id>).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "chargeback_id",
+    "order_id",
+    "intent_id",
+    "payer_client_id",
+    "amount_minor",
+    "currency"
+  ],
+  "properties": {
+    "chargeback_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "intent_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payer_client_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount_minor": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "examples": [
+    {
+      "chargeback_id": "7f000000-0000-4000-8000-000000000103",
+      "order_id": "7b000000-0000-4000-8000-000000000103",
+      "intent_id": "7c000000-0000-4000-8000-000000000103",
+      "payer_client_id": "7e000000-0000-4000-8000-000000000103",
+      "amount_minor": 15700,
+      "currency": "UAH"
+    }
+  ]
+}
