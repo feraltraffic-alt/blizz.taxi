@@ -33,7 +33,7 @@ class CardReconciliation {
     private static final Set<String> SAFE_FAILURES=Set.of("RECONCILIATION_PROVIDER_UNAVAILABLE",
             "RECONCILIATION_INVALID_RESPONSE","RECONCILIATION_AMBIGUOUS_LOCAL_REFERENCE",
             "RECONCILIATION_CONFLICTING_BANK_EVIDENCE","RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND",
-            "RECONCILIATION_TOO_MANY_WINDOWS","RECONCILIATION_UNOWNED_PENDING_TRANSACTION",
+            "RECONCILIATION_TOO_MANY_WINDOWS","RECONCILIATION_UNOWNED_PENDING_TRANSACTION","RECONCILIATION_LEASE_LOST",
             "RECONCILIATION_MERCHANT_UNAVAILABLE",
             "RECONCILIATION_LOCAL_CHANGED");
     private final Merchants merchants;
@@ -73,6 +73,7 @@ class CardReconciliation {
             for (ProviderTransaction row:provider.transactions(merchant,attempt.run().periodFrom().toInstant(),until.toInstant())) {
                 merge(bank,row);
             }
+            store.renew(attempt);
             Set<String> references=new LinkedHashSet<>(cohort);
             references.addAll(bank.keySet());
             Map<String,Local> local=locals.load(merchantId,references);
@@ -100,6 +101,7 @@ class CardReconciliation {
                     // These are compatibility lookups, not permission to import every historical bank row.
                     if (window.getValue().contains(row.reference())) merge(bank,row);
                 }
+                store.renew(attempt);
             }
             // A worker may have completed a callback while we fetched. Read the selected chains again, never apply.
             local=locals.load(merchantId,references);

@@ -199,6 +199,21 @@ class ReconciliationDecisionTests {
         assertThat(meters.get("blizz.payments.reconciliation.items").tag("kind","AMOUNT").gauge().value()).isGreaterThanOrEqualTo(1);
     }
 
+    /** Audit 29.10.2026: a long run kept its first ten-minute lease, so a second instance could take it over. */
+    @Test
+    void aLongRunRenewsItsLeaseAndStopsOnceAnotherInstanceTookIt() {
+        var attempt=store.begin(merchant,java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(9),false);
+        jdbc.sql("update payment_reconciliation set lease_until=now()+interval '1 minute' where id=:id")
+                .param("id",attempt.run().id()).update();
+        store.renew(attempt);
+        assertThat(jdbc.sql("select lease_until>now()+interval '9 minutes' from payment_reconciliation where id=:id")
+                .param("id",attempt.run().id()).query(Boolean.class).single()).isTrue();
+
+        jdbc.sql("update payment_reconciliation set lease_token=:other where id=:id")
+                .param("other",UUID.randomUUID()).param("id",attempt.run().id()).update();
+        assertThatThrownBy(()->store.renew(attempt)).hasMessage("RECONCILIATION_LEASE_LOST");
+    }
+
     @Test
     void paginationAndFreshnessUseBoundedIndexesOnOneHundredThousandHistoricalRuns() {
         jdbc.sql("""
@@ -217,6 +232,12 @@ class ReconciliationDecisionTests {
         assertThat(first.runs()).hasSize(20);
         assertThat(second.runs()).hasSize(20);
         assertThat(first.runs()).doesNotContainAnyElementsOf(second.runs());
+        List<java.time.LocalDate> days=new ArrayList<>();
+        first.runs().forEach(r->days.add(r.day()));
+        second.runs().forEach(r->days.add(r.day()));
+        assertThat(days).as("newest day first, across pages").isSortedAccordingTo(java.util.Comparator.reverseOrder())
+                .doesNotHaveDuplicates();
+        assertThat(first.runs().getFirst().id()).as("yesterday's run of the fixture").isEqualTo(run);
         double age=meters.get("blizz.payments.reconciliation.oldest.success.age").gauge().value();
         assertThat(Double.isFinite(age)).isTrue();
         long elapsed=System.nanoTime()-start;
@@ -224,7 +245,7 @@ class ReconciliationDecisionTests {
         assertThat(java.time.Duration.ofNanos(elapsed)).isLessThan(java.time.Duration.ofSeconds(1));
         String listSql=(String)org.springframework.test.util.ReflectionTestUtils.getField(api,"LIST_SQL");
         String pagePlan=jdbc.sql("explain (analyze,buffers,format json) "+listSql).param("merchant",merchant)
-                .param("after",null).param("allCities",true).param("cities",List.of(city1,city2)).param("limit",21)
+                .param("afterDay",null).param("afterId",null).param("allCities",true).param("cities",List.of(city1,city2)).param("limit",21)
                 .query(String.class).single();
         String freshnessSql=(String)org.springframework.test.util.ReflectionTestUtils.getField(
                 context.getBean(ReconciliationMetrics.class),"LAST_SUCCESS_SQL");

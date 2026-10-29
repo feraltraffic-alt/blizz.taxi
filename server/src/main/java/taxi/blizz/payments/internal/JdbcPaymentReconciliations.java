@@ -27,15 +27,16 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
             select r.* from payment_merchant m
             join lateral (
                 select r.* from payment_reconciliation r where r.merchant_id=m.id
-                    and (cast(:after as uuid) is null or r.id>:after)
-                order by r.id limit :limit
+                    and (cast(:afterDay as date) is null
+                         or (r.day,r.id)<(cast(:afterDay as date),cast(:afterId as uuid)))
+                order by r.day desc,r.id desc limit :limit
             ) r on true
             where (cast(:merchant as uuid) is null or m.id=:merchant)
                 and (:allCities or (
                     exists(select 1 from payment_merchant_city c where c.merchant_id=m.id)
                     and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id
                                    and c.city_id not in (:cities))))
-            order by r.id limit :limit
+            order by r.day desc,r.id desc limit :limit
             """;
     private final JdbcClient jdbc;
     private final StaffAccess staff;
@@ -52,21 +53,28 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
     public Runs list(Actor actor, UUID merchantId, String cursor, int limit) {
         staff.require(actor, RESOLVE_PERMISSION);
         pageSize(limit);
-        UUID after = null;
+        // Newest day first, as the contract says (audit 29.10.2026: the pages went by a random id). Cursor: day|id.
+        java.time.LocalDate afterDay = null;
+        UUID afterId = null;
         if (cursor != null) {
-            try { after=UUID.fromString(cursor); }
-            catch (IllegalArgumentException ignored) { throw invalid("Invalid cursor"); }
+            String[] parts = cursor.split("\\|", -1);
+            try {
+                if (parts.length != 2) throw new IllegalArgumentException();
+                afterDay=java.time.LocalDate.parse(parts[0]);
+                afterId=UUID.fromString(parts[1]);
+            } catch (RuntimeException ignored) { throw invalid("Invalid cursor"); }
         }
         if (merchantId != null) requireMerchant(actor, merchantId);
         StaffAccess.Scope scope = staff.scope(actor, RESOLVE_PERMISSION);
         if (!scope.allCities() && scope.cityIds().isEmpty()) return new Runs(List.of(),null);
         // A merchant's bank statement spans every mapped city; partial city access is insufficient.
         List<UUID> cities = scope.cityIds().isEmpty() ? List.of(new UUID(0,0)) : List.copyOf(scope.cityIds());
-        var query=jdbc.sql(LIST_SQL).param("merchant", merchantId).param("after", after).param("allCities", scope.allCities())
+        var query=jdbc.sql(LIST_SQL).param("merchant", merchantId).param("afterDay", afterDay).param("afterId", afterId)
+                .param("allCities", scope.allCities())
                 .param("cities", cities).param("limit", limit+1).query(JdbcPaymentReconciliations::mapRun).list();
         boolean more=query.size()>limit;
         List<Run> page=more?query.subList(0,limit):query;
-        return new Runs(page, more?page.getLast().id().toString():null);
+        return new Runs(page, more?page.getLast().day()+"|"+page.getLast().id():null);
     }
 
     @Override
