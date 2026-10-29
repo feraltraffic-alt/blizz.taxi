@@ -19,6 +19,15 @@ A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profil
 
 `prod` is never combined with `dev`, `sandbox` or `test`. Without a profile the server starts as `dev`, which must never be used for real data.
 
+## Access logs of the proxy
+
+Admin search by phone passes the phone in the query string, for example `/api/admin/v1/otp-deliveries?phone=…`, `/api/admin/v1/clients?phone=…` and `/api/admin/v1/rider-wallets?phone=…`. The server's own logs record only the route template. The reverse proxy in front of the server **must not log query strings** of `/api/` (threat model O2, REQ-SEC-08): log the path and the status, never `$request_uri` or `$args`. In nginx, for example:
+
+```nginx
+log_format blizz '$remote_addr [$time_iso8601] "$request_method $uri" $status $body_bytes_sent $request_time';
+access_log /var/log/nginx/blizz.log blizz;
+```
+
 ## Keys of integrations
 
 Keys of Firebase, GraphHopper, the map keys of the apps and the payment merchants are entered in the admin panel
