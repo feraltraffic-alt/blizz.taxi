@@ -365,4 +365,65 @@ class StaffSignInTests {
         assertThatThrownBy(() -> jdbc.sql("update staff_activity set outcome = 'x'").update())
                 .rootCause().hasMessageContaining("append-only");
     }
+
+    /** Audit 29.10.2026: a held session cannot guess the current password without limit to take the account over. */
+    @Test
+    void wrongCurrentPasswordsAreCountedAndLockTheAccountLikeSignIn() {
+        StaffMember op = operator(uniqueLogin("guess"), "guess-operator-123", "orders.view");
+        Actor actor = new Actor(SubjectType.STAFF, op.id());
+        for (int i = 0; i < 5; i++) {
+            int attempt = i;
+            assertCode(() -> signIn.changePassword(actor, null, "wrong-guess-" + attempt, "guess-operator-456"),
+                    ErrorCode.UNAUTHENTICATED);
+        }
+        assertThat(jdbc.sql("select locked_until > now() from staff_user where id = :id").param("id", op.id())
+                .query(Boolean.class).single()).isTrue();
+        assertCode(() -> signIn.changePassword(actor, null, "guess-operator-123", "guess-operator-456"),
+                ErrorCode.UNAUTHENTICATED);
+    }
+
+    /** Audit 29.10.2026: two super admins suspending each other at once leave one active, not none. */
+    @Test
+    void twoSuperAdminsSuspendingEachOtherAtOnceLeaveOneActive() throws Exception {
+        UUID otherId = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, first_name, last_name, name, role, state, password_hash,
+                                                all_cities, created_at, updated_at)
+                        values (:id, :login, 'Second', 'Root', 'Second Root', 'SUPER_ADMIN', 'ACTIVE', :hash, true,
+                                now(), now())""")
+                .param("id", otherId).param("login", "root2-" + otherId.toString().substring(0, 8))
+                .param("hash", new BCryptPasswordEncoder(4).encode(SUPER_PASSWORD)).update();
+        Actor other = new Actor(SubjectType.STAFF, otherId);
+        // Only these two may be active super admins for the race; the others come back afterwards.
+        List<UUID> parked = jdbc.sql("""
+                        update staff_user set state = 'SUSPENDED'
+                        where role = 'SUPER_ADMIN' and state = 'ACTIVE' and id not in (:a, :b) returning id""")
+                .param("a", superAdmin.id()).param("b", otherId).query(UUID.class).list();
+        try {
+            long mine = directory.get(superAdmin, superAdmin.id()).version();
+            long theirs = directory.get(superAdmin, otherId).version();
+            var start = new java.util.concurrent.CountDownLatch(1);
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var a = pool.submit(() -> { start.await();
+                    return directory.suspend(superAdmin, UUID.randomUUID(), otherId, theirs, "race"); });
+                var b = pool.submit(() -> { start.await();
+                    return directory.suspend(other, UUID.randomUUID(), superAdmin.id(), mine, "race"); });
+                start.countDown();
+                int done = 0;
+                for (var f : List.of(a, b)) {
+                    try { f.get(); done++; } catch (java.util.concurrent.ExecutionException refused) { /* the loser */ }
+                }
+                assertThat(done).isOne();
+            }
+            assertThat(jdbc.sql("""
+                            select count(*) from staff_user
+                            where role = 'SUPER_ADMIN' and state = 'ACTIVE' and id in (:a, :b)""")
+                    .param("a", superAdmin.id()).param("b", otherId).query(Long.class).single()).isOne();
+        } finally {
+            if (!parked.isEmpty()) {
+                jdbc.sql("update staff_user set state = 'ACTIVE' where id in (:ids)").param("ids", parked).update();
+            }
+            jdbc.sql("update staff_user set state = 'ACTIVE' where id = :id").param("id", superAdmin.id()).update();
+        }
+    }
 }

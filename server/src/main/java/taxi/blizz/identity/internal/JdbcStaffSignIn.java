@@ -142,6 +142,11 @@ class JdbcStaffSignIn implements StaffSignIn {
         if (staff == null || staff.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff only");
         }
+        // The current password is checked and counted in its own transaction first, as for a confirmation: a held
+        // session must not be able to guess it without limit (audit 29.10.2026).
+        if (!checkCounted(staff, currentPassword)) {
+            throw new DomainException(ErrorCode.UNAUTHENTICATED, "The current password is wrong");
+        }
         tx.executeWithoutResult(status -> {
             record Row(String login, String hash) {
             }
@@ -174,7 +179,16 @@ class JdbcStaffSignIn implements StaffSignIn {
         if (staff == null || staff.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff only");
         }
-        // Called before the change starts its transaction, so a failure is counted although the change is refused.
+        if (!checkCounted(staff, password)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "The password is wrong");
+        }
+    }
+
+    /**
+     * The staff member's password, checked in a transaction of its own so a failure is counted although the caller's
+     * change is refused; a locked account is refused without looking. Too many failures lock it like sign-in does.
+     */
+    private boolean checkCounted(Actor staff, String password) {
         Boolean ok = tx.execute(status -> {
             record Row(String hash, int failed, OffsetDateTime lockedUntil) {
             }
@@ -201,9 +215,7 @@ class JdbcStaffSignIn implements StaffSignIn {
             jdbc.sql("update staff_user set failed_sign_ins = 0 where id = :id").param("id", staff.id()).update();
             return true;
         });
-        if (!Boolean.TRUE.equals(ok)) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "The password is wrong");
-        }
+        return Boolean.TRUE.equals(ok);
     }
 
     private OffsetDateTime now() {

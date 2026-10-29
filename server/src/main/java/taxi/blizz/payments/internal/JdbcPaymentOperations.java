@@ -3,6 +3,7 @@ package taxi.blizz.payments.internal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -48,6 +49,8 @@ class JdbcPaymentOperations implements PaymentOperations {
     @Transactional(readOnly = true)
     public List<Operation> ofOrder(Actor actor, UUID orderId) {
         staff.require(actor, RETRY_PERMISSION);
+        requireCity(actor, jdbc.sql("select city_id from payment_intent where order_id = :order")
+                .param("order", orderId).query((rs, i) -> Optional.ofNullable(rs.getObject(1, UUID.class))).optional());
         List<Operation> ops = jdbc.sql(SELECT + " where i.order_id = :order order by o.created_at, o.id")
                 .param("order", orderId).query((rs, i) -> map(rs).operation()).list();
         if (ops.isEmpty()) {
@@ -62,6 +65,10 @@ class JdbcPaymentOperations implements PaymentOperations {
     @Override
     public Operation retry(Actor actor, UUID commandId, UUID operationId, String reason) {
         staff.require(actor, RETRY_PERMISSION);
+        requireCity(actor, jdbc.sql("""
+                        select i.city_id from payment_operation o join payment_intent i on i.id = o.intent_id
+                        where o.id = :id""")
+                .param("id", operationId).query((rs, i) -> Optional.ofNullable(rs.getObject(1, UUID.class))).optional());
         if (reason == null || reason.isBlank()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
         }
@@ -107,6 +114,22 @@ class JdbcPaymentOperations implements PaymentOperations {
                             Map.of("operation_id", id.toString(), "order_id", old.orderId().toString())));
                     return created;
                 });
+    }
+
+    /**
+     * The payment's city decides (audit 29.10.2026: a member of one city could re-charge cards in every city); a
+     * payment without a city needs all cities. Nothing found: the caller answers NOT_FOUND as before.
+     */
+    private void requireCity(Actor actor, Optional<Optional<UUID>> city) {
+        if (city.isEmpty()) {
+            return;
+        }
+        if (city.get().isPresent()) {
+            staff.require(actor, RETRY_PERMISSION, city.get().get());
+        } else if (!staff.scope(actor, RETRY_PERMISSION).allCities()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + RETRY_PERMISSION
+                    + " for all cities");
+        }
     }
 
     private static Row map(java.sql.ResultSet rs) throws java.sql.SQLException {

@@ -74,6 +74,7 @@ class JdbcDriverPromotions implements DriverPromotions {
     public Promotion create(Actor actor, UUID commandId, Draft draft, String reason) {
         staff.require(actor, MANAGE_PERMISSION);
         Draft valid = validate(draft);
+        requireFor(actor, valid.cityId());
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "driverPromotion.create", commandId),
                 new CreateRequest(valid, why), Promotion.class, () -> {
@@ -91,6 +92,8 @@ class JdbcDriverPromotions implements DriverPromotions {
                             String reason) {
         staff.require(actor, MANAGE_PERMISSION);
         Draft valid = validate(draft);
+        requireFor(actor, storedCity(promotionId));
+        requireFor(actor, valid.cityId());
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "driverPromotion.change", commandId),
                 new ChangeRequest(promotionId, expectedVersion, valid, why), Promotion.class, () -> {
@@ -109,6 +112,7 @@ class JdbcDriverPromotions implements DriverPromotions {
     @Override
     public Promotion archive(Actor actor, UUID commandId, UUID promotionId, long expectedVersion, String reason) {
         staff.require(actor, MANAGE_PERMISSION);
+        requireFor(actor, storedCity(promotionId));
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "driverPromotion.archive", commandId),
                 new ArchiveRequest(promotionId, expectedVersion, why), Promotion.class, () -> {
@@ -267,5 +271,25 @@ class JdbcDriverPromotions implements DriverPromotions {
 
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
+    }
+
+    /**
+     * A promotion of one city needs the permission for that city; one for every city (no city) needs all cities
+     * (audit 29.10.2026: a member of one city could create a discount for every rider in every city).
+     */
+    private void requireFor(Actor actor, UUID cityId) {
+        if (cityId != null) {
+            staff.require(actor, MANAGE_PERMISSION, cityId);
+        } else if (!staff.scope(actor, MANAGE_PERMISSION).allCities()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED,
+                    "A promotion of every city needs " + MANAGE_PERMISSION + " for all cities");
+        }
+    }
+
+    /** The city of the stored promotion; an unknown one passes here and is NOT_FOUND inside the command. */
+    private UUID storedCity(UUID promotionId) {
+        return jdbc.sql("select city_id from driver_promotion where id = :id").param("id", promotionId)
+                .query((rs, i) -> java.util.Optional.ofNullable(rs.getObject(1, UUID.class))).optional()
+                .flatMap(c -> c).orElse(null);
     }
 }

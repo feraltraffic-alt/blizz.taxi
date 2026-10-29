@@ -102,10 +102,10 @@ class JdbcCardPayments implements CardPayments {
         OffsetDateTime now = now();
         jdbc.sql("""
                         insert into payment_intent (id, order_id, client_id, merchant_id, card_id, currency, hold_minor,
-                                                    hold_until, state, created_at, updated_at, correlation_id)
+                                                    hold_until, state, created_at, updated_at, correlation_id, city_id)
                         values (:id, :order, :client, :merchant, :card, :currency, :amount, :until, :state,
-                                :now, :now, :correlation)""")
-                .param("id", intentId).param("order", orderId).param("client", clientId)
+                                :now, :now, :correlation, :city)""")
+                .param("id", intentId).param("city", cityId).param("order", orderId).param("client", clientId)
                 .param("correlation", CorrelationId.currentOrNew())
                 .param("merchant", merchant.id()).param("card", cardId).param("currency", currency)
                 .param("amount", amountMinor).param("until", holdUntil).param("state", state).param("now", now).update();

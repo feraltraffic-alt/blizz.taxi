@@ -206,6 +206,35 @@ class CashDisputeTests {
         }
     }
 
+    private Actor staffIn(UUID city, String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Finance', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "dispute-city-" + id).param("permissions", permissions)
+                .param("scope", new UUID[] {city}).update();
+        return new Actor(SubjectType.STAFF, id);
+    }
+
+    /** Audit 29.10.2026: finance of another city neither sees nor decides a city's disputes. */
+    @Test
+    void onlyFinanceOfTheOrdersCitySeesAndDecidesItsDispute() {
+        Ride ride = ride(false);
+        UUID order = ride.order().id();
+        Actor elsewhere = staffIn(UUID.randomUUID(), CashDisputes.MANAGE_PERMISSION);
+        assertCode(() -> disputes.get(elsewhere, order), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> disputes.decide(elsewhere, UUID.randomUUID(), order, 0, Decision.PAY_DRIVER, "x"),
+                ErrorCode.ACCESS_DENIED);
+        assertThat(disputes.open(elsewhere, 100)).extracting(CashDisputes.Dispute::orderId).doesNotContain(order);
+
+        Actor here = staffIn(cityId, CashDisputes.MANAGE_PERMISSION);
+        assertThat(disputes.open(here, 100)).extracting(CashDisputes.Dispute::orderId).contains(order);
+        long version = disputes.get(here, order).version();
+        assertThat(disputes.decide(here, UUID.randomUUID(), order, version, Decision.KEEP_HELD, "No answer")
+                .decision()).isEqualTo(Decision.KEEP_HELD);
+    }
+
     /** Owner decision 28.10.2026: past 14 days nothing moves by itself; it becomes one urgent task. */
     @Test
     void anUndecidedDisputePastItsDeadlineBecomesOneUrgentTaskAndMovesNoMoney() {
