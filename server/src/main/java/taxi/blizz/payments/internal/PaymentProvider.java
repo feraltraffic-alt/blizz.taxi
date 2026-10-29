@@ -16,6 +16,9 @@ interface PaymentProvider {
         SUCCEEDED, DECLINED, PENDING, UNKNOWN
     }
 
+    /** WayForPay's reason code "Order Not Found": the bank never saw the reference (wiki.wayforpay.com/en/view/852131). */
+    String ORDER_NOT_FOUND = "1127";
+
     record Result(Outcome outcome, String providerStatus, String reasonCode, String reason) {
 
         static Result unknown(String reason) {

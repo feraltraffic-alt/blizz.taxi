@@ -38,7 +38,9 @@ class JdbcFinanceReports implements FinanceReports {
     static final int MAX_DAYS = 92;
     /** Postings whose basis is an order. */
     private static final List<String> ORDER_BASES = List.of("TRIP_FARE", "CASH_COLLECTED", "TERMINAL_COLLECTED",
-            "CARD_PAYMENT", "PROMOTION_DISCOUNT", "PROMOTION", "TIP", "TRIP_PAYMENT");
+            "CARD_PAYMENT", "PROMOTION_DISCOUNT", "PROMOTION", "TIP", "TRIP_PAYMENT",
+            // They change the rider's debt for an order too (audit 29.10.2026).
+            "CHARGEBACK", "CASH_DISPUTE");
 
     private final JdbcClient jdbc;
     private final CityCatalog cities;

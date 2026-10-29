@@ -73,14 +73,29 @@ class JdbcCashDisputes implements CashDisputes {
     @Transactional(readOnly = true)
     public Dispute get(Actor actor, UUID orderId) {
         staff.require(actor, MANAGE_PERMISSION);
+        staff.require(actor, MANAGE_PERMISSION, cityOf(orderId));
         return find(orderId, false);
+    }
+
+    /**
+     * The order's city, for the staff member's city scope (audit 29.10.2026: finance of one city decided another's
+     * disputes). Read from ride_order as ADR 0004 allows finance; null for an unknown order (find answers NOT_FOUND).
+     */
+    private UUID cityOf(UUID orderId) {
+        return jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId).query(UUID.class)
+                .optional().orElse(null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Dispute> open(Actor actor, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
-        return jdbc.sql(SELECT + " where decision is null order by decide_by, order_id limit :limit")
+        StaffAccess.Scope scope = staff.scope(actor, MANAGE_PERMISSION);
+        return jdbc.sql(SELECT + """
+                         where decision is null
+                           and (:all or order_id in (select id from ride_order where city_id = any(:cities)))
+                         order by decide_by, order_id limit :limit""")
+                .param("all", scope.allCities()).param("cities", scope.cityIds().toArray(UUID[]::new))
                 .param("limit", Math.max(1, Math.min(limit, 100))).query((rs, i) -> map(rs)).list();
     }
 
@@ -91,6 +106,7 @@ class JdbcCashDisputes implements CashDisputes {
     public Dispute decide(Actor actor, UUID commandId, UUID orderId, long expectedVersion, Decision decision,
                           String reason) {
         staff.require(actor, MANAGE_PERMISSION);
+        staff.require(actor, MANAGE_PERMISSION, cityOf(orderId));
         if (decision == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A decision is required");
         }
