@@ -57,6 +57,8 @@ class AuditHotPathVolumeTests {
     @Autowired SessionService auth;
     @Autowired QuoteService quotes;
     @Autowired SupportCases cases;
+    @Autowired taxi.blizz.audit.AuditLog audit;
+    @Autowired taxi.blizz.location.TrackService tracks;
     UUID order,driver,vehicle,device,city;
     Actor staff;
 
@@ -144,9 +146,25 @@ class AuditHotPathVolumeTests {
         }
     }
 
-    record Query(String name,String index,String sql,Map<String,?> params) {}
+    record Query(String name,String index,String sql,Map<String,?> params,boolean generic) {
+        Query(String name,String index,String sql,Map<String,?> params) {this(name,index,sql,params,false);}
+    }
 
+    @SuppressWarnings("unchecked")
     List<Query> hotQueries() {
+        Object auditTarget=AopTestUtils.getUltimateTargetObject(audit);
+        Object staffQuery=ReflectionTestUtils.invokeMethod(auditTarget,"querySql",
+                new taxi.blizz.audit.AuditLog.Query("STAFF",null,null,null,null,null,null,null,null,100));
+        String staffSql=ReflectionTestUtils.invokeMethod(staffQuery,"sql");
+        Map<String,?> staffParams=ReflectionTestUtils.invokeMethod(staffQuery,"params");
+        List<taxi.blizz.location.TrackService.InputPoint> input=new java.util.ArrayList<>();
+        OffsetDateTime at=OffsetDateTime.now();
+        for(int i=0;i<100;i++) input.add(new taxi.blizz.location.TrackService.InputPoint(200001+i,50,20,5,null,null,
+                at.minusSeconds(i*1800L)));
+        Object trackTarget=AopTestUtils.getUltimateTargetObject(tracks);
+        Object trackQuery=ReflectionTestUtils.invokeMethod(trackTarget,"previousQuery",device,input);
+        String trackSql=ReflectionTestUtils.invokeMethod(trackQuery,"sql");
+        Map<String,?> trackParams=ReflectionTestUtils.invokeMethod(trackQuery,"params");
         return List.of(
             new Query("assignment/order (OrderView, chat, journal)","assignment_order_created_idx",
                 "select id,driver_id from assignment where order_id=:order order by created_at desc limit 1",Map.of("order",order)),
@@ -154,12 +172,7 @@ class AuditHotPathVolumeTests {
                 "select id,order_id from assignment where driver_id=:driver order by created_at desc limit 50",Map.of("driver",driver)),
             new Query("offer candidate exclusion","offer_order_driver_idx",
                 "select exists(select 1 from offer where order_id=:order and driver_id=:driver)",Map.of("order",order,"driver",UUID.randomUUID())),
-            new Query("track predecessor","track_point_session_recorded_idx","""
-                select recorded_at,ST_Y(point),ST_X(point),not(flags && ARRAY['POOR_ACCURACY','FUTURE']::text[])
-                from track_point where device_session_id=:device
-                 and (recorded_at<:recorded or (recorded_at=:recorded and sequence<:sequence))
-                order by recorded_at desc,sequence desc limit 1""",
-                Map.of("device",device,"recorded",OffsetDateTime.now().plusHours(1),"sequence",300000L)),
+            new Query("track predecessor batch of 100","track_point_session_recorded_idx",trackSql,trackParams),
             new Query("support order hold/evidence","support_case_order_idx",
                 "select exists(select 1 from support_case where order_id=:order and state not in ('RESOLVED','CLOSED'))",
                 Map.of("order",UUID.randomUUID())),
@@ -167,7 +180,7 @@ class AuditHotPathVolumeTests {
                 "select channel,state,count(*) from otp_delivery where attempted_at>=:from group by channel,state",
                 Map.of("from",OffsetDateTime.now().minusHours(1))),
             new Query("staff changes log","audit_log_staff_occurred_idx",
-                "select id,occurred_at,action from audit_log where actor_type='STAFF' order by occurred_at desc,id desc limit 100",Map.of()));
+                staffSql,staffParams,true));
     }
 
     JsonNode explain(String label,String sql,Map<String,?> params) {
@@ -206,10 +219,13 @@ class AuditHotPathVolumeTests {
     void eachHotPathUsesItsIndexUnderFiftyMilliseconds(Query query) {
         JsonNode before=tx.execute(s->{
             jdbc.sql("drop index if exists "+query.index()).update();
-            JsonNode plan=explain(query.name()+" BEFORE",query.sql(),query.params());s.setRollbackOnly();return plan;
+            JsonNode plan=query.generic()?genericPlan(query.name()+" BEFORE",query.sql(),query.params())
+                    :explain(query.name()+" BEFORE",query.sql(),query.params());
+            s.setRollbackOnly();return plan;
         });
         assertThat(before.get("Plan").toString()).as(query.name()+" baseline really scans history").contains("Seq Scan");
-        JsonNode after=explain(query.name()+" AFTER",query.sql(),query.params());
+        JsonNode after=query.generic()?genericPlan(query.name()+" AFTER",query.sql(),query.params())
+                :explain(query.name()+" AFTER",query.sql(),query.params());
         assertThat(taxi.blizz.SqlPlans.indexNames(after.get("Plan"))).contains(query.index());
         assertThat(after.get("Execution Time").asDouble()).as(query.name()+" PostgreSQL execution milliseconds").isLessThan(50);
     }

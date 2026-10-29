@@ -143,7 +143,10 @@ class JdbcTrackService implements TrackService {
     }
 
     /** One bounded read, including persisted points interleaved with this backfilled batch. */
-    private List<PreviousForInput> previousForBatch(UUID device, List<InputPoint> input) {
+    private record TrackSql(String sql, Map<String, Object> params) {
+    }
+
+    private TrackSql previousQuery(UUID device, List<InputPoint> input) {
         StringBuilder sql = new StringBuilder("with incoming(recorded_at,sequence,ordinal) as (values ");
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("session", device);
@@ -164,7 +167,12 @@ class JdbcTrackService implements TrackService {
                     order by recorded_at desc,sequence desc limit 1
                 ) p on true
                 """);
-        return jdbc.sql(sql.toString()).params(params).query((rs, i) -> {
+        return new TrackSql(sql.toString(), Map.copyOf(params));
+    }
+
+    private List<PreviousForInput> previousForBatch(UUID device, List<InputPoint> input) {
+        TrackSql query = previousQuery(device, input);
+        return jdbc.sql(query.sql()).params(query.params()).query((rs, i) -> {
             OffsetDateTime previousAt = rs.getObject("previous_at", OffsetDateTime.class);
             Previous previous = previousAt == null ? null : new Previous(previousAt, rs.getLong("previous_sequence"),
                     rs.getDouble("lat"), rs.getDouble("lon"), rs.getBoolean("good"));
