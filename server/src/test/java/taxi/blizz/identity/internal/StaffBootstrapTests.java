@@ -28,7 +28,7 @@ class StaffBootstrapTests {
     @Test
     void createsTheFirstSuperAdminOnlyWhileThereIsNone() {
         StaffProperties properties = new StaffProperties(5, java.time.Duration.ofMinutes(15), 12, "Owner",
-                "bootstrap-password-1");
+                "bootstrap-password-1", 30);
         StaffBootstrap bootstrap = new StaffBootstrap(jdbc, tx, passwords, properties, clock);
         tx.executeWithoutResult(status -> {
             jdbc.sql("update staff_user set role = 'ADMIN' where role = 'SUPER_ADMIN'").update();

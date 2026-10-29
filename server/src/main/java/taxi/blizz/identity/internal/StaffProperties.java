@@ -25,12 +25,6 @@ record StaffProperties(
         String bootstrapPassword,
         @DefaultValue("30") int maxFailedSignInsPerAddress) {
 
-    /** Source compatibility for callers written before the per-address limit. */
-    StaffProperties(int maxFailedSignIns, Duration lockout, int minPasswordLength, String bootstrapLogin,
-                    String bootstrapPassword) {
-        this(maxFailedSignIns, lockout, minPasswordLength, bootstrapLogin, bootstrapPassword, 30);
-    }
-
     StaffProperties {
         if (maxFailedSignInsPerAddress < 1) {
             throw new IllegalStateException("blizz.staff: max-failed-sign-ins-per-address must be at least 1");
