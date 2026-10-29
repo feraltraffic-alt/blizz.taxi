@@ -126,9 +126,13 @@ class JdbcOtpService implements OtpService {
                                   String clientIp, OtpChannel preferred, UUID subjectId) {
         String country = properties.countryOf(phone).orElseThrow(() -> new DomainException(
                 ErrorCode.PHONE_COUNTRY_NOT_SERVED, "Codes are sent only to numbers of the served countries"));
+        if (!OtpProperties.fullNumber(phone, country)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Not a full phone number of this country");
+        }
+        String address = addressBlock(clientIp);
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            OtpChannel channel = enforceLimits(audience, phone, deviceRef, clientIp, preferred, now);
+            OtpChannel channel = enforceLimits(audience, phone, deviceRef, address, preferred, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
@@ -150,7 +154,7 @@ class JdbcOtpService implements OtpService {
                     .param("expiresAt", expiresAt)
                     .param("maxAttempts", properties.maxAttempts())
                     .param("deviceRef", deviceRef)
-                    .param("clientIp", clientIp)
+                    .param("clientIp", address)
                     .param("now", now)
                     .update();
 
@@ -487,6 +491,29 @@ class JdbcOtpService implements OtpService {
     private record Result(VerifiedSubject subject) {
         static Result invalid() {
             return new Result(null);
+        }
+    }
+
+    /**
+     * The address budgets count an IPv6 client by its /64, the block one subscriber gets: otherwise every address
+     * of it was a budget of its own (audit 29.10.2026). IPv4 and anything unparseable stay as they are.
+     */
+    static String addressBlock(String clientIp) {
+        if (clientIp == null || clientIp.indexOf(':') < 0) {
+            return clientIp;
+        }
+        try {
+            byte[] bytes = java.net.InetAddress.ofLiteral(clientIp).getAddress();
+            if (bytes.length != 16) {
+                return clientIp;
+            }
+            StringBuilder block = new StringBuilder();
+            for (int i = 0; i < 8; i += 2) {
+                block.append(String.format("%x", ((bytes[i] & 0xff) << 8) | (bytes[i + 1] & 0xff))).append(':');
+            }
+            return block.append(":/64").toString();
+        } catch (IllegalArgumentException e) {
+            return clientIp;
         }
     }
 }

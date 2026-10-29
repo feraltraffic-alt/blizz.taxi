@@ -244,6 +244,37 @@ class SupportCasesTests {
                 .satisfies(m -> assertThat(m.visibility()).isEqualTo(Visibility.INTERNAL));
     }
 
+    @Autowired
+    taxi.blizz.platform.Outbox outbox;
+    @Autowired
+    org.springframework.transaction.support.TransactionTemplate tx;
+
+    /**
+     * Audit 29.10.2026: a second event with the key of an open problem is delivered without a second case. The
+     * duplicate insert used to abort the relay's transaction, and the event ended FAILED.
+     */
+    @Test
+    void aSecondEventWithTheSameProblemKeyIsDeliveredWithoutASecondCase() {
+        Ride ride = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        rides.complete(ride, true);
+        deliverEvents();
+        UUID order = ride.order().id();
+        List<UUID> events = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            tx.executeWithoutResult(status -> outbox.publish(new taxi.blizz.platform.OutboxEvent("CashDisputeOverdue", 1,
+                    "CashDispute", order, 0, Map.of("order_id", order.toString()))));
+        }
+        events.addAll(jdbc.sql("""
+                        select event_id from outbox where event_type = 'CashDisputeOverdue' and aggregate_id = :order""")
+                .param("order", order).query(UUID.class).list());
+        deliverEvents();
+        assertThat(events).hasSize(2);
+        assertThat(jdbc.sql("select state from outbox where event_id in (:ids)").param("ids", events).query(String.class)
+                .list()).containsOnly("DONE");
+        assertThat(jdbc.sql("select count(*) from support_case where source_key = :key")
+                .param("key", "cash-dispute-overdue:" + order).query(Long.class).single()).isOne();
+    }
+
     @Test
     void theCasesOfASuspendedMemberGoBackToTheQueue() {
         Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);

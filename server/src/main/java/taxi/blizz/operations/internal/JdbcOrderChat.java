@@ -77,7 +77,9 @@ class JdbcOrderChat implements OrderChat {
                     String role = role(sender, party);
                     // Open once a driver is assigned (owner decision 27.10.2026); readable in the order history for
                     // good, writable until WRITE_AFTER_END after the assignment ended (owner decision 29.10.2026).
-                    if (party.assignmentId() == null) {
+                    // A driver who withdrew or was taken off gets nothing more: the rider's next words (a gate code,
+                    // an entrance) are for the next driver (audit 29.10.2026).
+                    if (party.assignmentId() == null || party.driverLeft()) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "No driver has been assigned to this order");
                     }
                     if (party.assignmentClosedAt() != null

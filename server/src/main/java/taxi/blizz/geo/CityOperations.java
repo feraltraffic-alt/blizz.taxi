@@ -24,14 +24,18 @@ public interface CityOperations {
      */
     record Hours(Set<Integer> daysOfWeek, LocalTime from, LocalTime to) {
         public Hours {
-            daysOfWeek = daysOfWeek == null ? Set.of() : Set.copyOf(daysOfWeek);
+            // Sorted: the request is hashed for idempotency, and Set.copyOf iterates in a per-JVM random order, so a
+            // retry on another instance looked like another request (audit 29.10.2026).
+            daysOfWeek = daysOfWeek == null ? Set.of()
+                    : java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(daysOfWeek));
         }
     }
 
     record Settings(List<Hours> workingHours, Set<String> paymentMethods) {
         public Settings {
             workingHours = workingHours == null ? List.of() : List.copyOf(workingHours);
-            paymentMethods = paymentMethods == null ? Set.of() : Set.copyOf(paymentMethods);
+            paymentMethods = paymentMethods == null ? Set.of()
+                    : java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(paymentMethods));
         }
     }
 

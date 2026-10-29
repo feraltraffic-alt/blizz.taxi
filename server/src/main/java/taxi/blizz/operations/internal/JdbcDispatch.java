@@ -170,7 +170,9 @@ class JdbcDispatch implements Dispatch {
                           and o.vehicle_class = any(v.class_approvals)
                           and (o.payment_method <> 'TERMINAL' or d.has_payment_terminal or o.terminal_fallback_cash)
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
-                          and not exists (select 1 from assignment x where x.order_id = o.id and x.driver_id = :driver)
+                          -- Nor the driver of the interrupted trip a follow-up replaces (as for personal offers).
+                          and not exists (select 1 from assignment x where x.driver_id = :driver
+                                          and x.order_id in (o.id, o.related_order_id))
                         order by distance_m, o.created_at
                         limit 50""")
                 .param("driver", driver.id())
@@ -203,7 +205,11 @@ class JdbcDispatch implements Dispatch {
                         throw new DomainException(ErrorCode.DRIVER_BUSY, "The driver is not free");
                     }
                     DriverAvailability availability = requireEligible(driver, Set.of());
-                    int hadIt = jdbc.sql("select count(*) from assignment where order_id = :order and driver_id = :driver")
+                    // The order or the interrupted trip it follows up (audit 29.10.2026: the removed driver could
+                    // claim the service-paid follow-up of his own passenger).
+                    int hadIt = jdbc.sql("""
+                                    select count(*) from assignment x join ride_order o on o.id = :order
+                                    where x.driver_id = :driver and x.order_id in (o.id, o.related_order_id)""")
                             .param("order", orderId)
                             .param("driver", driver.id())
                             .query(Integer.class).single();

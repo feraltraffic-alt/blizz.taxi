@@ -166,6 +166,23 @@ class OtpPumpingTests {
         assertThat(challenges(phone)).isEqualTo(5);
     }
 
+    /** Audit 29.10.2026: invented numbers of any length after +48/+380, and IPv6 address rotation. */
+    @Test
+    void onlyFullNumbersOfTheMarketsAndOneBudgetPerIpv6Block() {
+        for (String wrong : List.of("+4812345", "+48123456789012", "+38066123456", "+3806612345678")) {
+            assertRefused(ErrorCode.VALIDATION_FAILED, () -> otp.requestChallenge(OtpAudience.CLIENT, wrong, null, null));
+            assertThat(challenges(wrong)).isZero();
+        }
+        String phone = ukrainian();
+        String block = "2001:db8:" + Integer.toHexString(Math.floorMod(UUID.randomUUID().hashCode(), 0xffff)) + ":7::";
+        for (int i = 1; i <= 5; i++) {
+            otp.requestChallenge(OtpAudience.CLIENT, phone, "device-" + UUID.randomUUID(), block + Integer.toHexString(i));
+            rewind(phone);
+        }
+        assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, "device-" + UUID.randomUUID(),
+                block + "abcd")).isInstanceOf(RateLimitedException.class).hasMessageContaining("from this address");
+    }
+
     // ------------------------------------------------------------ E4, P4: riders and drivers together
 
     @Test

@@ -45,6 +45,10 @@ public class PreorderWorker {
         List<UUID> due = tx.execute(status -> jdbc.sql("""
                         select id from ride_order
                         where status = 'SCHEDULED' and release_at <= :now
+                          -- A reserved one waits for its driver; it must not fill the batch and hold back the rest
+                          -- (audit 29.10.2026).
+                          and not exists (select 1 from preorder_reservation r
+                                          where r.order_id = ride_order.id and r.state = 'RESERVED')
                         order by release_at limit :limit
                         for update skip locked""")
                 .param("now", now).param("limit", BATCH).query(UUID.class).list());

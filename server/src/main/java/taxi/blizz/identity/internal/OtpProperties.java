@@ -67,6 +67,18 @@ public record OtpProperties(
         }
     }
 
+    /** National significant digits of the markets' numbers (Poland, Ukraine); other codes are not length-checked. */
+    private static final java.util.Map<String, Integer> NATIONAL_DIGITS = java.util.Map.of("48", 9, "380", 9);
+
+    /**
+     * Whether {@code phone} has as many digits as a number of {@code country} has (audit 29.10.2026: invented
+     * numbers of any length after +48/+380 ran up the code budget).
+     */
+    static boolean fullNumber(taxi.blizz.identity.PhoneNumber phone, String country) {
+        Integer national = NATIONAL_DIGITS.get(country);
+        return national == null || phone.e164().length() - 1 == country.length() + national;
+    }
+
     /** The allowed country code {@code phone} belongs to, or empty: the longest code that prefixes its digits. */
     java.util.Optional<String> countryOf(taxi.blizz.identity.PhoneNumber phone) {
         String digits = phone.e164().substring(1);
