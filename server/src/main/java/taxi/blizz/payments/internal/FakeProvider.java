@@ -21,12 +21,17 @@ class FakeProvider extends WayForPayProvider {
     static final class Gateway implements Transport {
 
         private final Function<String, String> secretOfAccount;
+        private final Clock clock;
+        private final Map<String, Map<String, Map<String, Object>>> statement = new ConcurrentHashMap<>();
+        private final Map<String, Map<String, Map<String, Object>>> injected = new ConcurrentHashMap<>();
+        private final Map<String, Map<String, Object>> statementOverrides = new ConcurrentHashMap<>();
         private final Deque<String> script = new ArrayDeque<>();
         private final Map<String, String> statusOf = new ConcurrentHashMap<>();
         private final List<Map<String, Object>> requests = new ArrayList<>();
 
-        Gateway(Function<String, String> secretOfAccount) {
+        Gateway(Function<String, String> secretOfAccount, Clock clock) {
             this.secretOfAccount = secretOfAccount;
+            this.clock = clock;
         }
 
         /**
@@ -43,7 +48,74 @@ class FakeProvider extends WayForPayProvider {
 
         /** What the bank now knows about {@code reference}, e.g. a payment made on the FAKE payment page. */
         synchronized void record(String reference, String status) {
-            statusOf.put(reference, status);
+            statusOf.replaceAll((key,old)->key.endsWith("\0"+reference)?status:old);
+            for (Map<String,Map<String,Object>> entries:statement.values()) {
+                Map<String,Object> old=entries.get(reference);
+                if (old!=null) {
+                    Map<String,Object> changed=new LinkedHashMap<>(old);
+                    changed.put("transactionStatus",status);
+                    changed.put("processingDate",clock.instant().getEpochSecond());
+                    entries.put(reference,Map.copyOf(changed));
+                }
+            }
+        }
+
+        /** Independently supplied bank evidence; tests/sandbox can deliberately contradict application SQL. */
+        synchronized void reconciliationList(String account, Map<String, Object> response) {
+            if (response == null) statementOverrides.remove(account);
+            else statementOverrides.put(account, Map.copyOf(response));
+        }
+
+        synchronized void record(String account, String reference, String status, String amount, String currency) {
+            statusOf.put(account+"\0"+reference,status);
+            Map<String,Map<String,Object>> entries=statement.computeIfAbsent(account, ignored->new LinkedHashMap<>());
+            Map<String,Object> old=entries.get(reference);
+            long now=clock.instant().getEpochSecond();
+            Map<String,Object> row=new LinkedHashMap<>();
+            row.put("orderReference",reference);
+            row.put("transactionType","PURCHASE");
+            row.put("transactionStatus",status);
+            row.put("amount",amount);
+            row.put("currency",currency);
+            row.put("createdDate",old==null?now:old.get("createdDate"));
+            row.put("processingDate",now);
+            entries.put(reference,Map.copyOf(row));
+        }
+
+        synchronized void injectReconciliationTransaction(String account,java.util.UUID fixture,long amount,String currency) {
+            String reference="sandbox-reconciliation-"+fixture;
+            Map<String,Map<String,Object>> entries=injected.computeIfAbsent(account,ignored->new LinkedHashMap<>());
+            Map<String,Object> old=entries.get(reference);
+            if (old!=null) {
+                if (!WayForPayProvider.amount(amount).equals(old.get("amount")) || !currency.equals(old.get("currency"))) {
+                    throw new IllegalArgumentException("Fixture already has different accounting fields");
+                }
+                return;
+            }
+            long now=clock.instant().getEpochSecond();
+            entries.put(reference,Map.of("orderReference",reference,"transactionType","PURCHASE",
+                    "transactionStatus","Approved","amount",WayForPayProvider.amount(amount),"currency",currency,
+                    "createdDate",now,"processingDate",now));
+        }
+
+        synchronized void removeReconciliationTransaction(String account,java.util.UUID fixture) {
+            Map<String,Map<String,Object>> entries=injected.get(account);
+            if (entries!=null) entries.remove("sandbox-reconciliation-"+fixture);
+        }
+
+        private Map<String,Object> transactions(Map<String,Object> request) {
+            String account=(String)request.get("merchantAccount");
+            Map<String,Object> override=statementOverrides.get(account);
+            if (override!=null) return override;
+            long from=((Number)request.get("dateBegin")).longValue();
+            long to=((Number)request.get("dateEnd")).longValue();
+            // Deliberately model creation-date selection: later SETTLE/REFUND still use the original anchor.
+            List<Map<String,Object>> rows=java.util.stream.Stream.concat(
+                    statement.getOrDefault(account,Map.of()).values().stream(),
+                    injected.getOrDefault(account,Map.of()).values().stream())
+                    .filter(row->((Number)row.get("createdDate")).longValue()>=from
+                            && ((Number)row.get("createdDate")).longValue()<=to).toList();
+            return Map.of("reasonCode",1100,"transactionList",rows);
         }
 
         synchronized void reset() {
@@ -54,12 +126,17 @@ class FakeProvider extends WayForPayProvider {
         @Override
         public synchronized Map<String, Object> post(String url, Map<String, Object> body) throws Exception {
             requests.add(Map.copyOf(body));
+            String account = (String) body.get("merchantAccount");
             String type = (String) body.get("transactionType");
             String reference = (String) body.get("orderReference");
             String scripted = script.poll();
             if ("TIMEOUT".equals(scripted)) {
                 // The request never reached the bank.
                 throw new java.net.SocketTimeoutException("fake gateway timeout");
+            }
+            if ("TRANSACTION_LIST".equals(type)) {
+                if ("LOST_ANSWER".equals(scripted)) throw new java.net.SocketTimeoutException("fake gateway timeout");
+                return transactions(body);
             }
             boolean answerLost = "LOST_ANSWER".equals(scripted);
             if (answerLost) {
@@ -68,17 +145,19 @@ class FakeProvider extends WayForPayProvider {
             String status = scripted != null ? scripted : switch (type) {
                 case "CHARGE" -> "AUTH".equals(body.get("merchantTransactionType")) ? "WaitingAuthComplete" : "Approved";
                 case "SETTLE" -> "Approved";
-                case "REFUND" -> "WaitingAuthComplete".equals(statusOf.get(reference)) ? "Voided" : "Refunded";
-                case "CHECK_STATUS" -> statusOf.getOrDefault(reference, "Declined");
+                case "REFUND" -> "WaitingAuthComplete".equals(statusOf.get(account+"\0"+reference)) ? "Voided" : "Refunded";
+                case "CHECK_STATUS" -> statusOf.getOrDefault(account+"\0"+reference, "Declined");
                 default -> "Declined";
             };
-            if (!"CHECK_STATUS".equals(type)) {
-                statusOf.put(reference, status);
+            if (("SETTLE".equals(type) || "REFUND".equals(type)) && "Declined".equalsIgnoreCase(status)) {
+                statusOf.put(account+"\0"+reference,status); // A declined follow-up does not undo the bank's earlier hold/charge.
+            } else if (!"CHECK_STATUS".equals(type)) {
+                record((String)body.get("merchantAccount"),reference,status,
+                        String.valueOf(body.getOrDefault("amount","0")),(String)body.getOrDefault("currency","UAH"));
             }
             if (answerLost) {
                 throw new java.net.SocketTimeoutException("fake gateway: answer lost");
             }
-            String account = (String) body.get("merchantAccount");
             Merchant merchant = new Merchant(null, "FAKE", account, "", secretOfAccount.apply(account), "");
             String reasonCode = status.equalsIgnoreCase("Declined") ? "1105" : "1100";
             Map<String, Object> answer = new LinkedHashMap<>();

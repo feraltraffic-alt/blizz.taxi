@@ -5194,9 +5194,16 @@ components:
           pattern: "^[a-f0-9]{64}$"
           description: Merchant-scoped safe identity of the provider reference; arbitrary external reference strings may contain personal data and are not persisted.
         local_operation_id: {type: [string, "null"], format: uuid}
+        local_record_id:
+          type: [string, "null"]
+          format: uuid
+          description: Payments-owned source id; an operation, top-up or verification according to local_type.
         local_type: {type: [string, "null"], maxLength: 32}
         local_state: {type: [string, "null"], maxLength: 32}
-        local_amount_minor: {type: [integer, "null"], minimum: 0}
+        local_amount_minor:
+          type: [integer, "null"]
+          minimum: 0
+          description: Effective local amount used for this bank-reference comparison; for UNKNOWN_STILL, the unresolved command's requested amount.
         local_currency: {type: [string, "null"], pattern: "^[A-Z]{3}$"}
         provider_type: {type: [string, "null"], maxLength: 32}
         provider_state: {type: [string, "null"], maxLength: 32}

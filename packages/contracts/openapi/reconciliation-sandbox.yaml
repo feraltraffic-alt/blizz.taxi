@@ -1,0 +1,90 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — sandbox card reconciliation
+  version: 1.0.0
+  description: Sandbox profile only, FAKE merchants only; requires payments.retry and every merchant city.
+  license: {name: Proprietary, identifier: LicenseRef-Proprietary}
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted domain.
+security:
+  - bearerAuth: []
+tags:
+  - name: SandboxReconciliation
+    description: Reproducible statement fixtures without moving money
+paths:
+  /sandbox/v1/payment-reconciliations/run:
+    post:
+      operationId: sandboxRunCardReconciliation
+      summary: Observe today's incomplete UTC day or an already finished day
+      description: Repeating a preview returns the same immutable snapshot. A separate full daily snapshot can still run after the day ends; previews never satisfy production freshness.
+      tags: [SandboxReconciliation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [merchant_id, day]
+              properties:
+                merchant_id: {type: string, format: uuid}
+                day: {type: string, format: date}
+      responses:
+        '200':
+          description: Run, including a visible FAILED state when the provider did not answer.
+          content:
+            application/json:
+              schema: {$ref: './admin.v1.yaml#/components/schemas/PaymentReconciliationRun'}
+        '400': {$ref: './common.yaml#/components/responses/BadRequest'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+        '404': {$ref: './common.yaml#/components/responses/NotFound'}
+  /sandbox/v1/payment-reconciliations/merchants/{merchant_id}/transactions/{fixture_id}:
+    parameters:
+      - name: merchant_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: fixture_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: sandboxInjectReconciliationTransaction
+      summary: Add an independent successful FAKE bank transaction
+      description: Uses sandbox-reconciliation-<fixture_id> as its provider reference. Never creates a local payment. Existing completed runs stay unchanged; use a merchant/day whose first run has not happened. Restore with DELETE in an EXIT trap.
+      tags: [SandboxReconciliation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_minor, currency]
+              properties:
+                amount_minor: {type: integer, minimum: 1}
+                currency: {type: string, pattern: '^[A-Z]{3}$'}
+      responses:
+        '204': {description: Bank fixture installed; identical repeat is harmless.}
+        '400': {$ref: './common.yaml#/components/responses/BadRequest'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+        '404': {$ref: './common.yaml#/components/responses/NotFound'}
+        '409': {$ref: './common.yaml#/components/responses/Conflict'}
+    delete:
+      operationId: sandboxRemoveReconciliationTransaction
+      summary: Restore the independent FAKE statement after the scenario
+      tags: [SandboxReconciliation]
+      responses:
+        '204': {description: "Fixture removed, including an already absent fixture."}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+        '404': {$ref: './common.yaml#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

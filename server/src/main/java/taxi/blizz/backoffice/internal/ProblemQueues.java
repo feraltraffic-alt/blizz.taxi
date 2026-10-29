@@ -55,13 +55,20 @@ class ProblemQueues implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
-                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue" -> true;
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "PaymentReconciliationDifferencesFound" -> true;
             default -> false;
         };
     }
 
     @Override
     public void handle(OutboxMessage message) {
+        if ("PaymentReconciliationDifferencesFound".equals(message.type())) {
+            ReconciliationProblem p=json.readValue(message.payload(),ReconciliationProblem.class);
+            cases.openFromSystem("reconciliation:"+p.runId(),p.cityId(),Category.PAYMENT,null,
+                    "Card reconciliation needs a decision",Priority.HIGH,
+                    "Review the open differences in payment reconciliation "+p.runId()+". No money was changed.");
+            return;
+        }
         if (problem(message)) {
             return;
         }
@@ -160,4 +167,6 @@ class ProblemQueues implements OutboxHandler {
     private UUID cityOf(UUID orderId) {
         return orders.get(orderId).cityId();
     }
+    private record ReconciliationProblem(UUID runId,UUID merchantId,UUID cityId,int openItemCount,java.util.List<String> kinds) { }
+
 }

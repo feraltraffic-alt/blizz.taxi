@@ -46,8 +46,8 @@ class PaymentsConfiguration {
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     @Bean
-    FakeProvider.Gateway fakeGateway(Merchants merchants) {
-        return new FakeProvider.Gateway(merchants::secretOfAccount);
+    FakeProvider.Gateway fakeGateway(Merchants merchants, Clock clock) {
+        return new FakeProvider.Gateway(merchants::secretOfAccount, clock);
     }
 
     @Bean
