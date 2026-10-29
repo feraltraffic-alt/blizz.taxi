@@ -9,10 +9,13 @@ const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const files = (dir, suffix) => readdirSync(join(root, dir), { withFileTypes: true }).flatMap(e =>
   e.isDirectory() ? files(`${dir}/${e.name}`, suffix) : e.name.endsWith(suffix) ? [`${dir}/${e.name}`] : []);
 const read = f => readFileSync(join(root, f), 'utf8');
-const errors = [], routes = [], events = new Map(), contracts = [], coverage = [];
+const errors = [], routes = [], events = new Map(), contracts = [], coverage = [], unresolvedCoverage = [];
 const at = (f, s, i) => `${f}:${s.slice(0, i).split('\n').length}`;
-const normalize = p => p.replace(/\{[^}]+\}/g, '{}').replace(/\/$/, '') || '/';
+const normalize = p => p.replace(/\{[^}]+\}/g, '{}') || '/';
 const key = (m, p) => `${m.toUpperCase()} ${normalize(p)}`;
+const pathMatches = (template, actual) => new RegExp('^' + normalize(template).split('/').map(segment =>
+  segment === '{}' ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('/') + '$').test(normalize(actual));
+const callMatches = (operation, call) => operation.method === call.method && pathMatches(operation.path, call.path);
 // Preserve offsets and strings while removing comments (including URLs in strings).
 const uncomment = s => s.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
   x => x.startsWith('//') || x.startsWith('/*') ? x.replace(/[^\n]/g, ' ') : x);
@@ -208,24 +211,47 @@ for (const {f,s} of testSources) {
     }
   }
 }
+// Resolve simple shell path assignments; ambiguous or generated URLs stay unclassified.
+function shellPaths(s) {
+  const values = new Map();
+  for(const m of s.matchAll(/\b([A-Za-z_]\w*)=["']([^"'\n]+)/g)) {
+    if(!/^[/$]/.test(m[2]))continue;
+    const paths=values.get(m[1])??new Set(); paths.add(m[2].split('?')[0]); values.set(m[1],paths);
+  }
+  const expand=(path,seen=new Set())=>path.replace(/\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g,(whole,a,b)=>{
+    const name=a??b, choices=values.get(name);
+    if(seen.has(name) || choices?.size!==1) return '{}';
+    return expand([...choices][0],new Set([...seen,name]));
+  });
+  return path=>expand(path.split('?')[0]);
+}
+for(const {f,s} of testSources) for(const m of mask(s).matchAll(/\.buildAsync\s*\(/g)) {
+  const a=args(s,s.indexOf('(',m.index));
+  const paths=strings(a.values[0]).filter(p=>p.startsWith('/ws/'));
+  if(paths.length===1) coverage.push({method:'GET',path:paths[0],source:at(f,s,m.index)});
+}
 // Only executable HTTP call syntax counts. Concatenated/dynamic segments match one template segment.
 for(const f of [...files('server/src/test','.java'),...files('scripts/sandbox/scenarios','.sh')]) {
   const s=f.endsWith('.java')?uncomment(read(f)):read(f).replace(/^[ \t]*#[^\n]*$/gm, x=>x.replace(/[^\n]/g,' '));
-  const pattern=f.endsWith('.java') ? /\b(get|post|put|patch|delete|head|options)\(\s*"([^"\n]+)"([^\n;]*)/g : /\bapi\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+["']?([^\s"']+)/g;
+  const expand=shellPaths(s);
+  const pattern=f.endsWith('.java') ? /\b(get|post|put|patch|delete|head|options)\(\s*"([^"\n]+)"([^\n;]*)/g : /\bapi\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+["']?([^\s"'();|<>]+)/g;
   for(const m of s.matchAll(pattern)) {
+    if(f.endsWith('.java') && !m[2].startsWith('/'))continue;
     let path=m[2].split('?')[0];
     if(f.endsWith('.java')) {
       // Follow string concatenation on the call's first argument only.
       const expression=args(s,s.indexOf('(',m.index)).values[0];
       // Reconstruct reliably from alternating literal and expression terms.
       path=javaPath(expression);
-    } else path=path.replace(/\$\{[^}]+\}|\$[A-Za-z_]\w*/g,'{}');
-    if(!path.startsWith('/')) continue;
+    } else path=expand(path);
+    if(!path.startsWith('/')) {
+      unresolvedCoverage.push({source:at(f,s,m.index),reason:'HTTP call path is generated or passed through unresolved arguments'});
+      continue;
+    }
     coverage.push({method:m[1].toUpperCase(),path,source:at(f,s,m.index)});
   }
 }
 // curl downloads bypass the sandbox api helper. Count only URLs whose path is visible.
-const unresolvedCoverage=[];
 for(const f of files('scripts/sandbox/scenarios','.sh')) {
   const s=read(f).replace(/^[ \t]*#[^\n]*$/gm, x=>x.replace(/[^\n]/g,' '));
   for(const m of s.matchAll(/\bcurl\b(?:\\\n|[^\n])*/g)) {
@@ -239,12 +265,12 @@ for(const f of files('scripts/sandbox/scenarios','.sh')) {
 const routeKeys=new Set(routes.map(r=>key(r.method,r.path))), contractKeys=new Set(contracts.map(r=>key(r.method,r.path)));
 const missingContracts=routes.filter(r=>!contractKeys.has(key(r.method,r.path)));
 const missingMappings=contracts.filter(r=>!routeKeys.has(key(r.method,r.path)));
-const untested=contracts.filter(r=>!coverage.some(c=>key(c.method,c.path)===key(r.method,r.path)));
+const untested=contracts.filter(r=>!coverage.some(c=>callMatches(r,c)));
 const report={summary:{routes:routes.length,contractOperations:contracts.length,publishedEvents:events.size,eventSchemas:schemas.size,untestedOperations:untested.length},
   missingContracts,missingMappings,missingEventSchemas:[...events].filter(([n])=>!schemas.has(n)).map(([name,sources])=>({name,sources})),
-  coverageLimitations:["Static calls do not prove successful authorization or business assertions.","Contract-driven isolation sweep evidence is classified separately: its calls can reject before business logic and require manual review.","Paths passed only through variables, helper-generated upload URLs and shell audience substitutions are not classified as covered without a resolved concrete path."],unresolvedCoverage,
+  coverageLimitations:["Static calls do not prove successful authorization or business assertions.","Contract-driven isolation sweep evidence is classified separately: its calls can reject before business logic and require manual review.","Unresolved URL variables, helper-generated upload URLs and shell audience substitutions are not classified as covered without a resolved concrete path."],unresolvedCoverage,
   schemasWithoutPublisher:[...schemas].filter(([n])=>!events.has(n)).map(([name,source])=>({name,source})),unresolved:errors,untested,
-  covered:contracts.filter(r=>!untested.includes(r)).map(r=>({...r,evidence:coverage.filter(c=>key(c.method,c.path)===key(r.method,r.path))})),
+  covered:contracts.filter(r=>!untested.includes(r)).map(r=>({...r,evidence:coverage.filter(c=>callMatches(r,c))})),
   routes,events:Object.fromEntries(events)};
 if(process.argv.includes('--json')) console.log(JSON.stringify(report,null,2));
 else {
