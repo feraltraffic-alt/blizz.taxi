@@ -14,7 +14,8 @@ class RoutingConfiguration {
     /** The estimate the quotes use; the plain straight line is only its fallback (and a test's @Primary wins). */
     @Bean
     ConfiguredRouteEstimator configuredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
-                                                      StraightLineRouteEstimator straightLine, JsonMapper json) {
-        return new ConfiguredRouteEstimator(integrations, environment, straightLine, json);
+                                                      StraightLineRouteEstimator straightLine, JsonMapper json,
+                                                      taxi.blizz.platform.ProviderBreakers breakers) {
+        return new ConfiguredRouteEstimator(integrations, environment, straightLine, json, breakers);
     }
 }

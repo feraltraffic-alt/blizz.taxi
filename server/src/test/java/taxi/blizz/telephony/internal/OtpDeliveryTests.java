@@ -297,6 +297,37 @@ class OtpDeliveryTests {
         assertThat(http.requests).hasSize(4);
     }
 
+    /**
+     * Issue #98 E7: while TurboSMS is down its breaker opens and a send fails at once without a request, so a code
+     * goes on to the call channel; a declined number ("NOT_ALLOWED") never opens it.
+     */
+    @Test
+    void aDownSmsProviderIsNotCalledWhileItsBreakerIsOpen() {
+        set(Map.of(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-test", Integrations.OTP_TURBOSMS_SENDER, "Blizz"));
+        Recording http = new Recording(r -> new HttpTransport.Response(200, """
+                {"response_code":0,"response_status":"OK","response_result":[{"phone":"380631234567",
+                 "response_code":406,"message_id":null,"response_status":"NOT_ALLOWED_RECIPIENT_COUNTRY"}]}"""));
+        var breakers = taxi.blizz.platform.ProviderBreakers.of(3, java.time.Duration.ofMinutes(1),
+                java.time.Clock.systemUTC());
+        TurboSmsSender sms = new TurboSmsSender(integrations, settings, live(), http, json, breakers);
+        PhoneNumber phone = new PhoneNumber("+380631234567");
+        for (int i = 0; i < 5; i++) {
+            assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
+        }
+        assertThat(breakers.state(taxi.blizz.platform.ProviderBreakers.Provider.TURBOSMS))
+                .as("a declined number is an answer").isEqualTo(taxi.blizz.platform.ProviderBreakers.State.CLOSED);
+
+        http.answer = r -> new HttpTransport.Response(503, "");
+        for (int i = 0; i < 3; i++) {
+            sms.send(phone, "123456", OtpAudience.CLIENT);
+        }
+        int asked = http.requests.size();
+        OtpSender.Result refused = sms.send(phone, "123456", OtpAudience.CLIENT);
+        assertThat(refused.state()).as("so the call channel is tried").isEqualTo(OtpSender.State.FAILED);
+        assertThat(refused.error()).contains("breaker open");
+        assertThat(http.requests).as("no request while open").hasSize(asked);
+    }
+
     // ------------------------------------------------------------ Asterisk
 
     @Test

@@ -11,6 +11,7 @@
 | [ledger.md](ledger.md) | Проводка в журнале не сходится |
 | [clock.md](clock.md) | Часы экземпляра расходятся с базой |
 | [sms.md](sms.md) | Коды для входа не уходят |
+| [providers.md](providers.md) | Внешний провайдер (маршруты, адреса, SMS, пуши) недоступен, предохранитель открыт |
 | [orders-and-gps.md](orders-and-gps.md) | Заказы долго ищут машину, водители теряют GPS |
 | [key-compromise.md](key-compromise.md) | Утёк ключ или пароль |
 

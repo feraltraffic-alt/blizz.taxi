@@ -23,23 +23,37 @@ class PushConfiguration {
         return new FakePushProvider(clock);
     }
 
+    /**
+     * HTTP to Firebase, behind the FCM breaker (REQ-ENG-07): a timeout, a refused connection or a 5xx counts; while
+     * it is open nothing is sent and the push stays pending for its back-off.
+     */
     @Bean
-    FcmPushProvider.Transport fcmTransport() {
+    FcmPushProvider.Transport fcmTransport(taxi.blizz.platform.ProviderBreakers breakers) {
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         return (url, headers, contentType, body) -> {
             HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(10)).header("Content-Type", contentType)
                     .POST(HttpRequest.BodyPublishers.ofString(body));
             headers.forEach(request::header);
-            try {
-                HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
-                return new FcmPushProvider.Response(response.statusCode(), response.body());
-            } catch (java.io.IOException e) {
-                throw new java.io.UncheckedIOException(e);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted", e);
+            RuntimeException[] error = new RuntimeException[1];
+            FcmPushProvider.Response answer = breakers.call(taxi.blizz.platform.ProviderBreakers.Provider.FCM, () -> {
+                        HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+                        return new FcmPushProvider.Response(response.statusCode(), response.body());
+                    },
+                    r -> r.status() >= 500 || r.status() == 429,
+                    e -> {
+                        error[0] = e instanceof java.io.IOException io ? new java.io.UncheckedIOException(io)
+                                : new IllegalStateException(e.getClass().getSimpleName(), e);
+                        return null;
+                    },
+                    () -> {
+                        error[0] = new IllegalStateException("Firebase is unavailable (breaker open)");
+                        return null;
+                    });
+            if (error[0] != null) {
+                throw error[0];
             }
+            return answer;
         };
     }
 

@@ -116,6 +116,14 @@ groups:
           summary: "GPS points outside trips are kept longer than their retention: the clean-up stopped"
           runbook: docs/runbooks/orders-and-gps.md
 
+      - alert: ProviderBreakerOpen
+        expr: max by (provider) (blizz_provider_breaker_state) == 2
+        for: 5m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "Provider {{ $labels.provider }} is down: its circuit breaker has been open for 5 minutes"
+          runbook: docs/runbooks/providers.md
+
       - alert: InvariantViolation
         expr: blizz_invariant_violations > 0
         for: 20m

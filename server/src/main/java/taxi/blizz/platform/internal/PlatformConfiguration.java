@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(OutboxProperties.class)
+@EnableConfigurationProperties({OutboxProperties.class, BreakerProperties.class})
 class PlatformConfiguration {
 
     /** Server time in UTC; tests may replace it. Deadlines never use the device clock. */
@@ -15,6 +15,12 @@ class PlatformConfiguration {
     @Bean
     static ProductionSafetyCheck productionSafetyCheck() {
         return new ProductionSafetyCheck();
+    }
+
+    /** Circuit breakers of the outside providers (REQ-ENG-07). */
+    @Bean
+    InMemoryProviderBreakers providerBreakers(BreakerProperties properties, Clock clock) {
+        return new InMemoryProviderBreakers(properties, clock);
     }
 
     @Bean

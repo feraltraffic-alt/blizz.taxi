@@ -17,6 +17,7 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
     private final GraphHopperProperties environment;
     private final RouteEstimator straightLine;
     private final JsonMapper json;
+    private final taxi.blizz.platform.ProviderBreakers breakers;
 
     private record Built(long revision, GraphHopperProperties properties, GraphHopperRouteEstimator graphHopper) {
     }
@@ -24,7 +25,9 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
     private volatile Built built;
 
     ConfiguredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
-                             RouteEstimator straightLine, JsonMapper json) {
+                             RouteEstimator straightLine, JsonMapper json,
+                             taxi.blizz.platform.ProviderBreakers breakers) {
+        this.breakers = breakers;
         this.integrations = integrations;
         this.environment = environment;
         this.straightLine = straightLine;
@@ -45,7 +48,7 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
         synchronized (this) {
             if (built == null || built.revision() != revision) {
                 GraphHopperProperties p = properties();
-                built = new Built(revision, p, new GraphHopperRouteEstimator(p, straightLine, json));
+                built = new Built(revision, p, new GraphHopperRouteEstimator(p, straightLine, json, breakers));
             }
             return built;
         }
