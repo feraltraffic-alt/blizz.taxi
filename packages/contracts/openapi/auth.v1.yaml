@@ -87,7 +87,7 @@ paths:
       description: |
         Into the admin panel (audience ADMIN) or the operator workstation (OPERATOR), owner decision 27.10.2026.
         A wrong login and a wrong password both give 401 UNAUTHENTICATED. After too many wrong passwords in a
-        row the account is locked for a while: 429 with Retry-After. A suspended account gets 403. When
+        row the account is locked for a while: 429 with Retry-After. So is a network address after 30 wrong sign-ins within the lockout, whatever the logins (threat model A3). A suspended account gets 403. When
         password_change_required is true the token only allows changing the password (/me/password).
       tags: [Staff]
       parameters:

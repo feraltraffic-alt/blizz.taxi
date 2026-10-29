@@ -203,6 +203,23 @@ class StaffSignInTests {
 
     // ------------------------------------------------------------ sign in
 
+    /** Threat model A3: one address trying many logins is refused for a while; another address is not. */
+    @Test
+    void oneAddressWithManyWrongSignInsIsRefusedWhateverTheLogin() {
+        String spray = "198.51.100." + (1 + Math.floorMod(UUID.randomUUID().hashCode(), 250));
+        String login = uniqueLogin("spray");
+        operator(login, "spray-password-123");
+        for (int i = 0; i < 30; i++) {
+            String guess = "nobody-" + i + "-" + login;
+            assertCode(() -> signIn.signIn(guess, "guess-password-1", ApiAudience.OPERATOR, null, spray),
+                    ErrorCode.UNAUTHENTICATED);
+        }
+        assertCode(() -> signIn.signIn(login, "spray-password-123", ApiAudience.OPERATOR, null, spray),
+                ErrorCode.RATE_LIMITED);
+        assertThat(signIn.signIn(login, "spray-password-123", ApiAudience.OPERATOR, null, "203.0.113.9"))
+                .as("the account itself is not locked").isNotNull();
+    }
+
     @Test
     void wrongLoginAndWrongPasswordLookTheSameAndTooManyLockTheAccount() {
         String login = uniqueLogin("lock");

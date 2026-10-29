@@ -62,6 +62,13 @@ class JdbcStaffSignIn implements StaffSignIn {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Staff sign in to ADMIN or OPERATOR");
         }
         String normalized = login == null ? "" : login.strip().toLowerCase(Locale.ROOT);
+        // Threat model A3: one address trying many logins (password spraying, or keeping someone locked out) is
+        // refused for a while, before any password is checked; the per-account lock stays as it is.
+        if (clientIp != null && failedFrom(clientIp) >= properties.maxFailedSignInsPerAddress()) {
+            activity.signIn(null, normalized, audience.value(), "ADDRESS_LIMITED", clientIp);
+            throw new RateLimitedException("Too many wrong sign-ins from this address; try again later",
+                    properties.lockout());
+        }
         // The attempt and its counters commit even when the sign-in fails.
         Attempt attempt = tx.execute(status -> attempt(normalized, password, audience));
         activity.signIn(attempt.account() == null ? null : attempt.account().id(), normalized, audience.value(),
@@ -77,6 +84,15 @@ class JdbcStaffSignIn implements StaffSignIn {
         Actor actor = new Actor(SubjectType.STAFF, attempt.account().id());
         return new Result(sessions.openStaff(new VerifiedSubject(actor, "ACTIVE", false), audience, deviceRef),
                 attempt.account().mustChange());
+    }
+
+    /** Wrong sign-ins from {@code clientIp} within the lockout window; a bounded, indexed count (lesson 9). */
+    private long failedFrom(String clientIp) {
+        return jdbc.sql("""
+                        select count(*) from staff_activity
+                        where kind = 'SIGN_IN' and client_ip = :ip and occurred_at > :since
+                          and outcome in ('BAD_CREDENTIALS', 'LOCKED')""")
+                .param("ip", clientIp).param("since", now().minus(properties.lockout())).query(Long.class).single();
     }
 
     private Attempt attempt(String login, String password, ApiAudience audience) {
