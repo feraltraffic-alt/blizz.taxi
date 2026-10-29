@@ -22,6 +22,7 @@ import taxi.blizz.location.TrackService;
 import taxi.blizz.operations.OrderChat;
 import taxi.blizz.operations.OrderView;
 import taxi.blizz.operations.Orders;
+import taxi.blizz.payments.CardPayments;
 import taxi.blizz.payments.PaymentOperations;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
@@ -54,14 +55,16 @@ class OrderEvidence {
     private final TrackService tracks;
     private final ClientAccounts clients;
     private final PaymentOperations payments;
+    private final CardPayments cards;
     private final OrderChat chat;
     private final JdbcClient jdbc;
     private final AuditLog audit;
     private final Clock clock;
 
     OrderEvidence(StaffAccess staff, Orders orders, FinalFares fares, DriverAdmission drivers, TrackService tracks,
-                  ClientAccounts clients, PaymentOperations payments, OrderChat chat, JdbcClient jdbc, AuditLog audit,
-                  Clock clock) {
+                  ClientAccounts clients, PaymentOperations payments, CardPayments cards, OrderChat chat,
+                  JdbcClient jdbc, AuditLog audit, Clock clock) {
+        this.cards = cards;
         this.staff = staff;
         this.orders = orders;
         this.fares = fares;
@@ -179,17 +182,14 @@ class OrderEvidence {
     }
 
     private List<CardOperation> cardOperations(Actor actor, UUID orderId) {
-        try {
-            return payments.ofOrder(actor, orderId).stream()
-                    .map(o -> new CardOperation(o.type(), o.state(), o.amountMinor(), o.currency(), o.providerStatus(),
-                            o.createdAt()))
-                    .toList();
-        } catch (DomainException e) {
-            if (e.code() == ErrorCode.NOT_FOUND) {
-                return List.of(); // not paid by card
-            }
-            throw e;
+        // Asked first rather than caught: a NOT_FOUND inside this transaction would mark it for rollback.
+        if (cards.intent(orderId).isEmpty()) {
+            return List.of(); // never paid by card
         }
+        return payments.ofOrder(actor, orderId).stream()
+                .map(o -> new CardOperation(o.type(), o.state(), o.amountMinor(), o.currency(), o.providerStatus(),
+                        o.createdAt()))
+                .toList();
     }
 
     /** The order's support cases, oldest first, with what was said to and by the requester (no internal notes). */

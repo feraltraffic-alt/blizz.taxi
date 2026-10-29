@@ -301,7 +301,7 @@ class ChargebackEvidenceTests {
         assertThat(evidence(staff(PaymentOperations.RETRY_PERMISSION), orderId, " ").status()).isEqualTo(400);
 
         Response ofTheCity = evidence(staffIn(cityId, PaymentOperations.RETRY_PERMISSION), orderId, "Bank request");
-        assertThat(ofTheCity.status()).as("finance of the order's city").isEqualTo(200);
+        assertThat(ofTheCity.status()).as("finance of the order's city: %s", ofTheCity.body()).isEqualTo(200);
         Map<String, Object> body = json.readValue(ofTheCity.body(), Map.class);
         assertThat((List<Object>) body.get("card_operations")).as("a cash ride").isEmpty();
         assertThat((Map<String, Object>) body.get("order")).containsEntry("payment_method", "CASH");
