@@ -25,6 +25,10 @@ import taxi.blizz.location.TrackRetention;
  *       points are marked kept — evidence, never deleted; the rest are deleted.</li>
  * </ol>
  * The rate-limit rows of location batches older than a day go too.
+ *
+ * <p>The age of a point is counted from when the server received it, never from the phone's clock (audit 29.10.2026,
+ * #112): a point dated 2099 was never deleted, and a phone two days behind lost its trip points within minutes. The
+ * phone's time still decides which trip a point belongs to.
  */
 @Service
 class TrackRetentionSweep {
@@ -87,8 +91,8 @@ class TrackRetentionSweep {
             OffsetDateTime before = now().minus(properties.offTrip());
             List<Point> points = jdbc.sql("""
                             select id, driver_id, recorded_at from track_point
-                            where order_id is null and recorded_at < :before
-                            order by recorded_at limit :limit
+                            where order_id is null and received_at < :before
+                            order by received_at limit :limit
                             for update skip locked""")
                     .param("before", before).param("limit", properties.batch())
                     .query((rs, i) -> new Point(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
@@ -102,6 +106,7 @@ class TrackRetentionSweep {
             OffsetDateTime to = from;
             for (Point p : points) {
                 drivers.add(p.driverId());
+                from = p.recordedAt().isBefore(from) ? p.recordedAt() : from;
                 to = p.recordedAt().isAfter(to) ? p.recordedAt() : to;
             }
             List<TrackRetention.TripWindow> windows = new ArrayList<>();
@@ -136,8 +141,8 @@ class TrackRetentionSweep {
             OffsetDateTime before = now().minus(properties.trip());
             List<Point> points = jdbc.sql("""
                             select id, driver_id, recorded_at, order_id from track_point
-                            where order_id is not null and not kept and recorded_at < :before
-                            order by recorded_at limit :limit
+                            where order_id is not null and not kept and received_at < :before
+                            order by received_at limit :limit
                             for update skip locked""")
                     .param("before", before).param("limit", properties.batch())
                     .query((rs, i) -> new Point(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
