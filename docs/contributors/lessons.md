@@ -70,6 +70,13 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **check that your instrument does what you think before you debug the system.** Look at the request as it left: the transcript, the curl line, the headers.
 - **Habit:** **a test must reach the code it claims to test.** If an earlier layer (sign-in, validation) answers first, the test shows nothing about yours.
 
+## 9. A scheduled scan sized for test data (PR #104, issue #99)
+
+- **Task:** invariant checks every 10 minutes, each under a 5 s timeout.
+- **Handed in:** excellent proofs: red before code, real timeouts, concurrent reporters. But every query aggregated the whole history: the journal, all orders, all assignments, all payment operations.
+- **Missed:** at launch scale (more than 10,000 drivers) the scans would pass their own timeout within weeks. A check that always times out finds nothing.
+- **Habit:** **bound every periodic query by what can still change.** Use a lookback window, active rows only, and an index, and prove it with a volume test (`generate_series`) and `EXPLAIN`.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
