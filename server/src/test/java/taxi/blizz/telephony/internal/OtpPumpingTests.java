@@ -182,6 +182,40 @@ class OtpPumpingTests {
         }
     }
 
+    @Test
+    void concurrentRequestsAsRiderAndDriverShareOneBudgetForTheNumber() throws Exception {
+        String phone = polish();
+        // Four codes so far: one more is allowed, whichever app asks first.
+        for (int i = 0; i < 4; i++) {
+            otp.requestChallenge(i % 2 == 0 ? OtpAudience.CLIENT : OtpAudience.DRIVER, phone, null, null);
+            rewind(phone);
+        }
+        int threads = 8;
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(threads)) {
+            List<java.util.concurrent.Future<Boolean>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                OtpAudience audience = i % 2 == 0 ? OtpAudience.CLIENT : OtpAudience.DRIVER;
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        otp.requestChallenge(audience, phone, null, null);
+                        return true;
+                    } catch (RateLimitedException e) {
+                        return false;
+                    }
+                }));
+            }
+            start.countDown();
+            long issued = 0;
+            for (var result : results) {
+                issued += result.get() ? 1 : 0;
+            }
+            assertThat(issued).isOne();
+        }
+        assertThat(challenges(phone)).isEqualTo(5);
+    }
+
     // ------------------------------------------------------------ E5: settings
 
     @Test
