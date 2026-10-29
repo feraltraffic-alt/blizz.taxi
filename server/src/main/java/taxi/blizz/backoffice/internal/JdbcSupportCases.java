@@ -9,7 +9,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -299,13 +298,24 @@ class JdbcSupportCases implements SupportCases {
     @Transactional(propagation = Propagation.MANDATORY)
     boolean openFromSystem(String sourceKey, UUID cityId, Category category, UUID orderId, String subject,
                            Priority priority, String internalNote) {
-        try {
-            UUID id = insertCase(cityId, category, orderId, "SYSTEM", null, subject, priority, sourceKey);
+        // ON CONFLICT, not a caught DuplicateKeyException: in PostgreSQL the failed insert aborts the whole outbox
+        // transaction, so a second event with the same key failed at commit and ended FAILED (audit 29.10.2026).
+        UUID id = UUID.randomUUID();
+        OffsetDateTime now = now();
+        boolean inserted = jdbc.sql("""
+                        insert into support_case (id, city_id, category, order_id, requester_type, requester_id, subject,
+                                                  priority, state, source_key, created_at, updated_at, respond_by)
+                        values (:id, :city, :category, :order, 'SYSTEM', null, :subject, :priority, 'OPEN',
+                                :source, :now, :now, :respondBy)
+                        on conflict (source_key) do nothing""")
+                .param("respondBy", now.plus(respondWithin(priority)))
+                .param("id", id).param("city", cityId).param("category", category.name()).param("order", orderId)
+                .param("subject", subject).param("priority", priority.name()).param("source", sourceKey)
+                .param("now", now).update() == 1;
+        if (inserted) {
             addMessage(id, "SYSTEM", null, Visibility.INTERNAL, internalNote);
-            return true;
-        } catch (DuplicateKeyException already) {
-            return false;
         }
+        return inserted;
     }
 
     /** REQ-USR-18: the open cases of a suspended member go back to the queue, comments kept. */

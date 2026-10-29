@@ -13,7 +13,9 @@ public interface OperatorBonuses {
 
     record TimeRule(String key, Set<Integer> daysOfWeek, int startHour, int endHour, int m, int g) {
         public TimeRule {
-            daysOfWeek = daysOfWeek == null ? Set.of() : Set.copyOf(daysOfWeek);
+            // Sorted, so the hashed settings request serializes the same on every instance (audit 29.10.2026).
+            daysOfWeek = daysOfWeek == null ? Set.of()
+                    : java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(daysOfWeek));
         }
     }
 
