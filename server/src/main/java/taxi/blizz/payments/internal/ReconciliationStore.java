@@ -41,6 +41,8 @@ class ReconciliationStore {
         this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    static final java.time.Duration LEASE=java.time.Duration.ofMinutes(10);
+
     Attempt begin(UUID merchant, LocalDate day, boolean partial) {
         OffsetDateTime start=day.atStartOfDay().atOffset(ZoneOffset.UTC).minusHours(2);
         OffsetDateTime end=start.plusDays(1).plusHours(4);
@@ -54,7 +56,7 @@ class ReconciliationStore {
                     values (:id,:merchant,:day,:start,:end,:partial,'RUNNING',1,:token,:lease,:now,:now)
                     on conflict (merchant_id,day,partial) do nothing
                     """).param("id",id).param("merchant",merchant).param("day",day).param("start",start)
-                    .param("end",end).param("partial",partial).param("token",token).param("lease",now.plusMinutes(10))
+                    .param("end",end).param("partial",partial).param("token",token).param("lease",now.plus(LEASE))
                     .param("now",now).update();
             var row=jdbc.sql("""
                     select id,lease_token,lease_until from payment_reconciliation
@@ -75,9 +77,22 @@ class ReconciliationStore {
             jdbc.sql("""
                     update payment_reconciliation set state='RUNNING',attempts=attempts+1,lease_token=:token,
                         lease_until=:lease,updated_at=:now,finished_at=null,failure_code=null,version=version+1 where id=:id
-                    """).param("token",token).param("lease",now.plusMinutes(10)).param("now",now).param("id",id).update();
+                    """).param("token",token).param("lease",now.plus(LEASE)).param("now",now).param("id",id).update();
             return new Attempt(views.run(id),token);
         });
+    }
+
+    /**
+     * Extends the lease while a long run still works (audit 29.10.2026: a run past ten minutes could be taken over by
+     * a second instance and both fetched the bank). The lease lost already: RECONCILIATION_LEASE_LOST, the run stops.
+     */
+    void renew(Attempt attempt) {
+        Integer renewed=tx.execute(status->jdbc.sql("""
+                update payment_reconciliation set lease_until=:lease,updated_at=:now
+                where id=:id and lease_token=:token and state='RUNNING'
+                """).param("lease",now().plus(LEASE)).param("now",now()).param("id",attempt.run().id())
+                .param("token",attempt.token()).update());
+        if (renewed==null || renewed==0) throw new IllegalStateException("RECONCILIATION_LEASE_LOST");
     }
 
     Run fail(Attempt attempt,String safeCode) {
