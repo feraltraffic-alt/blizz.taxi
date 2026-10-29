@@ -91,7 +91,7 @@ class JdbcCashDisputes implements CashDisputes {
     public List<Dispute> open(Actor actor, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         StaffAccess.Scope scope = staff.scope(actor, MANAGE_PERMISSION);
-        return jdbc.sql(SELECT + """
+        return jdbc.sql(SELECT + " " + """
                          where decision is null
                            and (:all or order_id in (select id from ride_order where city_id = any(:cities)))
                          order by decide_by, order_id limit :limit""")

@@ -462,6 +462,8 @@ class CardCaptureTests {
         assertThat(paymentOperations.ofOrder(here, order.id())).isNotEmpty();
         assertThat(paymentOperations.retry(here, UUID.randomUUID(), declined.id(), "Bank asked").type())
                 .isEqualTo("CHARGE");
+        // The retry is sent here, so no later test's scripted answer is taken by it.
+        settlePayments();
     }
 
     /** REQ-PAY-14: a declined charge is retried by hand, once, by someone with the right; it pays the debt. */
