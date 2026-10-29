@@ -75,6 +75,11 @@ class JdbcFinalFares implements FinalFares {
         return fare;
     }
 
+    @Override
+    public Optional<FinalFare> ofOrder(UUID orderId) {
+        return stored(orderId);
+    }
+
     private Optional<FinalFare> stored(UUID orderId) {
         return jdbc.sql("""
                         select id, order_id, version, quote_id, policy, amount_minor, currency, commission_rate,

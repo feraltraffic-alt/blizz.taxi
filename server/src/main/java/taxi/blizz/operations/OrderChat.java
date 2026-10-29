@@ -30,6 +30,12 @@ public interface OrderChat {
     /** The full conversation of the order for the admin's order details; audited. */
     List<Message> conversation(Actor staff, UUID orderId, String reason);
 
+    /**
+     * The whole conversation of the order, oldest first, for a chargeback's evidence (REQ-PAY-23). The caller has
+     * checked the staff member's access to the order's city and recorded the look with its reason.
+     */
+    List<Message> transcript(UUID orderId);
+
     /** The order of the driver's trip, for the driver app that knows only the trip. */
     UUID orderOfTrip(Actor driver, UUID tripId);
 }

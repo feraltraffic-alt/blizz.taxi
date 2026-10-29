@@ -918,4 +918,39 @@ class JdbcOrders implements Orders {
                                 rs.getString("registration_number"))))
                 .optional();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<TripTimes> tripTimes(UUID orderId) {
+        return jdbc.sql("""
+                        select o.created_at, a.created_at as assigned_at, t.arrived_at, t.started_at, t.completed_at,
+                               a.driver_id, a.vehicle_id
+                        from ride_order o
+                        left join lateral (select * from assignment where order_id = o.id
+                                           order by created_at desc, id desc limit 1) a on true
+                        left join trip t on t.assignment_id = a.id
+                        where o.id = :order""")
+                .param("order", orderId)
+                .query((rs, i) -> new TripTimes(rs.getObject("created_at", OffsetDateTime.class),
+                        rs.getObject("assigned_at", OffsetDateTime.class),
+                        rs.getObject("arrived_at", OffsetDateTime.class),
+                        rs.getObject("started_at", OffsetDateTime.class),
+                        rs.getObject("completed_at", OffsetDateTime.class), rs.getObject("driver_id", UUID.class),
+                        rs.getObject("vehicle_id", UUID.class)))
+                .optional();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PayerTrips> payerTrips(UUID payerClientId, OffsetDateTime since) {
+        return jdbc.sql("""
+                        select currency, count(*) as trips, coalesce(sum(coalesce(final_price_minor, price_minor)), 0)
+                               as total
+                        from ride_order
+                        where payer_client_id = :payer and status = 'FULFILLED' and created_at >= :since
+                        group by currency order by currency""")
+                .param("payer", payerClientId).param("since", since)
+                .query((rs, i) -> new PayerTrips(rs.getString("currency"), rs.getLong("trips"), rs.getLong("total")))
+                .list();
+    }
 }

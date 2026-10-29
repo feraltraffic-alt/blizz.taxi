@@ -159,6 +159,13 @@ class JdbcOrderChat implements OrderChat {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Message> transcript(UUID orderId) {
+        return jdbc.sql(SELECT + " where order_id = :order order by sequence")
+                .param("order", orderId).query((rs, i) -> map(rs)).list();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public UUID orderOfTrip(Actor driver, UUID tripId) {
         return jdbc.sql("""
                         select t.order_id from trip t join assignment a on a.id = t.assignment_id

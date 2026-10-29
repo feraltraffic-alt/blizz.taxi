@@ -49,4 +49,7 @@ public interface FinalFares {
      * unchanged (AC-14).
      */
     FinalFare finalizeFare(Facts facts);
+
+    /** The order's final fare when it has one, e.g. for a chargeback's evidence (REQ-PAY-23). */
+    java.util.Optional<FinalFare> ofOrder(UUID orderId);
 }

@@ -204,6 +204,24 @@ class JdbcTrackService implements TrackService {
                 .list();
     }
 
+    @Override
+    public Summary summary(UUID driverId, OffsetDateTime from, OffsetDateTime to) {
+        return jdbc.sql("""
+                        select count(*) as points,
+                               count(*) filter (where cardinality(flags) > 0) as flagged,
+                               min(recorded_at) as first, max(recorded_at) as last,
+                               coalesce(round(ST_Length(ST_MakeLine(point order by recorded_at, sequence)
+                                   filter (where not flags && array['JUMP', 'FUTURE']::text[])::geography)), 0)
+                                   as length
+                        from track_point
+                        where driver_id = :driver and recorded_at >= :from and recorded_at <= :to""")
+                .param("driver", driverId).param("from", from).param("to", to)
+                .query((rs, i) -> new Summary(rs.getLong("points"), rs.getLong("flagged"),
+                        rs.getObject("first", OffsetDateTime.class), rs.getObject("last", OffsetDateTime.class),
+                        rs.getLong("length")))
+                .single();
+    }
+
     private static Set<Flag> flags(Array array) throws SQLException {
         EnumSet<Flag> result = EnumSet.noneOf(Flag.class);
         if (array == null) return result;
