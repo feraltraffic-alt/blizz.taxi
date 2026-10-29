@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/trip-interrupted.v1.schema.json",
+  "title": "TripInterrupted v1 payload",
+  "description": "Staff interrupted a trip, optionally creating a service-paid follow-up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "cancelled_by",
+    "reason_code",
+    "reason_labels",
+    "trip_id",
+    "driver_id",
+    "partial_fare"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "cancelled_by": {"type": "string"},
+    "reason_code": {"type": "string"},
+    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "trip_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "partial_fare": {"type": "string"},
+    "comment": {"type": "string"},
+    "follow_up_order_id": {"type": "string", "format": "uuid"}
+  }
+}

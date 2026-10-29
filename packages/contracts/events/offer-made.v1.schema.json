@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/offer-made.v1.schema.json",
+  "title": "OfferMade v1 payload",
+  "description": "Driver offered this order.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "offer_id",
+    "driver_id",
+    "distance_m"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "offer_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "distance_m": {"type": "number", "minimum": 0}
+  },
+  "examples": [{"offer_id": "58d42f6f-8d24-4a20-83ee-e63b114dc105", "order_id": "b83b8fa8-1f4c-40df-8a42-bf1f92a8187f", "driver_id": "197c3fa7-a791-49b2-980b-26928ce2c75d", "distance_m": 1000}]
+}

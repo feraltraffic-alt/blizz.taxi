@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-arrived.v1.schema.json",
+  "title": "DriverArrived v1 payload",
+  "description": "Driver arrived; distance is unknown when location cannot be checked.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "trip_id",
+    "distance_m"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "trip_id": {"type": "string", "format": "uuid"},
+    "distance_m": {"oneOf": [{"type": "number", "minimum": 0}, {"const": "unknown"}]}
+  },
+  "examples": [{"trip_id": "2d2f2de6-c0cd-4c4e-aae3-2acc67557ba3", "order_id": "b83b8fa8-1f4c-40df-8a42-bf1f92a8187f", "distance_m": 30}]
+}

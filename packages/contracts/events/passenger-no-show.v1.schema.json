@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/passenger-no-show.v1.schema.json",
+  "title": "PassengerNoShow v1 payload",
+  "description": "Driver cancelled after the minimum arrival wait.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "cancelled_by",
+    "reason_code",
+    "reason_labels",
+    "trip_id",
+    "waited_seconds"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "cancelled_by": {"type": "string"},
+    "reason_code": {"type": "string"},
+    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "trip_id": {"type": "string", "format": "uuid"},
+    "waited_seconds": {"type": "integer", "minimum": 0}
+  }
+}

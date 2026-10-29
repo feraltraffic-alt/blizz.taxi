@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/support-case-updated.v1.schema.json",
+  "title": "SupportCaseUpdated v1 payload",
+  "description": "Support case metadata changed; apps refresh the case, without message text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "number",
+    "state",
+    "requester_type",
+    "requester_id"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "format": "uuid"},
+    "number": {"type": "integer", "minimum": 1},
+    "state": {"type": "string"},
+    "requester_type": {"type": "string"},
+    "requester_id": {"type": "string", "format": "uuid"}
+  }
+}

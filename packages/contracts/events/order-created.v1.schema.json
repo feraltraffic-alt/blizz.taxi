@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/order-created.v1.schema.json",
+  "title": "OrderCreated v1 payload",
+  "description": "Order created, including a service-paid follow-up after an interruption.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "payment_method",
+    "quote_id",
+    "price_minor"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "channel": {"type": "string"},
+    "city_id": {"type": "string", "format": "uuid"},
+    "payment_method": {"type": "string"},
+    "quote_id": {"type": "string", "format": "uuid"},
+    "price_minor": {"type": "integer", "minimum": 0},
+    "pickup_at": {"type": "string", "format": "date-time"},
+    "preorder": {"type": "boolean"},
+    "discount_minor": {"type": "integer", "minimum": 0},
+    "wallet_minor": {"type": "integer", "minimum": 0},
+    "related_order_id": {"type": "string", "format": "uuid"}
+  },
+  "examples": [{"channel": "APP", "city_id": "a9b61233-8e28-4612-b8ec-550ce86d6251", "order_id": "b83b8fa8-1f4c-40df-8a42-bf1f92a8187f", "quote_id": "75e48f5c-b8f2-4981-bb26-1f2d6b13918e", "price_minor": 18339, "payment_method": "CASH"}]
+}
