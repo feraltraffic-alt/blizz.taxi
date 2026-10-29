@@ -55,13 +55,23 @@ class ProblemQueues implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
-                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue" -> true;
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated" -> true;
             default -> false;
         };
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Invariant(String check, String objectType, UUID objectId, String detail) { }
+
     @Override
     public void handle(OutboxMessage message) {
+        if ("InvariantViolated".equals(message.type())) {
+            Invariant v = json.readValue(message.payload(), Invariant.class);
+            cases.openFromSystem("invariant:" + v.check() + ":" + v.objectId(), null, Category.OTHER,
+                    "Order".equals(v.objectType()) ? v.objectId() : null,
+                    "Invariant " + v.check() + ": " + v.objectType(), Priority.HIGH, v.detail());
+            return;
+        }
         if (problem(message)) {
             return;
         }

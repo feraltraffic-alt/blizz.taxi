@@ -1,6 +1,7 @@
 package taxi.blizz.payments;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,6 +53,11 @@ public interface CardPayments {
 
     /** Sends what is due for the order now rather than at the worker's next round; outside any transaction. */
     void processNow(UUID orderId);
+
+    /** Identifiers only: successful AUTHs without a successful or unresolved SETTLE/REFUND targeting that AUTH.
+     * SELECT only, used inside the caller's short read-only invariant scan; recent changes are excluded. */
+    record StandingHold(UUID intentId, UUID orderId) { }
+    List<StandingHold> standingHoldsOlderThan(OffsetDateTime changedBefore);
 
     Optional<Intent> intent(UUID orderId);
 }
