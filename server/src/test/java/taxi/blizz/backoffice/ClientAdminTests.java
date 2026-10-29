@@ -180,6 +180,8 @@ class ClientAdminTests {
                 .satisfies(d -> assertThat(((Number) d.get("amount_minor")).longValue()).isEqualTo(4_000));
         assertThat((List<Map<String, Object>>) card.get("cases")).singleElement()
                 .satisfies(c -> assertThat(c).containsEntry("subject", "Umbrella"));
+        assertThat(jdbc.sql("select count(*) from audit_log where action = 'client.card.view' and resource_id = :id")
+                .param("id", rider.id().toString()).query(Long.class).single()).as("the look is on record").isEqualTo(1);
 
         String clerk = auth.openStaff(new VerifiedSubject(staff(new String[0]), "ACTIVE", false), ApiAudience.ADMIN,
                 null).accessToken();
