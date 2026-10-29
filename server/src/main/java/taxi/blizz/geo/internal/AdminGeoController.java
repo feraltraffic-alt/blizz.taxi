@@ -129,7 +129,7 @@ class AdminGeoController {
 
     @GetMapping("/cities/{cityId}/zones")
     Zones zones(AccessClaims claims, @PathVariable UUID cityId) {
-        staff.require(claims.actor(), GeoConfiguration.MANAGE_PERMISSION);
+        staff.require(claims.actor(), GeoConfiguration.MANAGE_PERMISSION, cityId);
         return new Zones(jdbc.sql("""
                         select id, city_id, type, priority, state, version, ST_AsGeoJSON(polygon)
                         from zone where city_id = :city order by state, type, priority desc""")

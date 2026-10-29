@@ -353,6 +353,11 @@ class JdbcIntegrations implements Integrations {
                         pk) || !pk.contains("PRIVATE KEY")) {
                     throw invalid("The JSON has no client_email or private_key: is it a service account key?");
                 }
+                // The server signs in only at Google's own token endpoint (REQ-SEC-05).
+                if (account.get("token_uri") != null
+                        && !"https://oauth2.googleapis.com/token".equals(account.get("token_uri"))) {
+                    throw invalid("token_uri must be https://oauth2.googleapis.com/token");
+                }
             }
             case FCM_PROJECT_ID, GRAPHHOPPER_PROFILE -> {
                 if (!value.matches("^[A-Za-z0-9_.-]{1,100}$")) {

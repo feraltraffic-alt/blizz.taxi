@@ -291,6 +291,7 @@ class JdbcOrders implements Orders {
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Call not found"));
         // Before the receipts, so a stored outcome is never given to someone who lost access.
         requireStaff(actor, Calls.ANSWER_PERMISSION, call.cityId());
+        requireStaff(actor, CREATE_PERMISSION, call.cityId());
         return commands.execute(new CommandKey(actor, "order.create-during-call", commandId),
                 new DuringCall(callId, linkAgain, order), OrderView.class, () -> {
                     OrderView created = create(actor, commandId, order);
