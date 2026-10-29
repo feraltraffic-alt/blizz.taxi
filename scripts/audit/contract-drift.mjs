@@ -187,6 +187,27 @@ for(const {f,s} of testSources) for(const h of helpers.filter(h=>h.f===f && (h.h
     coverage.push({method,path:javaPath(a.values[h.pathIndex]),source:at(f,s,m.index),via:h.source});
   }
 }
+// The contract-driven isolation sweep constructs requests at runtime. Model its explicit
+// selection rule only while the selector and actual HTTP invocation remain recognizable.
+for (const {f,s} of testSources) {
+  const selector=s.match(/List\.of\(("get"[^)]*)\)/g)?.find(x=>x.includes('"put"') && x.includes('"delete"'));
+  if (!selector || !s.includes('path.contains("{")') || !s.includes('item.containsKey(method)')
+      || !s.includes('perform(request(call.method(), url), strangerToken)')) continue;
+  const methods=strings(selector).map(m=>m.toUpperCase());
+  for (const call of s.matchAll(/\bcalls\("([^"/]+\.yaml)"\)/g)) {
+    const file=`packages/contracts/openapi/${call[1]}`;
+    let path=null;
+    // Match the unbundled paths the test reads: a path-item $ref has no direct method key.
+    for (const line of read(file).split('\n')) {
+      const match=line.match(/^  (\/\S+):\s*$/);
+      if(match) {path=match[1];continue;}
+      if(/^\S/.test(line)) {path=null;continue;}
+      const method=line.match(/^    (get|post|put|patch|delete|head|options):\s*$/)?.[1].toUpperCase();
+      if(path?.includes('{') && methods.includes(method)) coverage.push({method,path,
+        source:at(f,s,call.index),via:'contract-driven isolation sweep; may reject before business logic'});
+    }
+  }
+}
 // Only executable HTTP call syntax counts. Concatenated/dynamic segments match one template segment.
 for(const f of [...files('server/src/test','.java'),...files('scripts/sandbox/scenarios','.sh')]) {
   const s=f.endsWith('.java')?uncomment(read(f)):read(f).replace(/^[ \t]*#[^\n]*$/gm, x=>x.replace(/[^\n]/g,' '));
@@ -221,14 +242,14 @@ const missingMappings=contracts.filter(r=>!routeKeys.has(key(r.method,r.path)));
 const untested=contracts.filter(r=>!coverage.some(c=>key(c.method,c.path)===key(r.method,r.path)));
 const report={summary:{routes:routes.length,contractOperations:contracts.length,publishedEvents:events.size,eventSchemas:schemas.size,untestedOperations:untested.length},
   missingContracts,missingMappings,missingEventSchemas:[...events].filter(([n])=>!schemas.has(n)).map(([name,sources])=>({name,sources})),
-  coverageLimitations:["Static calls do not prove successful authorization or business assertions.","Contract-driven AccessIsolationTests calls rider/driver paths dynamically; these checks can reject requests before business logic and require manual review.","Paths passed only through variables, helper-generated upload URLs and shell audience substitutions are not classified as covered without a resolved concrete path."],unresolvedCoverage,
+  coverageLimitations:["Static calls do not prove successful authorization or business assertions.","Contract-driven isolation sweep evidence is classified separately: its calls can reject before business logic and require manual review.","Paths passed only through variables, helper-generated upload URLs and shell audience substitutions are not classified as covered without a resolved concrete path."],unresolvedCoverage,
   schemasWithoutPublisher:[...schemas].filter(([n])=>!events.has(n)).map(([name,source])=>({name,source})),unresolved:errors,untested,
   covered:contracts.filter(r=>!untested.includes(r)).map(r=>({...r,evidence:coverage.filter(c=>key(c.method,c.path)===key(r.method,r.path))})),
   routes,events:Object.fromEntries(events)};
 if(process.argv.includes('--json')) console.log(JSON.stringify(report,null,2));
 else {
   console.log(JSON.stringify(report.summary));
-  console.log('Coverage is a static HTTP-call inventory, not proof of successful authorization or business assertions. Dynamic contract-driven tests and unresolved URL variables require manual review.');
+  console.log('Coverage is a static HTTP-call inventory, not proof of successful authorization or business assertions. Contract-driven isolation checks and unresolved URL variables require manual review.');
   for(const name of ['missingContracts','missingMappings','missingEventSchemas','schemasWithoutPublisher','unresolved','unresolvedCoverage','untested']) {
     console.log(`\n${name} (${report[name].length})`);
     for(const row of report[name]) console.log(typeof row==='string'?row:JSON.stringify(row));
