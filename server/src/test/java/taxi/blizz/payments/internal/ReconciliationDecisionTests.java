@@ -155,6 +155,9 @@ class ReconciliationDecisionTests {
         assertThat(store.begin(merchant,day,false).acquired()).isFalse();
         store.fail(attempt,"RECONCILIATION_PROVIDER_UNAVAILABLE");
         assertThat(meters.get("blizz.payments.reconciliation.failed").gauge().value()).isGreaterThanOrEqualTo(1);
+        assertThat(store.begin(merchant,day,false).acquired()).as("not before its pause").isFalse();
+        jdbc.sql("update payment_reconciliation set next_attempt_at=now()-interval '1 second' where id=:id")
+                .param("id",attempt.run().id()).update();
         var retry=store.begin(merchant,day,false);
         assertThat(retry.run().id()).isEqualTo(attempt.run().id());
         assertThat(retry.run().attempts()).isEqualTo(2);
