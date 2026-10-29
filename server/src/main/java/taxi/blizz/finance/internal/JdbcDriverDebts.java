@@ -40,8 +40,11 @@ class JdbcDriverDebts implements DriverDebts {
     private final AuditLog audit;
     private final Clock clock;
 
+    private final taxi.blizz.identity.AccountDirectory accounts;
+
     JdbcDriverDebts(JdbcClient jdbc, StaffAccess staff, IdempotentCommands commands, Ledger ledger, Outbox outbox,
-                    AuditLog audit, Clock clock) {
+                    AuditLog audit, Clock clock, taxi.blizz.identity.AccountDirectory accounts) {
+        this.accounts = accounts;
         this.jdbc = jdbc;
         this.staff = staff;
         this.commands = commands;
@@ -122,6 +125,10 @@ class JdbcDriverDebts implements DriverDebts {
         text(reason);
         if (driverId == null || amountMinor <= 0) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A driver and a positive amount are required");
+        }
+        // A mistyped id must not get money posted to a driver who does not exist (audit 29.10.2026).
+        if (accounts.accountState(new Actor(taxi.blizz.platform.SubjectType.DRIVER, driverId)).isEmpty()) {
+            throw new DomainException(ErrorCode.NOT_FOUND, "Driver not found");
         }
         return commands.execute(new CommandKey(actor, "driverDebt.recordPayment", commandId),
                 new PaymentRequest(driverId, currency, amountMinor, reference, reason), Status.class, () -> {

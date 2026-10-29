@@ -134,6 +134,10 @@ class FakeProvider extends WayForPayProvider {
                 // The request never reached the bank.
                 throw new java.net.SocketTimeoutException("fake gateway timeout");
             }
+            if (scripted != null && scripted.startsWith("REASON:")) {
+                // An error before any transaction is described: a reason code and no status, as the real gateway.
+                return Map.of("merchantAccount", account, "reasonCode", scripted.substring(7), "reason", "Fake error");
+            }
             if ("TRANSACTION_LIST".equals(type)) {
                 if ("LOST_ANSWER".equals(scripted)) throw new java.net.SocketTimeoutException("fake gateway timeout");
                 return transactions(body);
@@ -146,9 +150,14 @@ class FakeProvider extends WayForPayProvider {
                 case "CHARGE" -> "AUTH".equals(body.get("merchantTransactionType")) ? "WaitingAuthComplete" : "Approved";
                 case "SETTLE" -> "Approved";
                 case "REFUND" -> "WaitingAuthComplete".equals(statusOf.get(account+"\0"+reference)) ? "Voided" : "Refunded";
-                case "CHECK_STATUS" -> statusOf.getOrDefault(account+"\0"+reference, "Declined");
+                case "CHECK_STATUS" -> statusOf.get(account+"\0"+reference);
                 default -> "Declined";
             };
+            if (status == null) {
+                // As the real gateway: a reference it never saw is "Order Not Found", without a status.
+                return Map.of("merchantAccount", account, "orderReference", reference, "reasonCode",
+                        PaymentProvider.ORDER_NOT_FOUND, "reason", "Order Not Found");
+            }
             if (("SETTLE".equals(type) || "REFUND".equals(type)) && "Declined".equalsIgnoreCase(status)) {
                 statusOf.put(account+"\0"+reference,status); // A declined follow-up does not undo the bank's earlier hold/charge.
             } else if (!"CHECK_STATUS".equals(type)) {

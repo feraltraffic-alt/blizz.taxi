@@ -239,6 +239,37 @@ class CardCaptureTests {
                 "SETTLE::" + WayForPayProvider.amount(hold - 100), "CHARGE:SALE:" + WayForPayProvider.amount(hold - 100));
     }
 
+    /**
+     * Audit 29.10.2026: a status check that comes back without a status (here a bad signature, as right after a key
+     * change) is not a decline. The charge went through; taking it for declined let staff charge it again.
+     */
+    @Test
+    void aStatusCheckWithoutAStatusLeavesTheChargeUnknownUntilTheBankDescribesIt() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        // The capture goes through; the charge of the rest too, but its answer is lost; the first check is an error.
+        gateway.next("Approved", "LOST_ANSWER", "REASON:1113");
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(gateway.requests()).filteredOn(r -> "CHECK_STATUS".equals(r.get("transactionType"))).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(payments.intent(order.id()).orElseThrow().state()).as("the bank took the rest").isEqualTo("PAID");
+        assertThat(clearingFor(order)).isEqualTo(hold + 700);
+    }
+
+    /** "Order Not Found" is the one status-less answer that says a charge never reached the bank. */
+    @Test
+    void aChargeTheBankNeverSawIsDeclinedOnOrderNotFound() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        long hold = order.priceMinor();
+        gateway.next("Approved", "TIMEOUT"); // the charge never reaches the bank
+        tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH"));
+        settlePayments();
+        assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PARTIALLY_PAID");
+        assertThat(clearingFor(order)).isEqualTo(hold);
+    }
+
     private String authReference(OrderView order) {
         return jdbc.sql("""
                         select o.reference from payment_operation o join payment_intent i on i.id = o.intent_id
@@ -403,6 +434,36 @@ class CardCaptureTests {
         assertThat(orders.get(order.id()).paymentState()).isEqualTo("PARTIALLY_PAID");
         return paymentOperations.ofOrder(finance, order.id()).stream()
                 .filter(o -> o.type().equals("CHARGE") && o.state().equals("DECLINED")).findFirst().orElseThrow();
+    }
+
+    private Actor staffIn(UUID city, String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Finance', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "capture-city-" + id).param("permissions", permissions)
+                .param("scope", new UUID[] {city}).update();
+        return new Actor(taxi.blizz.platform.SubjectType.STAFF, id);
+    }
+
+    /** Audit 29.10.2026: finance of another city neither sees nor re-charges a city's card payments. */
+    @Test
+    void onlyFinanceOfTheOrdersCityRetriesItsCharge() {
+        Actor rider = riderWithCard();
+        OrderView order = heldOrder(rider);
+        String retry = taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION;
+        var declined = declinedRest(order, staffWith(retry));
+        Actor elsewhere = staffIn(UUID.randomUUID(), retry);
+        assertCode(() -> paymentOperations.ofOrder(elsewhere, order.id()), taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        assertCode(() -> paymentOperations.retry(elsewhere, UUID.randomUUID(), declined.id(), "Bank asked"),
+                taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        Actor here = staffIn(cityId, retry);
+        assertThat(paymentOperations.ofOrder(here, order.id())).isNotEmpty();
+        assertThat(paymentOperations.retry(here, UUID.randomUUID(), declined.id(), "Bank asked").type())
+                .isEqualTo("CHARGE");
+        // The retry is sent here, so no later test's scripted answer is taken by it.
+        settlePayments();
     }
 
     /** REQ-PAY-14: a declined charge is retried by hand, once, by someone with the right; it pays the debt. */

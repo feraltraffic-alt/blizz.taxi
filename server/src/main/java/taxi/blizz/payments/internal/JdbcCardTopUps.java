@@ -226,7 +226,11 @@ class JdbcCardTopUps implements CardTopUps {
             try {
                 Merchant merchant = merchants.byId(d.merchantId())
                         .orElseThrow(() -> new IllegalStateException("Merchant " + d.merchantId() + " has no secret"));
-                PaymentProvider.Result result = providers.of(merchant).checkStatus(merchant, d.reference());
+                PaymentProvider.Result asked = providers.of(merchant).checkStatus(merchant, d.reference());
+                // Without a status only "Order Not Found" is an answer; any other error leaves the top-up pending.
+                PaymentProvider.Result result = asked.providerStatus() == null
+                        && !PaymentProvider.ORDER_NOT_FOUND.equals(asked.reasonCode())
+                        ? PaymentProvider.Result.unknown("No status") : asked;
                 tx.executeWithoutResult(status -> {
                     if (result.outcome() == PaymentProvider.Outcome.SUCCEEDED
                             || result.outcome() == PaymentProvider.Outcome.DECLINED) {
