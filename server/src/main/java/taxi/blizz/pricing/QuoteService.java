@@ -17,9 +17,10 @@ public interface QuoteService {
 
     /**
      * Joins the order command's transaction. A duplicate direct consumption is rejected;
-     * IdempotentCommands around order creation will replay the original order instead.
+     * IdempotentCommands around order creation will replay the original order instead. The order {@code orderId}
+     * claims the "every N-th trip" promotions the quote counted on (QUOTE_EXPIRED if another order has one).
      */
-    Quote consume(UUID quoteId, Actor payer, String fingerprint);
+    Quote consume(UUID quoteId, Actor payer, String fingerprint, UUID orderId);
 
     /**
      * {@code pickupAt}: the requested pickup time of an order for later, or null for now. Far enough ahead it is

@@ -234,10 +234,19 @@ class JdbcRiderPromotions implements RiderPromotions {
                         order by created_at, id""")
                 .param("now", now).query((rs, i) -> promotion(rs)).list();
         List<Applied> applied = new ArrayList<>();
+        java.util.Map<UUID, Integer> cycles = new java.util.HashMap<>();
         long discounted = 0;
         for (Promotion p : active) {
             if (!matches(p, ctx, completed + 1)) {
                 continue;
+            }
+            Integer cycle = null;
+            if (p.conditions().everyNthTrip() != null) {
+                // Another order of the rider holds this N-th trip already: this one is not it (#112).
+                cycle = Math.toIntExact((completed + 1) / p.conditions().everyNthTrip());
+                if (claimed(p.id(), ctx.clientId(), cycle)) {
+                    continue;
+                }
             }
             if (p.valueType() == ValueType.FIXED && !p.currency().equals(ctx.currency())) {
                 continue;
@@ -252,16 +261,56 @@ class JdbcRiderPromotions implements RiderPromotions {
                 discounted += discount;
             }
             applied.add(new Applied(p.id(), p.name(), p.kind(), p.valueType(), p.value(), discount));
+            if (cycle != null) {
+                cycles.put(p.id(), cycle);
+            }
         }
         for (Applied a : applied) {
             jdbc.sql("""
-                            insert into promotion_quote (quote_id, promotion_id, kind, value_type, value, discount_minor)
-                            values (:quote, :promotion, :kind, :valueType, :value, :discount)""")
+                            insert into promotion_quote (quote_id, promotion_id, kind, value_type, value, discount_minor,
+                                                         nth_cycle)
+                            values (:quote, :promotion, :kind, :valueType, :value, :discount, :cycle)""")
                     .param("quote", quoteId).param("promotion", a.promotionId()).param("kind", a.kind().name())
                     .param("valueType", a.valueType().name()).param("value", a.value())
-                    .param("discount", a.discountMinor()).update();
+                    .param("discount", a.discountMinor())
+                    .param("cycle", cycles.get(a.promotionId()), java.sql.Types.INTEGER).update();
         }
         return List.copyOf(applied);
+    }
+
+    private boolean claimed(UUID promotionId, UUID clientId, int cycle) {
+        return jdbc.sql("""
+                        select count(*) from promotion_nth_claim
+                        where promotion_id = :promotion and client_id = :client and cycle = :cycle""")
+                .param("promotion", promotionId).param("client", clientId).param("cycle", cycle)
+                .query(Long.class).single() > 0;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void claimForOrder(UUID quoteId, UUID clientId, UUID orderId) {
+        record Slot(UUID promotionId, int cycle) {
+        }
+        List<Slot> slots = jdbc.sql("""
+                        select promotion_id, nth_cycle from promotion_quote
+                        where quote_id = :quote and nth_cycle is not null order by promotion_id""")
+                .param("quote", quoteId)
+                .query((rs, i) -> new Slot(rs.getObject(1, UUID.class), rs.getInt(2))).list();
+        OffsetDateTime now = now();
+        for (Slot slot : slots) {
+            // A second order waits here for the first one's transaction; ON CONFLICT keeps this one usable.
+            int inserted = jdbc.sql("""
+                            insert into promotion_nth_claim (promotion_id, client_id, cycle, order_id, quote_id,
+                                                             claimed_at)
+                            values (:promotion, :client, :cycle, :order, :quote, :now)
+                            on conflict do nothing""")
+                    .param("promotion", slot.promotionId()).param("client", clientId).param("cycle", slot.cycle())
+                    .param("order", orderId).param("quote", quoteId).param("now", now).update();
+            if (inserted == 0) {
+                throw new DomainException(ErrorCode.QUOTE_EXPIRED,
+                        "Another order already has this every-N-th-trip promotion; get a new price");
+            }
+        }
     }
 
     /** Percent in basis points of {@code base}, rounded half up; or the fixed amount. Integers only. */

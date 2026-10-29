@@ -152,7 +152,7 @@ class JdbcQuoteService implements QuoteService {
 
     @Override
     @Transactional
-    public Quote consume(UUID quoteId, Actor payer, String fingerprint) {
+    public Quote consume(UUID quoteId, Actor payer, String fingerprint, UUID orderId) {
         payer(payer);
         record Stored(Quote quote, Instant expiresAt, boolean consumed) {
         }
@@ -170,6 +170,9 @@ class JdbcQuoteService implements QuoteService {
         }
         jdbc.sql("update quote set consumed_at = :now where id = :id")
                 .param("id", quoteId).param("now", at(now)).update();
+        if (payer.type() == taxi.blizz.platform.SubjectType.CLIENT && !quote.promotions().isEmpty()) {
+            promotions.claimForOrder(quoteId, payer.id(), orderId);
+        }
         return quote;
     }
 
