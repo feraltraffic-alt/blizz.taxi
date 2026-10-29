@@ -364,10 +364,41 @@ class GeographyTests {
         };
     }
 
+    /** Audit 29.10.2026: geo.manage for one city changes nothing in another city, and creates no city. */
+    @Test
+    void aMemberOfOneCityChangesOnlyThatCitysGeography() {
+        Revision mine = draft(BOX, 0);
+        Revision theirs = draft("SRID=4326;MULTIPOLYGON(((32 50,33 50,33 51,32 51,32 50)))", 0);
+        Revision theirZone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), STAFF, 0, theirs.id(), "TEST_ZONE",
+                "SRID=4326;MULTIPOLYGON(((32 50,33 50,33 51,32 51,32 50)))", 1, "test"));
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                insert into staff_user(id, login, name, role, permissions, all_cities, city_scope, state, created_at,
+                                       updated_at)
+                values (:id, :login, 'City geography', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())
+                """).param("id", id).param("login", "geo-city-" + id)
+                .param("permissions", new String[] {GeoConfiguration.MANAGE_PERMISSION})
+                .param("scope", new UUID[] {mine.id()}).update();
+        Actor local = new Actor(SubjectType.STAFF, id);
+
+        reject(() -> geo.publishZone(new Change(UUID.randomUUID(), local, theirZone.id(), 0, "x")),
+                ErrorCode.ACCESS_DENIED);
+        reject(() -> geo.archiveCity(new Change(UUID.randomUUID(), local, theirs.id(), 0, "x")), ErrorCode.ACCESS_DENIED);
+        reject(() -> geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), local, 0, theirs.id(), "TEST_ZONE", BOX, 1,
+                "x")), ErrorCode.ACCESS_DENIED);
+        reject(() -> geo.createCityDraft(new CityDraft(UUID.randomUUID(), local, 0, "test-" + UUID.randomUUID(), "X",
+                "UAH", "Europe/Kyiv", BOX, 0, "x")), ErrorCode.ACCESS_DENIED);
+
+        Revision zone = geo.createZoneDraft(new ZoneDraft(UUID.randomUUID(), local, 0, mine.id(), "TEST_ZONE", BOX, 1,
+                "test"));
+        assertThat(geo.publishZone(new Change(UUID.randomUUID(), local, zone.id(), 0, "test")).state())
+                .isEqualTo("PUBLISHED");
+    }
+
     private Actor permittedStaff(UUID id, String state, String... permissions) {
         jdbc.sql("""
-                insert into staff_user(id, login, name, role, permissions, state, created_at, updated_at)
-                values (:id, :login, 'Geography manager', 'ADMIN', :permissions, :state, now(), now())
+                insert into staff_user(id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                values (:id, :login, 'Geography manager', 'ADMIN', :permissions, true, :state, now(), now())
                 on conflict (id) do update set permissions = excluded.permissions, state = excluded.state
                 """).param("id", id).param("login", "geo-staff-" + id)
                 .param("permissions", permissions).param("state", state).update();

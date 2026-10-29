@@ -91,6 +91,9 @@ class SupportAttachments {
     @Transactional
     Case comment(Actor staff, UUID commandId, UUID caseId, long expectedVersion, SupportCases.Visibility visibility,
                  String body, boolean waitForRequester, List<UUID> attachmentIds) {
+        // Access first: a repeat must not hand the stored case to someone who has lost it (AGENTS.md; audit
+        // 29.10.2026). get checks support.manage for the case's city.
+        cases.get(staff, caseId);
         return once(staff, "comment", commandId, caseId, attachmentIds,
                 () -> cases.comment(staff, commandId, caseId, expectedVersion, visibility, body, waitForRequester));
     }

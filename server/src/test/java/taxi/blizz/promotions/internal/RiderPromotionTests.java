@@ -86,8 +86,8 @@ class RiderPromotionTests {
         cityId = rides.city("test-rider-promotions", "UAH", 3);
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Marketing', 'ADMIN', :permissions, 'ACTIVE', now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Marketing', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
                 .param("id", id).param("login", "promotions-" + id)
                 .param("permissions", new String[] {RiderPromotions.MANAGE_PERMISSION}).update();
         admin = new Actor(SubjectType.STAFF, id);
@@ -117,6 +117,28 @@ class RiderPromotionTests {
     private RiderPromotions.Promotion create(String name, Kind kind, ValueType type, long value, Conditions c) {
         return promotions.create(admin, UUID.randomUUID(),
                 new Draft(name, kind, type, value, type == ValueType.FIXED ? "UAH" : null, c), "test");
+    }
+
+    /** Audit 29.10.2026: a member of one city manages that city's promotions only, and none for every city. */
+    @Test
+    void aMemberOfOneCityManagesOnlyThatCitysPromotions() {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Marketing', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "promotions-city-" + id)
+                .param("permissions", new String[] {RiderPromotions.MANAGE_PERMISSION})
+                .param("scope", new UUID[] {UUID.randomUUID()}).update();
+        Actor elsewhere = new Actor(SubjectType.STAFF, id);
+        Conditions everywhere = new Conditions(null, null, null, null, null, null, null, null, null, null);
+        assertCode(() -> promotions.create(elsewhere, UUID.randomUUID(),
+                new Draft("all", Kind.DISCOUNT, ValueType.PERCENT, 10_000, null, everywhere), "x"), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> promotions.create(elsewhere, UUID.randomUUID(),
+                new Draft("here", Kind.DISCOUNT, ValueType.PERCENT, 1_000, null, inCity()), "x"), ErrorCode.ACCESS_DENIED);
+        RiderPromotions.Promotion ours = create("ours", Kind.DISCOUNT, ValueType.PERCENT, 1_000, inCity());
+        assertCode(() -> promotions.archive(elsewhere, UUID.randomUUID(), ours.id(), ours.version(), "x"),
+                ErrorCode.ACCESS_DENIED);
     }
 
     private QuoteService.Quote quote(Actor rider) {
