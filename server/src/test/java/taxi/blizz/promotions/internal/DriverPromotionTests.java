@@ -85,8 +85,8 @@ class DriverPromotionTests {
         cityId = rides.city("test-driver-promotions", "UAH", 5);
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Fleet', 'ADMIN', :permissions, 'ACTIVE', now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
+                        values (:id, :login, 'Fleet', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
                 .param("id", id).param("login", "driver-promotions-" + id)
                 .param("permissions", new String[] {RiderPromotions.MANAGE_PERMISSION}).update();
         admin = new Actor(SubjectType.STAFF, id);

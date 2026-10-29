@@ -166,9 +166,15 @@ public class PaymentWorker {
         Context c = context(op.intentId());
         PaymentProvider.Result status = providers.of(c.merchant()).checkStatus(c.merchant(), op.target());
         if (status.providerStatus() == null) {
-            return status.outcome() == PaymentProvider.Outcome.DECLINED && !"AUTH".equals(op.type())
-                    && !"CHARGE".equals(op.type()) && !"TIP".equals(op.type())
-                    ? PaymentProvider.Result.unknown("The provider does not know the transaction") : status;
+            // No status: the provider did not describe the transaction. Only "Order Not Found" says it never reached
+            // the bank, and only an operation that makes its own transaction is then declined. Any other error — a
+            // bad signature right after a key change, a gate error — says nothing about the money: still UNKNOWN,
+            // asked again. Taking it for a decline let a charge that went through be charged again (audit 29.10.2026).
+            return PaymentProvider.ORDER_NOT_FOUND.equals(status.reasonCode()) && !"SETTLE".equals(op.type())
+                    && !"REFUND".equals(op.type()) && status.outcome() == PaymentProvider.Outcome.DECLINED
+                    ? status
+                    : PaymentProvider.Result.unknown("The provider gave no status for the transaction"
+                            + (status.reasonCode() == null ? "" : " (" + status.reasonCode() + ")"));
         }
         String s = status.providerStatus().toLowerCase(java.util.Locale.ROOT);
         if (("SETTLE".equals(op.type()) || "REFUND".equals(op.type())) && "waitingauthcomplete".equals(s)) {

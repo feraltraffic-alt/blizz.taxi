@@ -38,7 +38,7 @@ class FcmPushProviderTests {
                 + "\n-----END PRIVATE KEY-----\n";
         String credentials = JSON.writeValueAsString(Map.of("type", "service_account",
                 "client_email", "push@blizz-test.iam.gserviceaccount.com", "private_key", pem,
-                "token_uri", "https://oauth2.example.test/token"));
+                "token_uri", "https://oauth2.googleapis.com/token"));
         return new FcmPushProvider((url, headers, contentType, body) -> {
             calls.add(new Call(url, headers, contentType, body));
             return answers.poll();
@@ -49,6 +49,23 @@ class FcmPushProviderTests {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
         return generator.generateKeyPair();
+    }
+
+    /** Audit 29.10.2026: any other token endpoint in the pasted JSON is refused, never called. */
+    @Test
+    void aTokenEndpointOtherThanGooglesIsRefused() throws Exception {
+        String pem = "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getMimeEncoder().encodeToString(keys().getPrivate().getEncoded())
+                + "\n-----END PRIVATE KEY-----\n";
+        String credentials = JSON.writeValueAsString(Map.of("type", "service_account",
+                "client_email", "push@blizz-test.iam.gserviceaccount.com", "private_key", pem,
+                "token_uri", "http://10.0.0.5:5432/"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new FcmPushProvider((url, headers, type, body) -> {
+            calls.add(new Call(url, headers, type, body));
+            return null;
+        }, JSON, Clock.fixed(NOW, ZoneOffset.UTC), "blizz-test", credentials))
+                .hasMessageContaining("token_uri");
+        assertThat(calls).isEmpty();
     }
 
     @Test
@@ -67,7 +84,7 @@ class FcmPushProviderTests {
         assertThat(calls).as("one sign-in for both").hasSize(3);
 
         Call signIn = calls.getFirst();
-        assertThat(signIn.url()).isEqualTo("https://oauth2.example.test/token");
+        assertThat(signIn.url()).isEqualTo("https://oauth2.googleapis.com/token");
         String assertion = signIn.body().substring(signIn.body().indexOf("assertion=") + "assertion=".length());
         String[] parts = assertion.split("\\.");
         Signature verify = Signature.getInstance("SHA256withRSA");
@@ -76,7 +93,7 @@ class FcmPushProviderTests {
         assertThat(verify.verify(Base64.getUrlDecoder().decode(parts[2]))).as("signed by the service account").isTrue();
         Map<String, Object> claims = JSON.readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
         assertThat(claims).containsEntry("iss", "push@blizz-test.iam.gserviceaccount.com")
-                .containsEntry("aud", "https://oauth2.example.test/token")
+                .containsEntry("aud", "https://oauth2.googleapis.com/token")
                 .containsEntry("scope", "https://www.googleapis.com/auth/firebase.messaging");
 
         Call send = calls.get(1);

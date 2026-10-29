@@ -20,6 +20,9 @@ import tools.jackson.databind.json.JsonMapper;
  */
 class FcmPushProvider implements PushProvider {
 
+    static final String GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
+
+
     /** The HTTP call; returns the status and the body. */
     interface Transport {
         Response post(String url, Map<String, String> headers, String contentType, String body);
@@ -60,8 +63,13 @@ class FcmPushProvider implements PushProvider {
             throw new IllegalStateException("The Firebase service account key is not JSON");
         }
         this.clientEmail = (String) account.get("client_email");
+        // Google's token endpoint only: an address taken from a pasted JSON would let the panel make the server call
+        // any host and port and read its answer as an error (REQ-SEC-05; audit 29.10.2026).
         Object uri = account.get("token_uri");
-        this.tokenUri = uri == null ? "https://oauth2.googleapis.com/token" : (String) uri;
+        if (uri != null && !GOOGLE_TOKEN_URI.equals(uri)) {
+            throw new IllegalStateException("The service account's token_uri must be " + GOOGLE_TOKEN_URI);
+        }
+        this.tokenUri = GOOGLE_TOKEN_URI;
         this.key = privateKey((String) account.get("private_key"));
     }
 
