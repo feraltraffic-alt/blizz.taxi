@@ -230,6 +230,89 @@ class RiderPromotionTests {
         assertThat(wallets.mine(rider, 10).entries()).as("once per trip").hasSize(1);
     }
 
+    private OrderView order(Actor rider, QuoteService.Quote quote) {
+        return orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP, "Home",
+                DROPOFF, "Work", PaymentMethod.CASH, quote.id()));
+    }
+
+    /** No offers while the orders below stay open. */
+    private void offline() {
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where driver_id = :d and state <> 'CLOSED'")
+                .param("d", driver.actor().id()).update();
+    }
+
+    private void cancel(Actor rider, OrderView order) {
+        orders.cancel(rider, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
+        deliverEvents();
+    }
+
+    /**
+     * #112: a rider one trip short of the N-th made several quotes and opened an order with each; every order got the
+     * N-th-trip discount. One order per cycle now; the cycle is free again when that order ends without a trip.
+     */
+    @Test
+    void theNthTripGoesToOneOrderAndComesBackWhenItIsCancelled() {
+        create("Кожна друга поїздка -10 %", Kind.DISCOUNT, ValueType.PERCENT, 1_000,
+                new Conditions(cityId, null, 2, null, null, null, null, null, null, null));
+        Actor rider = rides.client();
+        rideToTheEnd(rider, quote(rider));
+        offline();
+
+        QuoteService.Quote first = quote(rider);
+        QuoteService.Quote second = quote(rider);
+        assertThat(first.discountMinor()).as("both quotes count on trip 2").isPositive();
+        assertThat(second.discountMinor()).isPositive();
+        OrderView taken = order(rider, first);
+        assertThat(taken.discountMinor()).isEqualTo(first.discountMinor());
+        assertCode(() -> order(rider, second), ErrorCode.QUOTE_EXPIRED);
+
+        QuoteService.Quote meanwhile = quote(rider);
+        assertThat(meanwhile.promotions()).as("trip 2 is held by the open order").isEmpty();
+        OrderView plain = order(rider, meanwhile);
+        assertThat(plain.discountMinor()).isZero();
+
+        cancel(rider, taken);
+        QuoteService.Quote again = quote(rider);
+        assertThat(again.discountMinor()).as("the cancelled order gave trip 2 back").isPositive();
+        OrderView retaken = order(rider, again);
+        assertThat(retaken.discountMinor()).isEqualTo(again.discountMinor());
+        cancel(rider, plain);
+        cancel(rider, retaken);
+    }
+
+    /** Two orders at the same moment with quotes for the same N-th trip: exactly one keeps it. */
+    @Test
+    void twoOrdersAtOnceClaimTheNthTripOnce() throws Exception {
+        create("Кожна друга поїздка -5 грн", Kind.DISCOUNT, ValueType.FIXED, 500,
+                new Conditions(cityId, null, 2, null, null, null, null, null, null, null));
+        Actor rider = rides.client();
+        rideToTheEnd(rider, quote(rider));
+        offline();
+        List<QuoteService.Quote> both = List.of(quote(rider), quote(rider));
+        java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(2);
+        List<java.util.concurrent.Future<Object>> results;
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            results = both.stream().map(q -> pool.submit(() -> {
+                start.await();
+                try {
+                    return (Object) order(rider, q);
+                } catch (DomainException e) {
+                    return e.code();
+                }
+            })).toList();
+        }
+        List<Object> outcomes = new java.util.ArrayList<>();
+        for (var r : results) {
+            outcomes.add(r.get());
+        }
+        assertThat(outcomes).filteredOn(OrderView.class::isInstance).singleElement()
+                .extracting(o -> ((OrderView) o).discountMinor()).isEqualTo(500L);
+        assertThat(outcomes).filteredOn(o -> o == ErrorCode.QUOTE_EXPIRED).hasSize(1);
+        assertThat(jdbc.sql("select count(*) from promotion_nth_claim where client_id = :client")
+                .param("client", rider.id()).query(Long.class).single()).isEqualTo(1L);
+        outcomes.stream().filter(OrderView.class::isInstance).forEach(o -> cancel(rider, (OrderView) o));
+    }
+
     @Test
     void conditionsTimeWindowsAndRounding() {
         Conditions weekdayMornings = new Conditions(null, null, null,

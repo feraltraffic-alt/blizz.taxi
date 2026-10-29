@@ -336,7 +336,8 @@ paths:
       summary: Order from a quote
       description: |
         Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
-        the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED. The
+        the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED, and the same
+        when the quote has an "every N-th trip" promotion another open order of mine already took (get a new price). The
         price is the quote's, never the client's. A repeat of the same command returns the same order. Card
         payment is not available yet (S-09). At most active_orders_per_payer orders not in a final state, pre-orders
         included, together with phone orders from my phone (ADR 0012) → 409 ACTIVE_ORDER_LIMIT. A rider whose

@@ -25,7 +25,8 @@ public interface RiderPromotions {
     enum ValueType { PERCENT, FIXED }
 
     /**
-     * Null means "any". {@code everyNthTrip}: the rider's N-th, 2N-th … completed trip; {@code daysOfWeek} and
+     * Null means "any". {@code everyNthTrip}: the rider's N-th, 2N-th … completed trip, given to one order of the
+     * rider at a time (the order claims it; a cancelled order gives it back); {@code daysOfWeek} and
      * {@code timeFrom}–{@code timeTo} in the city's time zone at the pickup time ({@code timeTo} may be past midnight,
      * e.g. 22:00–06:00); zones of the city at the pickup and the drop-off.
      */
@@ -70,4 +71,10 @@ public interface RiderPromotions {
      * for the quote in the caller's transaction.
      */
     List<Applied> applyToQuote(UUID quoteId, Context context);
+
+    /**
+     * The order that takes the quote claims the "every N-th trip" cycles the quote counted on, in the caller's
+     * transaction. QUOTE_EXPIRED when another order of the rider holds one already: the rider gets a new price.
+     */
+    void claimForOrder(UUID quoteId, UUID clientId, UUID orderId);
 }

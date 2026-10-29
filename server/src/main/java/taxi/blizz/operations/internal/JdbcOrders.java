@@ -158,9 +158,9 @@ class JdbcOrders implements Orders {
                 actor, order.pickupAt()).fingerprint();
         OrderView result = commands.execute(new CommandKey(actor, "order.create", commandId), order, OrderView.class,
                 () -> {
-            QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint);
-            requireBelowLimit(order);
             UUID id = UUID.randomUUID();
+            QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint, id);
+            requireBelowLimit(order);
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
             // The discount of promotions comes first (ADR 0009); bonuses pay at most what is left.
@@ -736,7 +736,8 @@ class JdbcOrders implements Orders {
                     if (followUpId == null) {
                         return new Interrupted(core.view(orderId), null);
                     }
-                    QuoteService.Quote consumed = quotes.consume(followUpQuote.id(), actor, followUpQuote.fingerprint());
+                    QuoteService.Quote consumed = quotes.consume(followUpQuote.id(), actor, followUpQuote.fingerprint(),
+                            followUpId);
                     jdbc.sql("""
                                     insert into ride_order (id, channel, payer_client_id, created_by_type, created_by_id,
                                                             city_id, vehicle_class, pickup, pickup_label, dropoff,

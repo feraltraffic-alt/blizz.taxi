@@ -120,7 +120,7 @@ class PricingTests {
         QuoteService.Quote latest = quotes.create(UUID.randomUUID(), request(PAYER));
         assertThat(latest.tariffVersionId()).isEqualTo(next.id());
         assertThat(latest.amountMinor()).isEqualTo(22000);
-        QuoteService.Quote consumed = quotes.consume(old.id(), PAYER, old.fingerprint());
+        QuoteService.Quote consumed = quotes.consume(old.id(), PAYER, old.fingerprint(), UUID.randomUUID());
         assertThat(consumed).isEqualTo(old);
         assertThat(consumed.amountMinor()).isEqualTo(11000);
         assertThat(consumed.terms().commissionRate()).isEqualByComparingTo("0.15");
@@ -150,14 +150,14 @@ class PricingTests {
     void wrongOwnerFingerprintAndRepeatedConsumptionAreRefused() {
         published(TERMS);
         QuoteService.Quote quote = quotes.create(UUID.randomUUID(), request(PAYER));
-        reject(() -> quotes.consume(quote.id(), new Actor(SubjectType.CLIENT, UUID.randomUUID()), quote.fingerprint()),
+        reject(() -> quotes.consume(quote.id(), new Actor(SubjectType.CLIENT, UUID.randomUUID()), quote.fingerprint(), UUID.randomUUID()),
                 ErrorCode.QUOTE_MISMATCH);
-        reject(() -> quotes.consume(quote.id(), new Actor(SubjectType.DRIVER, PAYER.id()), quote.fingerprint()),
+        reject(() -> quotes.consume(quote.id(), new Actor(SubjectType.DRIVER, PAYER.id()), quote.fingerprint(), UUID.randomUUID()),
                 ErrorCode.QUOTE_MISMATCH);
-        reject(() -> quotes.consume(quote.id(), PAYER, "wrong fingerprint"), ErrorCode.QUOTE_MISMATCH);
-        reject(() -> quotes.consume(UUID.randomUUID(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_MISMATCH);
-        assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint())).isEqualTo(quote);
-        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_EXPIRED);
+        reject(() -> quotes.consume(quote.id(), PAYER, "wrong fingerprint", UUID.randomUUID()), ErrorCode.QUOTE_MISMATCH);
+        reject(() -> quotes.consume(UUID.randomUUID(), PAYER, quote.fingerprint(), UUID.randomUUID()), ErrorCode.QUOTE_MISMATCH);
+        assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID())).isEqualTo(quote);
+        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID()), ErrorCode.QUOTE_EXPIRED);
         assertThat(audits(quote.id(), "quote.consume")).isZero();
     }
 
@@ -166,9 +166,9 @@ class PricingTests {
         published(TERMS);
         QuoteService.Quote quote = quotes.create(UUID.randomUUID(), request(PAYER));
         clock.current = quote.expiresAt();
-        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_EXPIRED);
+        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID()), ErrorCode.QUOTE_EXPIRED);
         clock.current = quote.expiresAt().plusSeconds(1);
-        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint()), ErrorCode.QUOTE_EXPIRED);
+        reject(() -> quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID()), ErrorCode.QUOTE_EXPIRED);
         assertThat(jdbc.sql("select consumed_at is null from quote where id = :id")
                 .param("id", quote.id()).query(Boolean.class).single()).isTrue();
         assertThat(audits(quote.id(), "quote.consume")).isZero();
@@ -179,7 +179,7 @@ class PricingTests {
         published(TERMS);
         QuoteService.Quote quote = quotes.create(UUID.randomUUID(), request(PAYER));
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
-            quotes.consume(quote.id(), PAYER, quote.fingerprint());
+            quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID());
             throw new IllegalStateException("Synthetic order failure");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(audits(quote.id(), "quote.consume")).isZero();
@@ -187,7 +187,7 @@ class PricingTests {
                 .param("id", quote.id()).query(Boolean.class).single()).isTrue();
         CommandKey key = new CommandKey(PAYER, "synthetic.order.create", UUID.randomUUID());
         UUID order = commands.execute(key, quote.id(), UUID.class, () -> {
-            quotes.consume(quote.id(), PAYER, quote.fingerprint());
+            quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID());
             return UUID.randomUUID();
         });
         assertThat(commands.execute(key, quote.id(), UUID.class, () -> {
@@ -201,8 +201,8 @@ class PricingTests {
         published(TERMS);
         QuoteService.Quote quote = quotes.create(UUID.randomUUID(), request(PAYER));
         List<Boolean> outcomes = race(List.of(
-                () -> quotes.consume(quote.id(), PAYER, quote.fingerprint()),
-                () -> quotes.consume(quote.id(), PAYER, quote.fingerprint())), ErrorCode.QUOTE_EXPIRED);
+                () -> quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID()),
+                () -> quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID())), ErrorCode.QUOTE_EXPIRED);
         assertThat(outcomes).containsExactlyInAnyOrder(true, false);
         assertThat(audits(quote.id(), "quote.consume")).isZero();
     }
@@ -331,7 +331,7 @@ class PricingTests {
         assertThat(jdbc.sql("select consumed_at is null from quote where id = :id")
                 .param("id", quote.id()).query(Boolean.class).single()).isTrue();
 
-        assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint())).isEqualTo(quote);
+        assertThat(quotes.consume(quote.id(), PAYER, quote.fingerprint(), UUID.randomUUID())).isEqualTo(quote);
 
         assertThat(quoteAuditCount(quote.id())).isZero();
         assertThat(jdbc.sql("select consumed_at is not null from quote where id = :id")
