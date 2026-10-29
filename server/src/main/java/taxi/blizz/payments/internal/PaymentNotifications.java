@@ -100,12 +100,25 @@ class PaymentNotifications {
 
     /** A hold or charge of ours (by its own reference), a top-up, else a card binding. */
     private String apply(Merchant merchant, PaymentProvider.Notification n) {
-        Optional<UUID> operation = jdbc.sql("""
-                        select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
+        record Ours(UUID id, long amountMinor, String currency) {
+        }
+        Optional<Ours> operation = jdbc.sql("""
+                        select o.id, o.amount_minor, i.currency from payment_operation o
+                        join payment_intent i on i.id = o.intent_id
                         where o.reference = :reference and i.merchant_id = :merchant and o.type in ('AUTH', 'CHARGE', 'TIP')""")
-                .param("reference", n.reference()).param("merchant", merchant.id()).query(UUID.class).optional();
+                .param("reference", n.reference()).param("merchant", merchant.id())
+                .query((rs, i) -> new Ours(rs.getObject(1, UUID.class), rs.getLong(2), rs.getString(3).trim()))
+                .optional();
         if (operation.isPresent()) {
-            payments.apply(operation.get(), n.outcome(), n.status(), n.reasonCode(), n.reason());
+            Ours op = operation.get();
+            if (n.amountMinor() != op.amountMinor() || (n.currency() != null && !n.currency().equals(op.currency()))) {
+                // Threat model W1: a notification about another sum is not applied; the worker asks the provider
+                // about the operation by its own reference, and the daily reconciliation reports the difference.
+                log.error("Payment notification for operation {} reports {} {} instead of {} {}", op.id(),
+                        n.amountMinor(), n.currency(), op.amountMinor(), op.currency());
+                return "OPERATION_AMOUNT_MISMATCH";
+            }
+            payments.apply(op.id(), n.outcome(), n.status(), n.reasonCode(), n.reason());
             return "OPERATION_" + n.outcome();
         }
         Optional<String> topUp = topUps.apply(merchant.id(), n.reference(), n.outcome(), n.amountMinor(),
