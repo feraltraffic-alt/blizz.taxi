@@ -36,7 +36,8 @@ public record OtpProperties(
         @DefaultValue("2000") int maxGlobalPerHour,
         @DefaultValue("30") int maxPerIpPerHour,
         @DefaultValue("10") int maxPerDevicePerHour,
-        @DefaultValue("48,380") List<String> allowedCountryCodes,
+        // One value per code: a single "48,380" would bind as one element.
+        @DefaultValue({"48", "380"}) List<String> allowedCountryCodes,
         @DefaultValue("5") int maxPerIpAndPhonePerHour,
         @DefaultValue("2") int maxCallsPerPhonePerHour,
         @DefaultValue("500") int hourlyAlarm) {
