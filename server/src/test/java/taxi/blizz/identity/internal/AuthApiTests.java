@@ -79,7 +79,8 @@ class AuthApiTests {
                 Map.of("audience", audience, "phone", phone, "device_ref", "test-device"));
         assertThat(challenge.getResponse().getStatus()).isEqualTo(201);
         Map<String, Object> issued = body(challenge);
-        assertThat(issued).containsOnlyKeys("challenge_id", "expires_at", "resend_available_at");
+        assertThat(issued).containsOnlyKeys("challenge_id", "expires_at", "resend_available_at", "channel");
+        assertThat(issued).containsEntry("channel", "SMS");
 
         MvcResult verify = postJson("/auth/v1/otp/verify",
                 Map.of("challenge_id", issued.get("challenge_id"), "code", delivery.codes.getLast()));

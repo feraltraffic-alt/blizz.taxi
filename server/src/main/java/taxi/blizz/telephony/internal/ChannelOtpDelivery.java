@@ -3,10 +3,9 @@ package taxi.blizz.telephony.internal;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,9 +22,10 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.platform.CommittedMetrics;
 
 /**
- * Sends a one-time code (ADR 0012 Q-18): first by the channel the person asked for ("call me instead"), else by the
- * one set in the admin panel (otp.channel, SMS by default), then by the fallback (otp.fallback, VOICE by default)
- * until one provider takes it. Every attempt is recorded for support, never the code. Runs after the challenge is
+ * Sends a one-time code (ADR 0012 Q-18) by exactly the channel the OTP service chose, once: one request never costs an
+ * SMS and a call (issue #101). The admin panel sets the channel (otp.channel, SMS by default) and the fallback a
+ * resend goes by after it did not get through (otp.fallback, VOICE by default); the service reads them here, with the
+ * record of failed attempts. Every attempt is recorded for support, never the code. Runs after the challenge is
  * committed, so a failure here never undoes it; the person can ask for a new code after the resend delay.
  */
 @Component
@@ -62,35 +62,40 @@ class ChannelOtpDelivery implements OtpDelivery {
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void send(UUID challengeId, PhoneNumber phone, String code, OtpAudience audience, OtpChannel preferred) {
-        for (OtpChannel channel : order(preferred)) {
-            OtpSender sender = sender(channel);
-            OtpSender.Result result;
-            try {
-                result = sender.send(phone, code, audience);
-            } catch (RuntimeException e) {
-                result = OtpSender.Result.unknown(e.getClass().getSimpleName());
-            }
-            record(challengeId, phone, audience, sender, result);
-            if (result.state() == OtpSender.State.SENT) {
-                return;
-            }
+    public void send(UUID challengeId, PhoneNumber phone, String code, OtpAudience audience, OtpChannel channel) {
+        OtpSender sender = sender(channel != null ? channel : primaryChannel());
+        OtpSender.Result result;
+        try {
+            result = sender.send(phone, code, audience);
+        } catch (RuntimeException e) {
+            result = OtpSender.Result.unknown(e.getClass().getSimpleName());
         }
-        log.warn("No channel delivered the code for {} (challenge {})", phone.masked(), challengeId);
+        record(challengeId, phone, audience, sender, result);
+        if (result.state() != OtpSender.State.SENT) {
+            log.warn("The code for {} (challenge {}) did not go out by {}", phone.masked(), challengeId,
+                    sender.channel());
+        }
     }
 
-    /** The channels to try, in order, each once. */
-    List<OtpChannel> order(OtpChannel preferred) {
-        Set<OtpChannel> order = new LinkedHashSet<>();
-        if (preferred != null) {
-            order.add(preferred);
-        }
-        order.add(setting(Integrations.OTP_CHANNEL).map(OtpChannel::valueOf).orElse(OtpChannel.SMS));
+    @Override
+    public OtpChannel primaryChannel() {
+        return setting(Integrations.OTP_CHANNEL).map(OtpChannel::valueOf).orElse(OtpChannel.SMS);
+    }
+
+    @Override
+    public Optional<OtpChannel> fallbackChannel() {
         String fallback = setting(Integrations.OTP_FALLBACK).orElse("VOICE");
-        if (!"NONE".equals(fallback)) {
-            order.add(OtpChannel.valueOf(fallback));
-        }
-        return List.copyOf(order);
+        return "NONE".equals(fallback) ? Optional.empty() : Optional.of(OtpChannel.valueOf(fallback));
+    }
+
+    @Override
+    public boolean failedSince(PhoneNumber phone, OtpChannel channel, OffsetDateTime since) {
+        return jdbc.sql("""
+                        select exists (select 1 from otp_delivery
+                                       where phone = :phone and attempted_at > :since and channel = :channel
+                                         and state <> 'SENT')""")
+                .param("phone", phone.e164()).param("since", since).param("channel", channel.name())
+                .query(Boolean.class).single();
     }
 
     private java.util.Optional<String> setting(String name) {

@@ -72,6 +72,34 @@ groups:
           summary: "More than 20 % of sign-in codes do not go out"
           runbook: docs/runbooks/sms.md
 
+      # SMS pumping (issue #101): codes sent in the last hour against the same hour of the previous 7 days, and against
+      # the instance's own ceiling blizz.otp.hourly-alarm. The floor of 50 keeps a quiet first week from paging.
+      - alert: OtpVolumeSpike
+        expr: |
+          sum(increase(blizz_otp_sent_total[1h])) > 50
+            and sum(increase(blizz_otp_sent_total[1h])) > 3 * (
+              (sum(increase(blizz_otp_sent_total[1h] offset 1d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 2d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 3d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 4d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 5d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 6d)) or vector(0)) +
+              (sum(increase(blizz_otp_sent_total[1h] offset 7d)) or vector(0))
+            ) / 7
+        for: 10m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "One-time codes in the last hour are more than 3x the usual for this hour: possible SMS pumping"
+          runbook: docs/runbooks/sms.md
+
+      - alert: OtpHourlyAlarm
+        expr: sum(increase(blizz_otp_sent_total[1h])) > on() max(blizz_otp_hourly_alarm)
+        for: 5m
+        labels: {severity: critical, owner: backend-oncall}
+        annotations:
+          summary: "More one-time codes in the last hour than blizz.otp.hourly-alarm: possible SMS pumping"
+          runbook: docs/runbooks/sms.md
+
       - alert: OrdersWaitingLong
         expr: max(blizz_orders_searching_oldest_seconds) > 900
         for: 5m

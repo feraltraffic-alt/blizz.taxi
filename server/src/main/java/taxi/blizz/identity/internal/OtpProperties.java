@@ -2,6 +2,8 @@ package taxi.blizz.identity.internal;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -17,6 +19,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param maxGlobalPerHour  overall sending budget per hour for the instance (SMS pumping protection)
  * @param maxPerIpPerHour   codes per client IP per hour; generous because a fleet may share one NAT address
  * @param maxPerDevicePerHour codes per app installation per hour
+ * @param allowedCountryCodes country calling codes whose numbers get codes (Poland, Ukraine); any other number is
+ *                          refused, against expensive international routes (SMS pumping, IRSF, issue #101)
+ * @param maxPerIpAndPhonePerHour codes per client IP and phone per hour, so rotating device refs does not help
+ * @param maxCallsPerPhonePerHour codes by a call per phone per hour, riders and drivers together
+ * @param hourlyAlarm       codes sent in an hour above which the SMS-pumping alert fires (exported as a gauge)
  */
 @ConfigurationProperties("blizz.otp")
 public record OtpProperties(
@@ -28,7 +35,14 @@ public record OtpProperties(
         @DefaultValue("5") int maxPerPhonePerHour,
         @DefaultValue("2000") int maxGlobalPerHour,
         @DefaultValue("30") int maxPerIpPerHour,
-        @DefaultValue("10") int maxPerDevicePerHour) {
+        @DefaultValue("10") int maxPerDevicePerHour,
+        // One value per code: a single "48,380" would bind as one element.
+        @DefaultValue({"48", "380"}) List<String> allowedCountryCodes,
+        @DefaultValue("5") int maxPerIpAndPhonePerHour,
+        @DefaultValue("2") int maxCallsPerPhonePerHour,
+        @DefaultValue("500") int hourlyAlarm) {
+
+    private static final Pattern COUNTRY_CODE = Pattern.compile("^[1-9][0-9]{0,2}$");
 
     public OtpProperties {
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
@@ -37,5 +51,26 @@ public record OtpProperties(
         if (codeLength < 4 || codeLength > 8) {
             throw new IllegalStateException("blizz.otp.code-length must be between 4 and 8");
         }
+        if (allowedCountryCodes == null || allowedCountryCodes.isEmpty()) {
+            throw new IllegalStateException("blizz.otp.allowed-country-codes must list at least one country code");
+        }
+        allowedCountryCodes = allowedCountryCodes.stream().map(c -> c == null ? "" : c.strip()).toList();
+        for (String code : allowedCountryCodes) {
+            if (!COUNTRY_CODE.matcher(code).matches()) {
+                throw new IllegalStateException("blizz.otp.allowed-country-codes must be country calling codes of "
+                        + "1 to 3 digits without '+', e.g. 48,380; got '" + code + "'");
+            }
+        }
+        if (maxCallsPerPhonePerHour < 0 || maxPerIpAndPhonePerHour < 1 || hourlyAlarm < 1) {
+            throw new IllegalStateException("blizz.otp.max-calls-per-phone-per-hour must not be negative, "
+                    + "blizz.otp.max-per-ip-and-phone-per-hour and blizz.otp.hourly-alarm must be positive");
+        }
+    }
+
+    /** The allowed country code {@code phone} belongs to, or empty: the longest code that prefixes its digits. */
+    java.util.Optional<String> countryOf(taxi.blizz.identity.PhoneNumber phone) {
+        String digits = phone.e164().substring(1);
+        return allowedCountryCodes.stream().filter(digits::startsWith)
+                .max(java.util.Comparator.comparingInt(String::length));
     }
 }

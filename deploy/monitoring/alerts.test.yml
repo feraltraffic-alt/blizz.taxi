@@ -1,0 +1,32 @@
+# promtool test rules deploy/monitoring/alerts.test.yml (issue #101)
+rule_files: [alerts.yml]
+evaluation_interval: 1m
+tests:
+  # 120 codes an hour for 193 hours (an instance restarts), then 600 an hour: both alerts fire; before, none.
+  - interval: 1m
+    input_series:
+      - series: 'blizz_otp_sent_total{channel="SMS",country="380"}'
+        values: '0+2x11580 0+10x120'
+      - series: 'blizz_otp_hourly_alarm'
+        values: '500x11700'
+    alert_rule_test:
+      - eval_time: 195h
+        alertname: OtpVolumeSpike
+        exp_alerts:
+          - exp_labels: {severity: critical, owner: backend-oncall}
+            exp_annotations:
+              summary: "One-time codes in the last hour are more than 3x the usual for this hour: possible SMS pumping"
+              runbook: docs/runbooks/sms.md
+      - eval_time: 195h
+        alertname: OtpHourlyAlarm
+        exp_alerts:
+          - exp_labels: {severity: critical, owner: backend-oncall}
+            exp_annotations:
+              summary: "More one-time codes in the last hour than blizz.otp.hourly-alarm: possible SMS pumping"
+              runbook: docs/runbooks/sms.md
+      - eval_time: 190h
+        alertname: OtpVolumeSpike
+        exp_alerts: []
+      - eval_time: 190h
+        alertname: OtpHourlyAlarm
+        exp_alerts: []
