@@ -163,24 +163,63 @@ class GraphHopperRouteEstimatorTests {
         assertThat(refused.message()).contains("refused").doesNotContain("wrong-key");
     }
 
-    /** The panel's values (a stub of Integrations) switch GraphHopper on and off without a restart. */
-    @Test
-    void thePanelSwitchesGraphHopperOnAndOff() {
-        java.util.Map<String, String> values = new java.util.concurrent.ConcurrentHashMap<>();
-        java.util.concurrent.atomic.AtomicLong revision = new java.util.concurrent.atomic.AtomicLong();
-        Integrations panel = (Integrations) java.lang.reflect.Proxy.newProxyInstance(
+    /** The local test router stands for a public host; a test flips it to refused. */
+    volatile boolean addressRefused;
+    final taxi.blizz.platform.OutboundAddresses allowed = (address, schemes) -> {
+        if (addressRefused) {
+            throw new taxi.blizz.platform.DomainException(taxi.blizz.platform.ErrorCode.VALIDATION_FAILED,
+                    "The host resolves to a private address");
+        }
+        return java.net.URI.create(address);
+    };
+
+    private static Integrations panel(java.util.Map<String, String> values,
+                                      java.util.concurrent.atomic.AtomicLong revision) {
+        return (Integrations) java.lang.reflect.Proxy.newProxyInstance(
                 Integrations.class.getClassLoader(), new Class<?>[] {Integrations.class}, (proxy, method, args) ->
                         switch (method.getName()) {
                             case "value" -> java.util.Optional.ofNullable(values.get((String) args[0]));
                             case "revision" -> revision.get();
                             default -> throw new UnsupportedOperationException(method.getName());
                         });
+    }
+
+    /**
+     * Audit 29.10.2026: the panel's address was checked when the settings were read, then used for every quote. A host
+     * whose DNS answer turns private later is no longer asked; the price comes from the straight line.
+     */
+    @Test
+    void aPanelAddressThatTurnsPrivateIsNotAskedAnyMore() {
+        java.util.Map<String, String> values = new java.util.concurrent.ConcurrentHashMap<>();
+        java.util.concurrent.atomic.AtomicLong revision = new java.util.concurrent.atomic.AtomicLong();
+        values.put(Integrations.GRAPHHOPPER_ENABLED, "true");
+        values.put(Integrations.GRAPHHOPPER_BASE_URL, "http://127.0.0.1:" + server.getAddress().getPort());
+        RouteEstimator.Estimate straight = new RouteEstimator.Estimate(7, 7);
+        ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(panel(values, revision),
+                new GraphHopperProperties(false, "http://127.0.0.1:1", null, "car", Duration.ofMillis(500)),
+                (a, b) -> straight, JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none(), allowed);
+        body = """
+                {"paths":[{"distance":1000,"time":60000}]}""";
+        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
+        int asked = routeCalls.get();
+
+        addressRefused = true; // same settings revision: nothing is rebuilt
+        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(straight);
+        assertThat(routeCalls.get()).as("the router is not called").isEqualTo(asked);
+    }
+
+    /** The panel's values (a stub of Integrations) switch GraphHopper on and off without a restart. */
+    @Test
+    void thePanelSwitchesGraphHopperOnAndOff() {
+        java.util.Map<String, String> values = new java.util.concurrent.ConcurrentHashMap<>();
+        java.util.concurrent.atomic.AtomicLong revision = new java.util.concurrent.atomic.AtomicLong();
+        Integrations panel = panel(values, revision);
         GraphHopperProperties environment = new GraphHopperProperties(false, "http://127.0.0.1:1", null, "car",
                 Duration.ofMillis(500));
         RouteEstimator.Estimate straight = new RouteEstimator.Estimate(7, 7);
         RouteEstimator straightLine = (a, b) -> straight;
         ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(panel, environment, straightLine,
-                JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none());
+                JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none(), allowed);
         assertThat(configured.estimate(MAIDAN, STATION)).as("off in the environment").isEqualTo(straight);
 
         body = """

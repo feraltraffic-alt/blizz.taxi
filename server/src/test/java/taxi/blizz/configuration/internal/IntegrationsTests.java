@@ -127,6 +127,26 @@ class IntegrationsTests {
         assertThat(integrations.value(Integrations.FCM_CREDENTIALS)).isEmpty();
     }
 
+    /**
+     * Audit 29.10.2026: the receipt kept an unsalted SHA-256 of the changed values, so a database dump allowed guessing
+     * a weak password offline. The fingerprint is an HMAC with a key derived from the master key now.
+     */
+    @Test
+    void theFingerprintOfAChangeIsKeyedWithTheMasterKey() throws Exception {
+        JdbcIntegrations target = org.springframework.test.util.AopTestUtils.getTargetObject(integrations);
+        java.util.Map<String, String> values = new java.util.LinkedHashMap<>();
+        values.put(Integrations.OTP_ASTERISK_ARI_PASSWORD, "asterisk1");
+        String text = Integrations.OTP_ASTERISK_ARI_PASSWORD + "=asterisk1\n";
+        String unsalted = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.getBytes(StandardCharsets.UTF_8)));
+
+        String fingerprint = target.fingerprint(values);
+        assertThat(fingerprint).startsWith("hmac:").doesNotContain(unsalted);
+        assertThat(target.fingerprint(values)).as("stable, so a repeated command is recognised").isEqualTo(fingerprint);
+        values.put(Integrations.OTP_ASTERISK_ARI_PASSWORD, "asterisk2");
+        assertThat(target.fingerprint(values)).isNotEqualTo(fingerprint);
+    }
+
     @Test
     void theWrongPasswordNoRightOrBadValuesChangeNothing() {
         assertCode(() -> integrations.change(admin, UUID.randomUUID(), "wrong", List.of(

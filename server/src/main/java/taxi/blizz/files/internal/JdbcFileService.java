@@ -33,7 +33,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 
 /**
- * Upload pipeline: claim the session → stage with a size limit → detect the real type → strip JPEG
+ * Upload pipeline: claim the session → stage with a size limit → detect the real type → strip image
  * metadata → scan → store under a random key → SAFE. Any failed check makes the file REJECTED and
  * removes its bytes. The database only records state; long I/O never runs inside a transaction.
  */
@@ -123,7 +123,9 @@ class JdbcFileService implements FileService {
             if (detected.isEmpty() || !detected.get().equals(claimed.declaredType())) {
                 return reject(fileId, staged, "The content does not match the declared type");
             }
-            if ("image/jpeg".equals(detected.get()) && !JpegMetadataStripper.strip(staged)) {
+            boolean structureValid = "image/jpeg".equals(detected.get()) ? JpegMetadataStripper.strip(staged)
+                    : ImageMetadataStripper.strip(staged, detected.get());
+            if (!structureValid) {
                 return reject(fileId, staged, "The image structure is not valid");
             }
             Optional<String> finding = scanner.scan(staged, detected.get());

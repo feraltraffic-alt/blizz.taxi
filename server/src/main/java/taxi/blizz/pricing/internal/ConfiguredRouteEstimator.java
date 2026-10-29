@@ -1,15 +1,24 @@
 package taxi.blizz.pricing.internal;
 
 import java.util.Optional;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import taxi.blizz.configuration.IntegrationCheck;
 import taxi.blizz.configuration.Integrations;
 import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.OutboundAddresses;
 import taxi.blizz.pricing.RouteEstimator;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The route estimate with the settings in force: GraphHopper when it is on in the admin panel (or, without a value
  * there, in the environment), the straight line otherwise. Rebuilt when the settings change, without a restart.
+ *
+ * <p>An address typed in the admin panel is checked again before every request (REQ-SEC-05, audit 29.10.2026): the
+ * host's DNS answer may turn private after the settings were saved. A refused address prices by the straight line.
+ * The JVM keeps a DNS answer for a while, so the check and the connection right after it see the same one.
  */
 class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
 
@@ -18,16 +27,23 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
     private final RouteEstimator straightLine;
     private final JsonMapper json;
     private final taxi.blizz.platform.ProviderBreakers breakers;
+    private final OutboundAddresses addresses;
 
-    private record Built(long revision, GraphHopperProperties properties, GraphHopperRouteEstimator graphHopper) {
+    private static final Logger log = LoggerFactory.getLogger(ConfiguredRouteEstimator.class);
+    private static final Set<String> SCHEMES = Set.of("http", "https");
+
+    /** {@code fromPanel}: the address was typed in the admin panel, not set by the deployment. */
+    private record Built(long revision, GraphHopperProperties properties, boolean fromPanel,
+                         GraphHopperRouteEstimator graphHopper) {
     }
 
     private volatile Built built;
 
     ConfiguredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
                              RouteEstimator straightLine, JsonMapper json,
-                             taxi.blizz.platform.ProviderBreakers breakers) {
+                             taxi.blizz.platform.ProviderBreakers breakers, OutboundAddresses addresses) {
         this.breakers = breakers;
+        this.addresses = addresses;
         this.integrations = integrations;
         this.environment = environment;
         this.straightLine = straightLine;
@@ -48,7 +64,9 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
         synchronized (this) {
             if (built == null || built.revision() != revision) {
                 GraphHopperProperties p = properties();
-                built = new Built(revision, p, new GraphHopperRouteEstimator(p, straightLine, json, breakers));
+                boolean fromPanel = setting(Integrations.GRAPHHOPPER_BASE_URL).isPresent();
+                built = new Built(revision, p, fromPanel,
+                        new GraphHopperRouteEstimator(p, straightLine, json, breakers));
             }
             return built;
         }
@@ -75,8 +93,21 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
     @Override
     public Estimate estimate(GeoPoint pickup, GeoPoint dropOff) {
         Built b = current();
-        return b.properties().enabled() ? b.graphHopper().estimate(pickup, dropOff)
+        return b.properties().enabled() && addressStillAllowed(b) ? b.graphHopper().estimate(pickup, dropOff)
                 : straightLine.estimate(pickup, dropOff);
+    }
+
+    private boolean addressStillAllowed(Built b) {
+        if (!b.fromPanel()) {
+            return true;
+        }
+        try {
+            addresses.check(b.properties().baseUrl(), SCHEMES);
+            return true;
+        } catch (DomainException e) {
+            log.warn("The routing address is not used: {}", e.getMessage());
+            return false;
+        }
     }
 
     @Override

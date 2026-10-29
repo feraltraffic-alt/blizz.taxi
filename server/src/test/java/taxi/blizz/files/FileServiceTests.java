@@ -25,7 +25,8 @@ import taxi.blizz.platform.SubjectType;
 @Import(TestcontainersConfiguration.class)
 class FileServiceTests {
 
-    private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
+    private static final byte[] PNG = java.util.Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
     @Autowired
     FileService files;
@@ -104,6 +105,23 @@ class FileServiceTests {
                 .contains("JFIF").contains("quantization-table-bytes");
         assertThat(kept[kept.length - 2] & 0xFF).isEqualTo(0xFF);
         assertThat(kept[kept.length - 1] & 0xFF).isEqualTo(0xD9);
+    }
+
+    /** Audit 29.10.2026: PNG kept its EXIF and text (REQ-SEC-07). */
+    @Test
+    void pngLosesItsMetadataTooAndABrokenOneIsRefused() throws Exception {
+        byte[] png = taxi.blizz.files.internal.ImageMetadataStripperTests.pngWithMetadata();
+        UUID id = open("image/png", png.length);
+
+        StoredFile stored = upload(id, "image/png", png);
+
+        assertThat(stored.state()).isEqualTo(FileState.SAFE);
+        try (InputStream in = files.open(driver, id).stream()) {
+            assertThat(in.readAllBytes()).isEqualTo(PNG);
+        }
+        byte[] cut = java.util.Arrays.copyOf(PNG, 16);
+        UUID broken = open("image/png", cut.length);
+        assertThat(upload(broken, "image/png", cut).rejectReason()).contains("structure is not valid");
     }
 
     @Test

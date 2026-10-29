@@ -15,7 +15,7 @@ components:
       description: Minor units of the city's currency.
       type: object
       additionalProperties: false
-      required: [trips, fare_minor, commission_minor, driver_share_minor, cash_minor, cashless_minor, tips_minor,
+      required: [trips, fare_minor, commission_minor, driver_share_minor, held_minor, cash_minor, cashless_minor, tips_minor,
                  bonuses_minor, top_ups_minor, transfers_in_minor, transfers_out_minor, adjustments_minor, net_minor]
       properties:
         trips:
@@ -29,7 +29,13 @@ components:
           type: integer
           format: int64
         driver_share_minor:
-          description: The driver's part of the fares.
+          description: The driver's part of the fares, credited to the balance.
+          type: integer
+          format: int64
+        held_minor:
+          description: >-
+            The driver's part of cash trips the driver reported not paid, held while support checks the case; it
+            reaches the balance (adjustments) only when support decides so.
           type: integer
           format: int64
         cash_minor:

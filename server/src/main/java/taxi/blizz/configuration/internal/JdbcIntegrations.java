@@ -373,12 +373,19 @@ class JdbcIntegrations implements Integrations {
         return value;
     }
 
-    private static String fingerprint(Map<String, String> values) {
+    /**
+     * Keyed with the master key, so the receipt's fingerprint of a secret is no offline guessing aid. Without a
+     * master key no secret can be stored (the change is refused), and a plain SHA-256 of the addresses is enough.
+     */
+    String fingerprint(Map<String, String> values) {
+        StringBuilder text = new StringBuilder();
+        values.forEach((k, v) -> text.append(k).append('=').append(v == null ? "" : v).append('\n'));
+        byte[] bytes = text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (cipher != null) {
+            return "hmac:" + java.util.HexFormat.of().formatHex(cipher.fingerprint(bytes));
+        }
         try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            values.forEach((k, v) -> digest.update((k + "=" + (v == null ? "" : v) + "\n")
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-            return java.util.HexFormat.of().formatHex(digest.digest());
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }

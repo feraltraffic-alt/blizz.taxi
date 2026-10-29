@@ -15,7 +15,8 @@ class RoutingConfiguration {
     @Bean
     ConfiguredRouteEstimator configuredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
                                                       StraightLineRouteEstimator straightLine, JsonMapper json,
-                                                      taxi.blizz.platform.ProviderBreakers breakers) {
-        return new ConfiguredRouteEstimator(integrations, environment, straightLine, json, breakers);
+                                                      taxi.blizz.platform.ProviderBreakers breakers,
+                                                      taxi.blizz.platform.OutboundAddresses addresses) {
+        return new ConfiguredRouteEstimator(integrations, environment, straightLine, json, breakers, addresses);
     }
 }
