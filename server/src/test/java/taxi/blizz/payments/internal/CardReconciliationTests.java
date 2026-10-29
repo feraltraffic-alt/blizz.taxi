@@ -19,7 +19,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 import taxi.blizz.TestQuotes;
 import taxi.blizz.TestRides;
-import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.SessionService;
 import taxi.blizz.operations.CreateOrder;
@@ -34,8 +33,19 @@ import taxi.blizz.pricing.QuoteService;
 
 /** Deliberate statement errors against real holds, without changing money through reconciliation. */
 @SpringBootTest(properties = "blizz.payments.reconciliation.enabled=false")
-@Import(TestcontainersConfiguration.class)
+@Import(CardReconciliationTests.Database.class)
 class CardReconciliationTests {
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
+    static class Database {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.boot.testcontainers.service.connection.ServiceConnection
+        org.testcontainers.postgresql.PostgreSQLContainer reconciliationPostgres() {
+            return new org.testcontainers.postgresql.PostgreSQLContainer(
+                    org.testcontainers.utility.DockerImageName.parse("postgis/postgis:18-3.6")
+                            .asCompatibleSubstituteFor("postgres"));
+        }
+    }
+
     static final GeoPoint PICKUP = new GeoPoint(-39.5, -119.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, -119.45);
     @Autowired JdbcClient jdbc;
@@ -187,22 +197,23 @@ class CardReconciliationTests {
 
     @Test
     void gatewayTimeoutIsAFailedRunAndNextAttemptUsesTheSameIdentity() {
-        jdbc.sql("update payment_operation set created_at=now()-interval '1 day',updated_at=now()-interval '1 day' where id=:id")
-                .param("id",operation).update();
-        statement.put("createdDate",((Number)statement.get("createdDate")).longValue()-86400);
-        statement.put("processingDate",((Number)statement.get("processingDate")).longValue()-86400);
+        LocalDate completedDay=LocalDate.now(ZoneOffset.UTC).minusDays(2);
+        OffsetDateTime occurred=completedDay.atTime(12,0).atOffset(ZoneOffset.UTC);
+        jdbc.sql("update payment_operation set created_at=:at,updated_at=:at where id=:id")
+                .param("at",occurred).param("id",operation).update();
+        statement.put("createdDate",occurred.toEpochSecond());
+        statement.put("processingDate",occurred.toEpochSecond());
         override(List.of(statement));
         gateway.next("TIMEOUT");
         double failures=meters.get("blizz.payments.reconciliation.failures").counter().count();
-        LocalDate yesterday=LocalDate.now(ZoneOffset.UTC).minusDays(1);
-        UUID id=run(yesterday,false);
+        UUID id=run(completedDay,false);
         assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
                 .query(String.class).single()).isEqualTo("FAILED");
         assertThat(jdbc.sql("select failure_code from payment_reconciliation where id=:id").param("id",id)
                 .query(String.class).single()).isEqualTo("RECONCILIATION_PROVIDER_UNAVAILABLE");
         assertThat(meters.get("blizz.payments.reconciliation.failures").counter().count()).isEqualTo(failures+1);
         assertThat(meters.get("blizz.payments.reconciliation.failed").gauge().value()).isGreaterThanOrEqualTo(1);
-        assertThat(run(yesterday,false)).isEqualTo(id);
+        assertThat(run(completedDay,false)).isEqualTo(id);
         assertThat(jdbc.sql("select state from payment_reconciliation where id=:id").param("id",id)
                 .query(String.class).single()).isEqualTo("CLEAN");
     }
@@ -391,6 +402,18 @@ class CardReconciliationTests {
         assertThat(jdbc.sql("select failure_code from payment_reconciliation where id=:id").param("id",id)
                 .query(String.class).single()).isEqualTo("RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND");
         assertThat(moneySnapshot()).isEqualTo(before);
+    }
+
+    @Test
+    void missingAnchorOlderThanThirtyDaysFailsWithoutAnOutOfRangeProviderRead() {
+        jdbc.sql("update payment_operation set created_at=now()-interval '31 days' where id=:id")
+                .param("id",operation).update();override(List.of());
+        UUID id=run();
+        assertThat(jdbc.sql("select failure_code from payment_reconciliation where id=:id").param("id",id)
+                .query(String.class).single()).isEqualTo("RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
+        assertThat(gateway.requests().stream().filter(r->"TRANSACTION_LIST".equals(r.get("transactionType")))).hasSize(1);
+        assertThat(jdbc.sql("select count(*) from payment_reconciliation_item where run_id=:id").param("id",id)
+                .query(Long.class).single()).isZero();
     }
 
     private void drain() { while(relay.runOnce()>0) { /* actual module consumers */ } }

@@ -34,7 +34,7 @@ class CardReconciliation {
             "RECONCILIATION_INVALID_RESPONSE","RECONCILIATION_AMBIGUOUS_LOCAL_REFERENCE",
             "RECONCILIATION_CONFLICTING_BANK_EVIDENCE","RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND",
             "RECONCILIATION_TOO_MANY_WINDOWS","RECONCILIATION_UNOWNED_PENDING_TRANSACTION",
-            "RECONCILIATION_MERCHANT_UNAVAILABLE");
+            "RECONCILIATION_MERCHANT_UNAVAILABLE","RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
     private final Merchants merchants;
     private final Providers providers;
     private final ReconciliationStore store;
@@ -45,9 +45,9 @@ class CardReconciliation {
 
     CardReconciliation(Merchants merchants,Providers providers,ReconciliationStore store,ReconciliationLocals locals,
                        ReconciliationMetrics metrics,Clock clock,
-                       @Value("${blizz.payments.reconciliation.maximum-supplementary-windows:32}") int maximumWindows) {
+                       @Value("${blizz.payments.reconciliation.maximum-supplementary-windows:31}") int maximumWindows) {
         this.merchants=merchants;this.providers=providers;this.store=store;this.locals=locals;this.metrics=metrics;
-        this.clock=clock;this.maximumWindows=maximumWindows;
+        this.clock=clock;this.maximumWindows=Math.max(0,Math.min(31,maximumWindows));
     }
 
     Run run(UUID merchantId,LocalDate day,boolean allowPartial) {
@@ -78,6 +78,9 @@ class CardReconciliation {
             for (String reference:cohort) {
                 Local known=local.get(reference);
                 if (known!=null && (known.succeeded() || known.uncertain()) && !bank.containsKey(reference)) {
+                    if (known.createdAt().isBefore(observed.minusDays(30).toInstant())) {
+                        throw new IllegalStateException("RECONCILIATION_ANCHOR_OUTSIDE_LOOKBACK");
+                    }
                     LocalDate creationDay=known.createdAt().atOffset(ZoneOffset.UTC).toLocalDate();
                     if (!creationDay.equals(day)) missingDays.computeIfAbsent(creationDay,ignored->new LinkedHashSet<>()).add(reference);
                 }
@@ -86,6 +89,8 @@ class CardReconciliation {
             for (var window:missingDays.entrySet()) {
                 Instant from=window.getKey().atStartOfDay().toInstant(ZoneOffset.UTC).minusSeconds(7200);
                 Instant to=from.plusSeconds(100800);
+                if (from.isBefore(observed.minusDays(30).toInstant())) from=observed.minusDays(30).toInstant();
+                if (to.isAfter(observed.toInstant())) to=observed.toInstant();
                 for (ProviderTransaction row:provider.transactions(merchant,from,to)) {
                     // These are compatibility lookups, not permission to import every historical bank row.
                     if (window.getValue().contains(row.reference())) merge(bank,row);
