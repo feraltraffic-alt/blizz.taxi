@@ -14,7 +14,7 @@ class TrackGauges extends DatabaseGauges {
     TrackGauges(JdbcClient jdbc) {
         gauge("blizz.location.oldest_off_trip.seconds", "Age of the oldest GPS point outside a trip",
                 () -> jdbc.sql("""
-                                select coalesce(extract(epoch from now() - min(recorded_at)), 0)
+                                select coalesce(extract(epoch from now() - min(received_at)), 0)
                                 from track_point where order_id is null""").query(Double.class).single());
     }
 }

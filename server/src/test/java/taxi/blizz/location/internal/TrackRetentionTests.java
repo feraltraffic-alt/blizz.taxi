@@ -88,14 +88,20 @@ class TrackRetentionTests {
     }
 
     private UUID point(TestRides.Driver driver, OffsetDateTime at) {
+        return point(driver, at, at);
+    }
+
+    /** A point the phone dated {@code recorded} and the server received at {@code received}. */
+    private UUID point(TestRides.Driver driver, OffsetDateTime recorded, OffsetDateTime received) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into track_point (id, driver_id, device_session_id, sequence, recorded_at, received_at,
                                                  point, accuracy_m)
-                        values (:id, :driver, :device, :sequence, :at, :at, ST_SetSRID(ST_MakePoint(52.5, -39.5), 4326),
-                                5)""")
+                        values (:id, :driver, :device, :sequence, :recorded, :received,
+                                ST_SetSRID(ST_MakePoint(52.5, -39.5), 4326), 5)""")
                 .param("id", id).param("driver", driver.actor().id()).param("device", driver.device())
-                .param("sequence", Math.floorMod(id.getMostSignificantBits(), Long.MAX_VALUE)).param("at", at)
+                .param("sequence", Math.floorMod(id.getMostSignificantBits(), Long.MAX_VALUE))
+                .param("recorded", recorded).param("received", received)
                 .update();
         return id;
     }
@@ -170,6 +176,22 @@ class TrackRetentionTests {
         sweepAll();
         assertThat(exists(inSupportTrip)).isTrue();
         assertThat(exists(inFlaggedTrip)).isTrue();
+    }
+
+    /**
+     * #112: the age came from the phone's clock. A point dated 2099 was never deleted; a phone two days behind lost
+     * the points it had just sent. The server's receipt time decides now.
+     */
+    @Test
+    void theAgeOfAPointIsCountedFromWhenTheServerGotItNotFromThePhonesClock() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        UUID future = point(driver, OffsetDateTime.parse("2099-01-01T00:00:00Z"), now().minusDays(3));
+        UUID behind = point(driver, now().minusDays(2), now().minusMinutes(5));
+
+        sweepAll();
+
+        assertThat(exists(future)).as("dated 2099, received three days ago").isFalse();
+        assertThat(exists(behind)).as("dated two days ago by a slow clock, received just now").isTrue();
     }
 
     @Test
