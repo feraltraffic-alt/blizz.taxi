@@ -1749,6 +1749,127 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+  /api/admin/v1/payment-reconciliations:
+    get:
+      operationId: listPaymentReconciliations
+      summary: Daily card reconciliation runs
+      description: REQ-LED-07. Needs payments.retry and every city of the merchant; unmapped merchants require all-city scope. Failed attempts are visible as FAILED, never as clean zero differences. Completed daily snapshots are immutable.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: merchant_id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: cursor
+          in: query
+          schema: {type: string, maxLength: 200}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      responses:
+        "200":
+          description: Newest first, limited to merchants the staff member may access.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: {$ref: "#/components/schemas/PaymentReconciliationRun"}
+                  next_cursor: {type: [string, "null"]}
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+  /api/admin/v1/payment-reconciliations/{run_id}:
+    get:
+      operationId: getPaymentReconciliation
+      summary: A reconciliation run and its differences
+      description: Needs payments.retry and all merchant cities. Provider fields are a safe projection; raw customer data and arbitrary provider references are never returned. Fees are evidence, not compared or booked.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: run_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: after
+          in: query
+          schema: {type: string, format: uuid}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+      responses:
+        "200":
+          description: Items ordered by id, with a continuation id when another page exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, items]
+                properties:
+                  run: {$ref: "#/components/schemas/PaymentReconciliationRun"}
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/PaymentReconciliationItem"}
+                  next: {type: [string, "null"], format: uuid}
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+  /api/admin/v1/payment-reconciliations/items/{item_id}/resolve:
+    post:
+      operationId: resolvePaymentReconciliationItem
+      summary: Record the staff decision on a difference
+      description: Needs payments.retry and all merchant cities, checked again before command replay. Audited and idempotent. Records a decision only; it never applies a provider result or changes money. A later conflicting resolution is 409.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: item_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, decision, reason]
+              properties:
+                command_id: {$ref: "./common.yaml#/components/schemas/Uuid"}
+                expected_version: {type: integer, minimum: 0}
+                decision:
+                  type: string
+                  enum: [EXPLAINED, CORRECTED_BY_HAND, ESCALATED]
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        "200":
+          description: The immutable resolution, including on a same-command replay.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PaymentReconciliationItem"}
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/payment-merchants:
     get:
       operationId: listPaymentMerchants
@@ -5028,6 +5149,70 @@ components:
           type: string
           minLength: 1
           maxLength: 1000
+    PaymentReconciliationRun:
+      type: object
+      additionalProperties: false
+      required: [id, merchant_id, day, period_from, period_to, partial, state, created_at, updated_at, version]
+      properties:
+        id: {type: string, format: uuid}
+        merchant_id: {type: string, format: uuid}
+        day: {type: string, format: date}
+        period_from: {type: string, format: date-time}
+        period_to: {type: string, format: date-time}
+        observed_until: {type: [string, "null"], format: date-time}
+        partial:
+          type: boolean
+          description: Only a sandbox preview may observe an incomplete day; production runs wait until the end overlap has elapsed.
+        state:
+          type: string
+          enum: [RUNNING, CLEAN, OPEN, RESOLVED, FAILED]
+        local_count: {type: [integer, "null"], minimum: 0}
+        provider_count: {type: [integer, "null"], minimum: 0}
+        item_count: {type: [integer, "null"], minimum: 0}
+        open_count: {type: [integer, "null"], minimum: 0}
+        failure_code:
+          type: [string, "null"]
+          description: Fixed diagnostic code, never a raw provider error or response.
+          pattern: "^[A-Z][A-Z0-9_]{0,79}$"
+        attempts: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        finished_at: {type: [string, "null"], format: date-time}
+        version: {type: integer, minimum: 0}
+    PaymentReconciliationItem:
+      type: object
+      additionalProperties: false
+      required: [id, run_id, kind, reference_fingerprint, state, version]
+      properties:
+        id: {type: string, format: uuid}
+        run_id: {type: string, format: uuid}
+        kind:
+          type: string
+          enum: [MISSING_LOCALLY, MISSING_AT_PROVIDER, AMOUNT, CURRENCY, STATE, UNKNOWN_STILL]
+        reference_fingerprint:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Merchant-scoped safe identity of the provider reference; arbitrary external reference strings may contain personal data and are not persisted.
+        local_operation_id: {type: [string, "null"], format: uuid}
+        local_type: {type: [string, "null"], maxLength: 32}
+        local_state: {type: [string, "null"], maxLength: 32}
+        local_amount_minor: {type: [integer, "null"], minimum: 0}
+        local_currency: {type: [string, "null"], pattern: "^[A-Z]{3}$"}
+        provider_type: {type: [string, "null"], maxLength: 32}
+        provider_state: {type: [string, "null"], maxLength: 32}
+        provider_status: {type: [string, "null"], maxLength: 40}
+        provider_amount_minor: {type: [integer, "null"], minimum: 0}
+        provider_currency: {type: [string, "null"], pattern: "^[A-Z]{3}$"}
+        fee_minor:
+          type: [integer, "null"]
+          description: Provider evidence only, not compared or booked until accounting policy is decided.
+        provider_at: {type: [string, "null"], format: date-time}
+        state: {type: string, enum: [OPEN, RESOLVED]}
+        decision: {type: [string, "null"], enum: [EXPLAINED, CORRECTED_BY_HAND, ESCALATED, null]}
+        reason: {type: [string, "null"], maxLength: 500}
+        resolved_by: {type: [string, "null"], format: uuid}
+        resolved_at: {type: [string, "null"], format: date-time}
+        version: {type: integer, minimum: 0}
     PaymentOperation:
       type: object
       additionalProperties: false
