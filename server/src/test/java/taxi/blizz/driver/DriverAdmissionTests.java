@@ -454,6 +454,13 @@ class DriverAdmissionTests {
                 "Complaint under investigation");
         assertCode(() -> admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), suspended.version(), " "),
                 ErrorCode.VALIDATION_FAILED);
+        // Audit 29.10.2026: the insurance ended during the suspension; no reinstatement without valid documents.
+        jdbc.sql("update driver_document set valid_to = :d where driver_id = :id and type = 'INSURANCE'")
+                .param("d", java.time.LocalDate.now().minusDays(1)).param("id", driver.id()).update();
+        assertCode(() -> admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), suspended.version(),
+                "Complaint not confirmed"), ErrorCode.STATE_CONFLICT);
+        jdbc.sql("update driver_document set valid_to = :d where driver_id = :id and type = 'INSURANCE'")
+                .param("d", java.time.LocalDate.now().plusYears(1)).param("id", driver.id()).update();
         DriverProfile back = admission.reinstate(reviewer(), UUID.randomUUID(), driver.id(), suspended.version(),
                 "Complaint not confirmed");
         assertThat(back.reviewStatus()).isEqualTo(ReviewStatus.APPROVED);

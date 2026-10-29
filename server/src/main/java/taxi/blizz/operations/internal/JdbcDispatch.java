@@ -210,16 +210,20 @@ class JdbcDispatch implements Dispatch {
                     if (hadIt > 0) {
                         throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "This driver already gave up the order");
                     }
+                    // Within the radius of the ALL tab, as listed (audit 29.10.2026: a driver anywhere in the city
+                    // could claim any order through the API).
                     boolean matches = jdbc.sql("""
-                                    select count(*) from vehicle v, ride_order o
+                                    select count(*) from vehicle v, ride_order o, work_session ws
                                     where v.id = :vehicle and o.id = :order and o.vehicle_class = any(v.class_approvals)
-                                      and o.city_id = :city""")
+                                      and o.city_id = :city and ws.driver_id = :driver and ws.state = 'OPEN'
+                                      and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)""")
+                            .param("driver", driver.id()).param("radius", properties.broadcastRadiusMeters())
                             .param("vehicle", availability.vehicleId())
                             .param("order", orderId)
                             .param("city", availability.cityId())
                             .query(Integer.class).single() == 1;
                     if (!matches) {
-                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "Class or city does not match");
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "Class, city or distance does not match");
                     }
                     return commit(order, driver, availability.vehicleId(), "BROADCAST", null);
                 });

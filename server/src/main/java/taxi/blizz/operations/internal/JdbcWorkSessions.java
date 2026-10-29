@@ -378,7 +378,8 @@ class JdbcWorkSessions implements WorkSessions {
                 .query(String.class)
                 .optional()
                 .orElse("FREE");
-        // An open offer is not a commitment; the order core revokes it when the driver pauses.
+        // An open offer is not a commitment: it expires after its seconds, and accepting it is refused while the
+        // driver is paused (requireEligible).
         return !"FREE".equals(occupancy) && !"OFFERED".equals(occupancy);
     }
 

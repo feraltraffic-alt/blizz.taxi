@@ -40,7 +40,8 @@ class DriverPromotionTrips implements OutboxHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record TripCompleted(UUID orderId, UUID driverId, String paymentMethod, UUID cityId, OffsetDateTime acceptedAt) {
+    record TripCompleted(UUID orderId, UUID driverId, String paymentMethod, UUID cityId, OffsetDateTime acceptedAt,
+                         String currency) {
     }
 
     @Override
@@ -67,8 +68,11 @@ class DriverPromotionTrips implements OutboxHandler {
                          from driver_promotion where state = 'ACTIVE' and starts_at <= :at
                           and (ends_at is null or ends_at > :at)
                           and (city_id is null or city_id = :city)
-                          and (payment_method is null or payment_method = :payment)""")
-                .param("at", trip.acceptedAt()).param("city", trip.cityId()).param("payment", trip.paymentMethod())
+                          and (payment_method is null or payment_method = :payment)
+                          -- A reward is paid in the trip's money: a PLN promotion for every city does not count
+                          -- Ukrainian trips (audit 29.10.2026).
+                          and (cast(:currency as text) is null or currency = :currency)""")
+                .param("currency", trip.currency()).param("at", trip.acceptedAt()).param("city", trip.cityId()).param("payment", trip.paymentMethod())
                 .query((rs, i) -> JdbcDriverPromotions.promotion(rs)).list();
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         for (DriverPromotions.Promotion p : fitting) {

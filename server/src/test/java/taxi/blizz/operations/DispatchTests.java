@@ -282,6 +282,11 @@ class DispatchTests {
         OrderView order = order(client());
         assertThat(orders.get(order.id()).searchPhase()).isEqualTo("BROADCAST");
 
+        // Audit 29.10.2026: outside the ALL tab's radius (5 km) the order is neither listed nor claimable.
+        Driver far = driverAt(north(8000));
+        assertThat(dispatch.broadcast(far.actor())).isEmpty();
+        assertCode(() -> dispatch.claim(far.actor(), UUID.randomUUID(), order.id()), ErrorCode.DRIVER_NOT_ELIGIBLE);
+
         Driver driver = driverAt(north(1000));
         List<BroadcastOrderView> visible = dispatch.broadcast(driver.actor());
         assertThat(visible).extracting(BroadcastOrderView::orderId).containsExactly(order.id());

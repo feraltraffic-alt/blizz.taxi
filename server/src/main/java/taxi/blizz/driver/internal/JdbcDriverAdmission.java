@@ -377,6 +377,13 @@ class JdbcDriverAdmission implements DriverAdmission {
                     if (locked.status() != ReviewStatus.SUSPENDED) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a suspended driver can be reinstated");
                     }
+                    // A licence may have ended during the suspension; the expiry check skips suspended drivers
+                    // (audit 29.10.2026). Back to work only with valid documents, as on approval.
+                    List<String> missing = missingDocuments(driverId);
+                    if (!missing.isEmpty()) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "Documents are not valid: " + String.join(", ", missing));
+                    }
                     transition(driverId, ReviewStatus.SUSPENDED, ReviewStatus.APPROVED, reviewer, reason);
                     return profile(driverId);
                 });
