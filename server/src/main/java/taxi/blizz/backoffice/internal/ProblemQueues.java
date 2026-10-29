@@ -38,6 +38,10 @@ class ProblemQueues implements OutboxHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    record Chargeback(UUID chargebackId, UUID orderId, long amountMinor, String currency) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
     record CallerNotNotified(UUID orderId, String template, String outcome) {
     }
 
@@ -55,7 +59,8 @@ class ProblemQueues implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
-                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated" -> true;
+                 "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated",
+                 "CardChargebackRecorded" -> true;
             default -> false;
         };
     }
@@ -73,6 +78,15 @@ class ProblemQueues implements OutboxHandler {
             return;
         }
         if (problem(message)) {
+            return;
+        }
+        if ("CardChargebackRecorded".equals(message.type())) {
+            Chargeback c = json.readValue(message.payload(), Chargeback.class);
+            // REQ-PAY-23: the evidence goes to the provider's risk managers, the outcome is recorded when they answer.
+            cases.openFromSystem("chargeback:" + c.chargebackId(), cityOf(c.orderId()), Category.PAYMENT, c.orderId(),
+                    "Chargeback of a card payment", Priority.HIGH,
+                    "The bank took back " + c.amountMinor() + " " + c.currency() + " minor units of the order's card"
+                            + " payment. Send the order's evidence to the payment provider, then record WON or LOST.");
             return;
         }
         if ("CashDisputeOverdue".equals(message.type())) {
