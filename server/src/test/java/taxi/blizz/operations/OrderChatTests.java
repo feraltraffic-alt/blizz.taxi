@@ -139,7 +139,7 @@ class OrderChatTests {
     }
 
     @Test
-    void theChatStaysOpenInTheOrderHistory() {
+    void theChatStaysOpenForADayAfterTheOrderAndReadableForGood() {
         Ride done = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
         say(done.payer(), done, "Stop at the shop please");
         rides.complete(done, true);
@@ -154,6 +154,17 @@ class OrderChatTests {
                 orders.get(cancelled.order().id()).version(), "CHANGED_MIND");
         assertThat(say(cancelled.payer(), cancelled, "Sorry, plans changed").senderRole()).isEqualTo("RIDER");
         assertThat(chat.messages(cancelled.driver().actor(), cancelled.order().id(), 0, 50)).hasSize(1);
+
+        // Owner decision 29.10.2026 (REQ-SEC-04): 24 hours after the trip the chat is read-only for both sides.
+        jdbc.sql("update assignment set closed_at = now() - interval '24 hours 1 minute' where order_id = :o")
+                .param("o", done.order().id()).update();
+        assertCode(() -> say(done.driver().actor(), done, "Hi again"), ErrorCode.STATE_CONFLICT);
+        assertCode(() -> say(done.payer(), done, "Hi again"), ErrorCode.STATE_CONFLICT);
+        assertThat(chat.messages(done.payer(), done.order().id(), 0, 50)).as("still readable").hasSize(3);
+        assertThat(chat.messages(done.driver().actor(), done.order().id(), 0, 50)).hasSize(3);
+        jdbc.sql("update assignment set closed_at = now() - interval '23 hours' where order_id = :o")
+                .param("o", done.order().id()).update();
+        say(done.payer(), done, "Within the day: still open");
     }
 
     @Test

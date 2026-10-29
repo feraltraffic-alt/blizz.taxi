@@ -787,8 +787,9 @@ paths:
       operationId: postRiderMessage
       summary: Write to the driver
       description: |
-        Open once a driver is assigned and stays open in the order history (completed, cancelled), so the
-        rider can write from the order details; with no driver ever assigned → 409 STATE_CONFLICT. A driver
+        Open once a driver is assigned and for 24 hours after the trip or the cancellation, so the rider can
+        write from the order details; later it is read-only and contact goes through support (owner decision
+        29.10.2026) → 409 STATE_CONFLICT; with no driver ever assigned → 409 STATE_CONFLICT. A driver
         who withdrew or was taken off the order cannot write → 404.
         1 to 1000 characters. A repeat of the same command_id returns the same message. The conversation is
         kept for the order details in the admin panel.
