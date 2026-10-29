@@ -60,7 +60,7 @@ class ProblemQueues implements OutboxHandler {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
                  "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated",
-                 "CardChargebackRecorded" -> true;
+                 "CardChargebackRecorded", "PaymentReconciliationDifferencesFound" -> true;
             default -> false;
         };
     }
@@ -70,6 +70,13 @@ class ProblemQueues implements OutboxHandler {
 
     @Override
     public void handle(OutboxMessage message) {
+        if ("PaymentReconciliationDifferencesFound".equals(message.type())) {
+            ReconciliationProblem p=json.readValue(message.payload(),ReconciliationProblem.class);
+            cases.openFromSystem("reconciliation:"+p.runId(),p.cityId(),Category.PAYMENT,null,
+                    "Card reconciliation needs a decision",Priority.HIGH,
+                    "Review the open differences in payment reconciliation "+p.runId()+". No money was changed.");
+            return;
+        }
         if ("InvariantViolated".equals(message.type())) {
             Invariant v = json.readValue(message.payload(), Invariant.class);
             cases.openFromSystem("invariant:" + v.check() + ":" + v.objectId(), null, Category.OTHER,
@@ -184,4 +191,6 @@ class ProblemQueues implements OutboxHandler {
     private UUID cityOf(UUID orderId) {
         return orders.get(orderId).cityId();
     }
+    private record ReconciliationProblem(UUID runId,UUID merchantId,UUID cityId,int openItemCount,java.util.List<String> kinds) { }
+
 }

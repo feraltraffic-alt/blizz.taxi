@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/payment-reconciliation-differences-found.v1.schema.json",
+  "title": "PaymentReconciliationDifferencesFound v1 payload",
+  "description": "First completed snapshot with open differences. Creates one PAYMENT/HIGH case for reconciliation:<run_id>. No money or provider result is applied.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "merchant_id", "open_item_count", "kinds"],
+  "properties": {
+    "run_id": {"type": "string", "format": "uuid"},
+    "merchant_id": {"type": "string", "format": "uuid"},
+    "city_id": {"type": "string", "format": "uuid"},
+    "open_item_count": {"type": "integer", "minimum": 1},
+    "kinds": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "enum": ["MISSING_LOCALLY", "MISSING_AT_PROVIDER", "AMOUNT", "CURRENCY", "STATE", "UNKNOWN_STILL", "NOT_CHECKED"]}
+    }
+  },
+  "examples": [{"run_id": "7b000000-0000-4000-8000-000000000100", "merchant_id": "7b000000-0000-4000-8000-000000000101", "open_item_count": 1, "kinds": ["AMOUNT"]}]
+}

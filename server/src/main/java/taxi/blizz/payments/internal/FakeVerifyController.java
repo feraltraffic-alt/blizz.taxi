@@ -71,6 +71,7 @@ class FakeVerifyController {
         }
         notification.put("merchantSignature", WayForPayProvider.sign(merchant, account, reference, "0",
                 form.getFirst("currency"), "", pan, status, reasonCode));
+        gateway.record(account, reference, status, "0", form.getFirst("currency"));
         notifications.receive(merchant.id(), notification);
         String returnUrl = form.getFirst("returnUrl");
         return returnUrl == null ? ResponseEntity.ok().build()
@@ -103,7 +104,7 @@ class FakeVerifyController {
         String status = decline ? "Declined" : "Approved";
         String reasonCode = decline ? "1105" : "1100";
         String pan = "41****" + String.format("%04d", Math.floorMod(reference.hashCode(), 10000));
-        gateway.record(reference, status);
+        gateway.record(account, reference, status, amount, currency);
         if (!form.containsKey("fake_lost_notification")) {
             Map<String, Object> notification = new LinkedHashMap<>();
             notification.put("merchantAccount", account);

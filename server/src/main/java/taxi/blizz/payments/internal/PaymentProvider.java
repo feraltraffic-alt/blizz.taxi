@@ -64,6 +64,14 @@ interface PaymentProvider {
     /** Releases a hold or returns money taken under {@code reference}. */
     Result refund(Merchant merchant, String reference, long amountMinor, String comment);
 
+    /** Accounting-only bank projection; no customer fields or raw response are retained. */
+    record ProviderTransaction(String reference, String type, String status, long amountMinor, String currency,
+                               Long feeMinor, java.time.Instant createdAt, java.time.Instant processedAt) {
+    }
+
+    /** A failed or unclassifiable statement throws a safe fixed-code exception; it is never an empty statement. */
+    java.util.List<ProviderTransaction> transactions(Merchant merchant, java.time.Instant from, java.time.Instant to);
+
     Result checkStatus(Merchant merchant, String reference);
 
     /** Empty when the signature or the merchant does not match: the notification is not trusted (REQ-PAY-11). */

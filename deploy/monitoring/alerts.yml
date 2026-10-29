@@ -144,6 +144,30 @@ groups:
           summary: "GPS points outside trips are kept longer than their retention: the clean-up stopped"
           runbook: docs/runbooks/orders-and-gps.md
 
+      - alert: PaymentReconciliationMissing
+        expr: max(blizz_payments_reconciliation_oldest_success_age_seconds) > 26 * 3600
+        for: 1m
+        labels: {severity: critical, owner: payments-oncall}
+        annotations:
+          summary: "A merchant has no successful daily card reconciliation for 26 hours"
+          runbook: docs/runbooks/payment-reconciliation.md
+
+      - alert: PaymentReconciliationFailed
+        expr: max(blizz_payments_reconciliation_failed) > 0
+        for: 20m
+        labels: {severity: warning, owner: payments-oncall}
+        annotations:
+          summary: "A card statement could not be reconciled; FAILED does not mean zero differences"
+          runbook: docs/runbooks/payment-reconciliation.md
+
+      - alert: PaymentReconciliationMetricsMissing
+        expr: absent(blizz_payments_reconciliation_oldest_success_age_seconds) or max(blizz_payments_reconciliation_oldest_success_age_seconds) != max(blizz_payments_reconciliation_oldest_success_age_seconds)
+        for: 10m
+        labels: {severity: warning, owner: payments-oncall}
+        annotations:
+          summary: "Card reconciliation freshness cannot be measured"
+          runbook: docs/runbooks/payment-reconciliation.md
+
       - alert: ProviderBreakerOpen
         expr: max by (provider) (blizz_provider_breaker_state) == 2
         for: 5m

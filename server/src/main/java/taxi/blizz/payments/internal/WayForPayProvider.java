@@ -213,6 +213,93 @@ class WayForPayProvider implements PaymentProvider {
         return call(merchant, body, Kind.STATUS);
     }
 
+    /** Official TRANSACTION_LIST: https://wiki.wayforpay.com/en/view/1736786 (Unix seconds, UTC). */
+    @Override
+    public List<ProviderTransaction> transactions(Merchant merchant, java.time.Instant from, java.time.Instant to) {
+        if (from == null || to == null || !from.isBefore(to)) {
+            throw new IllegalArgumentException("Invalid reconciliation window");
+        }
+        long begin = from.getEpochSecond();
+        long end = to.getEpochSecond();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("transactionType", "TRANSACTION_LIST");
+        body.put("merchantAccount", merchant.account());
+        body.put("apiVersion", 1);
+        body.put("dateBegin", begin);
+        body.put("dateEnd", end);
+        body.put("merchantSignature", sign(merchant, merchant.account(), Long.toString(begin), Long.toString(end)));
+        Map<String, Object> response;
+        try {
+            response = transport.post(API, body);
+        } catch (Exception ignored) {
+            // Provider exceptions may embed the request, secret or customer fields. Do not log/chain them.
+            throw new IllegalStateException("RECONCILIATION_PROVIDER_UNAVAILABLE");
+        }
+        try {
+            if (response == null || (response.containsKey("merchantAccount")
+                    && !merchant.account().equals(text(response.get("merchantAccount"))))
+                    || !"1100".equals(text(response.get("reasonCode")))
+                    || !(response.get("transactionList") instanceof List<?> rows)) {
+                throw new IllegalArgumentException();
+            }
+            List<ProviderTransaction> result = new java.util.ArrayList<>();
+            for (Object value : rows) {
+                if (!(value instanceof Map<?, ?> row)) {
+                    throw new IllegalArgumentException();
+                }
+                String reference = statementText(row.get("orderReference"));
+                String type = statementText(row.get("transactionType")).toUpperCase(Locale.ROOT);
+                String status = statementText(row.get("transactionStatus"));
+                String currency = statementText(row.get("currency"));
+                if (reference.length() > 1000 || !java.util.Set.of("PURCHASE", "CHARGE", "SETTLE", "REFUND", "VERIFY")
+                        .contains(type) || !currency.matches("[A-Z]{3}")
+                        || !java.util.Set.of("approved", "waitingauthcomplete", "refunded", "voided", "declined",
+                            "expired", "inprocessing", "pending", "created", "refundinprocessing")
+                        .contains(status.toLowerCase(Locale.ROOT))) {
+                    throw new IllegalArgumentException();
+                }
+                // In the currency's own minor units: two decimals are not true of every currency.
+                int digits = java.util.Currency.getInstance(currency).getDefaultFractionDigits();
+                if (digits < 0) {
+                    throw new IllegalArgumentException();
+                }
+                long amount = new BigDecimal(statementText(row.get("amount"))).movePointRight(digits).longValueExact();
+                if (amount < 0) {
+                    throw new IllegalArgumentException();
+                }
+                Long fee = row.get("fee") == null ? null
+                        : new BigDecimal(statementText(row.get("fee"))).movePointRight(digits).longValueExact();
+                result.add(new ProviderTransaction(reference, type, status, amount, currency, fee,
+                        statementTime(row.get("createdDate"), false), statementTime(row.get("processingDate"), true)));
+            }
+            return List.copyOf(result);
+        } catch (RuntimeException ignored) {
+            throw new IllegalStateException("RECONCILIATION_INVALID_RESPONSE");
+        }
+    }
+
+    private static String statementText(Object value) {
+        String result = text(value);
+        if (result == null || result.isBlank()) {
+            throw new IllegalArgumentException();
+        }
+        return result;
+    }
+
+    private static java.time.Instant statementTime(Object value, boolean optional) {
+        if (value == null && optional) {
+            return null;
+        }
+        long seconds = new BigDecimal(statementText(value)).longValueExact();
+        if (seconds == 0 && optional) {
+            return null;
+        }
+        if (seconds <= 0 || seconds > 253402300799L) { // Unix seconds, not milliseconds; PG/JSON year <= 9999.
+            throw new IllegalArgumentException();
+        }
+        return java.time.Instant.ofEpochSecond(seconds);
+    }
+
     enum Kind {
         AUTH, SALE, REFUND, STATUS
     }
