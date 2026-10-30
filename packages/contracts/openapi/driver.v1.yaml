@@ -5,6 +5,10 @@ info:
   description: |
     API for the driver app (/api/driver/v1, REQ-API-02). Every operation needs an access token issued
     for the `driver` audience; tokens of other audiences are rejected (REQ-USR-08).
+    A **blocked** driver (account_state BLOCKED, REQ-DS-01, issue #141) keeps a limited session: signing in and
+    refreshing work, every GET works, and so do the current trip's commands (arrive, start, complete, cancel,
+    no-show, messages), the shift's heartbeat, pause, close and handover, location batches, support cases and
+    uploads, and push devices. Any other command answers 403 ACCOUNT_BLOCKED; no new order is offered.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -2227,10 +2231,17 @@ components:
     DriverProfile:
       type: object
       additionalProperties: false
-      required: [id, review_status, has_payment_terminal, admission_city_ids, version, vehicles, documents]
+      required: [id, account_state, review_status, has_payment_terminal, admission_city_ids, version, vehicles,
+                 documents]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: >-
+            ACTIVE; BLOCKED — a limited session only (issue #141): GET, the current trip, support; DELETION_PENDING;
+            ANONYMIZED.
+          type: string
+          enum: [ACTIVE, BLOCKED, DELETION_PENDING, ANONYMIZED]
         admission_city_ids:
           description: >-
             The cities the driver is admitted in (REQ-DSP-01, issue #141), set by staff. The driver goes online, is
