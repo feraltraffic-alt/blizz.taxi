@@ -1,0 +1,304 @@
+package taxi.blizz.backoffice.internal;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
+import taxi.blizz.TestRides;
+import taxi.blizz.backoffice.SupportCases;
+import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.identity.SessionService;
+import taxi.blizz.operations.Dispatch;
+import taxi.blizz.operations.Orders;
+import taxi.blizz.operations.Trips;
+import taxi.blizz.operations.WorkSessions;
+import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.SubjectType;
+import taxi.blizz.pricing.QuoteService;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/** Real 200k-row plans; an isolated database keeps this fixture out of functional tests. */
+@SpringBootTest
+@Import(AuditHotPathVolumeTests.Database.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class AuditHotPathVolumeTests {
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
+    static class Database {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.boot.testcontainers.service.connection.ServiceConnection
+        org.testcontainers.postgresql.PostgreSQLContainer auditHotPathPostgres() {
+            return new org.testcontainers.postgresql.PostgreSQLContainer(
+                    org.testcontainers.utility.DockerImageName.parse("postgis/postgis:18-3.6")
+                            .asCompatibleSubstituteFor("postgres"));
+        }
+    }
+    @Autowired JdbcClient jdbc;
+    @Autowired TransactionTemplate tx;
+    @Autowired JsonMapper json;
+    @Autowired Orders orders;
+    @Autowired Dispatch dispatch;
+    @Autowired Trips trips;
+    @Autowired WorkSessions sessions;
+    @Autowired SessionService auth;
+    @Autowired QuoteService quotes;
+    @Autowired SupportCases cases;
+    @Autowired taxi.blizz.audit.AuditLog audit;
+    @Autowired taxi.blizz.location.TrackService tracks;
+    UUID order,driver,vehicle,device,city;
+    Actor staff;
+
+    // Verbatim pre-#111 predicates, retained only to demonstrate the old generic prepared plan.
+    private static final String OLD_QUEUE_SQL = """
+        select id,number,city_id,category,order_id,requester_type,requester_id,subject,priority,state,
+               assigned_staff_id,resolution,version,created_at,updated_at,respond_by from support_case
+        where city_id is not distinct from :city
+          and (cast(:state as text) is null or state=:state)
+          and (cast(:priority as text) is null or priority=:priority)
+          and (cast(:category as text) is null or category=:category)
+          and (cast(:assignee as uuid) is null or assigned_staff_id=:assignee)
+          and (not :unassigned or assigned_staff_id is null)
+          and (cast(:before as timestamptz) is null or created_at<:before)
+          and (not :overdue or (state='OPEN' and respond_by<:now))
+        order by case when :overdue then respond_by end,
+                 case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
+                 created_at desc,id desc limit :limit
+        """;
+
+    @BeforeAll
+    void seedTwoHundredThousandRowsPerHotTable() {
+        TestRides rides=new TestRides(jdbc,orders,dispatch,trips,sessions,auth,quotes);
+        // This longitude is distinct from all shared TestRides cities; this database is isolated as well.
+        city=rides.city("audit-hot-paths","UAH",-177);
+        GeoPoint pickup=new GeoPoint(-39.5,-176.5),dropoff=new GeoPoint(-39.45,-176.45);
+        var online=rides.driverNear(pickup);
+        var ride=rides.started(city,online,pickup,dropoff);rides.complete(ride,true);
+        order=ride.order().id();driver=online.actor().id();vehicle=online.vehicle();device=online.device();
+        UUID id=UUID.randomUUID();staff=new Actor(SubjectType.STAFF,id);
+        jdbc.sql("""
+                insert into staff_user(id,login,name,role,permissions,all_cities,state,created_at,updated_at)
+                values (:id,:login,'Volume support','ADMIN',ARRAY['support.manage'],true,'ACTIVE',now(),now())""")
+                .param("id",id).param("login","volume-support-"+id).update();
+        jdbc.sql("""
+                insert into assignment(id,order_id,driver_id,vehicle_id,source,state,created_at,closed_at)
+                select md5('audit-assignment-'||g)::uuid,:order,:driver,:vehicle,'OFFER','COMPLETED',
+                    now()-g*interval '1 second',now() from generate_series(1,200000) g""")
+                .param("order",order).param("driver",driver).param("vehicle",vehicle).update();
+        jdbc.sql("""
+                insert into dispatch_attempt(id,order_id,generation,phase,total_deadline,created_at)
+                select md5('audit-attempt-'||g)::uuid,:order,g+100,'STOPPED',now(),now()
+                from generate_series(1,200000) g""").param("order",order).update();
+        jdbc.sql("""
+                insert into offer(id,order_id,attempt_id,driver_id,state,expires_at,created_at)
+                select md5('audit-offer-'||g)::uuid,:order,md5('audit-attempt-'||g)::uuid,:driver,
+                    'EXPIRED',now(),now() from generate_series(1,200000) g""")
+                .param("order",order).param("driver",driver).update();
+        jdbc.sql("""
+                insert into track_point(id,driver_id,device_session_id,sequence,recorded_at,received_at,point,accuracy_m)
+                select md5('audit-track-'||g)::uuid,:driver,:device,g,now()-g*interval '1 second',now(),
+                    ST_SetSRID(ST_MakePoint(20,50),4326),5 from generate_series(1,200000) g""")
+                .param("driver",driver).param("device",device).update();
+        jdbc.sql("""
+                insert into support_case(id,city_id,category,order_id,requester_type,subject,priority,state,
+                    assigned_staff_id,resolution,created_at,updated_at,respond_by)
+                select md5('audit-case-'||g)::uuid,case when g%2=0 then :city else null end,
+                    case when g%5=0 then 'PAYMENT' else 'OTHER' end,
+                    case when g=1 then :order else md5('unrelated-order-'||g)::uuid end,'SYSTEM','Volume case',
+                    case g%4 when 0 then 'URGENT' when 1 then 'HIGH' when 2 then 'NORMAL' else 'LOW' end,case when g%11=0 then 'RESOLVED' else 'OPEN' end,
+                    case when g%7=0 then :staff else null end,case when g%11=0 then 'Volume resolution' else null end,
+                    now()-g*interval '1 second',now(),
+                    case when g<=100000 then now()-interval '1 day' else now()+interval '1 day' end
+                from generate_series(1,200000) g""")
+                .param("city",city).param("order",order).param("staff",staff.id()).update();
+        UUID otherCity=rides.city("audit-other-city","UAH",-175);
+        jdbc.sql("""
+                insert into support_case(id,city_id,category,requester_type,subject,priority,state,
+                    created_at,updated_at,respond_by)
+                select md5('audit-other-case-'||g)::uuid,:city,'OTHER','SYSTEM','Other city','URGENT','OPEN',
+                    now()-g*interval '1 second',now(),now()-interval '1 day' from generate_series(1,200) g
+                """).param("city",otherCity).update();
+        jdbc.sql("""
+                insert into otp_delivery(id,phone,audience,channel,provider,state,attempted_at)
+                select md5('audit-otp-'||g)::uuid,'+'||(380200000000+g)::text,'CLIENT','SMS','FAKE','SENT',
+                    now()-interval '30 days'+g*interval '1 second' from generate_series(1,200000) g""").update();
+        jdbc.sql("""
+                insert into audit_log(id,occurred_at,actor_type,actor_id,action,resource_type,correlation_id)
+                select md5('audit-log-'||g)::uuid,now()-g*interval '1 second','STAFF',
+                    md5('audit-staff-'||g)::uuid,'volume','volume',gen_random_uuid()
+                from generate_series(1,200000) g""").update();
+        for(String table:List.of("assignment","offer","track_point","support_case","otp_delivery","audit_log")) {
+            jdbc.sql("analyze "+table).update();
+            assertThat(jdbc.sql("select count(*) from "+table).query(Long.class).single()).isGreaterThanOrEqualTo(200000);
+        }
+    }
+
+    record Query(String name,String index,String sql,Map<String,?> params,boolean generic) {
+        Query(String name,String index,String sql,Map<String,?> params) {this(name,index,sql,params,false);}
+    }
+
+    @SuppressWarnings("unchecked")
+    List<Query> hotQueries() {
+        Object auditTarget=AopTestUtils.getUltimateTargetObject(audit);
+        Object staffQuery=ReflectionTestUtils.invokeMethod(auditTarget,"querySql",
+                new taxi.blizz.audit.AuditLog.Query("STAFF",null,null,null,null,null,null,null,null,100));
+        String staffSql=ReflectionTestUtils.invokeMethod(staffQuery,"sql");
+        Map<String,?> staffParams=ReflectionTestUtils.invokeMethod(staffQuery,"params");
+        List<taxi.blizz.location.TrackService.InputPoint> input=new java.util.ArrayList<>();
+        OffsetDateTime at=OffsetDateTime.now();
+        for(int i=0;i<100;i++) input.add(new taxi.blizz.location.TrackService.InputPoint(200001+i,50,20,5,null,null,
+                at.minusSeconds(i*1800L)));
+        Object trackTarget=AopTestUtils.getUltimateTargetObject(tracks);
+        Object trackQuery=ReflectionTestUtils.invokeMethod(trackTarget,"previousQuery",device,input);
+        String trackSql=ReflectionTestUtils.invokeMethod(trackQuery,"sql");
+        Map<String,?> trackParams=ReflectionTestUtils.invokeMethod(trackQuery,"params");
+        return List.of(
+            new Query("assignment/order (OrderView, chat, journal)","assignment_order_created_idx",
+                "select id,driver_id from assignment where order_id=:order order by created_at desc limit 1",Map.of("order",order)),
+            new Query("assignment/driver history","assignment_driver_created_idx",
+                "select id,order_id from assignment where driver_id=:driver order by created_at desc limit 50",Map.of("driver",driver)),
+            new Query("offer candidate exclusion","offer_order_driver_idx",
+                "select exists(select 1 from offer where order_id=:order and driver_id=:driver)",Map.of("order",order,"driver",UUID.randomUUID())),
+            new Query("track predecessor batch of 100","track_point_session_recorded_idx",trackSql,trackParams),
+            new Query("support order hold/evidence","support_case_order_idx",
+                "select exists(select 1 from support_case where order_id=:order and state not in ('RESOLVED','CLOSED'))",
+                Map.of("order",UUID.randomUUID())),
+            new Query("OTP delivery gauge","otp_delivery_attempted_idx",
+                "select channel,state,count(*) from otp_delivery where attempted_at>=:from group by channel,state",
+                Map.of("from",OffsetDateTime.now().minusHours(1))),
+            new Query("staff changes log","audit_log_staff_occurred_idx",
+                staffSql,staffParams,true));
+    }
+
+    JsonNode explain(String label,String sql,Map<String,?> params) {
+        String text=jdbc.sql("explain (analyze,buffers,format json) "+sql).params(params).query(String.class).single();
+        System.out.println("AUDIT PLAN "+label+"\n"+text);
+        return json.readTree(text).get(0);
+    }
+
+    JsonNode genericPlan(String label,String sql,Map<String,?> params) {
+        return tx.execute(status->{
+            var placeholders=java.util.regex.Pattern.compile("(?<!:):([A-Za-z][A-Za-z0-9_]*)").matcher(sql);
+            StringBuffer prepared=new StringBuffer();List<Object> values=new java.util.ArrayList<>();
+            while(placeholders.find()) {
+                values.add(params.get(placeholders.group(1)));
+                placeholders.appendReplacement(prepared,java.util.regex.Matcher.quoteReplacement("$"+values.size()));
+            }
+            placeholders.appendTail(prepared);
+            jdbc.sql("set local plan_cache_mode=force_generic_plan").update();
+            jdbc.sql("prepare audit_queue_plan as "+prepared).update();
+            String arguments=values.stream().map(v->{
+                    if(v==null)return "null";
+                    if(v instanceof Number || v instanceof Boolean)return v.toString();
+                    if(v instanceof String || v instanceof UUID || v instanceof OffsetDateTime)
+                        return "'"+v.toString().replace("'","''")+"'";
+                    throw new IllegalArgumentException("Unsupported test argument "+v.getClass());
+                }).collect(java.util.stream.Collectors.joining(","));
+                JsonNode result=explain(label,"execute audit_queue_plan"+
+                        (values.isEmpty()?"":"("+arguments+")"),Map.of());
+                jdbc.sql("deallocate audit_queue_plan").update();
+            return result;
+        });
+    }
+
+    @ParameterizedTest(name="{0}")
+    @MethodSource("hotQueries")
+    void eachHotPathUsesItsIndexUnderFiftyMilliseconds(Query query) {
+        JsonNode before=tx.execute(s->{
+            jdbc.sql("drop index if exists "+query.index()).update();
+            JsonNode plan=query.generic()?genericPlan(query.name()+" BEFORE",query.sql(),query.params())
+                    :explain(query.name()+" BEFORE",query.sql(),query.params());
+            s.setRollbackOnly();return plan;
+        });
+        assertThat(before.get("Plan").toString()).as(query.name()+" baseline really scans history").contains("Seq Scan");
+        JsonNode after=query.generic()?genericPlan(query.name()+" AFTER",query.sql(),query.params())
+                :explain(query.name()+" AFTER",query.sql(),query.params());
+        assertThat(taxi.blizz.SqlPlans.indexNames(after.get("Plan"))).contains(query.index());
+        assertThat(after.get("Execution Time").asDouble()).as(query.name()+" PostgreSQL execution milliseconds").isLessThan(50);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void realQueueSqlUsesOnlySuppliedPredicatesAndPreservesFiltersAndPaging() {
+        List<SupportCases.QueueFilter> filters=List.of(
+            new SupportCases.QueueFilter(city,null,null,null,null,false,null,50),
+            new SupportCases.QueueFilter(null,null,null,null,null,false,null,50),
+            new SupportCases.QueueFilter(city,SupportCases.State.OPEN,SupportCases.Priority.URGENT,
+                SupportCases.Category.PAYMENT,staff.id(),false,null,50),
+            new SupportCases.QueueFilter(null,null,null,null,null,true,null,50,true),
+            new SupportCases.QueueFilter(city,null,null,null,null,true,null,50,true),
+            new SupportCases.QueueFilter(null,SupportCases.State.RESOLVED,SupportCases.Priority.HIGH,
+                SupportCases.Category.OTHER,null,false,null,50));
+        Object target=AopTestUtils.getUltimateTargetObject(cases);
+        for(var filter:filters) {
+            Object query=ReflectionTestUtils.invokeMethod(target,"queueQuery",filter);
+            String sql=ReflectionTestUtils.invokeMethod(query,"sql");
+            Map<String,?> params=ReflectionTestUtils.invokeMethod(query,"params");
+            assertThat(sql).doesNotContain("is not distinct from", "cast(:", "not :");
+            Map<String,Object> oldParams=new java.util.LinkedHashMap<>();
+            oldParams.put("city",filter.cityId());oldParams.put("state",filter.state()==null?null:filter.state().name());
+            oldParams.put("priority",filter.priority()==null?null:filter.priority().name());
+            oldParams.put("category",filter.category()==null?null:filter.category().name());
+            oldParams.put("assignee",filter.assignedStaffId());oldParams.put("unassigned",filter.unassignedOnly());
+            oldParams.put("before",filter.before());oldParams.put("overdue",filter.overdueOnly());
+            oldParams.put("now",OffsetDateTime.now());oldParams.put("limit",50);
+            JsonNode before=tx.execute(status->{
+                jdbc.sql("drop index if exists support_case_queue_order_idx").update();
+                jdbc.sql("drop index if exists support_case_overdue_order_idx").update();
+                jdbc.sql("drop index if exists support_case_queue_no_city_idx").update();
+                jdbc.sql("drop index if exists support_case_overdue_no_city_idx").update();
+                JsonNode old=genericPlan("support queue BEFORE "+filter,OLD_QUEUE_SQL,oldParams);
+                status.setRollbackOnly();return old;
+            });
+            assertThat(before.get("Plan").toString()).contains("Seq Scan");
+            JsonNode plan=genericPlan("support queue AFTER "+filter,sql,params);
+            var indexes=taxi.blizz.SqlPlans.indexNames(plan.get("Plan"));
+            assertThat(indexes).isNotEmpty();
+            if(filter.state()==null && !filter.overdueOnly())
+                assertThat(indexes).contains(filter.cityId()==null?"support_case_queue_no_city_idx":"support_case_queue_order_idx");
+            if(filter.overdueOnly())
+                assertThat(indexes).contains(filter.cityId()==null?"support_case_overdue_no_city_idx":"support_case_overdue_order_idx");
+            assertThat(plan.get("Execution Time").asDouble()).isLessThan(50);
+            var result=cases.queue(staff,filter);
+            assertThat(result).hasSize(50).allSatisfy(c->{
+                assertThat(c.cityId()).isEqualTo(filter.cityId());
+                if(filter.state()!=null)assertThat(c.state()).isEqualTo(filter.state());
+                if(filter.priority()!=null)assertThat(c.priority()).isEqualTo(filter.priority());
+                if(filter.category()!=null)assertThat(c.category()).isEqualTo(filter.category());
+                if(filter.assignedStaffId()!=null)assertThat(c.assignedStaffId()).isEqualTo(filter.assignedStaffId());
+                if(filter.unassignedOnly())assertThat(c.assignedStaffId()).isNull();
+                if(filter.overdueOnly()) {
+                    assertThat(c.respondBy()).isBefore(OffsetDateTime.now());
+                    assertThat(c.state()).isEqualTo(SupportCases.State.OPEN);
+                }
+            });
+            java.util.Comparator<SupportCases.Case> priority=java.util.Comparator
+                    .comparing(SupportCases.Case::priority).reversed();
+            java.util.Comparator<SupportCases.Case> ordering=filter.overdueOnly()
+                    ?java.util.Comparator.comparing(SupportCases.Case::respondBy).thenComparing(priority):priority;
+            ordering=ordering.thenComparing(SupportCases.Case::createdAt,java.util.Comparator.reverseOrder())
+                    .thenComparing(c->c.id().toString(),java.util.Comparator.reverseOrder());
+            assertThat(result).isSortedAccordingTo(ordering);
+            if(filter.state()==null && !filter.overdueOnly())
+                assertThat(result).extracting(SupportCases.Case::state)
+                        .contains(SupportCases.State.OPEN,SupportCases.State.RESOLVED);
+            var page=cases.queue(staff,new SupportCases.QueueFilter(filter.cityId(),filter.state(),filter.priority(),
+                filter.category(),filter.assignedStaffId(),filter.unassignedOnly(),result.getLast().createdAt(),50,
+                filter.overdueOnly()));
+            assertThat(page).noneMatch(c->result.stream().anyMatch(previous->previous.id().equals(c.id())));
+        }
+    }
+}

@@ -12,9 +12,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 class FinanceSchedule {
 
     private final JdbcCashDisputes disputes;
+    private final DriverDebtRefreshJob debtRefresh;
 
-    FinanceSchedule(JdbcCashDisputes disputes) {
+    FinanceSchedule(JdbcCashDisputes disputes, DriverDebtRefreshJob debtRefresh) {
         this.disputes = disputes;
+        this.debtRefresh = debtRefresh;
+    }
+
+    @Scheduled(fixedDelayString = "${blizz.finance.debt-refresh-interval:PT1S}")
+    void refreshDebtLimits() {
+        debtRefresh.runOnce();
     }
 
     /** Cash disputes past their deadline become urgent tasks (owner decision 28.10.2026). */
