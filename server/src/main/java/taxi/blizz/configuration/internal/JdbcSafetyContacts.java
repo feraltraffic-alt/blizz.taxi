@@ -116,9 +116,8 @@ class JdbcSafetyContacts implements SafetyContacts {
                                     .param("support", clean.supportPhone()).param("extra", extra)
                                     .param("by", actor.id()).param("reason", why).param("now", now).update();
                         } catch (DuplicateKeyException e) {
-                            // Someone else configured the city at the same moment.
-                            throw new DomainException(ErrorCode.VERSION_CONFLICT,
-                                    "The contacts changed: expected version 0");
+                            // Someone else configured the city at the same moment: version 1 is theirs.
+                            throw ConflictException.version(1, "The contacts changed: expected version 0");
                         }
                     } else {
                         jdbc.sql("""

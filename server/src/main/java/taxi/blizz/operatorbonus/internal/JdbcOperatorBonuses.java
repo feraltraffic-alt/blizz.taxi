@@ -140,7 +140,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                     .param("rules", json.writeValueAsString(settings.timeRules())).param("at", now)
                     .param("by", actor.id()).param("reason", reason).update();
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "Operator bonus settings changed");
+            // Version `version` was written by someone else at the same moment.
+            throw ConflictException.version(version, "Operator bonus settings changed");
         }
         audit.record(new AuditEntry(actor, "operator_bonus.settings.change", "operator_bonus_settings",
                 Long.toString(version), reason, current.settings(), settings));
