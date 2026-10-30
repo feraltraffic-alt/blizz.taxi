@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.backoffice.SupportCases;
 import taxi.blizz.backoffice.SupportCases.Case;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Support cases — rider, driver, admin and operator APIs. */
 @RestController
@@ -39,7 +43,12 @@ class SupportController {
     record Reply(@NotNull UUID commandId, @NotBlank String message, List<UUID> attachmentIds) {
     }
 
-    record Cases(List<Case> cases) {
+    /** A page of cases (REQ-API-09); {@code page} is new and optional for older clients. */
+    record Cases(List<Case> cases, Page.Info page) {
+
+        static Cases of(Page<Case> page) {
+            return new Cases(page.items(), page.page());
+        }
     }
 
     record Assign(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, UUID assigneeId, String reason) {
@@ -67,10 +76,12 @@ class SupportController {
     }
 
     @GetMapping({"/api/rider/v1/support/cases", "/api/driver/v1/support/cases"})
-    Cases mine(AccessClaims claims,
+    Cases mine(AccessClaims claims, @RequestParam(required = false) String cursor,
                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
-               @RequestParam(defaultValue = "20") int limit) {
-        return new Cases(cases.mine(claims.actor(), before, limit));
+               @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor after = PageCursor.read(SupportCases.MY_CASES, cursor, before);
+        return Cases.of(Page.of(cases.mine(claims.actor(), after, size + 1), size, SupportCases::minePosition));
     }
 
     @GetMapping({"/api/rider/v1/support/cases/{caseId}", "/api/driver/v1/support/cases/{caseId}"})
@@ -93,10 +104,25 @@ class SupportController {
                 @RequestParam(name = "assigned_staff_id", required = false) UUID assignee,
                 @RequestParam(defaultValue = "false") boolean unassigned,
                 @RequestParam(defaultValue = "false") boolean overdue,
+                @RequestParam(required = false) String cursor,
                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
-                @RequestParam(defaultValue = "50") int limit) {
-        return new Cases(cases.queue(claims.actor(), new SupportCases.QueueFilter(cityId, state, priority, category,
-                assignee, unassigned, before, limit, overdue)));
+                @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor after = queuePosition(cursor, before, overdue);
+        return Cases.of(Page.of(cases.queue(claims.actor(), new SupportCases.QueueFilter(cityId, state, priority,
+                category, assignee, unassigned, after, size + 1, overdue)), size, c -> SupportCases.position(c,
+                overdue)));
+    }
+
+    /**
+     * The queue is sorted by priority first, so a time alone cannot say where a page ends: the first version's
+     * {@code before} skipped and repeated cases across priorities. It is refused; no client used it.
+     */
+    private static PageCursor queuePosition(String cursor, OffsetDateTime before, boolean overdue) {
+        if (before != null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The case queue pages by cursor, not by before");
+        }
+        return PageCursor.decode(overdue ? SupportCases.OVERDUE_CASES : SupportCases.CASE_QUEUE, cursor);
     }
 
     @GetMapping({"/api/admin/v1/support/cases/{caseId}", "/api/operator/v1/support/cases/{caseId}"})

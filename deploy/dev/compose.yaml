@@ -3,7 +3,7 @@ name: blizz-taxi-dev
 
 services:
   postgres:
-    image: postgis/postgis:18-3.6
+    image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
     environment:
       POSTGRES_DB: blizz
       POSTGRES_USER: blizz
@@ -18,7 +18,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8
+    image: redis:8@sha256:4764ce37931aac77c0d033680b339b19b4a4a81772204d268947cb851212d0ac
     ports:
       - "6379:6379"
 
@@ -28,7 +28,7 @@ services:
   # The admin panel refuses private addresses unless the server lists them: run it with
   # BLIZZ_OUTBOUND_PRIVATE_HOSTS=localhost,asterisk (REQ-SEC-05).
   asterisk:
-    image: andrius/asterisk:latest
+    image: andrius/asterisk:latest@sha256:33f393eaa12001e5dcb1c8668d7fde6af13a2713e20901703346eeafcbf3c9d4
     ports:
       - "8088:8088"
     volumes:

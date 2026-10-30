@@ -13,7 +13,9 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
-    static final DockerImageName POSTGIS = DockerImageName.parse("postgis/postgis:18-3.6")
+    /** Pinned by digest like every image (REQ-ENG-11, scripts/pin-images.sh). */
+    static final DockerImageName POSTGIS = DockerImageName.parse(
+                    "postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4")
             .asCompatibleSubstituteFor("postgres");
 
     /**

@@ -3,20 +3,33 @@ package taxi.blizz.payments.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import jakarta.servlet.Filter;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 import taxi.blizz.TestQuotes;
 import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.SessionService;
+import taxi.blizz.identity.VerifiedSubject;
 import taxi.blizz.operations.CreateOrder;
 import taxi.blizz.operations.Dispatch;
 import taxi.blizz.operations.OrderView;
@@ -30,6 +43,7 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.internal.OutboxRelay;
 import taxi.blizz.pricing.QuoteService;
+import tools.jackson.databind.json.JsonMapper;
 
 /** The card hold before the search (ADR 0008, REQ-PAY-01/02/06, T-23). */
 @SpringBootTest
@@ -61,6 +75,10 @@ class CardHoldTests {
     OutboxRelay relay;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    WebApplicationContext context;
+    @Autowired
+    JsonMapper json;
 
     TestRides rides;
     UUID cityId;
@@ -151,6 +169,33 @@ class CardHoldTests {
         settlePayments();
         assertThat(intentState(order.id())).isEqualTo("VOIDED");
         assertThat(gateway.requests()).extracting(r -> r.get("transactionType")).containsExactly("CHARGE", "REFUND");
+    }
+
+    /**
+     * REQ-API-11: a card order is accepted, not done: the search waits for the bank's hold. The answer is 202 with
+     * the order and a Location to read it from; the order itself shows the payment state. A cash order stays 201.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCardOrderIsAcceptedWithWhereToFollowIt() throws Exception {
+        List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
+        AnnotationAwareOrderComparator.sort(filters);
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
+        Actor rider = riderWithCard();
+        String token = auth.open(new VerifiedSubject(rider, "ACTIVE", false), "card-202").accessToken();
+        UUID quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF, null).id();
+        MvcResult created = mvc.perform(MockMvcRequestBuilders.post("/api/rider/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("command_id", UUID.randomUUID(), "quote_id", quote,
+                                "vehicle_class", "STANDARD", "pickup", PICKUP, "dropoff", DROPOFF,
+                                "payment_method", "CARD"))))
+                .andReturn();
+        assertThat(created.getResponse().getStatus()).as(created.getResponse().getContentAsString()).isEqualTo(202);
+        Map<String, Object> order = json.readValue(created.getResponse().getContentAsString(), Map.class);
+        assertThat(order).containsEntry("status", "AWAITING_PAYMENT");
+        UUID orderId = UUID.fromString((String) order.get("id"));
+        assertThat(created.getResponse().getHeader(HttpHeaders.LOCATION)).isEqualTo("/api/rider/v1/orders/" + orderId);
+        orders.cancel(rider, UUID.randomUUID(), orderId, orders.get(orderId).version(), "CHANGED_MIND");
     }
 
     @Test

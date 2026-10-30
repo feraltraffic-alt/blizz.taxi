@@ -267,6 +267,7 @@ class CallCentreTests {
         final List<String> bodies = new CopyOnWriteArrayList<>();
         final Set<String> channels = java.util.concurrent.ConcurrentHashMap.newKeySet();
         final AtomicBoolean dropNextAnswer = new AtomicBoolean();
+        final AtomicBoolean failing = new AtomicBoolean();
 
         FakeAri() throws IOException {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -284,6 +285,11 @@ class CallCentreTests {
                 }
                 originates.add(query);
                 bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                if (failing.get()) {
+                    exchange.sendResponseHeaders(500, -1); // Asterisk is broken: nothing was placed
+                    exchange.close();
+                    return;
+                }
                 String id = java.net.URLDecoder.decode(query.replaceAll(".*channelId=([^&]*).*", "$1"),
                         StandardCharsets.UTF_8);
                 boolean fresh = channels.add(id);
@@ -313,10 +319,40 @@ class CallCentreTests {
     }
 
     private JdbcCalls liveCalls(String ariUrl) {
+        return liveCalls(ariUrl, taxi.blizz.platform.ProviderBreakers.none());
+    }
+
+    private JdbcCalls liveCalls(String ariUrl, taxi.blizz.platform.ProviderBreakers breakers) {
         Integrations integrations = new IntegrationsStub(Map.of(Integrations.OTP_ASTERISK_ARI_URL, ariUrl,
                 Integrations.OTP_ASTERISK_ARI_USER, "blizz", Integrations.OTP_ASTERISK_ARI_PASSWORD, "test-only"));
-        return new JdbcCalls(jdbc, tx, commands, staffAccess, outbox, live(), new AriChannels(integrations, json),
-                fakeChannels, clock);
+        return new JdbcCalls(jdbc, tx, commands, staffAccess, outbox, live(),
+                new AriChannels(integrations, json, breakers), fakeChannels, clock);
+    }
+
+    /**
+     * #145 E2: Asterisk answering 5xx opens its breaker; the next call from an order is refused at once with 503
+     * PROVIDER_UNAVAILABLE, and Asterisk is not asked again until the breaker lets a probe through.
+     */
+    @Test
+    void aBrokenAsteriskOpensItsBreakerAndCallsAreRefusedWithoutAskingIt() throws Exception {
+        ari = new FakeAri();
+        ari.failing.set(true);
+        JdbcCalls guarded = liveCalls(ari.url(), taxi.blizz.platform.ProviderBreakers.of(2, Duration.ofMinutes(1),
+                Clock.systemUTC()));
+        Actor anna = operatorWithExtension(freeExtension());
+        String callerPhone = newPhone("+38067");
+        OrderView order = phoneOrder(anna, callerPhone);
+        Calls.Outbound toCaller = new Calls.Outbound(order.id(), cityId, Calls.Party.CALLER,
+                PhoneNumber.parse(callerPhone));
+        for (int i = 0; i < 2; i++) {
+            assertCode(() -> guarded.dial(anna, UUID.randomUUID(), toCaller), ErrorCode.PROVIDER_UNAVAILABLE);
+        }
+        assertThat(ari.originates).as("two real failures").hasSize(2);
+        long started = System.nanoTime();
+        assertCode(() -> guarded.dial(anna, UUID.randomUUID(), toCaller), ErrorCode.PROVIDER_UNAVAILABLE);
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(2));
+        assertThat(ari.originates).as("the open breaker does not ask Asterisk").hasSize(2);
+        cancel(anna, order);
     }
 
     // ------------------------------------------------------------ extensions and who took a call

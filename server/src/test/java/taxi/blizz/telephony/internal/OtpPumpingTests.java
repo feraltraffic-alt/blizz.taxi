@@ -56,11 +56,17 @@ class OtpPumpingTests {
     }
 
     private static String ukrainian() {
-        return "+38066" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return "+38066" + randomDigits();
     }
 
     private static String polish() {
-        return "+4869" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return "+4869" + randomDigits();
+    }
+
+    /** Seven random digits, never ending in 0000: the fake sender fails such numbers on purpose (FakeOtpSender). */
+    private static String randomDigits() {
+        return String.format("%03d", Math.floorMod(UUID.randomUUID().hashCode(), 1_000))
+                + String.format("%04d", 1 + Math.floorMod(UUID.randomUUID().hashCode(), 9_999));
     }
 
     /** Moves the number's codes back past the resend delay, inside the hour. */

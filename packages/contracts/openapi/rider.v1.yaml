@@ -20,8 +20,8 @@ paths:
       operationId: openRiderLiveChannel
       summary: Live channel (WebSocket)
       description: >-
-        Upgrade to a WebSocket with the rider access token — the `Authorization: Bearer` header, or `access_token` in
-        the query where headers cannot be set. The server pushes a message for every change of an order the rider
+        Upgrade to a WebSocket with the rider access token — the `Authorization: Bearer` header, or from a browser the
+        subprotocols `blizz.v1, blizz.bearer.<token>` (never in the address, REQ-SEC-08). The server pushes a message for every change of an order the rider
         takes part in (section 20, REQ-NTF-04): `{"event_id", "type", "schema_version", "aggregate_type": "Order",
         "aggregate_id", "aggregate_version", "occurred_at", "correlation_id", "payload": {}}`. It carries no personal
         data: on a message the app reads the order over REST; duplicates and older versions are dropped, a gap in
@@ -30,9 +30,13 @@ paths:
         a fresh one. Commands stay REST (REQ-NTF-06).
       tags: [Live]
       parameters:
-        - name: access_token
-          in: query
+        - name: Sec-WebSocket-Protocol
+          in: header
           required: false
+          description: |
+            From a browser, which cannot set Authorization on a WebSocket: `blizz.v1, blizz.bearer.<access token>`.
+            The server answers `blizz.v1` only. A token in the address (`?access_token=`) is refused with 401: it
+            would reach proxy logs (REQ-SEC-08).
           schema:
             type: string
       responses:
@@ -304,31 +308,34 @@ paths:
     get:
       operationId: listRiderOrderHistory
       summary: Own order history
-      description: Own orders as payer, newest first. Use created_at of the last item as the next before cursor.
+      description: |
+        Own orders as payer, newest first (created_at, then id). Read the next page with page.next_cursor
+        (REQ-API-09).
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
-          description: Order history.
+          description: One page of the order history.
           content:
             application/json:
               schema:
-                type: array
-                maxItems: 50
-                items:
-                  $ref: "#/components/schemas/OrderHistoryItem"
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/OrderHistoryItem"
+                  page:
+                    $ref: "./common.yaml#/components/schemas/PageInfo"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
     post:
@@ -338,8 +345,8 @@ paths:
         Consumes the quote atomically with the order (REQ-PRC-06): it must belong to this rider and match
         the class and both points, otherwise 409 QUOTE_MISMATCH; used or expired → 409 QUOTE_EXPIRED, and the same
         when the quote has an "every N-th trip" promotion another open order of mine already took (get a new price). The
-        price is the quote's, never the client's. A repeat of the same command returns the same order. Card
-        payment is not available yet (S-09). At most active_orders_per_payer orders not in a final state, pre-orders
+        price is the quote's, never the client's. A repeat of the same command returns the same order. A card order
+        is 202: it waits in AWAITING_PAYMENT for the bank's hold before the search (ADR 0008, REQ-API-11). At most active_orders_per_payer orders not in a final state, pre-orders
         included, together with phone orders from my phone (ADR 0012) → 409 ACTIVE_ORDER_LIMIT. A rider whose
         account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE.
         The pickup city refuses new orders while paused (422 CITY_PAUSED), an order for now outside its working hours or
@@ -358,7 +365,21 @@ paths:
               $ref: "#/components/schemas/CreateOrder"
       responses:
         "201":
-          description: The order, already searching for a driver.
+          description: The order, created and searching for a driver (or scheduled); not paid by card.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "202":
+          description: |
+            A card order, accepted: AWAITING_PAYMENT with payment_state AUTH_PENDING until the bank answers. Follow
+            it at Location (GET /api/rider/v1/orders/{order_id}); 202 never means the bank has taken the money.
+          headers:
+            Location:
+              description: The order, which shows the payment state and then the search.
+              schema:
+                type: string
+                format: uri-reference
           content:
             application/json:
               schema:
@@ -832,17 +853,9 @@ paths:
       tags: [Support]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK

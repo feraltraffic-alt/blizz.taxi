@@ -45,7 +45,7 @@ expect 201
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
   \"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,\"pickup_label\":\"вул. Дмитрівська\",\"dropoff\":$DROPOFF,
   \"dropoff_label\":\"Нивки\",\"payment_method\":\"CARD\"}" | jq -r .id)
-expect 201
+expect 202
 wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state AUTHORIZED
 for _ in $(seq 1 10); do
     OFFER=$(api GET /api/driver/v1/offers "$ANDRII" | jq -r '.[0].id // empty')

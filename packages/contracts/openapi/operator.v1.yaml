@@ -424,7 +424,9 @@ paths:
     get:
       operationId: listOperatorOrders
       summary: Orders of one city
-      description: Newest first. The operator needs orders.view for the requested city.
+      description: |
+        Newest first (created_at, then id); read the next page with page.next_cursor (REQ-API-09). The operator
+        needs orders.view for the requested city.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -440,31 +442,26 @@ paths:
             type: string
             enum: [active, all]
             default: active
-        - name: before
-          in: query
-          required: false
-          description: Exclusive created_at cursor; returns older orders.
-          schema:
-            type: string
-            format: date-time
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
-          description: Orders of the requested city, newest first.
+          description: One page of the orders of the requested city.
           content:
             application/json:
               schema:
-                type: array
-                maxItems: 100
-                items:
-                  $ref: "#/components/schemas/OperatorOrder"
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/OperatorOrder"
+                  page:
+                    $ref: "./common.yaml#/components/schemas/PageInfo"
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
@@ -783,17 +780,8 @@ paths:
           schema:
             type: boolean
             default: false
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -1204,17 +1192,21 @@ paths:
       operationId: openOperatorLiveChannel
       summary: Live channel of the operator workstation (WebSocket)
       description: >-
-        Upgrade to a WebSocket with an operator access token — the `Authorization: Bearer` header, or `access_token`
-        in the query where a browser cannot set headers. The server pushes `{"type": "CallRinging", "call_id", …,
+        Upgrade to a WebSocket with an operator access token — the `Authorization: Bearer` header, or from the
+        browser the subprotocols `blizz.v1, blizz.bearer.<token>` (never in the address, REQ-SEC-08). The server pushes `{"type": "CallRinging", "call_id", …,
         "payload": CallRinging}` (calls.yaml) to the staff with calls.answer for the called number's city as a call
         rings (card-pop, REQ-OPS-01/08). The first message is `{"type": "Connected"}`; the client may send `ping`
         (answer `{"type": "Pong"}`). Closed with code 4403 within seconds when the session is revoked or a right it needs is taken away (sign in again), and 4401 when the access token expires — reconnect with a fresh
         one. The call log is GET /api/operator/v1/calls; commands stay REST.
       tags: [Calls]
       parameters:
-        - name: access_token
-          in: query
+        - name: Sec-WebSocket-Protocol
+          in: header
           required: false
+          description: |
+            From a browser, which cannot set Authorization on a WebSocket: `blizz.v1, blizz.bearer.<access token>`.
+            The server answers `blizz.v1` only. A token in the address (`?access_token=`) is refused with 401: it
+            would reach proxy logs (REQ-SEC-08).
           schema:
             type: string
       responses:

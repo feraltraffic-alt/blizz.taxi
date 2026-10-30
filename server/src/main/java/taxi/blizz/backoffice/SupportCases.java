@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Support cases (REQ-ADM-09): a category, the order when there is one, the requester, an owner, a priority,
@@ -61,8 +62,8 @@ public interface SupportCases {
     /** A rider or driver opens a case; {@code orderId} must be one of their orders (or trips) when given. */
     Case open(Actor requester, UUID commandId, Category category, UUID orderId, String subject, String message);
 
-    /** Their own cases, newest first, PUBLIC messages only. */
-    List<Case> mine(Actor requester, OffsetDateTime before, int limit);
+    /** Their own cases, newest first, after {@code after} (REQ-API-09), PUBLIC messages only. */
+    List<Case> mine(Actor requester, PageCursor after, int limit);
 
     Case mineOne(Actor requester, UUID caseId);
 
@@ -71,14 +72,37 @@ public interface SupportCases {
 
     // ---------------------------------------------------------------- staff
 
-    /** {@code overdueOnly}: OPEN cases nobody took by their {@code respondBy}, oldest due first. */
+    /**
+     * {@code overdueOnly}: OPEN cases nobody took by their {@code respondBy}, oldest due first. {@code after} is a
+     * position from {@link #position}, of the same kind of queue (REQ-API-09).
+     */
     record QueueFilter(UUID cityId, State state, Priority priority, Category category, UUID assignedStaffId,
-                       boolean unassignedOnly, OffsetDateTime before, int limit, boolean overdueOnly) {
+                       boolean unassignedOnly, PageCursor after, int limit, boolean overdueOnly) {
 
         public QueueFilter(UUID cityId, State state, Priority priority, Category category, UUID assignedStaffId,
-                           boolean unassignedOnly, OffsetDateTime before, int limit) {
-            this(cityId, state, priority, category, assignedStaffId, unassignedOnly, before, limit, false);
+                           boolean unassignedOnly, PageCursor after, int limit) {
+            this(cityId, state, priority, category, assignedStaffId, unassignedOnly, after, limit, false);
         }
+    }
+
+    String MY_CASES = "my-cases";
+    String CASE_QUEUE = "case-queue";
+    String OVERDUE_CASES = "overdue-cases";
+
+    /** URGENT first: the rank the queue sorts by, the same as in the SQL. */
+    static int rank(Priority priority) {
+        return Priority.URGENT.ordinal() - priority.ordinal();
+    }
+
+    static PageCursor minePosition(Case c) {
+        return PageCursor.of(MY_CASES, c.createdAt(), c.id());
+    }
+
+    /** The queue is sorted by (due time when overdue only,) priority, newest first; the cursor holds all of them. */
+    static PageCursor position(Case c, boolean overdueOnly) {
+        return overdueOnly
+                ? PageCursor.of(OVERDUE_CASES, c.respondBy(), rank(c.priority()), c.createdAt(), c.id())
+                : PageCursor.of(CASE_QUEUE, rank(c.priority()), c.createdAt(), c.id());
     }
 
     /** Cases of one city (or without a city when {@code cityId} is null), newest first; messages not included. */

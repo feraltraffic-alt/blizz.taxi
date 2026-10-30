@@ -36,7 +36,7 @@ expect 201
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",\"vehicle_class\":\"STANDARD\",
   \"pickup\":$PICKUP,\"pickup_label\":\"вул. Дмитрівська\",\"dropoff\":$DROPOFF,\"dropoff_label\":\"Нивки\",
   \"payment_method\":\"CARD\"}" | jq -r .id)
-expect 201
+expect 202
 cleanup() {
     local now
     now=$(api GET "/api/rider/v1/orders/$ORDER" "$RIDER")

@@ -17,11 +17,11 @@ A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profil
 | `OTP_PROVIDER`, `PUSH_PROVIDER`, geocoding provider | never `FAKE`; fake payment merchants are never allowed |
 | `STAFF_BOOTSTRAP_PASSWORD` | if set, not the sandbox password |
 
-`prod` is never combined with `dev`, `sandbox` or `test`. Without a profile the server starts as `dev`, which must never be used for real data.
+`prod` is never combined with `dev`, `sandbox` or `test`. Without a profile the server does not start (threat model O1): set `SPRING_PROFILES_ACTIVE=prod` on a real instance, `dev` for local development.
 
 ## Access logs of the proxy
 
-Admin search by phone passes the phone in the query string, for example `/api/admin/v1/otp-deliveries?phone=…`, `/api/admin/v1/clients?phone=…` and `/api/admin/v1/rider-wallets?phone=…`. The server's own logs record only the route template. The reverse proxy in front of the server **must not log query strings** of `/api/` (threat model O2, REQ-SEC-08): log the path and the status, never `$request_uri` or `$args`. In nginx, for example:
+Admin search by phone passes the phone in the query string, for example `/api/admin/v1/otp-deliveries?phone=…`, `/api/admin/v1/clients?phone=…` and `/api/admin/v1/rider-wallets?phone=…`. The server's own logs record only the route template. The reverse proxy in front of the server **must not log query strings** of `/api/` or `/ws/` (threat model O2, REQ-SEC-08): log the path and the status, never `$request_uri` or `$args`. The live channel `/ws/v1/…` takes its token in the `Authorization` header or, from a browser, as the subprotocol `blizz.bearer.<token>` next to `blizz.v1`; a token in the address is refused. Do not log the `Sec-WebSocket-Protocol` or `Authorization` headers either. In nginx, for example:
 
 ```nginx
 log_format blizz '$remote_addr [$time_iso8601] "$request_method $uri" $status $body_bytes_sent $request_time';

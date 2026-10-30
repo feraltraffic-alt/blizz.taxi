@@ -20,8 +20,8 @@ paths:
       operationId: openDriverLiveChannel
       summary: Live channel (WebSocket)
       description: >-
-        Upgrade to a WebSocket with the driver access token — the `Authorization: Bearer` header, or `access_token` in
-        the query where headers cannot be set. The server pushes a message for every change of an order the driver (also an order offered to him)
+        Upgrade to a WebSocket with the driver access token — the `Authorization: Bearer` header, or from a browser the
+        subprotocols `blizz.v1, blizz.bearer.<token>` (never in the address, REQ-SEC-08). The server pushes a message for every change of an order the driver (also an order offered to him)
         takes part in (section 20, REQ-NTF-04): `{"event_id", "type", "schema_version", "aggregate_type": "Order",
         "aggregate_id", "aggregate_version", "occurred_at", "correlation_id", "payload": {}}`. It carries no personal
         data: on a message the app reads the order over REST; duplicates and older versions are dropped, a gap in
@@ -30,9 +30,13 @@ paths:
         a fresh one. Commands stay REST (REQ-NTF-06).
       tags: [Live]
       parameters:
-        - name: access_token
-          in: query
+        - name: Sec-WebSocket-Protocol
+          in: header
           required: false
+          description: |
+            From a browser, which cannot set Authorization on a WebSocket: `blizz.v1, blizz.bearer.<access token>`.
+            The server answers `blizz.v1` only. A token in the address (`?access_token=`) is refused with 401: it
+            would reach proxy logs (REQ-SEC-08).
           schema:
             type: string
       responses:
@@ -955,31 +959,34 @@ paths:
     get:
       operationId: listDriverTripHistory
       summary: Own completed and aborted trips
-      description: Completed and aborted trips of the signed-in driver, newest first. Use created_at of the last item as before.
+      description: |
+        Completed and aborted trips of the signed-in driver, newest first (created_at, then id). Read the next page
+        with page.next_cursor (REQ-API-09).
       tags: [Trip]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
-          description: Trip history.
+          description: One page of the trip history.
           content:
             application/json:
               schema:
-                type: array
-                maxItems: 50
-                items:
-                  $ref: "#/components/schemas/TripHistoryItem"
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/TripHistoryItem"
+                  page:
+                    $ref: "./common.yaml#/components/schemas/PageInfo"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
@@ -1446,17 +1453,9 @@ paths:
       tags: [Support]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
