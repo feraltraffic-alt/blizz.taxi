@@ -19,6 +19,7 @@ import taxi.blizz.identity.SessionService;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -182,7 +183,7 @@ class JdbcClientAccounts implements ClientAccounts {
     private Client lock(UUID clientId, long expectedVersion) {
         Client client = find(clientId, true);
         if (client.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT,
+            throw ConflictException.version(client.version(),
                     "The rider changed: expected version " + expectedVersion + ", current " + client.version());
         }
         return client;

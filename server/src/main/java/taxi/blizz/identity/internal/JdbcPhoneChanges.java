@@ -20,6 +20,7 @@ import taxi.blizz.identity.SessionService;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -134,7 +135,7 @@ class JdbcPhoneChanges implements PhoneChanges {
                 Changed.class, () -> {
                     Account before = lock(subject);
                     if (before.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The account changed");
+                        throw ConflictException.version(before.version(), "The account changed");
                     }
                     if ("ANONYMIZED".equals(before.state())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "The account is anonymized");

@@ -23,6 +23,7 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -99,7 +100,7 @@ class JdbcSafetyContacts implements SafetyContacts {
                 new ChangeRequest(cityId, expectedVersion, clean, why), Version.class, () -> {
                     Version before = read(cityId, true);
                     if (before.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The contacts changed: expected version "
+                        throw ConflictException.version(before.version(), "The contacts changed: expected version "
                                 + expectedVersion + ", current " + before.version());
                     }
                     OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);

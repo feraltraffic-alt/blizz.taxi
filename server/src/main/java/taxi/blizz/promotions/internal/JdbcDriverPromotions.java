@@ -22,6 +22,7 @@ import taxi.blizz.audit.AuditLog;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -199,7 +200,7 @@ class JdbcDriverPromotions implements DriverPromotions {
                 .param("id", id).query((rs, i) -> promotion(rs)).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Promotion not found"));
         if (p.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The promotion changed");
+            throw ConflictException.version(p.version(), "The promotion changed");
         }
         return p;
     }

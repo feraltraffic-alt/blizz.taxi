@@ -17,6 +17,7 @@ import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.payments.PaymentReconciliations;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -115,7 +116,7 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
                     Item before=jdbc.sql("select * from payment_reconciliation_item where id=:id for update")
                             .param("id",itemId).query(JdbcPaymentReconciliations::mapItem).single();
                     if (!"OPEN".equals(before.state())) throw conflict("Item was already resolved");
-                    if (before.version()!=expectedVersion) throw new DomainException(ErrorCode.VERSION_CONFLICT,"Item version changed");
+                    if (before.version()!=expectedVersion) throw ConflictException.version(before.version(),"Item version changed");
                     String safeReason=safeReason(originalReason);
                     OffsetDateTime now=OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
                     jdbc.sql("""

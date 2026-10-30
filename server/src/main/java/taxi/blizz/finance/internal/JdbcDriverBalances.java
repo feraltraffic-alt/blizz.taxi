@@ -25,6 +25,7 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -325,7 +326,7 @@ class JdbcDriverBalances implements DriverBalances {
                             .optional().orElse(null);
                     long current = before == null ? 0 : before.version();
                     if (current != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The rule changed");
+                        throw ConflictException.version(current, "The rule changed");
                     }
                     jdbc.sql("""
                                     insert into driver_transfer_rule (currency, enabled, max_per_transfer_minor,

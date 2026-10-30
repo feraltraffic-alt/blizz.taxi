@@ -22,6 +22,7 @@ import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.operations.DriverRiskFlags;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -132,7 +133,7 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                 new ReviewRequest(flagId, expectedVersion, confirm, why), Flag.class, () -> {
                     Flag locked = find(flagId, true).orElseThrow(JdbcDriverRiskFlags::notFound);
                     if (locked.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The flag changed: expected version "
+                        throw ConflictException.version(locked.version(), "The flag changed: expected version "
                                 + expectedVersion + ", current " + locked.version());
                     }
                     if (locked.state() != State.OPEN) {

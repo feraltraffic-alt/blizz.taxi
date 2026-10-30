@@ -26,6 +26,7 @@ import taxi.blizz.operations.LocationFix;
 import taxi.blizz.operations.WorkSessions;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -452,7 +453,7 @@ class JdbcWorkSessions implements WorkSessions {
         Session session = currentSession(driverId)
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No open session"));
         if (session.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT,
+            throw ConflictException.version(session.version(),
                     "Session changed: expected version " + expectedVersion + ", current " + session.version());
         }
         return session;

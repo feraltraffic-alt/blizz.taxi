@@ -30,6 +30,7 @@ import taxi.blizz.geo.GeoConfiguration;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -190,7 +191,7 @@ class JdbcCityOperations implements CityOperations {
         State current = jdbc.sql(SELECT + " where city_id = :city for update").param("city", cityId)
                 .query((rs, i) -> map(rs)).optional().orElseGet(() -> defaults(cityId));
         if (current.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The city's operations changed");
+            throw ConflictException.version(current.version(), "The city's operations changed");
         }
         return current;
     }

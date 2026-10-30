@@ -22,6 +22,7 @@ import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.identity.StaffPermissions;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -257,7 +258,7 @@ class JdbcStaffDirectory implements StaffDirectory {
                 .query((rs, i) -> map(rs)).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Staff member not found"));
         if (before.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The staff member changed");
+            throw ConflictException.version(before.version(), "The staff member changed");
         }
         return before;
     }

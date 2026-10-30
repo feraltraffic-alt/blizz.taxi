@@ -18,6 +18,7 @@ import taxi.blizz.payments.Chargebacks;
 import taxi.blizz.payments.PaymentOperations;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -161,7 +162,8 @@ class JdbcChargebacks implements Chargebacks {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "The chargeback is resolved already");
                     }
                     if (((Number) row.get("version")).longValue() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The chargeback changed; reload it");
+                        throw ConflictException.version(
+                                ((Number) row.get("version")).longValue(), "The chargeback changed; reload it");
                     }
                     jdbc.sql("""
                                     update payment_chargeback

@@ -19,6 +19,7 @@ import taxi.blizz.configuration.LegalDocuments;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -279,7 +280,7 @@ class JdbcLegalDocuments implements LegalDocuments {
                     "A published text never changes; create a new version");
         }
         if (version.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The draft changed: expected version "
+            throw ConflictException.version(version.version(), "The draft changed: expected version "
                     + expectedVersion + ", current " + version.version());
         }
         return version;

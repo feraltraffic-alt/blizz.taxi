@@ -16,6 +16,7 @@ import taxi.blizz.geo.GeoZones;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -134,7 +135,7 @@ class JdbcTariffService implements TariffService {
                     .param("id", c.id()).query((rs, n) -> new Revision(rs.getObject(1, UUID.class),
                             rs.getString(2), rs.getLong(3))).single();
             if (before.version() != c.expectedVersion()) {
-                throw error(ErrorCode.VERSION_CONFLICT, "Stale tariff version");
+                throw ConflictException.version(before.version(), "Stale tariff version");
             }
             if (!(publish ? "DRAFT" : "PUBLISHED").equals(before.state())) {
                 throw error(ErrorCode.STATE_CONFLICT, "Tariff cannot make this transition");

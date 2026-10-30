@@ -31,6 +31,7 @@ import taxi.blizz.files.FileService;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -565,7 +566,7 @@ class JdbcDriverAdmission implements DriverAdmission {
     private Locked lockVersion(UUID driverId, long expectedVersion) {
         Locked locked = lock(driverId);
         if (locked.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT,
+            throw ConflictException.version(locked.version(),
                     "Driver changed: expected version " + expectedVersion + ", current " + locked.version());
         }
         return locked;

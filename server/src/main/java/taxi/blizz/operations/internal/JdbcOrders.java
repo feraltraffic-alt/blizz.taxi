@@ -33,6 +33,7 @@ import taxi.blizz.operations.Orders;
 import taxi.blizz.operations.PaymentMethod;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -420,7 +421,7 @@ class JdbcOrders implements Orders {
                         throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");
                     }
                     if (order.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                        throw ConflictException.version(order.version(), "The order changed");
                     }
                     // Rider and staff each choose from their own list (owner decision 27.10.2026).
                     String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
@@ -480,7 +481,7 @@ class JdbcOrders implements Orders {
                         throw new DomainException(ErrorCode.NOT_FOUND, "Order not found");
                     }
                     if (order.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                        throw ConflictException.version(order.version(), "The order changed");
                     }
                     if (!java.util.Set.of("AWAITING_PAYMENT", "SCHEDULED", "READY", "SEARCHING", "ASSIGNED", "IN_SERVICE")
                             .contains(order.status())) {
@@ -549,7 +550,7 @@ class JdbcOrders implements Orders {
                 new RevokeRequest(orderId, expectedVersion, reason), OrderView.class, () -> {
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     if (order.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                        throw ConflictException.version(order.version(), "The order changed");
                     }
                     if (!"ASSIGNED".equals(order.status())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "Only an assigned order before the start");
@@ -683,7 +684,7 @@ class JdbcOrders implements Orders {
                 new InterruptRequest(orderId, expectedVersion, interruption), Interrupted.class, () -> {
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     if (order.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The order changed");
+                        throw ConflictException.version(order.version(), "The order changed");
                     }
                     if (!"IN_SERVICE".equals(order.status())) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,

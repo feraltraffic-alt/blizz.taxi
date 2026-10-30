@@ -16,6 +16,7 @@ import taxi.blizz.configuration.FeatureFlags;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -67,7 +68,7 @@ class JdbcFeatureFlags implements FeatureFlags {
                 new ChangeRequest(key, expectedVersion, enabled, why), State.class, () -> {
                     State before = state(flag, true);
                     if (before.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT,
+                        throw ConflictException.version(before.version(),
                                 "The flag was changed meanwhile; reload it");
                     }
                     OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);

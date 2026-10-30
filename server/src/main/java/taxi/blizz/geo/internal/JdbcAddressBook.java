@@ -18,6 +18,7 @@ import taxi.blizz.geo.HouseNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -250,7 +251,7 @@ class JdbcAddressBook implements AddressBook {
     private Address locked(UUID id, long expectedVersion) {
         Address before = get(id, true).orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Address not found"));
         if (before.version() != expectedVersion) {
-            throw error(ErrorCode.VERSION_CONFLICT, "Stale address version");
+            throw ConflictException.version(before.version(), "Stale address version");
         }
         return before;
     }
