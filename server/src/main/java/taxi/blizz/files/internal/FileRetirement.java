@@ -57,7 +57,8 @@ class FileRetirement {
                 + " order by " + age(kind) + ",id limit " + RetentionWork.limit(limit);
     }
 
-    private record Claimed(UUID id, String key, String stagingKey, String state, UUID claim,
+    /** {@code plainKey}: a document's plain copy still waiting for its delete after re-encryption (issue #135). */
+    private record Claimed(UUID id, String key, String stagingKey, String plainKey, String state, UUID claim,
                            boolean previouslyClaimed, int attempts) {
     }
 
@@ -81,11 +82,12 @@ class FileRetirement {
 
     private Attempt retire(UUID id, String eligibility, Map<String, Object> params, OffsetDateTime now) {
         Claimed claimed = tx.execute(status -> {
-            var row = jdbc.sql("select id,storage_key,staging_key,state,retention_claim,retention_attempts from file_object where id=:id and "
+            var row = jdbc.sql("select id,storage_key,staging_key,plain_key_pending_delete,state,retention_claim,"
+                            + "retention_attempts from file_object where id=:id and "
                             + eligibility + " and " + AVAILABLE + " for update skip locked")
                     .params(params).param("id", id).query((rs, i) -> new Claimed(rs.getObject(1, UUID.class),
-                            rs.getString(2), rs.getString(3), rs.getString(4), UUID.randomUUID(),
-                            rs.getObject(5) != null, rs.getInt(6) + 1)).optional();
+                            rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), UUID.randomUUID(),
+                            rs.getObject(6) != null, rs.getInt(7) + 1)).optional();
             if (row.isEmpty()) return null;
             Claimed item = row.get();
             jdbc.sql("update file_object set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts where id=:id")
@@ -109,6 +111,8 @@ class FileRetirement {
             }
             if (claimed.stagingKey() != null) changed |= storage.delete(claimed.stagingKey());
             if (claimed.key() != null && !claimed.key().equals(claimed.stagingKey())) changed |= storage.delete(claimed.key());
+            // A re-encrypted document's plain copy must not outlive its row (issue #135).
+            if (claimed.plainKey() != null) changed |= storage.delete(claimed.plainKey());
             int deleted = tx.execute(status -> jdbc.sql("delete from file_object where id=:id and retention_claim=:claim")
                     .param("id", id).param("claim", claimed.claim()).update());
             return new Attempt(deleted == 1, deleted, 0, deleted != 1);
