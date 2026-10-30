@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 /**
  * What a blocked driver may still do (REQ-DS-01, issue #141, answer of the lead on the plan): read everything (GET),
  * finish the current trip, keep the shift's connection and end it, report positions, reach support and keep push
- * devices. Anything else answers 403 ACCOUNT_BLOCKED, so no new work starts: no shift, resume, offer, claim,
+ * devices, and rate the passenger of the finished trip. Anything else answers 403 ACCOUNT_BLOCKED, so no new work starts: no shift, resume, offer, claim,
  * pre-order, profile, document, vehicle, legal acceptance, phone change, top-up or transfer.
  */
 final class DriverLimitedSession {
@@ -15,6 +15,8 @@ final class DriverLimitedSession {
 
     private static final List<Pattern> COMMANDS = List.of(
             path("/api/driver/v1/trips/" + SEGMENT + "/(arrive|start|complete|cancel|no-show|messages)"),
+            // Rating the passenger of the trip just finished.
+            path("/api/driver/v1/orders/" + SEGMENT + "/rating"),
             path("/api/driver/v1/work-sessions/" + SEGMENT + "/(heartbeat|pause|close|handover)"),
             path("/api/driver/v1/location-batches"),
             path("/api/driver/v1/support/cases"),

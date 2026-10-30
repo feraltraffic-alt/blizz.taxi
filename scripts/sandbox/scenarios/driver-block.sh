@@ -9,10 +9,19 @@ PICKUP_LAT=50.4501; PICKUP_LON=30.5234
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890
 RIDER_PHONE="+38068$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
 
-NEXT=""
-# Whatever happens: Andrii unblocked and offline, the second order cancelled.
+NEXT=""; ORDER=""
+# Whatever happens: Andrii's trip ended, Andrii unblocked and offline, the orders cancelled.
 cleanup() {
     set +e
+    if [[ -n "${ANDRII:-}" ]]; then
+        local trip
+        trip=$(api GET /api/driver/v1/trips/current "$ANDRII")
+        if [[ "$(cat /tmp/sandbox-status)" == 200 && "$(jq -r .phase <<<"$trip")" == IN_PROGRESS ]]; then
+            api POST "/api/driver/v1/trips/$(jq -r .id <<<"$trip")/complete" "$ANDRII" "{\"command_id\":\"$(uuid)\",
+              \"expected_version\":$(jq -r .version <<<"$trip"),\"reported_at\":\"$(now_utc)\",\"cash_received\":true}" \
+              >/dev/null
+        fi
+    fi
     if [[ -n "${ADMIN:-}" ]]; then
         local profile
         profile=$(api GET "/api/admin/v1/drivers/$ANDRII_ID" "$ADMIN" | jq -c .profile)
@@ -21,15 +30,16 @@ cleanup() {
               \"expected_version\":$(jq -r .version <<<"$profile"),\"reason\":\"Sandbox scenario over\"}" >/dev/null
         fi
     fi
-    if [[ -n "$NEXT" && -n "${OPERATOR:-}" ]]; then
+    for order in "$ORDER" "$NEXT"; do
+        [[ -n "$order" && -n "${OPERATOR:-}" ]] || continue
         local view
-        view=$(api GET "/api/operator/v1/orders/$NEXT" "$OPERATOR")
-        if [[ "$(jq -r .status <<<"$view")" == SEARCHING ]]; then
-            api POST "/api/operator/v1/orders/$NEXT/cancel" "$OPERATOR" \
+        view=$(api GET "/api/operator/v1/orders/$order" "$OPERATOR")
+        if [[ "$(jq -r .status <<<"$view")" == SEARCHING || "$(jq -r .status <<<"$view")" == ASSIGNED ]]; then
+            api POST "/api/operator/v1/orders/$order/cancel" "$OPERATOR" \
                 "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .version <<<"$view"),\"reason_code\":\"NO_CARS\"}" \
                 >/dev/null
         fi
-    fi
+    done
     [[ -n "${ANDRII:-}" ]] && go_offline "$ANDRII"
 }
 trap cleanup EXIT
