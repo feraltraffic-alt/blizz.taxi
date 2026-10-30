@@ -122,6 +122,7 @@ class JdbcFileService implements FileService {
     public StoredFile upload(Actor owner, UUID fileId, String contentType, long contentLength, InputStream body) {
         Claimed claimed = tx.execute(status -> claim(owner, fileId, normalize(contentType), contentLength));
         Path staged = null;
+        Path sealed = null;
         try {
             try {
                 staged = storage.stage(body, claimed.declaredSize(), claimed.key());
@@ -157,26 +158,53 @@ class JdbcFileService implements FileService {
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
             String key = claimed.key();
-            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash, null, verdict);
-            staged = null;
+            String scheme = null;
+            Path toStore = staged;
+            if (encryptedAtRest(claimed.purpose())) {
+                // Scanned and hashed in the clear above; only the encrypted form reaches storage (issue #135).
+                Optional<FileCipher> cipher = encryption.cipher();
+                if (cipher.isEmpty()) {
+                    log.warn("No master key (SECRETS_MASTER_KEY): document {} is refused rather than kept in the clear",
+                            fileId);
+                    return reject(fileId, staged, "The file could not be stored");
+                }
+                sealed = staged.resolveSibling(staged.getFileName() + ".sealed");
+                cipher.get().encryptReserved(staged, sealed, key);
+                toStore = sealed;
+                scheme = FileCipher.SCHEME;
+            }
+            StoredFile result = completeUpload(fileId, toStore, key, detected.get(), size, hash, scheme, verdict,
+                    engine());
+            if (toStore == staged) {
+                staged = null;
+            } else {
+                sealed = null;
+            }
             return result;
         } catch (IOException e) {
             log.warn("Upload of file {} failed", fileId, e);
             return reject(fileId, staged, "The upload could not be completed");
         } finally {
             deleteQuietly(staged);
+            deleteQuietly(sealed);
             clearStageQuietly(claimed.key());
         }
+    }
+
+    /** Driver documents (passports, licences, vehicle papers) are kept encrypted at rest (issue #135, REQ-SEC-01). */
+    static boolean encryptedAtRest(FilePurpose purpose) {
+        return purpose == FilePurpose.DRIVER_DOCUMENT;
     }
 
     /** The body and scanner have finished; serialize only the bounded local move/finalization with cleanup. */
     private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash,
                                       String encryptionScheme) throws IOException {
-        return completeUpload(fileId, staged, key, type, size, hash, encryptionScheme, true);
+        return completeUpload(fileId, staged, key, type, size, hash, encryptionScheme, true, "content-type");
     }
 
+    /** {@code engine}: what the file passed, recorded with a verdict (e.g. {@code structural+clamav}). */
     private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash,
-                                      String encryptionScheme, boolean verdict) throws IOException {
+                                      String encryptionScheme, boolean verdict, String engine) throws IOException {
         try {
             return tx.execute(status -> {
                 boolean available = jdbc.sql("select id from file_object where id=:id and state='QUARANTINE' and retention_claim is null for update")
@@ -197,7 +225,7 @@ class JdbcFileService implements FileService {
                             version=version+1
                         where id=:id
                         """).param("verdict",verdict).param("type",type).param("size",size).param("hash",hash).param("key",key)
-                        .param("now",now).param("engine",encryptionScheme==null?engine():"content-type")
+                        .param("now",now).param("engine",engine)
                         .param("retry",properties.rescan().firstRetry().toSeconds()+" seconds")
                         .param("encryption",encryptionScheme).param("id",fileId).update();
                 return new StoredFile(fileId,verdict?FileState.SAFE:FileState.QUARANTINE,type,size,null);
@@ -407,18 +435,26 @@ class JdbcFileService implements FileService {
     /** The plain bytes; an encrypted file is decrypted while it is read. */
     private FileContent content(UUID fileId, String type, long size, String key, String scheme) {
         try {
-            if (scheme == null) {
-                return new FileContent(fileId, type, size, storage.open(key));
-            }
-            if (!FileCipher.SCHEME.equals(scheme)) {
-                throw new IllegalStateException("Unknown file encryption " + scheme);
-            }
-            FileCipher cipher = encryption.cipher().orElseThrow(() -> new IllegalStateException(
-                    "No master key (SECRETS_MASTER_KEY): an encrypted file cannot be opened"));
-            return new FileContent(fileId, type, size, cipher.decrypt(storage.open(key), key));
+            return new FileContent(fileId, type, size, openStored(key, scheme));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * The plain bytes of a stored file, by the scheme its row records: every reader of stored bytes (downloads, the
+     * rescan, re-encryption) goes through here, so none assumes plain bytes on disk (issue #135).
+     */
+    InputStream openStored(String key, String scheme) throws IOException {
+        if (scheme == null) {
+            return storage.open(key);
+        }
+        if (!FileCipher.SCHEME.equals(scheme)) {
+            throw new IllegalStateException("Unknown file encryption " + scheme);
+        }
+        FileCipher cipher = encryption.cipher().orElseThrow(() -> new IllegalStateException(
+                "No master key (SECRETS_MASTER_KEY): an encrypted file cannot be opened"));
+        return cipher.decrypt(storage.open(key), key);
     }
 
     private boolean allowedFor(FilePurpose purpose, String type) {
