@@ -121,7 +121,7 @@ class FareLedgerTests {
                         insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', true, now(), now())""")
                 .param("id", id)
-                .param("phone", "+48" + String.format("%09d", Math.floorMod(id.hashCode(), 1_000_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+48", 9))
                 .update();
         return new Actor(SubjectType.CLIENT, id);
     }
@@ -136,7 +136,7 @@ class FareLedgerTests {
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', now(), now())""")
                 .param("id", driverId)
-                .param("phone", "+38097" + String.format("%07d", Math.floorMod(driverId.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38097", 7))
                 .update();
         taxi.blizz.TestAdmission.inEveryCity(jdbc, driverId);
         UUID vehicle = UUID.randomUUID();

@@ -64,7 +64,7 @@ class DriverAdmissionTests {
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', 'NOT_SUBMITTED', now(), now())""")
                 .param("id", id)
-                .param("phone", "+38097" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38097", 7))
                 .update();
         taxi.blizz.TestAdmission.inEveryCity(jdbc, id);
         return new Actor(SubjectType.DRIVER, id);

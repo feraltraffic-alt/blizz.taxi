@@ -5,6 +5,11 @@ info:
   description: |
     API for the driver app (/api/driver/v1, REQ-API-02). Every operation needs an access token issued
     for the `driver` audience; tokens of other audiences are rejected (REQ-USR-08).
+    A **blocked** driver (account_state BLOCKED, REQ-DS-01, issue #141) keeps a limited session: signing in and
+    refreshing work, every GET works except the reads of new work (broadcast-orders, offers, preorders), and so
+    do the current trip's commands (arrive, start, complete, cancel, no-show, messages), the shift's heartbeat,
+    pause, close and handover, location batches, support cases and uploads, push devices and the rating of the
+    passenger. Anything else answers 403 ACCOUNT_BLOCKED; no new order is offered.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -90,6 +95,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -153,6 +160,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
@@ -180,6 +189,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
@@ -212,6 +223,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -244,6 +257,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
@@ -274,6 +289,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
 
   /api/driver/v1/uploads/{file_id}:
     put:
@@ -394,6 +411,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
@@ -514,6 +533,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -643,6 +664,8 @@ paths:
                   $ref: "#/components/schemas/Offer"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
 
   /api/driver/v1/preorders:
     get:
@@ -664,6 +687,8 @@ paths:
                 $ref: "#/components/schemas/PreorderList"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
@@ -716,6 +741,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -755,6 +782,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -793,6 +822,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -832,6 +863,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -871,6 +904,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
@@ -905,6 +940,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
 
@@ -942,6 +979,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -1354,6 +1393,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -1790,6 +1831,8 @@ paths:
                 $ref: "./phone-change.yaml#/components/schemas/PhoneChangeCode"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/driver/v1/me/phone-change/new-code:
@@ -1819,6 +1862,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
@@ -1949,6 +1994,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
@@ -2227,10 +2274,17 @@ components:
     DriverProfile:
       type: object
       additionalProperties: false
-      required: [id, review_status, has_payment_terminal, admission_city_ids, version, vehicles, documents]
+      required: [id, account_state, review_status, has_payment_terminal, admission_city_ids, version, vehicles,
+                 documents]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: >-
+            ACTIVE; BLOCKED — a limited session only (issue #141): GET, the current trip, support; DELETION_PENDING;
+            ANONYMIZED.
+          type: string
+          enum: [ACTIVE, BLOCKED, DELETION_PENDING, ANONYMIZED]
         admission_city_ids:
           description: >-
             The cities the driver is admitted in (REQ-DSP-01, issue #141), set by staff. The driver goes online, is

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.blizz.taxi/events/offer-revoked.v1.schema.json",
   "title": "OfferRevoked v1 payload",
-  "description": "An open personal offer was withdrawn because its driver paused or closed the shift (AC-11, issue #141); dispatch goes on with the next driver. An accept of it after this gets 409 OFFER_REVOKED.",
+  "description": "An open personal offer was withdrawn because its driver paused or closed the shift (AC-11, issue #141) or the driver's account was blocked (REQ-DS-01); dispatch goes on with the next driver. An accept of it after this gets 409 OFFER_REVOKED.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
     "order_id": {"type": "string", "format": "uuid"},
     "offer_id": {"type": "string", "format": "uuid"},
     "driver_id": {"type": "string", "format": "uuid"},
-    "reason": {"type": "string", "enum": ["DRIVER_PAUSED", "DRIVER_CLOSED"]}
+    "reason": {"type": "string", "enum": ["DRIVER_PAUSED", "DRIVER_CLOSED", "DRIVER_BLOCKED"]}
   },
   "examples": [
     {

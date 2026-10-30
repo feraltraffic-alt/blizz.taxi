@@ -39,6 +39,11 @@ class JdbcSessionService implements SessionService {
     private static final Set<String> ACTIVE_STATES = Set.of("ACTIVE");
     /** A rider who asked to delete the account still signs in, to see the request and cancel it (issue #56). */
     private static final Set<String> CLIENT_STATES = Set.of("ACTIVE", "DELETION_PENDING");
+    /**
+     * A blocked driver keeps a limited session to finish the current trip and reach support (REQ-DS-01, issue #141);
+     * the API door lets it do only that ({@code DriverLimitedSession}).
+     */
+    private static final Set<String> DRIVER_STATES = Set.of("ACTIVE", "BLOCKED");
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -266,7 +271,12 @@ class JdbcSessionService implements SessionService {
     }
 
     private static boolean maySignIn(Actor actor, String state) {
-        return (actor.type() == SubjectType.CLIENT ? CLIENT_STATES : ACTIVE_STATES).contains(state);
+        Set<String> allowed = switch (actor.type()) {
+            case CLIENT -> CLIENT_STATES;
+            case DRIVER -> DRIVER_STATES;
+            default -> ACTIVE_STATES;
+        };
+        return allowed.contains(state);
     }
 
     private void revoke(UUID sessionId, String reason, OffsetDateTime now) {
