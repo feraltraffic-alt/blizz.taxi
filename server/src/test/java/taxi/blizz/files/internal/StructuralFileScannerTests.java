@@ -57,4 +57,23 @@ class StructuralFileScannerTests {
         assertThat(scanner.scan(pdf("<< /Type /Page >>\n".getBytes(StandardCharsets.ISO_8859_1)), "application/pdf"))
                 .isEmpty();
     }
+
+    /** Issue #105: an object stream whose content cannot be read cannot be checked, so it is refused. */
+    @Test
+    void anObjectStreamThatCannotBeUnpackedIsRefused() throws Exception {
+        byte[] junk = "2 0 obj\n<< /Type /ObjStm /Filter /FlateDecode >>\nstream\nnot deflate data at all\nendstream\nendobj\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(scanner.scan(pdf(junk), "application/pdf")).as("corrupt Flate").isPresent();
+        byte[] lzw = "2 0 obj\n<< /Type /ObjStm /Filter /LZWDecode >>\nstream\n\u0080\u000b\u0060\u0050\nendstream\nendobj\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(scanner.scan(pdf(lzw), "application/pdf")).as("a filter it does not unpack").isPresent();
+        byte[] escaped = "2 0 obj\n<< /Type /Obj#53tm >>\nstream\nraw\nendstream\nendobj\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(scanner.scan(pdf(escaped), "application/pdf")).as("the name escaped").isPresent();
+        assertThat(scanner.scan(pdf(stream("<< /Type /Page /MediaBox [0 0 595 842] >>")), "application/pdf"))
+                .as("a Flate object stream that unpacks").isEmpty();
+        byte[] image = "3 0 obj\n<< /Type /XObject /Subtype /Image /Filter /DCTDecode >>\nstream\n\u00ff\u00d8raw\nendstream\nendobj\n"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(scanner.scan(pdf(image), "application/pdf")).as("an image stream is not an object stream").isEmpty();
+    }
 }
