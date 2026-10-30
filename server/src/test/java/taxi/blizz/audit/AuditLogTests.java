@@ -57,9 +57,10 @@ class AuditLogTests {
         for (int i = 0; i < 3; i++) {
             UUID id = UUID.randomUUID();
             jdbc.sql("""
-                            insert into audit_log (id, occurred_at, actor_type, actor_id, action, resource_type)
+                            insert into audit_log (id, occurred_at, actor_type, actor_id, action, resource_type,
+                                                   correlation_id)
                             values (:id, timestamptz '2026-10-30 09:00:00.654321+00', 'STAFF', :staff, 'page.test',
-                                    'test')""")
+                                    'test', gen_random_uuid())""")
                     .param("id", id).param("staff", staff).update();
             made.add(id);
         }
