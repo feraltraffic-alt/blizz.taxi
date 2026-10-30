@@ -86,7 +86,11 @@ jq -e '.order.status == "FULFILLED" and .order.payment_method == "CARD" and .ord
        and .rider.registered_at != null and (.rider.trips_last_year | length) == 1
        and ([.card_operations[] | "\(.type) \(.state)"] | index("SETTLE SUCCEEDED")) != null
        and (.chat | length) == 2' <<<"$EVIDENCE" >/dev/null
-if grep -qE '\+\s*(380|48)|(380|48)[0-9]{9}|4111|\*\*\*\*' <<<"$EVIDENCE"; then
+# Only the text of the evidence: ids and timestamps are digits too, and a timestamp once held "4111".
+TEXTS=$(jq -r '.. | strings
+               | select(test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$") | not)
+               | select(test("^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9:.]+(Z|[+-][0-9:]+)?)?$") | not)' <<<"$EVIDENCE")
+if grep -qE '\+\s*(380|48)|(380|48)[0-9]{9}|4111|\*\*\*\*' <<<"$TEXTS"; then
     note "**The evidence carries a phone or card number.**"; exit 1
 fi
 [[ "$(jq '[.chat[].body | select(contains("[number hidden]"))] | length' <<<"$EVIDENCE")" == 2 ]]
