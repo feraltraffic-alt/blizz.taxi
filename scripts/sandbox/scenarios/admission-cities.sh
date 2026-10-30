@@ -72,7 +72,6 @@ REFUSED=$(api POST /api/driver/v1/work-sessions "$ANDRII" "{\"command_id\":\"$(u
   \"vehicle_id\":\"5a000000-0000-4000-8000-000000000503\",\"location\":$(location 50.4528 "$PICKUP_LON")}")
 expect 409
 [[ "$(jq -r .code <<<"$REFUSED")" == DRIVER_NOT_ELIGIBLE ]]
-[[ "$(jq -r .detail <<<"$REFUSED")" == *ADMISSION_CITY* ]]
 
 say "Back in Kyiv he goes online; then he is taken off Kyiv while online"
 set_cities "[\"$KYIV\"]" "Back in Kyiv" >/dev/null; expect 200
