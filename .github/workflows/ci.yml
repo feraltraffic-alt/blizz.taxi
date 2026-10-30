@@ -50,6 +50,18 @@ jobs:
           cache-dependency-path: packages/contracts/package-lock.json
       - run: scripts/contracts-lint.sh
 
+  web:
+    name: Web (Node 24, generated API, admin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: scripts/web-check.sh
+
   security:
     name: Security (dependencies, secrets, image)
     runs-on: ubuntu-latest
