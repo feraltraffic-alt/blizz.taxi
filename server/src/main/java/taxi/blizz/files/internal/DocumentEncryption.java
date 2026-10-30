@@ -18,11 +18,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Re-encrypts the driver documents stored in the clear before issue #135, one file at a time, on any number of
- * instances. For each file: claim it for {@link #LEASE}; write the encrypted copy under a new key; switch the row to
- * it; delete the plain file. A crash at any point leaves a readable file: before the switch the row still points at
- * the plain file (the next run writes the copy again), after it the old key is kept in
- * {@code plain_key_pending_delete} until the plain file is gone. A plain file that is missing or unreadable is retried
+ * Re-encrypts the SAFE driver documents stored in the clear before issue #135, one file at a time, on any number of
+ * instances (a QUARANTINE one waits until the rescan makes it SAFE: the rescan owns it meanwhile). For each file: claim
+ * it for {@link #LEASE}; write the encrypted copy under a new key; switch the row to it, keeping the old key in
+ * {@code plain_key_pending_delete}; a later run deletes the plain file once {@link #GRACE} has passed since the switch,
+ * so a download that read the row just before the switch can still open it. A crash at any point leaves a readable
+ * file: before the switch the row still points at the plain file (the next run writes the copy again), after it the
+ * plain file waits in {@code plain_key_pending_delete}. A plain file that is missing or unreadable is retried
  * with back-off and counted ({@code blizz.files.documents.encryption_failing}); it is never marked encrypted and never
  * deleted. No transaction is held during file I/O.
  */
@@ -33,6 +35,8 @@ class DocumentEncryption {
     static final Duration LEASE = Duration.ofMinutes(10);
     static final Duration FIRST_RETRY = Duration.ofSeconds(30);
     static final Duration LONGEST_RETRY = Duration.ofHours(1);
+    /** How long a plain file stays after its row switched, for readers that read the row before the switch. */
+    static final Duration GRACE = Duration.ofMinutes(1);
     private static final int PER_RUN = 20;
     /** Suffix of the encrypted copy's key; the storage accepts only {@code [a-z0-9-]} in a key's parts. */
     static final String SUFFIX = "-e1";
@@ -72,7 +76,7 @@ class DocumentEncryption {
     private record Leftover(UUID fileId, String key) {
     }
 
-    /** Finishes interrupted deletes, then encrypts at most {@value #PER_RUN} due files; returns how many it switched. */
+    /** Deletes plain files switched more than {@link #GRACE} ago, then encrypts at most {@value #PER_RUN} due files; returns how many it switched. */
     int encryptDue() {
         Optional<FileCipher> cipher = encryption.cipher();
         if (cipher.isEmpty()) {
@@ -95,14 +99,16 @@ class DocumentEncryption {
     private void deleteLeftovers() {
         List<Leftover> leftovers = jdbc.sql("""
                         select id, plain_key_pending_delete from file_object
-                        where plain_key_pending_delete is not null order by id limit :limit""")
+                        where plain_key_pending_delete is not null and plain_pending_since <= :since
+                        order by id limit :limit""")
+                .param("since", now().minus(GRACE))
                 .param("limit", PER_RUN)
                 .query((rs, i) -> new Leftover(rs.getObject(1, UUID.class), rs.getString(2))).list();
         for (Leftover leftover : leftovers) {
             try {
                 storage.delete(leftover.key());
                 jdbc.sql("""
-                                update file_object set plain_key_pending_delete = null
+                                update file_object set plain_key_pending_delete = null, plain_pending_since = null
                                 where id = :id and plain_key_pending_delete = :key""")
                         .param("id", leftover.fileId()).param("key", leftover.key()).update();
             } catch (IOException | RuntimeException e) {
@@ -118,7 +124,7 @@ class DocumentEncryption {
                         update file_object
                         set encrypt_attempts = encrypt_attempts + 1, next_encrypt_at = :lease
                         where id = (select id from file_object
-                                    where purpose = 'DRIVER_DOCUMENT' and encryption is null
+                                    where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null
                                       and storage_key is not null
                                       and (next_encrypt_at is null or next_encrypt_at <= :now)
                                     order by next_encrypt_at nulls first, id
@@ -147,9 +153,10 @@ class DocumentEncryption {
             int switched = jdbc.sql("""
                             update file_object
                             set storage_key = :target, encryption = :scheme, plain_key_pending_delete = :plain,
-                                next_encrypt_at = null
-                            where id = :id and storage_key = :plain and encryption is null""")
+                                plain_pending_since = :now, next_encrypt_at = null
+                            where id = :id and storage_key = :plain and encryption is null and state = 'SAFE'""")
                     .param("target", target).param("scheme", FileCipher.SCHEME).param("plain", due.key())
+                    .param("now", now())
                     .param("id", due.fileId()).update();
             if (switched == 0) {
                 // Changed meanwhile (retired, or switched by another run): the copy is not ours to keep.
@@ -157,9 +164,7 @@ class DocumentEncryption {
                 return false;
             }
             steps.after("switched");
-            storage.delete(due.key());
-            jdbc.sql("update file_object set plain_key_pending_delete = null where id = :id and plain_key_pending_delete = :plain")
-                    .param("id", due.fileId()).param("plain", due.key()).update();
+            // The plain file is deleted by a later run, after GRACE (deleteLeftovers), not now.
             return true;
         } catch (IOException | FileStorage.TooLargeException e) {
             Duration wait = wait(due.attempts());

@@ -41,6 +41,8 @@ class DocumentEncryptionTests {
     @Autowired
     FileService files;
     @Autowired
+    JdbcFileService fileService;
+    @Autowired
     JdbcClient jdbc;
     @Value("${blizz.files.local-dir}")
     Path localDir;
@@ -94,9 +96,20 @@ class DocumentEncryptionTests {
                 .param("id", id).update();
     }
 
+    /** The grace period after the switch has passed: the next run deletes the plain files. */
+    private void graceOver(UUID id) {
+        jdbc.sql("""
+                        update file_object set plain_pending_since = now() - interval '2 minutes'
+                        where id = :id and plain_pending_since is not null""").param("id", id).update();
+        job.encryptDue();
+    }
+
     private void assertEncrypted(Plain doc) throws Exception {
         assertThat(column(doc.id(), "encryption")).isEqualTo("AES256GCM-STREAM-1");
         assertThat(column(doc.id(), "storage_key")).isEqualTo(doc.key() + DocumentEncryption.SUFFIX);
+        assertThat(Files.exists(path(doc.key()))).as("the plain file stays for the grace period").isTrue();
+        assertThat(download(doc.id())).isEqualTo(doc.bytes());
+        graceOver(doc.id());
         assertThat(column(doc.id(), "plain_key_pending_delete")).isNull();
         assertThat(Files.exists(path(doc.key()))).as("the plain file is gone").isFalse();
         byte[] onDisk = Files.readAllBytes(path(doc.key() + DocumentEncryption.SUFFIX));
@@ -188,6 +201,49 @@ class DocumentEncryptionTests {
         });
         job.encryptDue();
         assertThat(seen).hasSize(2).allSatisfy(bytes -> assertThat(bytes).isEqualTo(doc.bytes()));
+        assertEncrypted(doc);
+    }
+
+    @Test
+    void aReaderThatReadTheRowBeforeTheSwitchCanStillOpenThePlainFileAfterIt() throws Exception {
+        Plain doc = plainDocument();
+        String[] before = new String[2];
+        List<byte[]> opened = new ArrayList<>();
+        job.steps(step -> {
+            try {
+                if (step.equals("written")) {
+                    // A download reads the row now…
+                    before[0] = column(doc.id(), "storage_key");
+                    before[1] = column(doc.id(), "encryption");
+                } else if (step.equals("switched")) {
+                    // …and opens the file only after the switch.
+                    try (InputStream in = fileService.openStored(before[0], before[1])) {
+                        opened.add(in.readAllBytes());
+                    }
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        job.encryptDue();
+        assertThat(before[0]).isEqualTo(doc.key());
+        assertThat(opened).hasSize(1).allSatisfy(bytes -> assertThat(bytes).isEqualTo(doc.bytes()));
+        job.steps(null);
+        assertEncrypted(doc);
+    }
+
+    @Test
+    void aPlainDocumentInQuarantineIsLeftToTheRescan() throws Exception {
+        Plain doc = plainDocument();
+        jdbc.sql("update file_object set state = 'QUARANTINE' where id = :id").param("id", doc.id()).update();
+        job.encryptDue();
+        assertThat(column(doc.id(), "encryption")).isNull();
+        assertThat(column(doc.id(), "encrypt_attempts")).as("not claimed").isEqualTo("0");
+        assertThat(Files.exists(path(doc.key() + DocumentEncryption.SUFFIX))).isFalse();
+
+        // Once SAFE, it is encrypted.
+        jdbc.sql("update file_object set state = 'SAFE' where id = :id").param("id", doc.id()).update();
+        job.encryptDue();
         assertEncrypted(doc);
     }
 
