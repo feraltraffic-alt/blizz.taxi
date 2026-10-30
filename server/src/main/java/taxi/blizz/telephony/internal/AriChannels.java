@@ -14,8 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import taxi.blizz.configuration.Integrations;
+import taxi.blizz.platform.ProviderBreakers;
+import taxi.blizz.platform.ProviderBreakers.Provider;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -30,11 +33,23 @@ class AriChannels implements ChannelControl {
 
     private final Integrations integrations;
     private final JsonMapper json;
+    private final ProviderBreakers breakers;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     AriChannels(Integrations integrations, JsonMapper json) {
+        this(integrations, json, ProviderBreakers.none());
+    }
+
+    /**
+     * Every call goes through the Asterisk breaker and bulkhead (REQ-ENG-07): while Asterisk keeps failing, or already
+     * has its callers, a call is {@link Refused} at once, so a new call is surely not placed and the operator gets
+     * 503 PROVIDER_UNAVAILABLE without waiting out a timeout.
+     */
+    @Autowired
+    AriChannels(Integrations integrations, JsonMapper json, ProviderBreakers breakers) {
         this.integrations = integrations;
         this.json = json;
+        this.breakers = breakers;
     }
 
     @Override
@@ -54,7 +69,7 @@ class AriChannels implements ChannelControl {
         HttpResponse<Void> response = send(request(address)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("variables", variables))))
-                .timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.discarding());
+                .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.discarding());
         return switch (response.statusCode()) {
             case 200 -> Originated.STARTED;
             case 409 -> Originated.ALREADY_EXISTS;
@@ -65,8 +80,8 @@ class AriChannels implements ChannelControl {
     @Override
     @SuppressWarnings("unchecked")
     public Set<String> channels() throws IOException {
-        HttpResponse<String> response = send(request("/ari/channels").GET().timeout(Duration.ofSeconds(10)).build(),
-                HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = send(request("/ari/channels").GET().timeout(breakers.timeout(Provider.ASTERISK))
+                .build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IOException("Asterisk answered " + response.statusCode() + " to the list of channels");
         }
