@@ -8,15 +8,15 @@ import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import org.springframework.web.util.UriComponentsBuilder;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.SessionService;
 
 /**
  * Opens a live connection only with an access token of the audience of the address (REQ-USR-08): the
- * {@code Authorization: Bearer} header (mobile apps), or {@code access_token} in the query where a browser cannot
- * set headers.
+ * {@code Authorization: Bearer} header (mobile apps), or, where a browser cannot set headers, the subprotocol
+ * {@code blizz.bearer.<token>} next to {@link LiveHandler#PROTOCOL}, which the server answers. Never in the address
+ * (REQ-SEC-08): a query string ends up in proxy logs, so {@code ?access_token=} is refused.
  */
 class LiveHandshake implements HandshakeInterceptor {
 
@@ -59,6 +59,8 @@ class LiveHandshake implements HandshakeInterceptor {
         // nothing
     }
 
+    static final String BEARER_PROTOCOL = "blizz.bearer.";
+
     private static Optional<String> token(ServerHttpRequest request) {
         List<String> headers = request.getHeaders().getOrEmpty("Authorization");
         for (String header : headers) {
@@ -66,7 +68,14 @@ class LiveHandshake implements HandshakeInterceptor {
                 return Optional.of(header.substring(7).strip());
             }
         }
-        return Optional.ofNullable(UriComponentsBuilder.fromUri(request.getURI()).build()
-                .getQueryParams().getFirst("access_token"));
+        for (String protocol : request.getHeaders().getOrEmpty("Sec-WebSocket-Protocol")) {
+            for (String one : protocol.split(",")) {
+                String value = one.strip();
+                if (value.startsWith(BEARER_PROTOCOL)) {
+                    return Optional.of(value.substring(BEARER_PROTOCOL.length()));
+                }
+            }
+        }
+        return Optional.empty();
     }
 }

@@ -20,8 +20,8 @@ paths:
       operationId: openDriverLiveChannel
       summary: Live channel (WebSocket)
       description: >-
-        Upgrade to a WebSocket with the driver access token — the `Authorization: Bearer` header, or `access_token` in
-        the query where headers cannot be set. The server pushes a message for every change of an order the driver (also an order offered to him)
+        Upgrade to a WebSocket with the driver access token — the `Authorization: Bearer` header, or from a browser the
+        subprotocols `blizz.v1, blizz.bearer.<token>` (never in the address, REQ-SEC-08). The server pushes a message for every change of an order the driver (also an order offered to him)
         takes part in (section 20, REQ-NTF-04): `{"event_id", "type", "schema_version", "aggregate_type": "Order",
         "aggregate_id", "aggregate_version", "occurred_at", "correlation_id", "payload": {}}`. It carries no personal
         data: on a message the app reads the order over REST; duplicates and older versions are dropped, a gap in
@@ -30,9 +30,13 @@ paths:
         a fresh one. Commands stay REST (REQ-NTF-06).
       tags: [Live]
       parameters:
-        - name: access_token
-          in: query
+        - name: Sec-WebSocket-Protocol
+          in: header
           required: false
+          description: |
+            From a browser, which cannot set Authorization on a WebSocket: `blizz.v1, blizz.bearer.<access token>`.
+            The server answers `blizz.v1` only. A token in the address (`?access_token=`) is refused with 401: it
+            would reach proxy logs (REQ-SEC-08).
           schema:
             type: string
       responses:
