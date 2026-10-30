@@ -218,7 +218,7 @@ class ProviderBreakersTests {
                     .as("another provider answers").isEqualTo("route");
             assertThat(capped.state(Provider.WAYFORPAY)).as("a full bulkhead is not a failure").isEqualTo(State.CLOSED);
             assertThat(registry.get("blizz.provider.rejected").tag("provider", "wayforpay").tag("reason", "bulkhead")
-                    .counter().count()).isEqualTo(1.0);
+                    .functionCounter().count()).isEqualTo(1.0);
             release.countDown();
             for (Future<String> f : stuck) {
                 assertThat(f.get(5, TimeUnit.SECONDS)).isEqualTo("late");
@@ -242,7 +242,7 @@ class ProviderBreakersTests {
         assertThat(budgeted.mayRetry(Provider.FCM)).isTrue();
         assertThat(budgeted.mayRetry(Provider.FCM)).as("the burst of 2 is spent").isFalse();
         assertThat(registry.get("blizz.provider.rejected").tag("provider", "fcm").tag("reason", "retry_budget")
-                .counter().count()).isEqualTo(1.0);
+                .functionCounter().count()).isEqualTo(1.0);
         budgeted.call(Provider.FCM, () -> "sent", r -> false, e -> "error", () -> "refused");
         assertThat(budgeted.mayRetry(Provider.FCM)).as("half a retry per call is not a whole one yet").isFalse();
         budgeted.call(Provider.FCM, () -> "sent", r -> false, e -> "error", () -> "refused");
