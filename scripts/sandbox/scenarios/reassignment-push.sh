@@ -28,8 +28,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# take_offline TOKEN — ends the driver's shift even when another phone of the driver holds it (a scenario before this
+# one may have left the driver online there): this phone takes it over first.
+take_offline() {
+    local current id
+    current=$(api GET /api/driver/v1/work-sessions/current "$1")
+    id=$(jq -r '.session_id // empty' <<<"$current" 2>/dev/null || true)
+    [[ -n "$id" ]] || return 0
+    current=$(api POST "/api/driver/v1/work-sessions/$id/handover" "$1" \
+        "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}")
+    expect 200
+    api POST "/api/driver/v1/work-sessions/$id/close" "$1" \
+        "{\"command_id\":\"$(uuid)\",\"expected_version\":$(jq -r .session_version <<<"$current")}" >/dev/null
+    expect 200
+}
+
 say "Andrii (200 m) and Oleh (600 m) are online; a rider with the app orders"
-go_offline "$(sign_in DRIVER "+380500000001")"
+take_offline "$(sign_in DRIVER "+380500000001")"
 ADMIN=$(admin_token)
 OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 ANDRII=$(sign_in DRIVER "+380500000003")
