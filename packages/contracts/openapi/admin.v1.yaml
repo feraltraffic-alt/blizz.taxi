@@ -537,7 +537,9 @@ paths:
     get:
       operationId: getDriverDocumentFile
       summary: The scan of a driver's document
-      description: Private, not cached; every opening is audited (REQ-SEC-07). Needs driver.review.
+      description: >-
+        Private, not cached; every opening is audited (REQ-SEC-07). Needs driver.review. Always an attachment with
+        `X-Content-Type-Options: nosniff`, so a PDF is never rendered inline in the admin's browser (issue #105).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -6051,6 +6053,22 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReviewEvent"
+        duplicates:
+          description: >-
+            The driver's current documents whose file has the same content as a document of another driver (issue
+            #105). A warning for the reviewer; it blocks nothing.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [document_id, other_driver_id, other_document_id]
+            properties:
+              document_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              other_driver_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              other_document_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
 
     ReviewDecisionCommand:
       type: object

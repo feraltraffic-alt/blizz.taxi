@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -366,6 +367,21 @@ class JdbcFileService implements FileService {
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
         return content(fileId, row.type(), row.size(), row.key(), row.encryption());
+    }
+
+    @Override
+    public List<UUID> sameContent(UUID fileId, FilePurpose purpose) {
+        return jdbc.sql("""
+                        select o.id from file_object f
+                        join file_object o on o.purpose = f.purpose and o.state = 'SAFE' and o.sha256 = f.sha256
+                                          and o.id <> f.id
+                        where f.id = :id and f.purpose = :purpose and f.state = 'SAFE'
+                        order by o.created_at, o.id
+                        limit 50""")
+                .param("id", fileId)
+                .param("purpose", purpose.name())
+                .query(UUID.class)
+                .list();
     }
 
     /** The plain bytes; an encrypted file is decrypted while it is read. */
