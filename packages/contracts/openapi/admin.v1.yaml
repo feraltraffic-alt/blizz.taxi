@@ -3808,7 +3808,8 @@ paths:
       summary: Top up a rider's bonus account
       description: >-
         Needs wallets.manage; the reason is required, shown to the rider in the history and audited. A goodwill
-        top-up is the service's expense (journal PROMO_EXPENSE → RIDER_WALLET).
+        top-up is the service's expense (journal PROMO_EXPENSE → RIDER_WALLET). 422 TOP_UP_DAILY_LIMIT when it would
+        take the staff member over the settings' staff_top_ups limit for the currency.
       tags: [Wallets]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -3840,6 +3841,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
   /api/admin/v1/promotions:
     get:
@@ -4045,7 +4048,9 @@ paths:
       summary: Top up a driver's balance
       description: >-
         DEPOSIT — money the driver paid in (cash at the office, a transfer; reference optional); BONUS — a gift of the
-        service (its expense). Needs finance.manage; the reason is required and audited (ADR 0010).
+        service (its expense). Needs finance.manage; the reason is required and audited (ADR 0010). 422
+        TOP_UP_DAILY_LIMIT when it would take the staff member over the settings' staff_top_ups limit for the
+        currency.
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -4099,6 +4104,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
   /api/admin/v1/settings/driver-transfers:
     get:
@@ -5016,6 +5023,27 @@ components:
               type: boolean
               default: false
               description: When true, the four checked actions refuse a request with no version header.
+        staff_top_ups:
+          description: >-
+            Limit on what one staff member may top up in 24 hours (threat model C3, owner decision 30.10.2026): driver
+            balance top-ups (DEPOSIT and BONUS) and rider wallet top-ups together, per currency, counted over the
+            last 24 hours (a rolling window, not a calendar day). One more top-up over it is refused with 422
+            TOP_UP_DAILY_LIMIT and nothing is credited. A currency not listed has no daily limit; omitted when saving:
+            no daily limit. The limit of one top-up (100 000.00) stays.
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            daily_max_per_staff_minor:
+              type: object
+              description: Currency code to the most one staff member may top up in 24 hours, in minor units.
+              propertyNames:
+                pattern: "^[A-Z]{3}$"
+              additionalProperties:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 1000000000000
+              example: {UAH: 30000000, PLN: 3000000}
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
