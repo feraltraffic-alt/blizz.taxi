@@ -70,13 +70,17 @@ jobs:
           scripts/upgrade/stop.sh
           $PG_RUN psql -X -At -c "select now()" > cutoff.txt
           $PG_RUN psql -X -At -v ON_ERROR_STOP=1 -v cutoff="$(cat cutoff.txt)" < scripts/upgrade/snapshot.sql > before.txt
-          $PG_RUN psql -X -At -c "select max(version) from flyway_schema_history where success" > before-version.txt
+          $PG_RUN psql -X -At -c "select version || ' (' || count(*) over () || ' migrations)' from flyway_schema_history where success order by installed_rank desc limit 1" > before-version.txt
           cat before-version.txt before.txt
       - name: This version starts on it and migrates it
         run: |
           scripts/upgrade/start.sh server newer.log
-          $PG_RUN psql -X -At -c "select max(version) from flyway_schema_history where success" > after-version.txt
+          $PG_RUN psql -X -At -c "select version || ' (' || count(*) over () || ' migrations)' from flyway_schema_history where success order by installed_rank desc limit 1" > after-version.txt
           echo "Schema $(cat before-version.txt) -> $(cat after-version.txt)"
+          # Flyway versions compare as text in SQL ("9" > "20261030..."): the last applied by installed_rank instead.
+          if [ "$(cat before-version.txt)" = "$(cat after-version.txt)" ]; then
+            echo "::warning title=Upgrade::no migration between the two versions; the check proves only a restart"
+          fi
           $PG_RUN psql -X -At -v ON_ERROR_STOP=1 -v cutoff="$(cat cutoff.txt)" < scripts/upgrade/snapshot.sql > after.txt
           if ! diff -u before.txt after.txt; then echo "::error title=Upgrade::the snapshot changed"; exit 1; fi
           echo "# Newer version" > transcript.md
