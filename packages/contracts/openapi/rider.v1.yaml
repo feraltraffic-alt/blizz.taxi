@@ -2122,6 +2122,25 @@ components:
           type: [string, "null"]
           enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED, null]
 
+    DriverCard:
+      type: object
+      additionalProperties: false
+      required: [name, make, model, color, registration_number, photo_url]
+      properties:
+        name:
+          type: [string, "null"]
+        make:
+          type: string
+        model:
+          type: string
+        color:
+          type: string
+        registration_number:
+          type: string
+        photo_url:
+          description: Null until driver photos exist (REQ-DRV-01).
+          type: [string, "null"]
+
     HistoryVehicle:
       type: object
       additionalProperties: false
@@ -2293,8 +2312,33 @@ components:
           type: [string, "null"]
           enum: [PERSONAL, BROADCAST, STOPPED, EXHAUSTED, null]
         assignment:
+          description: >-
+            The current assignment only (REQ-RID-05, issue #143): null once it is revoked or released, so the old
+            driver leaves the screen.
           oneOf:
             - $ref: "#/components/schemas/Assignment"
+            - type: "null"
+        driver:
+          description: >-
+            Who is coming (REQ-RID-05): the driver and car of the current assignment; null without one. No phone —
+            calls go through the order.
+          oneOf:
+            - $ref: "#/components/schemas/DriverCard"
+            - type: "null"
+        driver_change:
+          description: >-
+            Set after the driver was changed before the start, with a reason the rider may see; null otherwise.
+            DRIVER_CANCELLED — the driver withdrew; SERVICE_REASSIGNED — the service took the driver off.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [reason_code, at]
+              properties:
+                reason_code:
+                  type: string
+                  enum: [DRIVER_CANCELLED, SERVICE_REASSIGNED]
+                at:
+                  $ref: "./common.yaml#/components/schemas/Timestamp"
             - type: "null"
         created_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
