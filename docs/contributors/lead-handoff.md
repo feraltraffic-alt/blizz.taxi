@@ -17,8 +17,9 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
   | Second Claude | `claude2` | `_5` |
 
   Suffixes `_3` and `_4` belonged to former contributors and are never reused.
-- Contributors are called by `@codex` in an issue or PR comment, or simply take open issues with their label
-  (`scripts/wait-for-work.sh <label>`).
+- Contributors take open issues with their label and watch issue and PR comments
+  (`scripts/wait-for-work.sh <label>`). Never write `@codex` in a comment: it wakes the ChatGPT Codex connector bot,
+  not our contributor.
 
 ## Work in flight
 
@@ -26,9 +27,9 @@ Audit of 30.10.2026: `docs/status/2026-10-30-server-audit.md` (what is left on t
 
 | Who | Queue (in order) |
 |---|---|
-| Codex | #130 (retention, approved; resolving the conflict with `main`) → #124 → #136 web foundation → #140 payments → #142 admin orders → #144 privacy |
-| Second Claude | #135 documents encrypted at rest (E6 after #130) → #137 rider app → #141 driver states → #143 operator and driver |
-| Lead | merges in migration order, reviews, #139 API conventions → #145 operations → #146 pilot proofs |
+| Codex | #124 (ownership sweep; the lead decided claim/reserve are two named shared-pool exceptions) → #136 web foundation → #149 retention layout and a line-length ratchet → #140 payments → #142 admin orders → #144 privacy |
+| Second Claude | PR #148 (#135 documents encrypted at rest: E6 and line wrapping left) → #141 driver states → #137 rider app (needs `packages/api-client` from #136) → #143 operator and driver |
+| Lead | PR #150 (#139 part 1: `current_version`, `retryable`), branch `claude/cursor-pagination` (#139 part 2: cursor pages, 202 for a card order; the rest of the lists is part 3) → #145 operations → #146 pilot proofs |
 
 Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
 Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
@@ -70,6 +71,11 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
 - The owner's e-mail is used only for authorship.
 
 ## Recent history (29–30.10.2026)
+
+- **#130 (Codex) merged** after its sandbox, but its Java was compressed onto lines of up to 250 characters, and the
+  lead missed it in review. Lessons case 14, AGENTS habit 12; the layout fix and a CI ratchet are #149.
+- **Cursor pages (#139):** `PageCursor` and `Page` in `platform`. A list sorts by its keys, then `id`, and asks its store
+  for `limit + 1` rows. The staff case queue's cursor holds the priority rank too, so it refuses `before`.
 
 - **#126 (lead):** OTP budget per range of numbers (`blizz.otp.max-per-range-per-hour`, 500); the tests and the
   sandbox raise it in their own config.
