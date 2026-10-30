@@ -89,6 +89,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - A staff command on an object that belongs to a city passes that city to `StaffAccess.require`; an object of no city (a promotion for every city, a new city) needs all cities. Name the city, or why there is none, in the PR.
 - A provider answer without the status you asked about is not a result: it stays UNKNOWN and is asked again. Only an explicit code (e.g. WayForPay 1127 "Order Not Found") may decide.
 - Inside a PostgreSQL transaction, a unique-key race is handled with `ON CONFLICT`, never by catching `DuplicateKeyException`: the transaction is already aborted.
+- For every row a cleanup deletes or fences, name which mechanisms read it and test those readers after cleanup, including replay and access after a failed deletion.
 - A lease is longer than the longest work it covers (a batch of provider calls with their timeouts), or each item is re-claimed just before it is worked on.
 - Collections in a hashed idempotency request serialize the same on every instance: sorted sets or lists, never `Set.copyOf`.
 - A query that runs on a schedule or on every request reads a bounded set (a lookback window, active rows, an index), never the whole history; prove it with a volume test and its `EXPLAIN`.

@@ -64,7 +64,7 @@ final class JpegMetadataStripper {
             }
             pos += 2 + length;
         }
-        Files.write(file, out.toByteArray());
+        Files.write(file,out.toByteArray(),java.nio.file.StandardOpenOption.WRITE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         return true;
     }
 }

@@ -36,7 +36,7 @@ final class ImageMetadataStripper {
             return false;
         }
         if (out != in) {
-            Files.write(file, out);
+            Files.write(file,out,java.nio.file.StandardOpenOption.WRITE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         }
         return true;
     }

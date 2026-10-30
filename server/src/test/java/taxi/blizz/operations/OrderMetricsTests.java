@@ -15,7 +15,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.TestQuotes;
 import taxi.blizz.TestRides;
-import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.SessionService;
 import taxi.blizz.operations.internal.DispatchWorker;
@@ -24,8 +23,19 @@ import taxi.blizz.pricing.QuoteService;
 
 /** REQ-OBS-02: actual commands on PostgreSQL; meter deltas across rollback, commit and replay. */
 @SpringBootTest
-@Import(TestcontainersConfiguration.class)
+@Import(OrderMetricsTests.OrderMetricsDatabase.class)
 class OrderMetricsTests {
+    /** The worker drains every city: other classes' old attempts must not enter this test's meter deltas. */
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+    static class OrderMetricsDatabase {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.boot.testcontainers.service.connection.ServiceConnection
+        org.testcontainers.postgresql.PostgreSQLContainer orderMetricsPostgres() {
+            return new org.testcontainers.postgresql.PostgreSQLContainer(org.testcontainers.utility.DockerImageName
+                    .parse("postgis/postgis:18-3.6").asCompatibleSubstituteFor("postgres"));
+        }
+    }
+
     static final GeoPoint PICKUP = new GeoPoint(-39.5, -159.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, -159.45);
     @Autowired Orders orders;

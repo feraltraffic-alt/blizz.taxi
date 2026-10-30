@@ -70,7 +70,7 @@ class SupportAttachments {
                 new AttachedCommand(operation, caseId, ids), Case.class, () -> {
                     List<StoredFile> attachments = validate(actor, ids);
                     SupportCases.Case result = command.get();
-                    attach(lastMessage(result), attachments);
+                    attach(actor, lastMessage(result), attachments);
                     return view(result);
                 });
     }
@@ -143,11 +143,14 @@ class SupportAttachments {
         return List.copyOf(result);
     }
 
-    private void attach(SupportCases.Message message, List<StoredFile> attachments) {
+    private void attach(Actor owner, SupportCases.Message message, List<StoredFile> attachments) {
         if (attachments.isEmpty()) {
             return;
         }
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(java.time.ZoneOffset.UTC);
+        // Two commands may list the same files in opposite orders; acquire their marker locks consistently.
+        attachments.stream().sorted(java.util.Comparator.comparing(StoredFile::fileId))
+                .forEach(file -> files.markAttached(owner, file.fileId(), FilePurpose.SUPPORT_ATTACHMENT));
         for (StoredFile file : attachments) {
             UUID existing = jdbc.sql("select message_id from support_message_attachment where file_id = :file")
                     .param("file", file.fileId()).query(UUID.class).optional().orElse(null);

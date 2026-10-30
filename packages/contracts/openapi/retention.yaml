@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: Technical data retention
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    RetentionDays:
+      type: object
+      additionalProperties: false
+      description: Separate retention in whole days for each kind. 0 always means keep forever. A change applies to the next cleanup run; already deleted data cannot be restored. Cleanup never deletes the audit log, journal, orders, payments or FAILED outbox events.
+      required: [sessions, sign_in_codes, code_deliveries, delivered_events, consumer_receipts, command_receipts, upload_sessions, quarantined_files, call_recordings]
+      properties:
+        sessions:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 30
+          description: "Refresh tokens after expiry or session revocation; active tokens are preserved. 0 means keep forever."
+        sign_in_codes:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 90
+          description: "One-time sign-in challenges, measured from creation. 0 means keep forever."
+        code_deliveries:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 90
+          description: "Code delivery attempts, measured from the attempt time. 0 means keep forever."
+        delivered_events:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 30
+          description: "Only DONE outbox events, measured from completion. FAILED and PENDING events are preserved. 0 means keep forever."
+        consumer_receipts:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 30
+          description: "Completed consumer inbox receipts, measured from completion. Receipts for events still PENDING or FAILED are preserved so replay skips completed consumers. 0 means keep forever."
+        command_receipts:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 30
+          description: "Completed command receipts, measured from completion. After expiry a command id is no longer remembered. 0 means keep forever."
+        upload_sessions:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 7
+          description: "Expired uploads never completed, or uploaded files never attached. Documents, support attachments and call recordings are preserved. 0 means keep forever."
+        quarantined_files:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 30
+          description: "Files stuck in quarantine; call recordings use their separate setting. 0 means keep forever."
+        call_recordings:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 0
+          description: "Recording files and metadata, including refused recordings still on Asterisk. Defaults to keeping forever. 0 means keep forever."
+    RetentionVersion:
+      type: object
+      additionalProperties: false
+      required: [version, days, changed_by, reason, changed_at]
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        days:
+          $ref: '#/components/schemas/RetentionDays'
+        changed_by:
+          type: [string, 'null']
+          format: uuid
+        reason:
+          type: [string, 'null']
+        changed_at:
+          type: [string, 'null']
+          format: date-time
+    ChangeRetention:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, days, reason]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        days:
+          $ref: '#/components/schemas/RetentionDays'
+        reason:
+          type: string
+          minLength: 1
