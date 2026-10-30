@@ -19,6 +19,7 @@ import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffDirectory;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -84,7 +85,7 @@ class StaffExtensions {
                     Optional<Extension> current = read(staffId, true);
                     long version = current.map(Extension::version).orElse(0L);
                     if (version != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The extension changed: expected "
+                        throw ConflictException.version(version, "The extension changed: expected "
                                 + "version " + expectedVersion + ", current " + version);
                     }
                     Extension after;

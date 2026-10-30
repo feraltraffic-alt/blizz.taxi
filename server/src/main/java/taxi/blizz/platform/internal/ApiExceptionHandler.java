@@ -30,6 +30,14 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    /** When a client may try again after a 503: a provider is down or its breaker is open (REQ-API-08). */
+    private final java.time.Duration unavailableRetryAfter;
+
+    ApiExceptionHandler(@org.springframework.beans.factory.annotation.Value(
+            "${blizz.api.unavailable-retry-after:PT30S}") java.time.Duration unavailableRetryAfter) {
+        this.unavailableRetryAfter = unavailableRetryAfter;
+    }
+
     @ExceptionHandler(DomainException.class)
     ResponseEntity<Object> domain(DomainException exception, WebRequest request) {
         return respond(exception, exception.code(), exception.code().httpStatus(), new HttpHeaders(), request);
@@ -61,12 +69,17 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<Object> respond(
             Exception exception, ErrorCode code, int status, HttpHeaders headers, WebRequest request) {
         ProblemDetail problem = problem(exception, code, status);
+        if (exception instanceof taxi.blizz.platform.ConflictException conflict) {
+            problem.setProperty("current_version", conflict.currentVersion());
+        }
         if (exception instanceof taxi.blizz.platform.UpgradeRequiredException upgrade) {
             problem.setProperty("minimum_version", upgrade.minimumVersion());
         }
-        if (exception instanceof RateLimitedException limited) {
-            long seconds = limited.retryAfter().toSeconds();
-            if (limited.retryAfter().getNano() != 0) seconds++; // Round up, never suggest an early retry.
+        java.time.Duration retryAfter = exception instanceof RateLimitedException limited ? limited.retryAfter()
+                : status == 503 ? unavailableRetryAfter : null;
+        if (retryAfter != null) {
+            long seconds = retryAfter.toSeconds();
+            if (retryAfter.getNano() != 0) seconds++; // Round up, never suggest an early retry.
             problem.setProperty("retryable", true);
             problem.setProperty("retry_after_seconds", seconds);
             headers = new HttpHeaders(headers);

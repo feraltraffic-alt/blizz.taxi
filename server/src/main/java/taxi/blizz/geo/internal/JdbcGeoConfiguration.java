@@ -17,6 +17,7 @@ import taxi.blizz.geo.GeoConfiguration;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -152,7 +153,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
                             rs.getString("state"), rs.getLong("version"))).optional()
                     .orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Geography not found"));
             if (before.version() != c.expectedVersion()) {
-                throw error(ErrorCode.VERSION_CONFLICT, "Stale geography version");
+                throw ConflictException.version(before.version(), "Stale geography version");
             }
             if ("ARCHIVED".equals(before.state()) || (publish && !"DRAFT".equals(before.state()))) {
                 throw error(ErrorCode.STATE_CONFLICT, "Geography cannot make this transition");

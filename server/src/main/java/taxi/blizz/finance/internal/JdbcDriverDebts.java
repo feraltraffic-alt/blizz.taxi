@@ -21,6 +21,7 @@ import taxi.blizz.finance.Ledger.Line;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -82,7 +83,7 @@ class JdbcDriverDebts implements DriverDebts {
                             .single();
                     long current = before.version();
                     if (current != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The limit changed");
+                        throw ConflictException.version(current, "The limit changed");
                     }
                     long version = current + 1;
                     jdbc.sql("""

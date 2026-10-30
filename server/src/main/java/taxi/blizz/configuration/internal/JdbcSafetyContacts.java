@@ -23,6 +23,7 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -99,7 +100,7 @@ class JdbcSafetyContacts implements SafetyContacts {
                 new ChangeRequest(cityId, expectedVersion, clean, why), Version.class, () -> {
                     Version before = read(cityId, true);
                     if (before.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The contacts changed: expected version "
+                        throw ConflictException.version(before.version(), "The contacts changed: expected version "
                                 + expectedVersion + ", current " + before.version());
                     }
                     OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
@@ -115,9 +116,8 @@ class JdbcSafetyContacts implements SafetyContacts {
                                     .param("support", clean.supportPhone()).param("extra", extra)
                                     .param("by", actor.id()).param("reason", why).param("now", now).update();
                         } catch (DuplicateKeyException e) {
-                            // Someone else configured the city at the same moment.
-                            throw new DomainException(ErrorCode.VERSION_CONFLICT,
-                                    "The contacts changed: expected version 0");
+                            // Someone else configured the city at the same moment: version 1 is theirs.
+                            throw ConflictException.version(1, "The contacts changed: expected version 0");
                         }
                     } else {
                         jdbc.sql("""

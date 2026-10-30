@@ -84,6 +84,16 @@ class ApiExceptionHandlerTests {
     }
 
     @Test
+    void aConflictOnAVersionedObjectNamesItsCurrentVersion() throws Exception {
+        Map<String, Object> body = check(mvc.perform(get("/__errors/conflict").param("code", "VERSION_CONFLICT"))
+                .andReturn(), 409, ErrorCode.VERSION_CONFLICT);
+        assertThat(body).containsEntry("current_version", 7);
+        body = check(mvc.perform(get("/__errors/conflict").param("code", "STATE_CONFLICT")).andReturn(), 409,
+                ErrorCode.STATE_CONFLICT);
+        assertThat(body).containsEntry("current_version", 7);
+    }
+
+    @Test
     void idempotencyConflictUsesTheSameHandler() throws Exception {
         check(mvc.perform(get("/__errors/idempotency")).andReturn(), 409, ErrorCode.IDEMPOTENCY_CONFLICT);
     }
@@ -194,8 +204,15 @@ class ApiExceptionHandlerTests {
         assertThat(body).containsEntry("status", status).containsEntry("code", code.name())
                 .containsEntry("type", "https://errors.blizz.taxi/" + code.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'))
                 .containsEntry("correlation_id", result.getResponse().getHeader(CorrelationId.HEADER));
-        if (!"/__errors/rate-limit".equals(result.getRequest().getRequestURI())) {
+        if (status == 503) {
+            // A provider is down: the client may try again, and is told when (REQ-API-08, #139).
+            assertThat(body).containsEntry("retryable", true).containsEntry("retry_after_seconds", 30);
+            assertThat(result.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
+        } else if (!"/__errors/rate-limit".equals(result.getRequest().getRequestURI())) {
             assertThat(body).doesNotContainKeys("retryable", "retry_after_seconds");
+        }
+        if (!"/__errors/conflict".equals(result.getRequest().getRequestURI())) {
+            assertThat(body).doesNotContainKey("current_version");
         }
         return body;
     }
@@ -252,6 +269,11 @@ class ApiExceptionHandlerTests {
 
         @GetMapping("/__errors/domain")
         void domain(@RequestParam ErrorCode code) { throw new DomainException(code, "secret provider details"); }
+
+        @GetMapping("/__errors/conflict")
+        void conflict(@RequestParam ErrorCode code) {
+            throw new taxi.blizz.platform.ConflictException(code, 7, "the object changed");
+        }
 
         @GetMapping("/__errors/idempotency")
         void idempotency() { throw new IdempotencyConflictException(new CommandKey(

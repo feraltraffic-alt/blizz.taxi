@@ -17,6 +17,7 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -81,7 +82,7 @@ class CallLines {
                     Optional<Line> current = read(number, true);
                     long version = current.map(Line::version).orElse(0L);
                     if (version != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The line changed: expected version "
+                        throw ConflictException.version(version, "The line changed: expected version "
                                 + expectedVersion + ", current " + version);
                     }
                     OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);

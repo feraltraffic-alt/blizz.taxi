@@ -120,6 +120,13 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **test a parser on realistic input with several elements**, at least two of every kind, and on every way the element can be damaged. One sample per test proves the first step only.
 - **Habit:** **every network call has a total deadline**, writes included, and the deadline is shorter than any lease around it.
 
+## 14. Code compressed onto long lines (PR #130, issue #118)
+
+- **Task:** a retention period for each kind of technical data, set in the admin, and the jobs that enforce it.
+- **Handed in:** working code. The jobs delete in bounded batches, a FAILED event is kept, and the sandbox proved the boundary.
+- **Missed:** the code was written compressed: several statements on one line, no spaces, lines up to 250 characters (`if(...)throw ...` after a read on the same line). CI has no formatter, and the lead reviewed the logic and missed the layout. Such code hides a missed condition from every later reader.
+- **Habit:** **write in the layout of the surrounding code**: one statement per line, at most 120 characters, SQL in text blocks. Before the PR, `awk 'length>120'` over your files prints nothing (the ratchet from #149 enforces it).
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

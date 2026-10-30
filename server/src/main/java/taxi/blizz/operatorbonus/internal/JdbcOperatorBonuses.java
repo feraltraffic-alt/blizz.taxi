@@ -26,6 +26,7 @@ import taxi.blizz.operations.Orders;
 import taxi.blizz.operatorbonus.OperatorBonuses;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -124,7 +125,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                         + "effective_at, changed_by, reason from operator_bonus_settings order by version desc limit 1 for update")
                 .query((rs, i) -> mapSettings(rs)).single();
         if (current.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "Operator bonus settings changed");
+            throw ConflictException.version(current.version(), "Operator bonus settings changed");
         }
         long version = current.version() + 1;
         OffsetDateTime now = now();
@@ -139,7 +140,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                     .param("rules", json.writeValueAsString(settings.timeRules())).param("at", now)
                     .param("by", actor.id()).param("reason", reason).update();
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "Operator bonus settings changed");
+            // Version `version` was written by someone else at the same moment.
+            throw ConflictException.version(version, "Operator bonus settings changed");
         }
         audit.record(new AuditEntry(actor, "operator_bonus.settings.change", "operator_bonus_settings",
                 Long.toString(version), reason, current.settings(), settings));

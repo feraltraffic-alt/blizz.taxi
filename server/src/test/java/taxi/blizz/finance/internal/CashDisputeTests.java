@@ -160,6 +160,11 @@ class CashDisputeTests {
                 " "), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> disputes.decide(finance, UUID.randomUUID(), ride.order().id(), version + 3,
                 Decision.RIDER_PAID, "x"), ErrorCode.VERSION_CONFLICT);
+        // The answer names the version the dispute has now, so the client reloads it (REQ-API-07, #139).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> disputes.decide(finance, UUID.randomUUID(),
+                        ride.order().id(), version + 3, Decision.RIDER_PAID, "x"))
+                .isInstanceOfSatisfying(taxi.blizz.platform.ConflictException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.currentVersion()).isEqualTo(version));
         assertCode(() -> disputes.decide(staff("settings.manage"), UUID.randomUUID(), ride.order().id(), version,
                 Decision.RIDER_PAID, "x"), ErrorCode.ACCESS_DENIED);
         UUID command = UUID.randomUUID();

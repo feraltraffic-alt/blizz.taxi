@@ -22,6 +22,7 @@ import taxi.blizz.finance.Ledger.Line;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -118,7 +119,7 @@ class JdbcCashDisputes implements CashDisputes {
                 new DecideRequest(orderId, expectedVersion, decision, why), Dispute.class, () -> {
                     Dispute d = find(orderId, true);
                     if (d.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The dispute changed; reload it");
+                        throw ConflictException.version(d.version(), "The dispute changed; reload it");
                     }
                     if (d.decision() != null) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "The dispute is decided already");

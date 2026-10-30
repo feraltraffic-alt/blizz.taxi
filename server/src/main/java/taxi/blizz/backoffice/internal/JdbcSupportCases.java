@@ -21,6 +21,7 @@ import taxi.blizz.operations.OrderView;
 import taxi.blizz.operations.Orders;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -445,7 +446,7 @@ class JdbcSupportCases implements SupportCases {
     private Case lockVersion(UUID caseId, long expectedVersion) {
         Case c = lock(caseId);
         if (c.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The case changed");
+            throw ConflictException.version(c.version(), "The case changed");
         }
         return c;
     }

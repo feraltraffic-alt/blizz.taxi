@@ -18,6 +18,7 @@ import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -97,7 +98,7 @@ class JdbcServiceSettings implements ServiceSettings {
                     jdbc.sql("select pg_advisory_xact_lock(hashtext('service-settings'))").query().singleRow();
                     Version before = current();
                     if (before.version() != expectedVersion) {
-                        throw new DomainException(ErrorCode.VERSION_CONFLICT, "The settings changed");
+                        throw ConflictException.version(before.version(), "The settings changed");
                     }
                     OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
                     long version = before.version() + 1;

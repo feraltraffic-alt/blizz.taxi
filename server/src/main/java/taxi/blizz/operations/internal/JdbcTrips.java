@@ -18,6 +18,7 @@ import taxi.blizz.operations.TripView;
 import taxi.blizz.operations.Trips;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
@@ -106,7 +107,7 @@ class JdbcTrips implements Trips {
                 new PhaseRequest(tripId, expectedVersion, exceptionReason), TripView.class, () -> {
                     Locked trip = lock(driver, tripId, expectedVersion);
                     if (!"TO_PICKUP".equals(trip.phase())) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Arrival is only possible on the way to the pickup");
+                        throw ConflictException.state(expectedVersion, "Arrival is only possible on the way to the pickup");
                     }
                     Arrival check = arrivalCheck(driver, trip.orderId());
                     String exception = blankToNull(exceptionReason);
@@ -141,11 +142,11 @@ class JdbcTrips implements Trips {
                     String exception = blankToNull(exceptionReason);
                     if ("TO_PICKUP".equals(trip.phase())) {
                         if (exception == null) {
-                            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                            throw ConflictException.state(expectedVersion,
                                     "Confirm the arrival first, or start with an exception reason");
                         }
                     } else if (!"WAITING".equals(trip.phase())) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The trip cannot start now");
+                        throw ConflictException.state(expectedVersion, "The trip cannot start now");
                     }
                     OffsetDateTime now = core.now();
                     jdbc.sql("""
@@ -268,7 +269,7 @@ class JdbcTrips implements Trips {
                 new CompleteRequest(tripId, expectedVersion, reportedAt, cashReceived), TripView.class, () -> {
                     Locked trip = lock(driver, tripId, expectedVersion);
                     if (!"IN_PROGRESS".equals(trip.phase())) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a started trip can be completed");
+                        throw ConflictException.state(expectedVersion, "Only a started trip can be completed");
                     }
                     record OrderFacts(PaymentMethod payment, UUID quoteId, UUID payerClientId) {
                     }
@@ -398,10 +399,10 @@ class JdbcTrips implements Trips {
                 .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getLong(4)))
                 .single();
         if (!"COMMITTED".equals(row.assignmentState())) {
-            throw new DomainException(ErrorCode.STATE_CONFLICT, "The assignment is no longer active");
+            throw ConflictException.state(row.version(), "The assignment is no longer active");
         }
         if (row.version() != expectedVersion) {
-            throw new DomainException(ErrorCode.VERSION_CONFLICT, "The trip changed");
+            throw ConflictException.version(row.version(), "The trip changed");
         }
         return new Locked(tripId, orderId, row.assignmentId(), row.phase(), order);
     }
