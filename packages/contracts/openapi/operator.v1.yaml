@@ -1192,17 +1192,21 @@ paths:
       operationId: openOperatorLiveChannel
       summary: Live channel of the operator workstation (WebSocket)
       description: >-
-        Upgrade to a WebSocket with an operator access token — the `Authorization: Bearer` header, or `access_token`
-        in the query where a browser cannot set headers. The server pushes `{"type": "CallRinging", "call_id", …,
+        Upgrade to a WebSocket with an operator access token — the `Authorization: Bearer` header, or from the
+        browser the subprotocols `blizz.v1, blizz.bearer.<token>` (never in the address, REQ-SEC-08). The server pushes `{"type": "CallRinging", "call_id", …,
         "payload": CallRinging}` (calls.yaml) to the staff with calls.answer for the called number's city as a call
         rings (card-pop, REQ-OPS-01/08). The first message is `{"type": "Connected"}`; the client may send `ping`
         (answer `{"type": "Pong"}`). Closed with code 4403 within seconds when the session is revoked or a right it needs is taken away (sign in again), and 4401 when the access token expires — reconnect with a fresh
         one. The call log is GET /api/operator/v1/calls; commands stay REST.
       tags: [Calls]
       parameters:
-        - name: access_token
-          in: query
+        - name: Sec-WebSocket-Protocol
+          in: header
           required: false
+          description: |
+            From a browser, which cannot set Authorization on a WebSocket: `blizz.v1, blizz.bearer.<access token>`.
+            The server answers `blizz.v1` only. A token in the address (`?access_token=`) is refused with 401: it
+            would reach proxy logs (REQ-SEC-08).
           schema:
             type: string
       responses:

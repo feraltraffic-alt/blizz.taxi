@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 150
     services:
       postgres:
-        image: postgis/postgis:18-3.6
+        image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
         env:
           POSTGRES_DB: blizz
           POSTGRES_USER: blizz
@@ -51,7 +51,7 @@ jobs:
       - name: Install contract tools
         run: cd packages/contracts && npm ci --no-fund --no-audit
       - name: Build the server
-        run: cd server && mvn -B -q -ntp -DskipTests package
+        run: cd server && ./mvnw -B -q -ntp -DskipTests package
       - name: Start the server (profile sandbox)
         run: |
           cd server
@@ -88,6 +88,21 @@ jobs:
             node scripts/sandbox/coverage.mjs >> "$GITHUB_STEP_SUMMARY" || true
           fi
           exit $failed
+      - name: Back up, restore into an empty database, start on it (issue 145 E3)
+        if: inputs.scenario == 'all'
+        env:
+          ERASURE_JOURNAL_DIR: /tmp/blizz-erasure-journal
+        run: |
+          set -o pipefail
+          echo -e "\n# Scenario: backup-restore" >> transcript.md
+          export PG_RUN="docker run --rm --network host -e PGHOST=localhost -e PGUSER=blizz -e PGPASSWORD=blizz-sandbox
+            -e PGDATABASE=blizz -v $PWD:/w -w /w postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4"
+          if TRANSCRIPT=transcript.md bash scripts/sandbox/backup-restore.sh 2> stderr-backup-restore.txt; then
+            echo "✅ backup-restore" >> results.txt
+          else
+            echo "❌ backup-restore" >> results.txt
+            tail -n 20 transcript.md stderr-backup-restore.txt; exit 1
+          fi
       - name: Keep it up behind a temporary public address
         if: always() && inputs.minutes != '0'
         env:

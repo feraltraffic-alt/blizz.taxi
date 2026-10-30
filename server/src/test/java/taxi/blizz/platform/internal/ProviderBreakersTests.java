@@ -184,4 +184,101 @@ class ProviderBreakersTests {
         assertThat(registry.get("blizz.provider.breaker.state").tag("provider", "graphhopper").gauge().value())
                 .isEqualTo(0.0);
     }
+
+    // ------------------------------------------------------------ issue #145: bulkhead and retry budget
+
+    /**
+     * #145 E1: a provider that hangs holds at most its cap of callers; the next caller of that provider gets the
+     * degradation at once instead of waiting, and the other providers keep answering (REQ-ENG-07, AC-22).
+     */
+    @Test
+    void aHangingProviderHoldsAtMostItsCapAndTheOthersKeepAnswering() throws Exception {
+        InMemoryProviderBreakers capped = new InMemoryProviderBreakers(new BreakerProperties(Map.of(
+                "wayforpay", new BreakerProperties.Settings(5, Duration.ofSeconds(30), 2, null, null, null))), clock);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        capped.bindTo(registry);
+        CountDownLatch hanging = new CountDownLatch(2);
+        CountDownLatch release = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            List<Future<String>> stuck = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                stuck.add(pool.submit(() -> capped.call(Provider.WAYFORPAY, () -> {
+                    hanging.countDown();
+                    release.await();
+                    return "late";
+                }, r -> false, e -> "error", () -> "refused")));
+            }
+            try {
+                assertThat(hanging.await(5, TimeUnit.SECONDS)).isTrue();
+                long started = System.nanoTime();
+                assertThat(capped.call(Provider.WAYFORPAY, () -> "third", r -> false, e -> "error",
+                        () -> "refused")).as("the third caller is not let in").isEqualTo("refused");
+                assertThat(Duration.ofNanos(System.nanoTime() - started)).as("and does not wait").isLessThan(
+                        Duration.ofMillis(500));
+                assertThat(capped.call(Provider.GRAPHHOPPER, () -> "route", r -> false, e -> "error",
+                        () -> "refused")).as("another provider answers").isEqualTo("route");
+                assertThat(capped.state(Provider.WAYFORPAY)).as("a full bulkhead is not a failure")
+                        .isEqualTo(State.CLOSED);
+                assertThat(registry.get("blizz.provider.rejected").tag("provider", "wayforpay")
+                        .tag("reason", "bulkhead").functionCounter().count()).isEqualTo(1.0);
+            } finally {
+                // Always let the stuck callers go: a failed assertion must fail the test, not hang it.
+                release.countDown();
+            }
+            for (Future<String> f : stuck) {
+                assertThat(f.get(5, TimeUnit.SECONDS)).isEqualTo("late");
+            }
+        }
+        assertThat(capped.call(Provider.WAYFORPAY, () -> "free again", r -> false, e -> "error", () -> "refused"))
+                .isEqualTo("free again");
+    }
+
+    /**
+     * #145 E2: retries spend a budget that only the provider's own traffic refills, so a storm of retries cannot pile
+     * onto a provider that is already struggling. A first attempt is never refused by the budget.
+     */
+    @Test
+    void retriesSpendABudgetThatFirstAttemptsRefill() {
+        InMemoryProviderBreakers budgeted = new InMemoryProviderBreakers(new BreakerProperties(Map.of(
+                "fcm", new BreakerProperties.Settings(100, Duration.ofSeconds(30), null, 0.5, 2, null))), clock);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        budgeted.bindTo(registry);
+        assertThat(budgeted.mayRetry(Provider.FCM)).isTrue();
+        assertThat(budgeted.mayRetry(Provider.FCM)).isTrue();
+        assertThat(budgeted.mayRetry(Provider.FCM)).as("the burst of 2 is spent").isFalse();
+        assertThat(registry.get("blizz.provider.rejected").tag("provider", "fcm").tag("reason", "retry_budget")
+                .functionCounter().count()).isEqualTo(1.0);
+        budgeted.call(Provider.FCM, () -> "sent", r -> false, e -> "error", () -> "refused");
+        assertThat(budgeted.mayRetry(Provider.FCM)).as("half a retry per call is not a whole one yet").isFalse();
+        budgeted.call(Provider.FCM, () -> "sent", r -> false, e -> "error", () -> "refused");
+        assertThat(budgeted.mayRetry(Provider.FCM)).as("two calls earned one retry").isTrue();
+        for (int i = 0; i < 20; i++) {
+            budgeted.call(Provider.FCM, () -> "sent", r -> false, e -> "error", () -> "refused");
+        }
+        assertThat(budgeted.mayRetry(Provider.FCM)).isTrue();
+        assertThat(budgeted.mayRetry(Provider.FCM)).isTrue();
+        assertThat(budgeted.mayRetry(Provider.FCM)).as("never more than the burst").isFalse();
+        assertThat(budgeted.mayRetry(Provider.GRAPHHOPPER)).as("budgets are per provider").isTrue();
+    }
+
+    /** #145: WayForPay and Asterisk have breakers too; each provider has its own timeout and cap. */
+    @Test
+    void everyProviderHasItsSettingsWithDefaults() {
+        BreakerProperties set = new BreakerProperties(Map.of("asterisk",
+                new BreakerProperties.Settings(null, null, 4, null, null, Duration.ofSeconds(3))));
+        assertThat(set.timeout(Provider.ASTERISK)).isEqualTo(Duration.ofSeconds(3));
+        assertThat(set.maxConcurrent(Provider.ASTERISK)).isEqualTo(4);
+        assertThat(set.timeout(Provider.WAYFORPAY)).isEqualTo(Duration.ofSeconds(10));
+        assertThat(set.maxConcurrent(Provider.WAYFORPAY)).isEqualTo(16);
+        assertThat(set.retryRatio(Provider.WAYFORPAY)).isEqualTo(0.2);
+        assertThat(set.retryBurst(Provider.WAYFORPAY)).isEqualTo(10);
+        for (BreakerProperties.Settings wrong : List.of(
+                new BreakerProperties.Settings(null, null, 0, null, null, null),
+                new BreakerProperties.Settings(null, null, null, -0.1, null, null),
+                new BreakerProperties.Settings(null, null, null, null, 0, null),
+                new BreakerProperties.Settings(null, null, null, null, null, Duration.ZERO))) {
+            assertThatThrownBy(() -> new BreakerProperties(Map.of("asterisk", wrong)))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
 }

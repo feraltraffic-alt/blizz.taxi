@@ -18,7 +18,7 @@ import java.util.function.Supplier;
 public interface ProviderBreakers {
 
     enum Provider {
-        GRAPHHOPPER, GEOCODING, TURBOSMS, FCM
+        GRAPHHOPPER, GEOCODING, TURBOSMS, FCM, WAYFORPAY, ASTERISK
     }
 
     enum State {
@@ -33,12 +33,23 @@ public interface ProviderBreakers {
     /**
      * Runs {@code action} unless the provider's breaker is open. A thrown exception goes to {@code onError} (and
      * counts as a failure, except an interruption); a result {@code failed} accepts counts as a failure but is still
-     * returned. While open, {@code whenOpen} answers and the provider is not called.
+     * returned. While open, or while the provider already has its {@code max-concurrent} callers (the bulkhead),
+     * {@code whenOpen} answers at once and the provider is not called.
      */
     <T> T call(Provider provider, Action<T> action, Predicate<T> failed, Function<Exception, T> onError,
                Supplier<T> whenOpen);
 
     State state(Provider provider);
+
+    /**
+     * Whether a retry of an earlier failed call may go to the provider now (REQ-ENG-07): retries spend a budget that
+     * the provider's calls refill, so they never pile onto a provider that is struggling. A caller refused here
+     * tries later, as if the provider had not answered. A first attempt never asks.
+     */
+    boolean mayRetry(Provider provider);
+
+    /** How long one call to the provider may take: {@code blizz.providers.<name>.timeout}. */
+    java.time.Duration timeout(Provider provider);
 
     /** Real breakers with the same settings for every provider, for code built outside Spring (tests). */
     static ProviderBreakers of(int failureThreshold, java.time.Duration openFor, java.time.Clock clock) {
@@ -64,6 +75,16 @@ public interface ProviderBreakers {
             @Override
             public State state(Provider provider) {
                 return State.CLOSED;
+            }
+
+            @Override
+            public boolean mayRetry(Provider provider) {
+                return true;
+            }
+
+            @Override
+            public java.time.Duration timeout(Provider provider) {
+                return java.time.Duration.ofSeconds(10);
             }
         };
     }
