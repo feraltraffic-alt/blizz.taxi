@@ -314,7 +314,8 @@ class AdmissionCityTests {
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, city_scope, all_cities, state,
                                                 created_at, updated_at)
-                        values (:id, :login, 'Reviewer', 'ADMIN', :permissions, :scope, :all, 'ACTIVE', now(), now())""")
+                        values (:id, :login, 'Reviewer', 'ADMIN', :permissions, :scope, :all, 'ACTIVE', now(),
+                                now())""")
                 .param("id", id).param("login", "admission-" + id).param("permissions", permissions)
                 .param("scope", cities == null ? new UUID[0] : cities).param("all", cities == null).update();
         return new Actor(SubjectType.STAFF, id);
