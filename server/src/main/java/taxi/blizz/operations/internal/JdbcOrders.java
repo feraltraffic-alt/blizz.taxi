@@ -584,13 +584,13 @@ class JdbcOrders implements Orders {
         String active = activeOnly
                 ? " and status in ('SCHEDULED', 'AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')"
                 : "";
-        String cursor = after == null ? "" : " and created_at < :afterAt";
+        String cursor = after == null ? "" : " and (created_at, id) < (:afterAt, :afterId)";
         JdbcClient.StatementSpec query = jdbc.sql("select id from ride_order where city_id = :city" + active + cursor
                         + " order by created_at desc, id desc limit :limit")
                 .param("city", cityId)
                 .param("limit", size);
         if (after != null) {
-            query = query.param("afterAt", after.time(0));
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query(UUID.class).list().stream().map(core::view).toList();
     }
@@ -602,7 +602,7 @@ class JdbcOrders implements Orders {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a rider can read rider order history");
         }
         int size = Math.max(1, Math.min(limit, PageCursor.MAX_FETCH));
-        String cursor = after == null ? "" : " and o.created_at < :afterAt";
+        String cursor = after == null ? "" : " and (o.created_at, o.id) < (:afterAt, :afterId)";
         JdbcClient.StatementSpec query = jdbc.sql("""
                         select o.id, o.short_number, o.status, o.created_at, o.pickup_label, o.dropoff_label,
                                o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
@@ -622,7 +622,7 @@ class JdbcOrders implements Orders {
                         """ + cursor + " order by o.created_at desc, o.id desc limit :limit")
                 .param("payer", payer.id()).param("limit", size);
         if (after != null) {
-            query = query.param("afterAt", after.time(0));
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query((rs, i) -> {
             UUID assignmentId = rs.getObject("assignment_id", UUID.class);

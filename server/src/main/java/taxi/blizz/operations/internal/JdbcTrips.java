@@ -76,7 +76,7 @@ class JdbcTrips implements Trips {
     public List<HistoryItem> history(Actor driver, PageCursor after, int limit) {
         requireDriver(driver);
         int size = Math.max(1, Math.min(limit, PageCursor.MAX_FETCH));
-        String cursor = after == null ? "" : " and t.created_at < :afterAt";
+        String cursor = after == null ? "" : " and (t.created_at, t.id) < (:afterAt, :afterId)";
         JdbcClient.StatementSpec query = jdbc.sql("""
                         select t.id, t.order_id, o.short_number, t.created_at, o.pickup_label, o.dropoff_label,
                                o.final_price_minor, o.currency, o.payment_method, t.phase
@@ -87,7 +87,7 @@ class JdbcTrips implements Trips {
                         """ + cursor + " order by t.created_at desc, t.id desc limit :limit")
                 .param("driver", driver.id()).param("limit", size);
         if (after != null) {
-            query = query.param("afterAt", after.time(0));
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query((rs, i) -> new HistoryItem(rs.getObject("id", UUID.class),
                         rs.getObject("order_id", UUID.class), rs.getLong("short_number"),
