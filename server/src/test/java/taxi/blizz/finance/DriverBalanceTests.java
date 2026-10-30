@@ -85,12 +85,14 @@ class DriverBalanceTests {
         jdbc.sql("""
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', now(), now())""")
-                .param("id", id).param("phone", phone(id)).update();
+                .param("id", id).param("phone", taxi.blizz.TestPhones.unique("+38098", 7)).update();
         return new Actor(SubjectType.DRIVER, id);
     }
 
-    private static String phone(UUID id) {
-        return taxi.blizz.TestPhones.unique("+38098", 7);
+    /** The driver's number, as it was stored: the transfer finds the recipient by it. */
+    private String phone(UUID id) {
+        return jdbc.sql("select phone_normalized from driver where id = :id").param("id", id).query(String.class)
+                .single();
     }
 
     private long balance(Actor driver) {
