@@ -208,18 +208,23 @@ class ProviderBreakersTests {
                     return "late";
                 }, r -> false, e -> "error", () -> "refused")));
             }
-            assertThat(hanging.await(5, TimeUnit.SECONDS)).isTrue();
-            long started = System.nanoTime();
-            assertThat(capped.call(Provider.WAYFORPAY, () -> "third", r -> false, e -> "error", () -> "refused"))
-                    .as("the third caller is not let in").isEqualTo("refused");
-            assertThat(Duration.ofNanos(System.nanoTime() - started)).as("and does not wait").isLessThan(
-                    Duration.ofMillis(500));
-            assertThat(capped.call(Provider.GRAPHHOPPER, () -> "route", r -> false, e -> "error", () -> "refused"))
-                    .as("another provider answers").isEqualTo("route");
-            assertThat(capped.state(Provider.WAYFORPAY)).as("a full bulkhead is not a failure").isEqualTo(State.CLOSED);
-            assertThat(registry.get("blizz.provider.rejected").tag("provider", "wayforpay").tag("reason", "bulkhead")
-                    .functionCounter().count()).isEqualTo(1.0);
-            release.countDown();
+            try {
+                assertThat(hanging.await(5, TimeUnit.SECONDS)).isTrue();
+                long started = System.nanoTime();
+                assertThat(capped.call(Provider.WAYFORPAY, () -> "third", r -> false, e -> "error",
+                        () -> "refused")).as("the third caller is not let in").isEqualTo("refused");
+                assertThat(Duration.ofNanos(System.nanoTime() - started)).as("and does not wait").isLessThan(
+                        Duration.ofMillis(500));
+                assertThat(capped.call(Provider.GRAPHHOPPER, () -> "route", r -> false, e -> "error",
+                        () -> "refused")).as("another provider answers").isEqualTo("route");
+                assertThat(capped.state(Provider.WAYFORPAY)).as("a full bulkhead is not a failure")
+                        .isEqualTo(State.CLOSED);
+                assertThat(registry.get("blizz.provider.rejected").tag("provider", "wayforpay")
+                        .tag("reason", "bulkhead").functionCounter().count()).isEqualTo(1.0);
+            } finally {
+                // Always let the stuck callers go: a failed assertion must fail the test, not hang it.
+                release.countDown();
+            }
             for (Future<String> f : stuck) {
                 assertThat(f.get(5, TimeUnit.SECONDS)).isEqualTo("late");
             }
