@@ -54,12 +54,14 @@ ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"qu
   \"dropoff_label\":\"Залізничний вокзал\",\"payment_method\":\"CASH\"}" | jq -r .id)
 expect 201
 
-say "The driver gets the offer and accepts it"
+say "The driver's phone gets the offer push, and the driver accepts"
+# Before the accept: a push about an offer that is no longer open is never sent (issue #143), and the sandbox holds
+# new pushes for 3 s.
+wait_push "$DRIVER_PHONE" driver.offer "$SINCE"
 OFFER=$(api GET /api/driver/v1/offers "$DRIVER" | jq -r '.[0].id')
 api POST "/api/driver/v1/offers/$OFFER/accept" "$DRIVER" "{\"command_id\":\"$(uuid)\"}" >/dev/null; expect 200
 
-say "The pushes the server sent: the offer to the driver, \"driver assigned\" to the rider"
-wait_push "$DRIVER_PHONE" driver.offer "$SINCE"
+say "The rider's phone gets \"driver assigned\""
 wait_push "$RIDER_PHONE" rider.driver-assigned "$SINCE"
 
 say "Rider and driver write in the order chat"
