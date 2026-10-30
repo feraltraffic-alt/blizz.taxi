@@ -112,7 +112,7 @@ class RetentionVolumeTests {
             String expected=switch(kind) {
                 case "sessions" -> "refresh_token_retention_idx";
                 case "sign_in_codes" -> "otp_challenge_retention_idx";
-                case "code_deliveries" -> "otp_delivery_retention_idx";
+                case "code_deliveries" -> "otp_delivery_attempted_idx";
                 case "delivered_events" -> "outbox_retention_idx";
                 case "consumer_receipts" -> "consumer_inbox_retention_idx";
                 case "command_receipts" -> "command_receipt_retention_idx";

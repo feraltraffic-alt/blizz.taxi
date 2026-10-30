@@ -16,7 +16,7 @@ class CodeDeliveryRetention implements RetentionWork {
         this.jdbc=jdbc;tx=new TransactionTemplate(transactions);tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
     public String kind(){return "code_deliveries";}
-    public String selectionSql(int limit){return "select id from otp_delivery where attempted_at<:cutoff order by attempted_at,id limit "+RetentionWork.limit(limit)+" for update skip locked";}
+    public String selectionSql(int limit){return "select id from otp_delivery where attempted_at<:cutoff order by attempted_at limit "+RetentionWork.limit(limit)+" for update skip locked";}
     public Result run(OffsetDateTime cutoff,OffsetDateTime now,int limit) {
         int deleted=tx.execute(status->jdbc.sql("delete from otp_delivery where id in ("+selectionSql(limit)+")").param("cutoff",cutoff).update());
         return new Result(deleted,0);
