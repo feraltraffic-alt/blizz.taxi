@@ -888,7 +888,8 @@ paths:
           in: query
           description: >-
             Only orders whose pickup is inside this published zone of the driver's city (REQ-DSP-07, issue #141); the
-            driver's own choice. A zone that does not exist, is not published or is of another city → 422.
+            driver's own choice. A zone that does not exist, is not published or is of another city → 400
+            VALIDATION_FAILED.
           schema:
             $ref: "./common.yaml#/components/schemas/Uuid"
       responses:
@@ -900,10 +901,10 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/BroadcastOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
-        "422":
-          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
 

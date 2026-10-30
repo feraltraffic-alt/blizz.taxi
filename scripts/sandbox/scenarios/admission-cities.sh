@@ -4,7 +4,7 @@
 #     he is taken off Kyiv: the shift stays, but an order 300 m away is not offered to him (the journal says
 #     CITY_NOT_ADMITTED), the ALL tab is empty and a claim is refused.
 # Zones: with Kyiv back, Andrii narrows the ALL tab to a zone around the pickup (the order is there) and to another
-#     zone (it is not); a Warsaw zone gets 422.
+#     zone (it is not); a Warsaw zone gets 400.
 source "$(dirname "$0")/../lib.sh"
 
 KYIV="5a000000-0000-4000-8000-000000000001"; WARSAW="5a000000-0000-4000-8000-000000000002"
@@ -112,5 +112,5 @@ expect 200
 [[ "$(api GET "/api/driver/v1/broadcast-orders?zone_id=$ELSEWHERE" "$ANDRII" \
     | jq --arg o "$ORDER" 'any(.[]; .order_id == $o)')" == false ]]
 expect 200
-api GET "/api/driver/v1/broadcast-orders?zone_id=$IN_WARSAW" "$ANDRII" >/dev/null; expect 422
+api GET "/api/driver/v1/broadcast-orders?zone_id=$IN_WARSAW" "$ANDRII" >/dev/null; expect 400
 note "Done: E1 for $ANDRII_ID (open 409, no offer, empty ALL tab, claim 409, journal CITY_NOT_ADMITTED); zone filter."
