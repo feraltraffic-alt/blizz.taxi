@@ -155,7 +155,7 @@ class RiderPromotionTests {
         rides.moveTo(driver, TestRides.north(PICKUP, 1000));
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
                 "Home", DROPOFF, "Work", PaymentMethod.CASH, quote.id()));
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 30));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);

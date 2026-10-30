@@ -38,7 +38,10 @@ public enum ErrorCode {
     /** The pickup city does not offer this payment method (REQ-TEN-03). */
     PAYMENT_METHOD_NOT_OFFERED(422),
     LOCATION_NOT_FRESH(422),
-    /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */
+    /**
+     * Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). Also a claim
+     * from the ALL tab whose pickup is outside the tab's radius from the driver (issue #102).
+     */
     PICKUP_TOO_FAR(422),
     /** A one-time code for a number outside the served countries (blizz.otp.allowed-country-codes, issue #101). */
     PHONE_COUNTRY_NOT_SERVED(422),

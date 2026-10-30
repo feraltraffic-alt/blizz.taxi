@@ -221,7 +221,7 @@ class DispatchJournalTests {
             OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP,
                     "Pickup", DROPOFF, "Dropoff", PaymentMethod.CASH, quote));
             if (label.equals("by")) orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
-            if (label.equals("source")) dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+            if (label.equals("source")) dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), onlyOffer(driver).id());
             if (label.equals("outcome")) dispatch.reject(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
             assertThat(observation(name, label)).isEqualTo(before);
             return order.id();
@@ -305,7 +305,7 @@ class DispatchJournalTests {
         OrderView order = order(client());
 
         dispatch.reject(near.actor(), UUID.randomUUID(), onlyOffer(near).id());
-        dispatch.accept(second.actor(), UUID.randomUUID(), onlyOffer(second).id());
+        dispatch.accept(second.actor(), second.device(), UUID.randomUUID(), onlyOffer(second).id());
 
         Actor support = staff(cityId, Orders.VIEW_PERMISSION);
         DispatchJournal.Journal read = journal.of(support, order.id());
