@@ -34,10 +34,11 @@ class RetentionVolumeTests {
         }
     }
     @Autowired JdbcClient jdbc;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @Autowired WebApplicationContext context;
     @Autowired JsonMapper json;
     OffsetDateTime now=OffsetDateTime.now();
-    static final String AGE="case when g<=2000 then now()-interval '200 days' else now()+interval '1 day' end";
+    static final String AGE="case when g<=198000 then now()-interval '200 days' else now()+interval '1 day' end";
     static final String ID="md5('retention-volume-'||g)::uuid";
     @BeforeAll void seed() {
         jdbc.sql("""
@@ -118,6 +119,16 @@ class RetentionVolumeTests {
                 default -> throw new AssertionError(kind);
             };
             assertThat(indexes).as(kind+" uses the exact retention index").contains(expected);
+            JsonNode missing=tx.execute(status->{
+                jdbc.sql("drop index "+expected).update();
+                String without=jdbc.sql("explain (analyze,buffers,format json) "+sql)
+                    .params(Map.of("cutoff",now.minusDays(30),"now",now)).query(String.class).single();
+                status.setRollbackOnly();return json.readTree(without).get(0);
+            });
+            List<String> missingIndexes=new ArrayList<>();collect(missing.path("Plan"),missingIndexes);
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->assertThat(missingIndexes).contains(expected))
+                .as("missing-index control rejects "+expected).isInstanceOf(AssertionError.class);
+            System.out.println("RETENTION MISSING INDEX "+kind+" "+expected+"\n"+missing);
             assertThat(plan.path("Plan").path("Actual Rows").asInt()).isEqualTo(1000);
             assertThat(plan.path("Execution Time").asDouble()).isLessThan(50);
         }

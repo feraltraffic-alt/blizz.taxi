@@ -62,7 +62,7 @@ class AriRecordingSource implements RecordingSource {
     @Override
     public void discard(String channelId) throws IOException {
         if (!NAME.matcher(channelId).matches()) {
-            return;
+            throw new IOException("Unsupported stored recording name");
         }
         HttpResponse<Void> response = send(request(channelId, "").DELETE().timeout(Duration.ofSeconds(30)).build(),
                 HttpResponse.BodyHandlers.discarding());

@@ -36,8 +36,8 @@ import taxi.blizz.telephony.Calls;
  * ({@link JdbcCalls#ended}); {@link #fetchDue} brings it from Asterisk into the files module, encrypted at rest, and
  * then removes Asterisk's copy. Asterisk still without a file after {@code recordingGiveUpAfter} means there is none
  * (NONE); an unreachable Asterisk is retried with a growing pause. Listening needs {@link Calls#LISTEN_PERMISSION} for
- * the call's city and is audited every time; there is no public link. Nothing deletes a recording: the retention is
- * open (Q-19), and deleting a client's account (#56) leaves the recordings of their calls as they are.
+ * the call's city and is audited every time; there is no public link. The Q-19 recording policy defaults to forever;
+ * deleting a client's account (#56) leaves the recordings of their calls as they are.
  */
 @Service
 class CallRecordings {
@@ -97,11 +97,11 @@ class CallRecordings {
         OffsetDateTime now = now();
         return tx.execute(status -> jdbc.sql("""
                         update call_recording r
-                        set attempts = r.attempts + 1, next_attempt_at = :lease, version = r.version + 1
+                        set attempts = r.attempts + 1, next_attempt_at = :lease, fetching_until = :lease, version = r.version + 1
                         from call c
                         where c.id = r.call_id
                           and r.call_id = (select call_id from call_recording
-                                           where state = 'PENDING' and next_attempt_at <= :now
+                                           where state = 'PENDING' and retention_claim is null and next_attempt_at <= :now
                                            order by next_attempt_at, call_id
                                            limit 1 for update skip locked)
                         returning r.call_id, c.channel_id, r.attempts, r.created_at""")
@@ -138,13 +138,17 @@ class CallRecordings {
                         stored.rejectReason());
                 return true;
             }
-            int updated = jdbc.sql("""
+            int updated = tx.execute(status -> {
+                int changed = jdbc.sql("""
                             update call_recording
                             set state = 'STORED', file_id = :file, duration_seconds = :seconds, stored_at = :now,
-                                version = version + 1
-                            where call_id = :call and state = 'PENDING'""")
+                                version = version + 1, fetching_until = null
+                            where call_id = :call and state = 'PENDING' and retention_claim is null""")
                     .param("file", stored.fileId()).param("seconds", seconds).param("now", now())
                     .param("call", due.callId()).update();
+                if (changed == 1) files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING);
+                return changed;
+            });
             if (updated == 0) {
                 log.warn("The recording of call {} was settled meanwhile; file {} is not linked", due.callId(),
                         stored.fileId());
@@ -174,14 +178,14 @@ class CallRecordings {
     }
 
     private void retry(Due due) {
-        jdbc.sql("update call_recording set next_attempt_at = :at where call_id = :call and state = 'PENDING'")
+        jdbc.sql("update call_recording set next_attempt_at = :at, fetching_until = null where call_id = :call and state = 'PENDING' and retention_claim is null")
                 .param("at", now().plus(pause(due.attempts()))).param("call", due.callId()).update();
     }
 
     private void none(Due due) {
         jdbc.sql("""
-                        update call_recording set state = 'NONE', version = version + 1
-                        where call_id = :call and state = 'PENDING'""")
+                        update call_recording set state = 'NONE', version = version + 1, fetching_until = null
+                        where call_id = :call and state = 'PENDING' and retention_claim is null""")
                 .param("call", due.callId()).update();
     }
 
@@ -201,7 +205,7 @@ class CallRecordings {
         Calls.Call call = calls.find(callId)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Call not found"));
         staff.require(actor, Calls.LISTEN_PERMISSION, call.cityId());
-        UUID fileId = jdbc.sql("select file_id from call_recording where call_id = :call and state = 'STORED'")
+        UUID fileId = jdbc.sql("select file_id from call_recording where call_id = :call and state = 'STORED' and retention_claim is null")
                 .param("call", callId).query(UUID.class).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "The call has no recording"));
         Map<String, Object> details = new LinkedHashMap<>();

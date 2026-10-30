@@ -175,6 +175,37 @@ class RetentionAcceptanceTests {
     }
     long count(Row row) {return jdbc.sql("select count(*) from "+row.table()+" where "+row.key()+"=:id")
         .param("id",row.id()).query(Long.class).single();}
+    Map<String,UUID> oldBusinessRecords(OffsetDateTime at) {
+        UUID city=UUID.randomUUID(),order=UUID.randomUUID(),merchant=UUID.randomUUID(),card=UUID.randomUUID(),intent=UUID.randomUUID(),operation=UUID.randomUUID();
+        // Empty draft geometry has no operating area and cannot overlap another test city.
+        jdbc.sql("""
+            insert into city(id,code,name,currency,timezone,polygon,priority,state,created_at,updated_at)
+            values(:id,:code,'Retention fixture','PLN','UTC',ST_GeomFromText('MULTIPOLYGON EMPTY',4326),0,'DRAFT',:at,:at)
+            """).param("id",city).param("code","retention-"+city).param("at",at).update();
+        jdbc.sql("""
+            insert into ride_order(id,channel,created_by_type,created_by_id,city_id,vehicle_class,pickup,pickup_label,
+              dropoff,dropoff_label,payment_method,price_minor,currency,status,created_at,updated_at)
+            values(:id,'PHONE','STAFF',:staff,:city,'standard',ST_SetSRID(ST_MakePoint(0,0),4326),'Fixture',
+              ST_SetSRID(ST_MakePoint(0,0),4326),'Fixture','CARD',1,'PLN','FULFILLED',:at,:at)
+            """).param("id",order).param("staff",staffId).param("city",city).param("at",at).update();
+        jdbc.sql("""
+            insert into payment_merchant(id,provider,account,domain,secret_ref,currency,created_at)
+            values(:id,'FAKE',:account,'retention.invalid','retentionfixture','PLN',:at)
+            """).param("id",merchant).param("account","retention-"+merchant).param("at",at).update();
+        jdbc.sql("""
+            insert into payment_card(id,client_id,merchant_id,token,masked_pan,state,created_at)
+            values(:id,:client,:merchant,'retention-fixture','****0000','ACTIVE',:at)
+            """).param("id",card).param("client",order).param("merchant",merchant).param("at",at).update();
+        jdbc.sql("""
+            insert into payment_intent(id,order_id,client_id,merchant_id,card_id,currency,hold_minor,state,created_at,updated_at)
+            values(:id,:order,:client,:merchant,:card,'PLN',1,'PAID',:at,:at)
+            """).param("id",intent).param("order",order).param("client",order).param("merchant",merchant).param("card",card).param("at",at).update();
+        jdbc.sql("""
+            insert into payment_operation(id,intent_id,type,reference,target,amount_minor,state,created_at,updated_at)
+            values(:id,:intent,'CHARGE',:reference,'retention-fixture',1,'SUCCEEDED',:at,:at)
+            """).param("id",operation).param("intent",intent).param("reference","retention-"+operation).param("at",at).update();
+        return Map.of("ride_order",order,"payment_merchant",merchant,"payment_card",card,"payment_intent",intent,"payment_operation",operation);
+    }
     void assertPresent(Row row,boolean present) {
         assertThat(count(row)).as(row.table()+" "+row.id()).isEqualTo(present?1:0);
         if(row.storageKey()!=null)assertThat(Files.exists(root.resolve(row.storageKey()))).isEqualTo(present);
@@ -207,7 +238,7 @@ class RetentionAcceptanceTests {
         assertThat(jdbc.sql("select count(*) from audit_log where action='retention.change' and actor_id=:id")
             .param("id",staffId).query(Long.class).single()).isEqualTo(1);
         assertThat(jdbc.sql("select count(*) from retention_settings where version=:v").param("v",version+1).query(Long.class).single()).isEqualTo(1);
-        for(Object invalid:List.of(-1,"never",1.5,"12")) {
+        for(Object invalid:List.of(-1,"never",1.5,"12",2147483648L)) {
             Map<String,Object> p=days(1);p.put("sessions",invalid);
             assertThat(request("PUT",token,command(version+1,p,UUID.randomUUID())).getResponse().getStatus()).as("invalid days "+invalid).isEqualTo(400);
         }
@@ -250,12 +281,15 @@ class RetentionAcceptanceTests {
         });
         jdbc.sql("insert into audit_log(id,occurred_at,actor_type,action,resource_type,correlation_id) values(:id,:at,'SYSTEM','retention.fixture','Fixture',:id)")
             .param("id",UUID.randomUUID()).param("at",now.minusDays(200)).update();
+        Map<String,UUID> protectedBusiness=oldBusinessRecords(now.minusDays(200));
         policy(days(1));long audit=jdbc.sql("select count(*) from audit_log").query(Long.class).single();
         long journal=jdbc.sql("select count(*) from journal_transaction").query(Long.class).single();
         for(String kind:KINDS)run(kind,now);
         assertPresent(failed,true);assertPresent(pending,true);assertPresent(unfinished,true);
         assertThat(jdbc.sql("select count(*) from audit_log").query(Long.class).single()).isEqualTo(audit);
         assertThat(jdbc.sql("select count(*) from journal_transaction").query(Long.class).single()).isEqualTo(journal);
+        for(var entry:protectedBusiness.entrySet())assertThat(jdbc.sql("select count(*) from "+entry.getKey()+" where id=:id")
+            .param("id",entry.getValue()).query(Long.class).single()).as("protected "+entry.getKey()).isEqualTo(1);
     }
     @Test void recordingsAreExcludedFromBothFileCleanupKindsWithoutAnAttachmentMarker() throws Exception {
         OffsetDateTime now=OffsetDateTime.now();Row safe=seed("call_recordings",now.minusDays(400));
@@ -287,6 +321,211 @@ class RetentionAcceptanceTests {
         jdbc.sql("update device_session set revoked_at=:at where id=:id").param("at",now.minusDays(29)).param("id",recent.id()).update();
         Map<String,Object> p=days(0);p.put("sessions",30);policy(p);run("sessions",now);
         assertPresent(revoked,false);assertPresent(recent,true);assertPresent(active,true);
+    }
+
+    @Test void simultaneousPolicyCommandsCannotLoseAnUpdate() throws Exception {
+        long version=current().path("version").asLong();
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a=executor.submit(()->{start.await();return request("PUT",token,command(version,days(17),UUID.randomUUID())).getResponse().getStatus();});
+            var b=executor.submit(()->{start.await();return request("PUT",token,command(version,days(18),UUID.randomUUID())).getResponse().getStatus();});
+            start.countDown();
+            assertThat(List.of(a.get(10,java.util.concurrent.TimeUnit.SECONDS),b.get(10,java.util.concurrent.TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,409);
+            assertThat(current().path("version").asLong()).isEqualTo(version+1);
+        }
+    }
+    @Test void anAttachmentTransactionWinsBeforeCleanupAndCleanupSkipsItsLockedRow() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();Row row=seed("upload_sessions",now.minusDays(40));
+        Map<String,Object> p=days(0);p.put("upload_sessions",7);policy(p);
+        var attached=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var attach=executor.submit(()->tx.executeWithoutResult(status->{
+                context.getBean(taxi.blizz.files.FileService.class).markAttached(new Actor(SubjectType.DRIVER,row.id()),row.id(),taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT);
+                attached.countDown();try {if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Attachment not released");}
+                catch(InterruptedException ex){Thread.currentThread().interrupt();throw new RuntimeException(ex);}
+            }));
+            try {
+                assertThat(attached.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                executor.submit(()->run("upload_sessions",now)).get(5,java.util.concurrent.TimeUnit.SECONDS);
+                assertPresent(row,true);
+            } finally {release.countDown();}
+            attach.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            run("upload_sessions",now);assertPresent(row,true);
+        }
+    }
+    @Test void aCommittedCleanupClaimRejectsAnAttachmentBeforeItsBytesAreRemoved() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();Row row=seed("upload_sessions",now.minusDays(40));
+        Map<String,Object> p=days(0);p.put("upload_sessions",7);policy(p);
+        var claimed=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(invocation->{
+            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            claimed.countDown();if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Storage not released");
+            return invocation.callRealMethod();
+        }).when(storage).delete(org.mockito.ArgumentMatchers.eq(row.storageKey()));
+        try(var executor=java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var cleanup=executor.submit(()->run("upload_sessions",now));
+            try {
+                assertThat(claimed.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                org.assertj.core.api.Assertions.assertThatThrownBy(()->tx.executeWithoutResult(status->
+                    context.getBean(taxi.blizz.files.FileService.class).markAttached(new Actor(SubjectType.DRIVER,row.id()),row.id(),taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT)))
+                    .isInstanceOf(taxi.blizz.platform.DomainException.class)
+                    .extracting(ex->((taxi.blizz.platform.DomainException)ex).code()).isEqualTo(taxi.blizz.platform.ErrorCode.STATE_CONFLICT);
+                assertPresent(row,true);
+            } finally {release.countDown();}
+            cleanup.get(10,java.util.concurrent.TimeUnit.SECONDS);assertPresent(row,false);
+        }
+    }
+    @Test void sandboxTriggersAreAbsentOutsideTheSandboxProfile() throws Exception {
+        assertThat(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/sandbox/v1/retention/run")
+            .header("Authorization","Bearer "+token)).andReturn().getResponse().getStatus()).isEqualTo(404);
+    }
+
+    boolean blocked(int pid) {
+        return pid>0&&jdbc.sql("select exists(select 1 from pg_stat_activity where pid=:pid and wait_event_type='Lock')")
+            .param("pid",pid).query(Boolean.class).single();
+    }
+    @Test void tokenRotationAndRevocationHaveTheSameLockOrder() throws Exception {
+        var issued=auth.openStaff(new VerifiedSubject(new Actor(SubjectType.STAFF,staffId),"ACTIVE",false),ApiAudience.ADMIN,null);
+        var locked=new java.util.concurrent.CountDownLatch(1);var revoke=new java.util.concurrent.CountDownLatch(1);
+        var rotationPid=new java.util.concurrent.atomic.AtomicInteger();
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var revoker=executor.submit(()->tx.executeWithoutResult(status->{
+                jdbc.sql("set local lock_timeout='5s'").update();
+                jdbc.sql("select id from device_session where id=:id for update").param("id",issued.sessionId()).query(UUID.class).single();
+                locked.countDown();try {if(!revoke.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Revoker not released");}
+                catch(InterruptedException ex){Thread.currentThread().interrupt();throw new RuntimeException(ex);}
+                auth.revokeAll(issued.actor(),"RETENTION_LOCK_ORDER_TEST");
+            }));
+            assertThat(locked.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var rotation=executor.submit(()->{
+                try {tx.executeWithoutResult(status->{
+                    jdbc.sql("set local lock_timeout='5s'").update();rotationPid.set(jdbc.sql("select pg_backend_pid()").query(Integer.class).single());
+                    auth.refresh(issued.refreshToken());
+                });return (Throwable)null;}catch(Throwable ex){return ex;}
+            });
+            try {org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(10)).until(()->blocked(rotationPid.get()));}
+            finally {revoke.countDown();}
+            revoker.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(rotation.get(10,java.util.concurrent.TimeUnit.SECONDS)).isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(ex->((taxi.blizz.platform.DomainException)ex).code()).isEqualTo(taxi.blizz.platform.ErrorCode.UNAUTHENTICATED);
+        }
+    }
+    @Test void reversedAttachmentListsCannotDeadlockTwoRealSupportCommands() throws Exception {
+        UUID client=UUID.randomUUID();Actor owner=new Actor(SubjectType.CLIENT,client);
+        jdbc.sql("insert into client(id,phone_normalized,account_state,created_at,updated_at) values(:id,'+48111000001','ACTIVE',now(),now())")
+            .param("id",client).update();
+        byte[] png=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var files=context.getBean(taxi.blizz.files.FileService.class);var ids=new ArrayList<UUID>();
+        for(int i=0;i<2;i++) {
+            var upload=files.openUpload(owner,UUID.randomUUID(),taxi.blizz.files.FilePurpose.SUPPORT_ATTACHMENT,"image/png",png.length);
+            assertThat(files.upload(owner,upload.fileId(),"image/png",png.length,new java.io.ByteArrayInputStream(png)).state()).isEqualTo(taxi.blizz.files.FileState.SAFE);
+            ids.add(upload.fileId());
+        }
+        ids.sort(UUID::compareTo);UUID low=ids.get(0);
+        var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        var firstPid=new java.util.concurrent.atomic.AtomicInteger();var secondPid=new java.util.concurrent.atomic.AtomicInteger();
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(3)) {
+            var holder=executor.submit(()->tx.executeWithoutResult(status->{
+                jdbc.sql("select id from file_object where id=:id for update").param("id",low).query(UUID.class).single();
+                locked.countDown();try {if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("File holder not released");}
+                catch(InterruptedException ex){Thread.currentThread().interrupt();throw new RuntimeException(ex);}
+            }));
+            assertThat(locked.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            java.util.function.BiFunction<List<UUID>,java.util.concurrent.atomic.AtomicInteger,Throwable> open=(attachments,pid)->{
+                try {tx.executeWithoutResult(status->{
+                    jdbc.sql("set local lock_timeout='5s'").update();pid.set(jdbc.sql("select pg_backend_pid()").query(Integer.class).single());
+                    ReflectionTestUtils.invokeMethod(context.getBean("supportAttachments"),"open",owner,UUID.randomUUID(),
+                        taxi.blizz.backoffice.SupportCases.Category.OTHER,null,"Retention concurrency","Two files",attachments);
+                });return null;}catch(Throwable ex){return ex;}
+            };
+            var a=executor.submit(()->open.apply(List.copyOf(ids),firstPid));
+            var b=executor.submit(()->open.apply(List.of(ids.get(1),ids.get(0)),secondPid));
+            try {org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(10)).until(()->blocked(firstPid.get())&&blocked(secondPid.get()));}
+            finally {release.countDown();}
+            holder.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            var results=java.util.Arrays.asList(a.get(10,java.util.concurrent.TimeUnit.SECONDS),b.get(10,java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(results.stream().filter(java.util.Objects::isNull).count()).as("one command owns both attachments").isEqualTo(1);
+            assertThat(results.stream().filter(java.util.Objects::nonNull).toList()).singleElement().isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(ex->((taxi.blizz.platform.DomainException)ex).code()).isEqualTo(taxi.blizz.platform.ErrorCode.VALIDATION_FAILED);
+            assertThat(jdbc.sql("select count(*) from support_case where requester_id=:id").param("id",client).query(Long.class).single()).isEqualTo(1);
+        }
+    }
+
+    @Test void theLargestValidDayCountKeepsDataWithoutOverflowingPostgresTime() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();Row row=seed("sessions",now.minusDays(400));
+        Map<String,Object> p=days(0);p.put("sessions",Integer.MAX_VALUE);policy(p);
+        io.micrometer.core.instrument.MeterRegistry meters=context.getBean(io.micrometer.core.instrument.MeterRegistry.class);
+        double failures=meters.find("blizz.retention.failures").tag("kind","sessions").counters().stream().mapToDouble(c->c.count()).sum();
+        run("sessions",now);assertPresent(row,true);
+        assertThat(meters.find("blizz.retention.failures").tag("kind","sessions").counter().count()).isEqualTo(failures);
+    }
+    @Test void aFinalUploadMoveAndQuarantineCleanupCannotInterleave() throws Exception {
+        Actor owner=new Actor(SubjectType.DRIVER,UUID.randomUUID());
+        byte[] png=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var files=context.getBean(taxi.blizz.files.FileService.class);
+        var upload=files.openUpload(owner,UUID.randomUUID(),taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT,"image/png",png.length);
+        Map<String,Object> p=days(0);p.put("quarantined_files",1);policy(p);
+        var moving=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(invocation->{
+            moving.countDown();if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Move not released");
+            return invocation.callRealMethod();
+        }).when(storage).store(org.mockito.ArgumentMatchers.any(java.nio.file.Path.class),org.mockito.ArgumentMatchers.anyString());
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var uploaded=executor.submit(()->files.upload(owner,upload.fileId(),"image/png",png.length,new java.io.ByteArrayInputStream(png)));
+            try {
+                assertThat(moving.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                // Advance only the cleanup clock: make this otherwise in-flight quarantine eligible.
+                executor.submit(()->run("quarantined_files",OffsetDateTime.now().plusDays(400))).get(5,java.util.concurrent.TimeUnit.SECONDS);
+            } finally {release.countDown();}
+            assertThat(uploaded.get(10,java.util.concurrent.TimeUnit.SECONDS).state()).isEqualTo(taxi.blizz.files.FileState.SAFE);
+            run("quarantined_files",OffsetDateTime.now().plusDays(400));
+            assertThat(jdbc.sql("select state from file_object where id=:id").param("id",upload.fileId()).query(String.class).single()).isEqualTo("SAFE");
+            try(var content=files.open(owner,upload.fileId()).stream()){assertThat(content.readAllBytes()).isNotEmpty();}
+        }
+    }
+
+    @Test void uploadExpiryUploadTimeAndQuarantineStartAreSeparateRetentionAnchors() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();var expired=new ArrayList<Row>();
+        for(int days:new int[]{8,6,-1}) {
+            UUID id=UUID.randomUUID();
+            jdbc.sql("""
+                insert into file_object(id,owner_type,owner_id,purpose,declared_content_type,declared_size_bytes,
+                  state,upload_expires_at,created_at)
+                values(:id,'DRIVER',:id,'DRIVER_DOCUMENT','image/png',1,'AWAITING_UPLOAD',:expires,:created)
+                """).param("id",id).param("expires",now.minusDays(days)).param("created",now.minusDays(400)).update();
+            expired.add(new Row("file_object","id",id,null));
+        }
+        Row uploaded=seed("upload_sessions",now),quarantine=seed("quarantined_files",now.minusDays(400));
+        jdbc.sql("update file_object set created_at=:at where id=:id").param("at",now.minusDays(400)).param("id",uploaded.id()).update();
+        jdbc.sql("update file_object set quarantine_at=:at where id=:id").param("at",now).param("id",quarantine.id()).update();
+        Map<String,Object> p=days(0);p.put("upload_sessions",7);p.put("quarantined_files",30);policy(p);
+        run("upload_sessions",now);run("quarantined_files",now);
+        assertPresent(expired.get(0),false);assertPresent(expired.get(1),true);assertPresent(expired.get(2),true);
+        assertPresent(uploaded,true);assertPresent(quarantine,true);
+    }
+    @Test void rejectedAndUnlinkedSystemRecordingsFollowOnlyTheRecordingPolicy() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();var files=context.getBean(taxi.blizz.files.FileService.class);
+        var rejected=files.storeSystemFile(taxi.blizz.files.FilePurpose.CALL_RECORDING,"audio/wav",
+            new java.io.ByteArrayInputStream(new byte[]{1,2,3}),1000000);
+        assertThat(rejected.state()).isEqualTo(taxi.blizz.files.FileState.REJECTED);
+        // Valid WAV bytes from the already-tested fake recording source, through the real encrypted storage path.
+        var fake=context.getBean("fakeCallSource");
+        @SuppressWarnings("unchecked") java.util.Optional<Path> wav=ReflectionTestUtils.invokeMethod(fake,"fetch","retention-orphan");
+        taxi.blizz.files.StoredFile unlinked;
+        try(var body=Files.newInputStream(wav.orElseThrow())) {
+            unlinked=files.storeSystemFile(taxi.blizz.files.FilePurpose.CALL_RECORDING,"audio/wav",body,1000000);
+        } finally {Files.deleteIfExists(wav.orElseThrow());}
+        assertThat(unlinked.state()).isEqualTo(taxi.blizz.files.FileState.SAFE);
+        for(UUID id:List.of(rejected.fileId(),unlinked.fileId()))jdbc.sql("update file_object set uploaded_at=case when state='SAFE' then :at else null end,scanned_at=:at,created_at=:at where id=:id")
+            .param("at",now.minusDays(40)).param("id",id).update();
+        String key=jdbc.sql("select storage_key from file_object where id=:id").param("id",unlinked.fileId()).query(String.class).single();
+        Map<String,Object> p=days(1);p.put("call_recordings",0);policy(p);
+        run("upload_sessions",now);run("quarantined_files",now);run("call_recordings",now);
+        assertThat(jdbc.sql("select count(*) from file_object where id in (:a,:b)").param("a",rejected.fileId()).param("b",unlinked.fileId()).query(Long.class).single()).isEqualTo(2);
+        assertThat(Files.exists(root.resolve(key))).isTrue();
+        p.put("call_recordings",30);policy(p);run("call_recordings",now);
+        assertThat(jdbc.sql("select count(*) from file_object where id in (:a,:b)").param("a",rejected.fileId()).param("b",unlinked.fileId()).query(Long.class).single()).isZero();
+        assertThat(Files.exists(root.resolve(key))).isFalse();
     }
 
 }

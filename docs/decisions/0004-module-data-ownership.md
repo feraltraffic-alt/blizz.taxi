@@ -25,6 +25,7 @@
 | `identity` | `city` (`geo`) | Проверка, что города, отмеченные сотруднику, существуют (`JdbcStaffDirectory`); `geo` сам зависит от `identity`, поэтому вызов API образовал бы цикл |
 | `finance` | `ride_order` (`operations`) | Город заказа (`city_id`) для отчёта владельца по деньгам города (`JdbcFinanceReports`) и для проверки города сотрудника в спорах о наличных (`JdbcCashDisputes`): журнал знает заказ, но не город; `operations` зависит от `finance`, поэтому вызов API образовал бы цикл |
 | `pricing` | `city` (`geo`) | Валюта и статус города при расчёте цены и выборе тарифа (`JdbcQuoteService`, `JdbcTariffService`, `JdbcVehicleClasses`) |
+| `files`, миграция `V20261030_0701_2` | `driver_document` (`driver`), `support_message_attachment` (`backoffice`), `call_recording` (`telephony`) | Однократное чтение идентификаторов файлов для заполнения `file_object.attached_at` существующих прикреплений (#118, явно разрешено ведущим 30.10.2026). Только миграция; чтений этих таблиц при исполнении нет |
 
 ## Последствия
 

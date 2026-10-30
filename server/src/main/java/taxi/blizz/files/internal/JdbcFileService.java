@@ -53,11 +53,13 @@ class JdbcFileService implements FileService {
     private final FilesProperties properties;
     private final FileEncryption encryption;
     private final Clock clock;
+    private final FileRetirement retirement;
 
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
                     FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock,
-                    taxi.blizz.platform.RateLimits rateLimits) {
+                    taxi.blizz.platform.RateLimits rateLimits, FileRetirement retirement) {
 
+        this.retirement = retirement;
         this.rateLimits = rateLimits;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -135,30 +137,37 @@ class JdbcFileService implements FileService {
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
             String key = claimed.purpose().name().toLowerCase(Locale.ROOT) + "/" + MONTH.format(now()) + "/" + fileId;
-            storage.store(staged, key);
+            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash);
             staged = null;
-            OffsetDateTime now = now();
-            jdbc.sql("""
-                            update file_object
-                            set state = 'SAFE', detected_content_type = :type, size_bytes = :size, sha256 = :hash,
-                                storage_key = :key, uploaded_at = :now, scanned_at = :now, scan_engine = :engine,
-                                version = version + 1
-                            where id = :id and state = 'QUARANTINE'""")
-                    .param("type", detected.get())
-                    .param("size", size)
-                    .param("hash", hash)
-                    .param("key", key)
-                    .param("now", now)
-                    .param("engine", scanner.engine())
-                    .param("id", fileId)
-                    .update();
-            return new StoredFile(fileId, FileState.SAFE, detected.get(), size, null);
+            return result;
         } catch (IOException e) {
             log.warn("Upload of file {} failed", fileId, e);
             return reject(fileId, staged, "The upload could not be completed");
         } finally {
             deleteQuietly(staged);
         }
+    }
+
+    /** The body and scanner have finished; serialize only the bounded local move/finalization with cleanup. */
+    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash)
+            throws IOException {
+        try {
+            return tx.execute(status -> {
+                boolean available = jdbc.sql("select id from file_object where id=:id and state='QUARANTINE' and retention_claim is null for update")
+                        .param("id", fileId).query(UUID.class).optional().isPresent();
+                if (!available) throw new DomainException(ErrorCode.STATE_CONFLICT, "The file is being retired");
+                try { storage.store(staged, key); }
+                catch (IOException ex) { throw new UncheckedIOException(ex); }
+                OffsetDateTime now = now();
+                jdbc.sql("""
+                        update file_object set state='SAFE',detected_content_type=:type,size_bytes=:size,sha256=:hash,
+                            storage_key=:key,uploaded_at=:now,scanned_at=:now,scan_engine=:engine,version=version+1
+                        where id=:id
+                        """).param("type",type).param("size",size).param("hash",hash).param("key",key)
+                        .param("now",now).param("engine",scanner.engine()).param("id",fileId).update();
+                return new StoredFile(fileId,FileState.SAFE,type,size,null);
+            });
+        } catch (UncheckedIOException ex) { throw ex.getCause(); }
     }
 
     private Claimed claim(Actor owner, UUID fileId, String contentType, long contentLength) {
@@ -168,7 +177,7 @@ class JdbcFileService implements FileService {
         Row row = jdbc.sql("""
                         select owner_id, owner_type, purpose, declared_content_type, declared_size_bytes, state,
                                upload_expires_at
-                        from file_object where id = :id for update""")
+                        from file_object where id = :id and retention_claim is null for update""")
                 .param("id", fileId)
                 .query((rs, i) -> new Row(rs.getObject("owner_id", UUID.class), rs.getString("owner_type"),
                         rs.getString("purpose"), rs.getString("declared_content_type"),
@@ -189,8 +198,8 @@ class JdbcFileService implements FileService {
         if (contentLength > row.size()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The file is larger than declared");
         }
-        jdbc.sql("update file_object set state = 'QUARANTINE', version = version + 1 where id = :id")
-                .param("id", fileId)
+        jdbc.sql("update file_object set state = 'QUARANTINE', quarantine_at=:now, version = version + 1 where id = :id")
+                .param("now", now()).param("id", fileId)
                 .update();
         return new Claimed(FilePurpose.valueOf(row.purpose()), row.type(), row.size());
     }
@@ -200,7 +209,7 @@ class JdbcFileService implements FileService {
         jdbc.sql("""
                         update file_object set state = 'REJECTED', reject_reason = :reason, scanned_at = :now,
                                                version = version + 1
-                        where id = :id and state = 'QUARANTINE'""")
+                        where id = :id and state = 'QUARANTINE' and retention_claim is null""")
                 .param("reason", reason)
                 .param("now", now())
                 .param("id", fileId)
@@ -281,7 +290,7 @@ class JdbcFileService implements FileService {
         }
         Row row = jdbc.sql("""
                         select owner_type, owner_id, purpose, state, detected_content_type, size_bytes
-                        from file_object where id = :id""")
+                        from file_object where id = :id and retention_claim is null""")
                 .param("id", fileId)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
                         rs.getString(4), rs.getString(5), (Long) rs.getObject(6)))
@@ -298,12 +307,31 @@ class JdbcFileService implements FileService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void markAttached(Actor owner, UUID fileId, FilePurpose purpose) {
+        int updated=jdbc.sql("""
+                update file_object set attached_at=coalesce(attached_at,:now)
+                where id=:id and purpose=:purpose and state='SAFE' and retention_claim is null
+                  and owner_type=:owner and owner_id is not distinct from cast(:ownerId as uuid)
+                """).param("now",now()).param("id",fileId).param("purpose",purpose.name())
+                .param("owner",owner.type().name()).param("ownerId",owner.id()).update();
+        if(updated!=1)throw new DomainException(ErrorCode.STATE_CONFLICT,"The file is not available for attachment");
+    }
+
+    @Override
+    public boolean deleteRecording(UUID fileId) {
+        if(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Recording deletion must run outside a database transaction");
+        return retirement.recording(fileId);
+    }
+
+    @Override
     public FileContent open(Actor requester, UUID fileId) {
         record Row(String ownerType, UUID ownerId, String type, long size, String key, String encryption) {
         }
         Row row = jdbc.sql("""
                         select owner_type, owner_id, detected_content_type, size_bytes, storage_key, encryption
-                        from file_object where id = :id and state = 'SAFE'""")
+                        from file_object where id = :id and state = 'SAFE' and retention_claim is null""")
                 .param("id", fileId)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
                         rs.getLong(4), rs.getString(5), rs.getString(6)))

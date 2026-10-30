@@ -87,7 +87,7 @@ class RetentionMigrationTests {
             .query(Long.class).single()).as("new files migration exists").isEqualTo(1);
         Map<String,Object> days=new java.util.LinkedHashMap<>();for(String kind:RetentionAcceptanceTests.KINDS)days.put(kind,0);
         days.put("upload_sessions",7);
-        jdbc.sql("insert into retention_settings(version,days,reason,changed_at) values(1,cast(:days as jsonb),'Migration proof',now())")
+        jdbc.sql("insert into retention_settings(version,days,changed_by,reason,changed_at) values(1,cast(:days as jsonb),gen_random_uuid(),'Migration proof',now())")
             .param("days",json.writeValueAsString(days)).update();
         assertThat(context.containsBean("retentionRunner")).isTrue();
         Object runner=context.getBean("retentionRunner");
@@ -99,7 +99,7 @@ class RetentionMigrationTests {
         assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",unused).query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select count(*) from file_object where attached_at is not null").query(Long.class).single()).isEqualTo(3);
         days.put("upload_sessions",0);
-        jdbc.sql("insert into retention_settings(version,days,reason,changed_at) values(2,cast(:days as jsonb),'Keep forever',now())")
+        jdbc.sql("insert into retention_settings(version,days,changed_by,reason,changed_at) values(2,cast(:days as jsonb),gen_random_uuid(),'Keep forever',now())")
             .param("days",json.writeValueAsString(days)).update();
         UUID forever=file("DRIVER_DOCUMENT");
         for(String kind:RetentionAcceptanceTests.KINDS)ReflectionTestUtils.invokeMethod(runner,"runKindAt",kind,OffsetDateTime.now());

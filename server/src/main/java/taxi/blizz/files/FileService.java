@@ -23,6 +23,12 @@ public interface FileService {
     /** Returns the SAFE file metadata or throws unless it belongs to {@code owner} and has {@code purpose}. */
     StoredFile requireAttachable(Actor owner, UUID fileId, FilePurpose purpose);
 
+    /** Marks a reference in the caller's business transaction, excluding a simultaneous retention claim. */
+    void markAttached(Actor owner, UUID fileId, FilePurpose purpose);
+
+    /** Removes a system recording's bytes before its metadata. No open transaction; retry-safe if already absent. */
+    boolean deleteRecording(UUID fileId);
+
     /** Opens a SAFE file for its owner; anyone else gets NOT_FOUND (no hint that it exists). */
     FileContent open(Actor requester, UUID fileId);
 

@@ -6,6 +6,9 @@ spring:
     username: ${DB_USER:blizz}
     password: ${DB_PASSWORD:blizz-sandbox}
 blizz:
+  retention:
+    # Scenarios invoke the real runner explicitly so old fixtures cannot race a timer.
+    enabled: false
   finance:
     invariants:
       interval: PT5S

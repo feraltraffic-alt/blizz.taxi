@@ -47,6 +47,7 @@ public final class StaffPermissions {
             new Permission("clients.manage", "Support", "Riders: find, see the card, block and unblock"),
             new Permission("clients.delete", "Clients", "Riders' deletion requests: check, complete or reject"),
             new Permission("operator-bonuses.manage", "Operators", "Operator bonus settings, balances and history"),
+            new Permission("retention.manage", "Settings", "Technical data retention periods and cleanup"),
             new Permission("settings.manage", "Settings", "Service settings: brand, languages, how calls work"),
             new Permission("flags.manage", "Settings",
                     "Feature flags: switch a function of the whole service on or off (audited)"),

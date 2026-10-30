@@ -1,0 +1,65 @@
+package taxi.blizz.telephony.internal;
+
+import java.io.IOException;
+import java.time.OffsetDateTime;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.Order;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import taxi.blizz.files.FileService;
+import taxi.blizz.platform.RetentionWork;
+
+/** Remove the source and owned file first, then the recording row. Calls themselves remain untouched. */
+@Component
+@Order(0)
+class CallRecordingRetention implements RetentionWork {
+    private static final Logger log=LoggerFactory.getLogger(CallRecordingRetention.class);
+    private static final String ELIGIBLE="created_at<:cutoff and (fetching_until is null or fetching_until<=:now) and (retention_claim is null or retention_until<=:now)";
+    private final JdbcClient jdbc;
+    private final FileService files;
+    private final RecordingSource source;
+    private final TransactionTemplate tx;
+    CallRecordingRetention(JdbcClient jdbc,FileService files,TelephonyProperties properties,AriRecordingSource asterisk,
+                           FakeCallSource fake,PlatformTransactionManager transactions) {
+        this.jdbc=jdbc;this.files=files;source=properties.fake()?fake:asterisk;
+        tx=new TransactionTemplate(transactions);tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+    public String kind(){return "call_recordings";}
+    public String selectionSql(int limit){return "select call_id from call_recording where "+ELIGIBLE+" order by created_at,call_id limit "+RetentionWork.limit(limit);}
+    private record Claimed(UUID call,UUID file,String channel,UUID claim){}
+    public Result run(OffsetDateTime cutoff,OffsetDateTime now,int limit) {
+        Result total=new Result(0,0,0);Map<String,Object> params=Map.of("cutoff",cutoff,"now",now);
+        for(UUID id:jdbc.sql(selectionSql(limit)).params(params).query(UUID.class).list()) {
+            Claimed item=tx.execute(status->{
+                var row=jdbc.sql("select call_id,file_id from call_recording where call_id=:id and "+ELIGIBLE+" for update skip locked")
+                    .params(params).param("id",id).query((rs,i)->new Claimed(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),null,UUID.randomUUID())).optional();
+                if(row.isEmpty())return null;
+                Claimed r=row.get();String channel=jdbc.sql("select channel_id from call where id=:id").param("id",id).query(String.class).single();
+                jdbc.sql("update call_recording set retention_claim=:claim,retention_until=:until where call_id=:id")
+                    .param("claim",r.claim()).param("until",now.plusMinutes(10)).param("id",id).update();
+                return new Claimed(id,r.file(),channel,r.claim());
+            });
+            if(item==null){total=total.plus(new Result(0,0,1));continue;}
+            try {
+                source.discard(item.channel());
+                if(item.file()!=null&&!files.deleteRecording(item.file()))throw new IOException("Recording file not removed");
+                int deleted=tx.execute(status->jdbc.sql("delete from call_recording where call_id=:id and retention_claim=:claim")
+                    .param("id",id).param("claim",item.claim()).update());
+                total=total.plus(new Result(deleted,0,1));
+            } catch(IOException|RuntimeException ex) {
+                try {tx.executeWithoutResult(status->jdbc.sql("update call_recording set retention_until=:now where call_id=:id and retention_claim=:claim")
+                    .param("now",now).param("id",id).param("claim",item.claim()).update());}
+                catch(RuntimeException retry){log.warn("Recording retry marker failed ({})",retry.getClass().getSimpleName());}
+                log.warn("Recording retention failed for {} ({})",id,ex.getClass().getSimpleName());
+                total=total.plus(new Result(0,1,1));
+            }
+        }
+        return total;
+    }
+}
