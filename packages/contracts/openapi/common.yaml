@@ -110,6 +110,8 @@ components:
         included (ADR 0012); it replaces ORDER_ALREADY_ACTIVE, which is no longer returned.
         ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
         pending), from the app or by an operator; a caller without an account is not affected.
+        PICKUP_TOO_FAR (422): arrival reported far from the pickup (can be confirmed with a reason, REQ-ASG-06), or a
+        claim of an order in the ALL tab whose pickup is outside the tab's radius from the driver (issue #102).
         PHONE_COUNTRY_NOT_SERVED (422): a one-time code was asked for a number outside the countries the service
         sends codes to (Poland and Ukraine by default); nothing is sent and no challenge is stored.
         CHARGEBACK_NOT_ALLOWED (422): a chargeback larger than what is left of the order's card payment (its

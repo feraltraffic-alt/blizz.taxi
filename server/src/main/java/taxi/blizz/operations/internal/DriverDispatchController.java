@@ -38,7 +38,7 @@ class DriverDispatchController {
 
     @PostMapping("/offers/{offerId}/accept")
     AssignmentView accept(AccessClaims claims, @PathVariable UUID offerId, @Valid @RequestBody Command body) {
-        return dispatch.accept(claims.actor(), body.commandId(), offerId);
+        return dispatch.accept(claims.actor(), claims.sessionId(), body.commandId(), offerId);
     }
 
     @PostMapping("/offers/{offerId}/reject")
@@ -54,7 +54,7 @@ class DriverDispatchController {
 
     @PostMapping("/orders/{orderId}/claim")
     AssignmentView claim(AccessClaims claims, @PathVariable UUID orderId, @Valid @RequestBody Command body) {
-        return dispatch.claim(claims.actor(), body.commandId(), orderId);
+        return dispatch.claim(claims.actor(), claims.sessionId(), body.commandId(), orderId);
     }
 
     @GetMapping("/assignments/current")

@@ -129,7 +129,7 @@ class OrderChatTests {
         // Audit 29.10.2026: until a new driver comes, what the rider writes goes to nobody, not to the one who left.
         assertCode(() -> say(ride.payer(), ride, "Entrance 2, code 4321"), ErrorCode.STATE_CONFLICT);
         OfferView offer = dispatch.offers(second.actor()).getFirst();
-        dispatch.accept(second.actor(), UUID.randomUUID(), offer.id());
+        dispatch.accept(second.actor(), second.device(), UUID.randomUUID(), offer.id());
 
         assertThat(chat.messages(second.actor(), ride.order().id(), 0, 50)).isEmpty();
         assertCode(() -> say(first.actor(), ride, "still here"), ErrorCode.NOT_FOUND);

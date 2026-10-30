@@ -148,7 +148,7 @@ class CardCaptureTests {
         Actor rider = riderWithCard();
         OrderView order = heldOrder(rider);
         deliverEvents();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
@@ -179,7 +179,7 @@ class CardCaptureTests {
         Actor rider = riderWithCard();
         OrderView order = heldOrder(rider);
         deliverEvents();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
