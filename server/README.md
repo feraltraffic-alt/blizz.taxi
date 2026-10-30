@@ -13,10 +13,11 @@ Java / Spring Boot backend, Maven, modular monolith (REQ-ENG-01, REQ-ENG-03). Ve
 ```bash
 scripts/dev-infra-up.sh   # PostgreSQL 18 + PostGIS 3.6, Redis
 scripts/server-build.sh   # compile and run tests
-cd server && mvn spring-boot:run
+cd server && mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-Health check: `http://localhost:8080/actuator/health`.
+Health check: `http://localhost:8080/actuator/health`. The server has no default profile: without one it stops and
+says which to set (`prod` for a real instance, `dev` here).
 
 ## Modules
 

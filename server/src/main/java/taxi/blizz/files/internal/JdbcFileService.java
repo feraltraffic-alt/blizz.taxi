@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,8 +35,10 @@ import taxi.blizz.platform.IdempotentCommands;
 
 /**
  * Upload pipeline: claim the session → stage with a size limit → detect the real type → strip image
- * metadata → scan → store under a random key → SAFE. Any failed check makes the file REJECTED and
- * removes its bytes. The database only records state; long I/O never runs inside a transaction.
+ * metadata → structural scan → antivirus → store under a random key → SAFE. Any failed check makes the file REJECTED
+ * and removes its bytes. When the antivirus cannot answer, the bytes are stored but the file stays in QUARANTINE until
+ * {@link QuarantineRescan} gets a verdict (issue #105). The database only records state; long I/O never runs inside a
+ * transaction.
  */
 @Service
 class JdbcFileService implements FileService {
@@ -44,19 +47,22 @@ class JdbcFileService implements FileService {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcFileService.class);
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
+    /** What the uploader is told; the signature's name stays in the log. */
+    static final String MALWARE = "The file did not pass the malware check";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
     private final IdempotentCommands commands;
     private final FileStorage storage;
     private final FileScanner scanner;
+    private final ContentScanner antivirus;
     private final FilesProperties properties;
     private final FileEncryption encryption;
     private final Clock clock;
     private final FileRetirement retirement;
 
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
-                    FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock,
+                    FileScanner scanner, ContentScanner antivirus, FilesProperties properties, FileEncryption encryption, Clock clock,
                     taxi.blizz.platform.RateLimits rateLimits, FileRetirement retirement) {
 
         this.retirement = retirement;
@@ -66,6 +72,7 @@ class JdbcFileService implements FileService {
         this.commands = commands;
         this.storage = storage;
         this.scanner = scanner;
+        this.antivirus = antivirus;
         this.properties = properties;
         this.encryption = encryption;
         this.clock = clock;
@@ -134,10 +141,23 @@ class JdbcFileService implements FileService {
             if (finding.isPresent()) {
                 return reject(fileId, staged, finding.get());
             }
+            Optional<String> malware;
+            boolean verdict = true;
+            try {
+                malware = antivirus.scan(staged);
+            } catch (ContentScanner.Unavailable e) {
+                log.warn("No antivirus verdict for file {}, kept in quarantine: {}", fileId, e.getMessage());
+                malware = Optional.empty();
+                verdict = false;
+            }
+            if (malware.isPresent()) {
+                log.warn("File {} rejected by {}: {}", fileId, antivirus.engine(), malware.get());
+                return reject(fileId, staged, MALWARE, engine());
+            }
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
             String key = claimed.key();
-            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash, null);
+            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash, null, verdict);
             staged = null;
             return result;
         } catch (IOException e) {
@@ -150,8 +170,13 @@ class JdbcFileService implements FileService {
     }
 
     /** The body and scanner have finished; serialize only the bounded local move/finalization with cleanup. */
-    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash, String encryptionScheme)
-            throws IOException {
+    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash,
+                                      String encryptionScheme) throws IOException {
+        return completeUpload(fileId, staged, key, type, size, hash, encryptionScheme, true);
+    }
+
+    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash,
+                                      String encryptionScheme, boolean verdict) throws IOException {
         try {
             return tx.execute(status -> {
                 boolean available = jdbc.sql("select id from file_object where id=:id and state='QUARANTINE' and retention_claim is null for update")
@@ -161,17 +186,28 @@ class JdbcFileService implements FileService {
                 catch (IOException ex) { throw new UncheckedIOException(ex); }
                 OffsetDateTime now = now();
                 jdbc.sql("""
-                        update file_object set state='SAFE',detected_content_type=:type,size_bytes=:size,sha256=:hash,
-                            storage_key=:key,uploaded_at=:now,scanned_at=:now,scan_engine=:engine,encryption=:encryption,
+                        update file_object
+                        set state = case when :verdict then 'SAFE' else 'QUARANTINE' end,
+                            detected_content_type=:type,size_bytes=:size,sha256=:hash,storage_key=:key,uploaded_at=:now,
+                            scanned_at=case when :verdict then cast(:now as timestamptz) end,
+                            scan_engine=case when :verdict then :engine end,encryption=:encryption,
+                            scan_attempts=1,
+                            next_scan_at=case when :verdict then null else cast(:now as timestamptz)+cast(:retry as interval) end,
                             declared_size_bytes=case when owner_type='SYSTEM' then greatest(:size,1) else declared_size_bytes end,
                             version=version+1
                         where id=:id
-                        """).param("type",type).param("size",size).param("hash",hash).param("key",key)
-                        .param("now",now).param("engine",encryptionScheme==null?scanner.engine():"content-type")
+                        """).param("verdict",verdict).param("type",type).param("size",size).param("hash",hash).param("key",key)
+                        .param("now",now).param("engine",encryptionScheme==null?engine():"content-type")
+                        .param("retry",properties.rescan().firstRetry().toSeconds()+" seconds")
                         .param("encryption",encryptionScheme).param("id",fileId).update();
-                return new StoredFile(fileId,FileState.SAFE,type,size,null);
+                return new StoredFile(fileId,verdict?FileState.SAFE:FileState.QUARANTINE,type,size,null);
             });
         } catch (UncheckedIOException ex) { throw ex.getCause(); }
+    }
+
+    /** The engines a SAFE upload passed; server-owned recordings only pass their content-type check. */
+    String engine() {
+        return antivirus.engine().isEmpty() ? scanner.engine() : scanner.engine() + "+" + antivirus.engine();
     }
 
     private Claimed claim(Actor owner, UUID fileId, String contentType, long contentLength) {
@@ -210,11 +246,17 @@ class JdbcFileService implements FileService {
     }
 
     private StoredFile reject(UUID fileId, Path staged, String reason) {
+        return reject(fileId, staged, reason, null);
+    }
+
+    /** {@code engine}: the engines that found it, when an antivirus did; null for a structural refusal. */
+    private StoredFile reject(UUID fileId, Path staged, String reason, String engine) {
         deleteQuietly(staged);
         jdbc.sql("""
                         update file_object set state = 'REJECTED', reject_reason = :reason, scanned_at = :now,
-                                               version = version + 1
+                                               scan_engine = coalesce(:engine, scan_engine), version = version + 1
                         where id = :id and state = 'QUARANTINE' and retention_claim is null""")
+                .param("engine", engine)
                 .param("reason", reason)
                 .param("now", now())
                 .param("id", fileId)
@@ -345,6 +387,21 @@ class JdbcFileService implements FileService {
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "File not found"));
         return content(fileId, row.type(), row.size(), row.key(), row.encryption());
+    }
+
+    @Override
+    public List<UUID> sameContent(UUID fileId, FilePurpose purpose) {
+        return jdbc.sql("""
+                        select o.id from file_object f
+                        join file_object o on o.purpose = f.purpose and o.state = 'SAFE' and o.sha256 = f.sha256
+                                          and o.id <> f.id
+                        where f.id = :id and f.purpose = :purpose and f.state = 'SAFE'
+                        order by o.created_at, o.id
+                        limit 50""")
+                .param("id", fileId)
+                .param("purpose", purpose.name())
+                .query(UUID.class)
+                .list();
     }
 
     /** The plain bytes; an encrypted file is decrypted while it is read. */

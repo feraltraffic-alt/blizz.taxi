@@ -1,3 +1,7 @@
+spring:
+  profiles:
+    # The server itself has no default profile (threat model O1); tests run on the development settings.
+    default: dev
 # Tests drive the outbox relay explicitly instead of on a timer.
 blizz:
   retention:
@@ -12,6 +16,8 @@ blizz:
   otp:
     # Tests read a code right after asking for it: send it in the request here.
     send-in-request: true
+    # Many tests sign in numbers of one range; OtpRangeBudgetTests sets a small budget in its own context.
+    max-per-range-per-hour: 100000
   telephony:
     otp-provider: FAKE
     # Tests close stale calls and fetch call recordings themselves.

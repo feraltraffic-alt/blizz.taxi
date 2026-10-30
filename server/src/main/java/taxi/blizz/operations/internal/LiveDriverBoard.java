@@ -75,7 +75,8 @@ class LiveDriverBoard {
         List<LiveDriver> drivers = jdbc.sql("""
                         select ws.driver_id, d.name, d.has_payment_terminal, v.registration_number, v.make, v.model,
                                v.color, v.class_approvals, ws.state, ws.intent, ws.last_heartbeat_at,
-                               ws.last_location_at, ST_Y(ws.last_location) as lat, ST_X(ws.last_location) as lon,
+                               ws.last_location_at, ws.location_refused_at, ST_Y(ws.last_location) as lat,
+                               ST_X(ws.last_location) as lon,
                                coalesce(c.occupancy, 'FREE') as occupancy,
                                (select a.order_id from assignment a
                                 where a.driver_id = ws.driver_id and a.state in ('RESERVED', 'COMMITTED')
@@ -100,6 +101,7 @@ class LiveDriverBoard {
                     OffsetDateTime located = rs.getObject("last_location_at", OffsetDateTime.class);
                     String connection = connection(heartbeat, now);
                     String geolocation = located == null ? "UNAVAILABLE"
+                            : rs.getObject("location_refused_at") != null ? "STALE"
                             : Duration.between(located, now).compareTo(presence.gpsMaxAge()) <= 0 ? "FRESH" : "STALE";
                     String occupancy = rs.getString("occupancy");
                     java.sql.Array classes = rs.getArray("class_approvals");

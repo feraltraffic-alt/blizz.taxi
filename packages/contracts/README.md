@@ -19,6 +19,9 @@ Audience documents reference shared parts as `common.yaml#/components/...`.
 - Paths `/api/{audience}/v1/...`; state changes are named commands with `command_id` and `expected_version`, never a PATCH of `status`.
 - snake_case fields, UTC timestamps, money as `amount_minor` + `currency`.
 - A breaking change gets a new major version; additions stay optional (REQ-EXC-15).
+- An event payload schema is chosen by the envelope's `aggregate_type`, `type` and `schema_version`. A type published
+  by two aggregates (the payment's `CardHoldAuthorized` and the order's history event of the same name) has one schema
+  per aggregate, each with its `x-aggregate`; the lint refuses a shared type without them.
 
 ## Lint
 

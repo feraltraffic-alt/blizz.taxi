@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestQuotes;
+import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.platform.Actor;
@@ -128,6 +129,7 @@ class TripTests {
     private long sequence = 10;
 
     private void moveTo(Driver driver, GeoPoint point) {
+        TestRides.timePassed(jdbc, driver.actor().id());
         sessions.heartbeat(driver.actor(), driver.device(), new LocationFix(point, 5.0, OffsetDateTime.now(), sequence++));
     }
 
@@ -139,7 +141,7 @@ class TripTests {
                 DROPOFF, "Office", payment,
                 new TestQuotes(jdbc, quoteService).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF).id()));
         OfferView offer = dispatch.offers(driver.actor()).getFirst();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), offer.id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer.id());
         return new Ride(payer, driver, order, trips.current(driver.actor()).orElseThrow());
     }
 
@@ -221,6 +223,7 @@ class TripTests {
     @Test
     void arrivalWithAPoorFixNeedsAReasonAndIsFlagged() {
         Ride ride = assigned(PaymentMethod.CASH);
+        TestRides.timePassed(jdbc, ride.driver().actor().id());
         sessions.heartbeat(ride.driver().actor(), ride.driver().device(),
                 new LocationFix(north(30), 250.0, OffsetDateTime.now(), sequence++));
 
@@ -403,7 +406,7 @@ class TripTests {
 
         jdbc.sql("update dispatch_attempt set phase = 'BROADCAST' where order_id = :id and phase = 'PERSONAL'")
                 .param("id", ride.order().id()).update();
-        assertCode(() -> dispatch.claim(ride.driver().actor(), UUID.randomUUID(), ride.order().id()),
+        assertCode(() -> dispatch.claim(ride.driver().actor(), ride.driver().device(), UUID.randomUUID(), ride.order().id()),
                 ErrorCode.DRIVER_NOT_ELIGIBLE);
         assertThat(dispatch.broadcast(ride.driver().actor()))
                 .noneMatch(b -> b.orderId().equals(ride.order().id()));

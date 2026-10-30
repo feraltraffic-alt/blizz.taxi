@@ -94,9 +94,7 @@ class JdbcDriverDebts implements DriverDebts {
                     Limit after = new Limit(currency, limitMinor, version);
                     audit.record(new AuditEntry(actor, "driverDebt.setLimit", "driver_debt_limit", currency, reason,
                             current == 0 ? null : before, after));
-                    for (UUID driverId : driversWithBalance(currency)) {
-                        refresh(driverId, currency);
-                    }
+                    DebtRefreshWork.enqueue(jdbc, currency, version);
                     return after;
                 });
     }
@@ -151,6 +149,7 @@ class JdbcDriverDebts implements DriverDebts {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Status refresh(UUID driverId, String currency) {
+        DebtRefreshWork.lock(jdbc, driverId, currency);
         jdbc.sql("""
                         insert into driver_debt_status (driver_id, currency, owed_minor, limit_minor, blocked, version,
                                                         updated_at)
@@ -167,7 +166,9 @@ class JdbcDriverDebts implements DriverDebts {
                 .filter(b -> b.currency().equals(currency))
                 .mapToLong(b -> b.debitMinor() - b.creditMinor())
                 .sum();
-        Long limit = limit(currency).limitMinor();
+        Limit configured = limit(currency);
+        Long limit = configured.limitMinor();
+        DebtRefreshWork.applied(jdbc, driverId, currency, configured.version());
         boolean blocked = limit != null && owed > limit;
         if (owed == before.owed() && java.util.Objects.equals(limit, before.limit()) && blocked == before.blocked()) {
             return new Status(driverId, currency, owed, limit, blocked);
@@ -202,17 +203,6 @@ class JdbcDriverDebts implements DriverDebts {
                 .query((rs, i) -> new Status(driverId, rs.getString(1), rs.getLong(2), (Long) rs.getObject(3),
                         rs.getBoolean(4)))
                 .list();
-    }
-
-    private List<UUID> driversWithBalance(String currency) {
-        return jdbc.sql("""
-                        select party_id from (
-                            select l.party_id from journal_line l join journal_transaction t on t.id = l.transaction_id
-                            where l.account = 'DRIVER_PAYABLE' and t.currency = :currency and l.party_id is not null
-                            union
-                            select driver_id from driver_debt_status where currency = :currency) drivers
-                        order by party_id""")
-                .param("currency", currency).query(UUID.class).list();
     }
 
     private static void currency(String currency) {

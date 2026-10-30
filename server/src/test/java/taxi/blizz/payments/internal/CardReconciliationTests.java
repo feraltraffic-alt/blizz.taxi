@@ -176,7 +176,7 @@ class CardReconciliationTests {
         TestRides.Driver driver=rides.driverNear(PICKUP);
         drain();
         var offer=dispatch.offers(driver.actor()).stream().filter(o->o.orderId().equals(orderId)).findFirst().orElseThrow();
-        dispatch.accept(driver.actor(),UUID.randomUUID(),offer.id());
+        dispatch.accept(driver.actor(),driver.device(),UUID.randomUUID(),offer.id());
         var trip=trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver,TestRides.north(PICKUP,20));
         var waiting=trips.arrive(driver.actor(),UUID.randomUUID(),trip.id(),trip.version(),null);

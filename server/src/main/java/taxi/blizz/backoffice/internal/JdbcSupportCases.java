@@ -135,26 +135,37 @@ class JdbcSupportCases implements SupportCases {
     @Transactional(readOnly = true)
     public List<Case> queue(Actor actor, QueueFilter f) {
         requireCity(actor, f.cityId());
-        return jdbc.sql(SELECT + """
-                        where city_id is not distinct from :city
-                          and (cast(:state as text) is null or state = :state)
-                          and (cast(:priority as text) is null or priority = :priority)
-                          and (cast(:category as text) is null or category = :category)
-                          and (cast(:assignee as uuid) is null or assigned_staff_id = :assignee)
-                          and (not :unassigned or assigned_staff_id is null)
-                          and (cast(:before as timestamptz) is null or created_at < :before)
-                          and (not :overdue or (state = 'OPEN' and respond_by < :now))
-                        order by case when :overdue then respond_by end,
-                                 case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
-                                 created_at desc, id desc
-                        limit :limit""")
-                .param("overdue", f.overdueOnly()).param("now", now())
-                .param("city", f.cityId()).param("state", f.state() == null ? null : f.state().name())
-                .param("priority", f.priority() == null ? null : f.priority().name())
-                .param("category", f.category() == null ? null : f.category().name())
-                .param("assignee", f.assignedStaffId()).param("unassigned", f.unassignedOnly())
-                .param("before", f.before()).param("limit", Math.max(1, Math.min(f.limit(), 100)))
-                .query((rs, i) -> map(rs, List.of())).list();
+        SupportQueueQuery query = queueQuery(f);
+        return jdbc.sql(query.sql()).params(query.params()).query((rs, i) -> map(rs, List.of())).list();
+    }
+
+    record SupportQueueQuery(String sql, Map<String, Object> params) {
+    }
+
+    SupportQueueQuery queueQuery(QueueFilter f) {
+        StringBuilder sql = new StringBuilder(SELECT);
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (f.cityId() == null) {
+            sql.append(" where city_id is null");
+        } else {
+            sql.append(" where city_id = :city");
+            params.put("city", f.cityId());
+        }
+        if (f.state() != null) { sql.append(" and state = :state"); params.put("state", f.state().name()); }
+        if (f.priority() != null) { sql.append(" and priority = :priority"); params.put("priority", f.priority().name()); }
+        if (f.category() != null) { sql.append(" and category = :category"); params.put("category", f.category().name()); }
+        if (f.assignedStaffId() != null) {
+            sql.append(" and assigned_staff_id = :assignee"); params.put("assignee", f.assignedStaffId());
+        }
+        if (f.unassignedOnly()) sql.append(" and assigned_staff_id is null");
+        if (f.before() != null) { sql.append(" and created_at < :before"); params.put("before", f.before()); }
+        if (f.overdueOnly()) { sql.append(" and state = 'OPEN' and respond_by < :now"); params.put("now", now()); }
+        sql.append(" order by ");
+        if (f.overdueOnly()) sql.append("respond_by, ");
+        sql.append("case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,")
+                .append(" created_at desc, id desc limit ").append(Math.max(1, Math.min(f.limit(), 100)));
+        // The bounded integer is SQL, so a generic plan knows the true row budget.
+        return new SupportQueueQuery(sql.toString(), Map.copyOf(params));
     }
 
     @Override

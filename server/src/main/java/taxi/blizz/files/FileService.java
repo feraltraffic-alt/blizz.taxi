@@ -46,4 +46,11 @@ public interface FileService {
 
     /** Opens a SAFE file after another module has already authorized access to a record that owns it. */
     FileContent openAttached(UUID fileId, FilePurpose purpose);
+
+    /**
+     * Other SAFE files of {@code purpose} with exactly the same content (SHA-256) as {@code fileId}, oldest first, at
+     * most 50; empty when there are none or the file is not SAFE. For spotting one document photo used by two drivers
+     * (issue #105): the caller maps the ids to its own records, nobody reads {@code file_object} but this module.
+     */
+    java.util.List<UUID> sameContent(UUID fileId, FilePurpose purpose);
 }

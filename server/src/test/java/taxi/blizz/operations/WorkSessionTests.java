@@ -287,6 +287,7 @@ class WorkSessionTests {
         GeoPoint newer = new GeoPoint(-39.4, 100.6);
         GeoPoint older = new GeoPoint(-39.9, 100.1);
 
+        taxi.blizz.TestRides.timePassed(jdbc, f.driver().id());
         sessions.heartbeat(f.driver(), f.device(), fix(newer, 10));
         sessions.heartbeat(f.driver(), f.device(), fix(older, 5));
 

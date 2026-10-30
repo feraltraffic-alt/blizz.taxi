@@ -117,7 +117,7 @@ class TerminalPaymentTests {
         assertThat(order.paymentMethod()).isEqualTo(PaymentMethod.TERMINAL);
         assertThat(order.paymentState()).isEqualTo("TERMINAL_EXPECTED");
         assertThat(dispatch.offers(plain.actor())).isEmpty();
-        dispatch.accept(terminal.actor(), UUID.randomUUID(), dispatch.offers(terminal.actor()).getFirst().id());
+        dispatch.accept(terminal.actor(), terminal.device(), UUID.randomUUID(), dispatch.offers(terminal.actor()).getFirst().id());
 
         TripView started = start(terminal);
         assertThatThrownBy(() -> trips.complete(terminal.actor(), UUID.randomUUID(), started.id(), started.version(),
@@ -143,7 +143,7 @@ class TerminalPaymentTests {
         assertThat(orders.get(strict.id()).searchPhase()).as("nobody with a terminal near").isEqualTo("BROADCAST");
         assertThat(dispatch.broadcast(plain.actor())).extracting(BroadcastOrderView::orderId)
                 .doesNotContain(strict.id());
-        assertThatThrownBy(() -> dispatch.claim(plain.actor(), UUID.randomUUID(), strict.id()))
+        assertThatThrownBy(() -> dispatch.claim(plain.actor(), plain.device(), UUID.randomUUID(), strict.id()))
                 .isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.DRIVER_NOT_ELIGIBLE);
         orders.cancel(operator, UUID.randomUUID(), strict.id(), orders.get(strict.id()).version(), "NO_CARS");
@@ -151,7 +151,7 @@ class TerminalPaymentTests {
         OrderView agreed = phoneOrder(PaymentMethod.TERMINAL, true);
         assertThat(dispatch.broadcast(plain.actor())).extracting(BroadcastOrderView::orderId)
                 .contains(agreed.id());
-        dispatch.claim(plain.actor(), UUID.randomUUID(), agreed.id());
+        dispatch.claim(plain.actor(), plain.device(), UUID.randomUUID(), agreed.id());
         OrderView cash = orders.get(agreed.id());
         assertThat(cash.paymentMethod()).isEqualTo(PaymentMethod.CASH);
         assertThat(cash.paymentState()).isEqualTo("CASH_EXPECTED");

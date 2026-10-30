@@ -68,30 +68,45 @@ public class AuditLog {
 
     @Transactional(readOnly = true)
     public java.util.List<Record> find(Query q) {
-        return jdbc.sql("""
-                        select id, occurred_at, actor_type, actor_id, actor_role, action, resource_type, resource_id,
-                               reason, before::text, after::text, correlation_id
-                        from audit_log
-                        where (cast(:actorType as text) is null or actor_type = :actorType)
-                          and (cast(:actorId as uuid) is null or actor_id = :actorId)
-                          and (cast(:actorRole as text) is null or actor_role = :actorRole)
-                          and (cast(:action as text) is null or action = :action)
-                          and (cast(:resourceType as text) is null or resource_type = :resourceType)
-                          and (cast(:resourceId as text) is null or resource_id = :resourceId)
-                          and (cast(:from as timestamptz) is null or occurred_at >= :from)
-                          and (cast(:to as timestamptz) is null or occurred_at < :to)
-                          and (cast(:before as timestamptz) is null or occurred_at < :before)
-                        order by occurred_at desc, id desc
-                        limit :limit""")
-                .param("actorType", q.actorType()).param("actorId", q.actorId()).param("actorRole", q.actorRole())
-                .param("action", q.action()).param("resourceType", q.resourceType())
-                .param("resourceId", q.resourceId()).param("from", q.from()).param("to", q.to())
-                .param("before", q.before()).param("limit", Math.max(1, Math.min(q.limit(), 200)))
+        AuditSql query = querySql(q);
+        return jdbc.sql(query.sql()).params(query.params())
                 .query((rs, i) -> new Record(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class),
                         rs.getString(3), rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6),
                         rs.getString(7), rs.getString(8), rs.getString(9), rs.getString(10), rs.getString(11),
                         rs.getObject(12, UUID.class)))
                 .list();
+    }
+
+    record AuditSql(String sql, java.util.Map<String, Object> params) {
+    }
+
+    AuditSql querySql(Query q) {
+        StringBuilder sql = new StringBuilder("""
+                select id, occurred_at, actor_type, actor_id, actor_role, action, resource_type, resource_id,
+                       reason, before::text, after::text, correlation_id from audit_log where 1=1
+                """);
+        java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+        if ("STAFF".equals(q.actorType())) {
+            // This fixed scope also proves the partial index's predicate in a generic prepared plan.
+            sql.append(" and actor_type = 'STAFF'");
+        } else equal(sql, params, "actor_type", q.actorType());
+        equal(sql, params, "actor_id", q.actorId());
+        equal(sql, params, "actor_role", q.actorRole());
+        equal(sql, params, "action", q.action());
+        equal(sql, params, "resource_type", q.resourceType());
+        equal(sql, params, "resource_id", q.resourceId());
+        if (q.from() != null) { sql.append(" and occurred_at >= :from"); params.put("from", q.from()); }
+        if (q.to() != null) { sql.append(" and occurred_at < :to"); params.put("to", q.to()); }
+        if (q.before() != null) { sql.append(" and occurred_at < :before"); params.put("before", q.before()); }
+        sql.append(" order by occurred_at desc, id desc limit ").append(Math.max(1, Math.min(q.limit(), 200)));
+        return new AuditSql(sql.toString(), java.util.Map.copyOf(params));
+    }
+
+    private static void equal(StringBuilder sql, java.util.Map<String, Object> params, String column, Object value) {
+        if (value != null) {
+            sql.append(" and ").append(column).append(" = :").append(column);
+            params.put(column, value);
+        }
     }
 
     private String toJson(Object value) {

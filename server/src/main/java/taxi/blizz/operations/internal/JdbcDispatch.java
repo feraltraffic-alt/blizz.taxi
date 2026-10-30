@@ -27,6 +27,8 @@ import taxi.blizz.platform.IdempotentCommands;
  * Accepting, declining and claiming orders. The assignment is created in one local transaction
  * that locks the order, then the driver's capacity, then the offer (REQ-ASG-08); the unique
  * indexes on active assignments are the last line of defence against a second assignment.
+ * Accept and claim work only from the device that holds the open shift, checked under the capacity lock that a
+ * handover also takes (issue #102, B3).
  */
 @Service
 class JdbcDispatch implements Dispatch {
@@ -82,18 +84,22 @@ class JdbcDispatch implements Dispatch {
     record OfferRequest(UUID offerId) {
     }
 
+    record AcceptRequest(UUID offerId, UUID deviceSessionId) {
+    }
+
     private record StoredOffer(UUID id, UUID orderId, UUID driverId, String state, OffsetDateTime expiresAt) {
     }
 
     @Override
-    public AssignmentView accept(Actor driver, UUID commandId, UUID offerId) {
+    public AssignmentView accept(Actor driver, UUID deviceSessionId, UUID commandId, UUID offerId) {
         requireDriver(driver);
         rateLimits.acquire(taxi.blizz.platform.RateLimits.OFFER_ACCEPT, driver);
-        return commands.execute(new CommandKey(driver, "offer.accept", commandId), new OfferRequest(offerId),
-                AssignmentView.class, () -> {
+        return commands.execute(new CommandKey(driver, "offer.accept", commandId),
+                new AcceptRequest(offerId, deviceSessionId), AssignmentView.class, () -> {
                     UUID orderId = orderOfOffer(offerId, driver);
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     OrderCore.Capacity capacity = core.lockCapacity(driver.id());
+                    requireShiftDevice(driver, deviceSessionId);
                     StoredOffer offer = lockOffer(offerId);
                     switch (offer.state()) {
                         case "OPEN" -> {
@@ -149,9 +155,10 @@ class JdbcDispatch implements Dispatch {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<BroadcastOrderView> broadcast(Actor driver) {
         requireDriver(driver);
+        // Counted in its own short transaction, so the read below is not a read-only one (issue #102, B1).
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.BROADCAST_LIST, driver);
         DriverAvailability availability = workSessions.availability(driver.id());
         if (!availability.eligible()) {
             return List.of();
@@ -184,16 +191,18 @@ class JdbcDispatch implements Dispatch {
                 .list();
     }
 
-    record ClaimRequest(UUID orderId) {
+    record ClaimRequest(UUID orderId, UUID deviceSessionId) {
     }
 
     @Override
-    public AssignmentView claim(Actor driver, UUID commandId, UUID orderId) {
+    public AssignmentView claim(Actor driver, UUID deviceSessionId, UUID commandId, UUID orderId) {
         requireDriver(driver);
-        return commands.execute(new CommandKey(driver, "order.claim", commandId), new ClaimRequest(orderId),
-                AssignmentView.class, () -> {
+        rateLimits.acquire(taxi.blizz.platform.RateLimits.BROADCAST_CLAIM, driver);
+        return commands.execute(new CommandKey(driver, "order.claim", commandId),
+                new ClaimRequest(orderId, deviceSessionId), AssignmentView.class, () -> {
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     OrderCore.Capacity capacity = core.lockCapacity(driver.id());
+                    requireShiftDevice(driver, deviceSessionId);
                     if ("ASSIGNED".equals(order.status()) || "IN_SERVICE".equals(order.status())) {
                         throw new DomainException(ErrorCode.ORDER_ALREADY_ASSIGNED, "Another driver took the order");
                     }
@@ -216,20 +225,29 @@ class JdbcDispatch implements Dispatch {
                     if (hadIt > 0) {
                         throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "This driver already gave up the order");
                     }
-                    // Within the radius of the ALL tab, as listed (audit 29.10.2026: a driver anywhere in the city
-                    // could claim any order through the API).
                     boolean matches = jdbc.sql("""
-                                    select count(*) from vehicle v, ride_order o, work_session ws
+                                    select count(*) from vehicle v, ride_order o
                                     where v.id = :vehicle and o.id = :order and o.vehicle_class = any(v.class_approvals)
-                                      and o.city_id = :city and ws.driver_id = :driver and ws.state = 'OPEN'
-                                      and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)""")
-                            .param("driver", driver.id()).param("radius", properties.broadcastRadiusMeters())
+                                      and o.city_id = :city""")
                             .param("vehicle", availability.vehicleId())
                             .param("order", orderId)
                             .param("city", availability.cityId())
                             .query(Integer.class).single() == 1;
                     if (!matches) {
-                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "Class, city or distance does not match");
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "Class or city does not match");
+                    }
+                    // Within the radius of the ALL tab, as listed, from the position read under the capacity lock
+                    // that heartbeats take (audit 29.10.2026, issue #102 B2: a driver anywhere in the city could
+                    // claim any order through the API).
+                    boolean near = jdbc.sql("""
+                                    select count(*) from ride_order o, work_session ws
+                                    where o.id = :order and ws.driver_id = :driver and ws.state = 'OPEN'
+                                      and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)""")
+                            .param("driver", driver.id()).param("radius", properties.broadcastRadiusMeters())
+                            .param("order", orderId)
+                            .query(Integer.class).single() == 1;
+                    if (!near) {
+                        throw new DomainException(ErrorCode.PICKUP_TOO_FAR, "The pickup is outside the ALL tab's radius");
                     }
                     return commit(order, driver, availability.vehicleId(), "BROADCAST", null);
                 });
@@ -254,6 +272,20 @@ class JdbcDispatch implements Dispatch {
             throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, String.join(", ", reasons));
         }
         return availability;
+    }
+
+    /** The device that holds the driver's open shift; with no shift, eligibility answers NO_OPEN_SESSION later. */
+    private void requireShiftDevice(Actor driver, UUID deviceSessionId) {
+        Optional<UUID> holder = jdbc.sql("""
+                        select device_session_id from work_session
+                        where driver_id = :driver and state in ('OPEN', 'CLOSING')""")
+                .param("driver", driver.id())
+                .query(UUID.class)
+                .optional();
+        if (holder.isPresent() && !holder.get().equals(deviceSessionId)) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                    "Another device holds the open shift; take it over on this device first");
+        }
     }
 
     private UUID orderOfOffer(UUID offerId, Actor driver) {

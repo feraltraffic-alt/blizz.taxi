@@ -136,7 +136,8 @@ class JdbcOtpService implements OtpService {
         String address = addressBlock(clientIp);
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            OtpChannel channel = enforceLimits(audience, phone, deviceRef, address, preferred, now);
+            OtpChannel channel = enforceLimits(audience, phone, OtpProperties.rangeOf(phone, country), deviceRef,
+                    address, preferred, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
@@ -184,8 +185,8 @@ class JdbcOtpService implements OtpService {
     }
 
     /** Checks every budget and returns the one channel this code goes by (issue #101). */
-    private OtpChannel enforceLimits(OtpAudience audience, PhoneNumber phone, String deviceRef, String clientIp,
-                                     OtpChannel requested, OffsetDateTime now) {
+    private OtpChannel enforceLimits(OtpAudience audience, PhoneNumber phone, String range, String deviceRef,
+                                     String clientIp, OtpChannel requested, OffsetDateTime now) {
         // Serializes concurrent requests for the same phone, riders and drivers together, within this transaction.
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
                 .param("key", "otp:" + phone.e164())
@@ -240,6 +241,17 @@ class JdbcOtpService implements OtpService {
         }
         if (deviceRef != null && countSince("device_ref", deviceRef, hourAgo) >= properties.maxPerDevicePerHour()) {
             throw new RateLimitedException("Too many codes from this device", Duration.ofHours(1));
+        }
+
+        // One range below the global budget, so invented numbers of one prefix leave the other numbers their codes.
+        int inRange = jdbc.sql("""
+                        select count(*) from otp_challenge
+                        where created_at > :since and starts_with(phone_normalized, :range)
+                        """)
+                .param("since", hourAgo).param("range", range)
+                .query(Integer.class).single();
+        if (inRange >= properties.maxPerRangePerHour()) {
+            throw new RateLimitedException("Code sending budget for these numbers exhausted", Duration.ofMinutes(5));
         }
 
         int global = jdbc.sql("select count(*) from otp_challenge where created_at > :since")

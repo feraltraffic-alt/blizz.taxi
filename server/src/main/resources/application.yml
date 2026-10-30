@@ -4,8 +4,8 @@ spring:
   jackson:
     # API field names are snake_case (packages/contracts).
     property-naming-strategy: SNAKE_CASE
-  profiles:
-    default: dev
+  # No default profile (threat model O1): a server started without one stops and says which to set, instead of
+  # running with the development keys. Real instances use prod, local work dev, the sandbox sandbox.
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/blizz}
     username: ${DB_USER:blizz}

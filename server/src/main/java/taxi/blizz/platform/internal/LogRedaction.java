@@ -12,7 +12,10 @@ import java.util.regex.Pattern;
  */
 public final class LogRedaction {
 
-    private record Rule(Pattern pattern, java.util.function.Function<Matcher, String> replacement) {
+    private record Rule(Pattern pattern, java.util.function.Function<Matcher, String> replacement, boolean phone) {
+        Rule(Pattern pattern, java.util.function.Function<Matcher, String> replacement) {
+            this(pattern, replacement, false);
+        }
     }
 
     private static final List<Rule> RULES = List.of(
@@ -27,8 +30,8 @@ public final class LogRedaction {
                     m -> m.group(1) + "****"),
             // Phones: E.164, 00…, and bare full Ukrainian or Polish numbers.
             new Rule(Pattern.compile("(?<![\\w+])(\\+|00)([1-9]\\d{7,14})\\b"),
-                    m -> mask(m.group(1) + m.group(2))),
-            new Rule(Pattern.compile("(?<![\\w.+-])(380\\d{9}|48\\d{9})(?![\\w.])"), m -> mask(m.group(1))),
+                    m -> mask(m.group(1) + m.group(2)), true),
+            new Rule(Pattern.compile("(?<![\\w.+-])(380\\d{9}|48\\d{9})(?![\\w.])"), m -> mask(m.group(1)), true),
             // Precise coordinates: two decimals are kept.
             new Rule(Pattern.compile("(?<![\\w.])(-?\\d{1,3}\\.\\d{2})\\d{3,}"), m -> m.group(1)));
 
@@ -36,6 +39,15 @@ public final class LogRedaction {
     }
 
     public static String redact(String text) {
+        return redact(text, false);
+    }
+
+    /** Persisted diagnostics retain no phone digits; all other log detection rules are shared. */
+    public static String redactFully(String text) {
+        return redact(text, true);
+    }
+
+    private static String redact(String text, boolean fullPhones) {
         if (text == null || text.isEmpty()) {
             return text;
         }
@@ -47,7 +59,7 @@ public final class LogRedaction {
                 if (sb == null) {
                     sb = new StringBuilder(out.length());
                 }
-                m.appendReplacement(sb, Matcher.quoteReplacement(rule.replacement().apply(m)));
+                m.appendReplacement(sb, Matcher.quoteReplacement(fullPhones && rule.phone() ? "[redacted-phone]" : rule.replacement().apply(m)));
             }
             if (sb != null) {
                 m.appendTail(sb);

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-document-duplicated.v1.schema.json",
+  "title": "DriverDocumentDuplicated v1 payload",
+  "description": "Published by driver when a document is added whose file has the same content (SHA-256) as a document of another driver (issue #105, threat model D2). Aggregate Driver (the driver who added it). Ids only. operations raises at most one DUPLICATE_DOCUMENT risk flag per pair of drivers; it blocks nothing (REQ-SEC-11).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["driver_id", "document_id", "other_driver_id", "other_document_id"],
+  "properties": {
+    "driver_id": { "type": "string", "format": "uuid", "description": "The driver who added the document." },
+    "document_id": { "type": "string", "format": "uuid" },
+    "other_driver_id": { "type": "string", "format": "uuid", "description": "The driver with the earliest document of the same content." },
+    "other_document_id": { "type": "string", "format": "uuid" }
+  },
+  "examples": [
+    {
+      "driver_id": "7b000000-0000-4000-8000-000000000105",
+      "document_id": "7d000000-0000-4000-8000-000000000105",
+      "other_driver_id": "7b000000-0000-4000-8000-000000000106",
+      "other_document_id": "7d000000-0000-4000-8000-000000000106"
+    }
+  ]
+}

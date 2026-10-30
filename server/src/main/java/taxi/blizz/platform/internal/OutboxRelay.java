@@ -150,7 +150,7 @@ public class OutboxRelay {
                 .param("attempts", attempts)
                 .param("state", exhausted ? "FAILED" : "PENDING")
                 .param("next", now().plus(backoff))
-                .param("error", truncate(String.valueOf(ex)))
+                .param("error", truncate(LogRedaction.redactFully(ex.getClass().getName() + ": " + ex.getMessage())))
                 .param("eventId", message.eventId())
                 .param("owner", owner)
                 .update();
@@ -173,6 +173,6 @@ public class OutboxRelay {
     }
 
     private static String truncate(String value) {
-        return value.length() <= 1000 ? value : value.substring(0, 1000);
+        return value.length() <= 500 ? value : value.substring(0, 500);
     }
 }

@@ -1,4 +1,4 @@
-# Instructions for contributors (Codex)
+# Instructions for contributors (Codex, Claude-2)
 
 You are a **contributor** on this repository. Claude is the **lead and reviewer**: it assigns work, reviews every pull request and decides what is merged. The product owner has the final word.
 
@@ -10,13 +10,13 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 
 ## How to work
 
-1. Take only work from a GitHub issue meant for you: open issues with your label (`codex`). **At every start, without waiting to be told:**
+1. Take only work from a GitHub issue meant for you: open issues with your label (`codex` for Codex, `claude2` for the second Claude). **At every start, without waiting to be told:**
    1. first answer the reviews of your open PRs (new comments since your last commit);
    2. then continue your open issue;
    3. when none is left, take the oldest open issue with your label.
 
    Say in the issue that you took it. The lead writes issues and reviews in GitHub and does not repeat them elsewhere, so GitHub is where you read your work. If something is unclear, ask in the issue instead of guessing.
-2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex (the lead uses `claude`). Never push to `main`.
+2. Branch from `main` as `<prefix>/<issue-number>-<short-name>`, where the prefix is `codex` for Codex and `claude2` for the second Claude (the lead uses `claude`). Never push to `main`.
 3. Keep a pull request to one concern and under ~400 changed lines where possible.
 4. Before opening the PR, run what CI runs:
    - `scripts/server-build.sh` (needs JDK 25, Maven, Docker)
@@ -25,7 +25,7 @@ You are a **contributor** on this repository. Claude is the **lead and reviewer*
 6. Open or update a PR only when the build is green; a PR with a compile error is not ready for review. The reviewer brings `main` in before merging and resolves trivial conflicts himself.
 7. Open the PR with the template filled in: linked issue, spec requirement ids (REQ-…, AC-…, T-…), what was tested and how.
 8. Do not merge your own PR. Address review comments in new commits on the same branch.
-9. **Do not stop when a step is done; wait for the next one.** After you ask for review, answer a review, or find no open issue with your label, run `scripts/wait-for-work.sh <your label>` (e.g. `codex`). It returns as soon as there is something new for you (a review or comment on your PR, the PR merged or closed, a new or commented issue with your label) and prints what; then start again from step 1. It ends after about nine minutes with nothing new (exit code 2): run it again. Keep the loop going until the person who started you stops you; never end your session with "waiting for review".
+9. **Do not stop when a step is done; wait for the next one.** After you ask for review, answer a review, or find no open issue with your label, run `scripts/wait-for-work.sh <your label>` (`codex` or `claude2`). It returns as soon as there is something new for you (a review or comment on your PR, the PR merged or closed, a new or commented issue with your label) and prints what; then start again from step 1. It ends after about nine minutes with nothing new (exit code 2): run it again. Keep the loop going until the person who started you stops you; never end your session with "waiting for review".
 
 ## Done means proven
 
@@ -45,7 +45,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 
 - Server modules: each direct sub-package of `taxi.blizz` is a module; cross-module calls only through a module's base package. `ModularityTests` must pass.
 - Schema changes only as new Flyway migrations; never edit an applied migration; Hibernate stays `ddl-auto=validate`.
-- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude and `2` for Codex; `3` and `4` belonged to former contributors and are never reused (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, `git fetch` and check that your migration sorts **after** every migration on the **current** `origin/main` (not the `main` you branched from); if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
+- Name new migrations by UTC date and time plus the author's suffix, `V<yyyyMMdd>_<HHmm>_<n>__<what>.sql`, where `n` is `1` for the lead Claude, `2` for Codex and `5` for the second Claude; `3` and `4` belonged to former contributors and are never reused (e.g. `V20261027_1400_2__rider_history.sql`), so parallel branches never take the same version even in the same minute. Before opening the PR, `git fetch` and check that your migration sorts **after** every migration on the **current** `origin/main` (not the `main` you branched from); if not, rename it to sort right after the last one there — current UTC time when that is later, otherwise the last one's date and time plus a step (Flyway refuses an older migration on a database that already has newer ones).
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.

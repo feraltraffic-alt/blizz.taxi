@@ -538,7 +538,7 @@ class InvariantViolationsTests {
                     "Home", DROPOFF, "Work", PaymentMethod.CARD, quote.id(), null, null, null, null, false, wallet));
         } else order = heldOrder(rider);
         drain();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         var trip = trips.current(driver.actor()).orElseThrow();
         var waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);

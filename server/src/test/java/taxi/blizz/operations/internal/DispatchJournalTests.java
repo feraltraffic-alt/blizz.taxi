@@ -221,7 +221,7 @@ class DispatchJournalTests {
             OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP,
                     "Pickup", DROPOFF, "Dropoff", PaymentMethod.CASH, quote));
             if (label.equals("by")) orders.cancel(payer, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
-            if (label.equals("source")) dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+            if (label.equals("source")) dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), onlyOffer(driver).id());
             if (label.equals("outcome")) dispatch.reject(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
             assertThat(observation(name, label)).isEqualTo(before);
             return order.id();
@@ -255,6 +255,9 @@ class DispatchJournalTests {
         Driver stale = driverAt(north(200));
         jdbc.sql("update work_session set last_location_at = now() - interval '1 hour' where driver_id = :d")
                 .param("d", stale.id()).update();
+        Driver refused = driverAt(north(210));  // a fresh time, but its last fix was an impossible jump (#102)
+        jdbc.sql("update work_session set location_refused_at = now() where driver_id = :d")
+                .param("d", refused.id()).update();
         Driver paused = driverAt(north(250));
         DriverAvailability p = sessions.availability(paused.id());
         sessions.pause(paused.actor(), UUID.randomUUID(), paused.device(), p.sessionVersion());
@@ -280,6 +283,7 @@ class DispatchJournalTests {
 
         Map<UUID, String> reasons = reasons(order.id());
         assertThat(reasons).containsEntry(eligible.id(), "OK").containsEntry(stale.id(), "STALE_LOCATION")
+                .containsEntry(refused.id(), "STALE_LOCATION")
                 .containsEntry(paused.id(), "PAUSED").containsEntry(notAdmitted.id(), "NOT_ADMITTED")
                 .containsEntry(otherClass.id(), "CLASS").containsEntry(restricted.id(), "RESTRICTED")
                 .containsEntry(busy.id(), "BUSY").containsEntry(released.id(), "PREVIOUS_DRIVER")
@@ -305,7 +309,7 @@ class DispatchJournalTests {
         OrderView order = order(client());
 
         dispatch.reject(near.actor(), UUID.randomUUID(), onlyOffer(near).id());
-        dispatch.accept(second.actor(), UUID.randomUUID(), onlyOffer(second).id());
+        dispatch.accept(second.actor(), second.device(), UUID.randomUUID(), onlyOffer(second).id());
 
         Actor support = staff(cityId, Orders.VIEW_PERMISSION);
         DispatchJournal.Journal read = journal.of(support, order.id());

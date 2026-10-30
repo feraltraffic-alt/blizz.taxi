@@ -14,9 +14,10 @@ public interface Dispatch {
     /**
      * Accepts an open offer before its server deadline (REQ-ASG-02). A late or revoked offer gets
      * OFFER_EXPIRED / OFFER_REVOKED, never a silent success. A repeated command returns the original
-     * assignment (T-10).
+     * assignment (T-10). Only from {@code deviceSessionId} holding the open shift; another signed-in device of the
+     * driver gets STATE_CONFLICT (issue #102, B3).
      */
-    AssignmentView accept(Actor driver, UUID commandId, UUID offerId);
+    AssignmentView accept(Actor driver, UUID deviceSessionId, UUID commandId, UUID offerId);
 
     /** Declines an offer; the search continues with the next driver. */
     void reject(Actor driver, UUID commandId, UUID offerId);
@@ -24,8 +25,12 @@ public interface Dispatch {
     /** Orders in the "ALL" tab the driver may claim now; empty when the driver is not eligible. */
     List<BroadcastOrderView> broadcast(Actor driver);
 
-    /** Takes an order from the "ALL" tab; exactly one of many concurrent claims wins (T-05). */
-    AssignmentView claim(Actor driver, UUID commandId, UUID orderId);
+    /**
+     * Takes an order from the "ALL" tab; exactly one of many concurrent claims wins (T-05). Within the tab's radius
+     * from the driver's current position (PICKUP_TOO_FAR otherwise), only from {@code deviceSessionId} holding the
+     * open shift (STATE_CONFLICT otherwise), and within the driver's {@code broadcast-claim} budget (issue #102).
+     */
+    AssignmentView claim(Actor driver, UUID deviceSessionId, UUID commandId, UUID orderId);
 
     Optional<AssignmentView> currentAssignment(Actor driver);
 }
