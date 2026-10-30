@@ -741,6 +741,49 @@ paths:
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
 
+  /api/admin/v1/drivers/{driver_id}/admission-cities:
+    put:
+      operationId: setDriverAdmissionCities
+      summary: Set the cities a driver is admitted in
+      description: >-
+        REQ-DSP-01, REQ-DS-06 (issue #141). Needs driver.review for every city added or removed; the reason is
+        required and the change is audited (event DriverAdmissionCitiesChanged). Replaces the whole list. A city that
+        does not exist → 422. A driver online in a city taken off the list keeps the current trip and the shift but
+        gets no new order there (ADMISSION_CITY).
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAdmissionCities"
+      responses:
+        "200":
+          description: The driver after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
   /api/admin/v1/drivers/{driver_id}/payment-terminal:
     post:
       operationId: setDriverPaymentTerminal
@@ -5229,10 +5272,13 @@ components:
     CityOperations:
       type: object
       additionalProperties: false
-      required: [city_id, working_hours, payment_methods, orders_paused, pause_reason, paused_at, version]
+      required: [city_id, working_hours, payment_methods, return_zone_meters, orders_paused, pause_reason, paused_at,
+                 version]
       properties:
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        return_zone_meters:
+          $ref: "#/components/schemas/ReturnZoneMeters"
         working_hours:
           description: Empty — open around the clock.
           type: array
@@ -5256,6 +5302,15 @@ components:
           format: int64
           minimum: 0
 
+    ReturnZoneMeters:
+      description: >-
+        REQ-DS-07 (issue #141): how far outside the city's polygon a driver may be and still get new orders of the
+        city (the pickup radius applies as usual). 0 — none: outside the polygon the driver is not eligible
+        (LOCATION_OUTSIDE_CITY). Never ends or changes a current trip.
+      type: integer
+      minimum: 0
+      maximum: 50000
+
     ChangeCityOperations:
       type: object
       additionalProperties: false
@@ -5263,6 +5318,9 @@ components:
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        return_zone_meters:
+          description: Left out — unchanged.
+          $ref: "#/components/schemas/ReturnZoneMeters"
         expected_version:
           type: integer
           format: int64
@@ -6179,6 +6237,30 @@ components:
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
+
+    SetAdmissionCities:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, city_ids, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: The driver profile's version.
+          type: integer
+          format: int64
+          minimum: 0
+        city_ids:
+          description: The whole new list; empty — admitted nowhere.
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
 
     ReviewChange:
       type: object
