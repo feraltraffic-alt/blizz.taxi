@@ -357,6 +357,95 @@ class DriverAdmissionTests {
         assertThat(count("select count(*) from driver_review_event where driver_id = :id", driver.id())).isEqualTo(2);
     }
 
+    // ------------------------------------------------------------ AC-11: one test per admission row of section 12.2
+
+    /** "Подать документы": NOT_SUBMITTED/CHANGES_REQUIRED → IN_REVIEW (issue #141). */
+    @Test
+    void submitRow() {
+        Actor driver = newDriver();
+        complete(driver);
+        long version = admission.profile(driver.id()).version();
+        Actor client = new Actor(SubjectType.CLIENT, UUID.randomUUID());
+        assertCode(() -> admission.submit(client, UUID.randomUUID(), version), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> admission.submit(reviewer(), UUID.randomUUID(), version), ErrorCode.ACCESS_DENIED);
+        UUID command = UUID.randomUUID();
+
+        DriverProfile inReview = admission.submit(driver, command, version);
+        assertThat(inReview.reviewStatus()).isEqualTo(ReviewStatus.IN_REVIEW);
+
+        assertThat(admission.submit(driver, command, version)).isEqualTo(inReview);
+        assertCode(() -> admission.submit(driver, UUID.randomUUID(), version), ErrorCode.VERSION_CONFLICT);
+    }
+
+    /** "Подтвердить проверку": IN_REVIEW → APPROVED, by staff with the permission (issue #141). */
+    @Test
+    void approveRow() {
+        Actor driver = newDriver();
+        long version = submitted(driver).version();
+        assertCode(() -> admission.decide(driver, UUID.randomUUID(), driver.id(), version, ReviewDecision.APPROVE,
+                "self", List.of("STANDARD"), List.of()), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> admission.decide(newStaff("ACTIVE"), UUID.randomUUID(), driver.id(), version,
+                ReviewDecision.APPROVE, "no permission", List.of("STANDARD"), List.of()), ErrorCode.ACCESS_DENIED);
+        Actor reviewer = reviewer();
+        UUID command = UUID.randomUUID();
+
+        DriverProfile approved = admission.decide(reviewer, command, driver.id(), version, ReviewDecision.APPROVE,
+                "All documents checked", List.of("STANDARD"), List.of());
+        assertThat(approved.reviewStatus()).isEqualTo(ReviewStatus.APPROVED);
+
+        assertThat(admission.decide(reviewer, command, driver.id(), version, ReviewDecision.APPROVE,
+                "All documents checked", List.of("STANDARD"), List.of())).isEqualTo(approved);
+        assertCode(() -> admission.decide(reviewer, UUID.randomUUID(), driver.id(), version, ReviewDecision.APPROVE,
+                "again", List.of("STANDARD"), List.of()), ErrorCode.VERSION_CONFLICT);
+        assertThat(count("""
+                select count(*) from driver_review_event where driver_id = :id and to_status = 'APPROVED'""",
+                driver.id())).isEqualTo(1);
+    }
+
+    /** "Запросить исправления": IN_REVIEW → CHANGES_REQUIRED with a reason (issue #141). */
+    @Test
+    void requestChangesRow() {
+        Actor driver = newDriver();
+        DriverProfile inReview = submitted(driver);
+        long version = inReview.version();
+        List<UUID> insurance = inReview.documents().stream()
+                .filter(d -> d.type() == DocumentType.INSURANCE).map(d -> d.id()).toList();
+        assertCode(() -> admission.decide(driver, UUID.randomUUID(), driver.id(), version,
+                ReviewDecision.REQUEST_CHANGES, "self", List.of(), insurance), ErrorCode.ACCESS_DENIED);
+        Actor reviewer = reviewer();
+        UUID command = UUID.randomUUID();
+
+        DriverProfile changes = admission.decide(reviewer, command, driver.id(), version,
+                ReviewDecision.REQUEST_CHANGES, "Insurance photo is blurred", List.of(), insurance);
+        assertThat(changes.reviewStatus()).isEqualTo(ReviewStatus.CHANGES_REQUIRED);
+
+        assertThat(admission.decide(reviewer, command, driver.id(), version, ReviewDecision.REQUEST_CHANGES,
+                "Insurance photo is blurred", List.of(), insurance)).isEqualTo(changes);
+        assertCode(() -> admission.decide(reviewer, UUID.randomUUID(), driver.id(), version,
+                ReviewDecision.REQUEST_CHANGES, "again", List.of(), insurance), ErrorCode.VERSION_CONFLICT);
+    }
+
+    /** "Приостановить": APPROVED → SUSPENDED with a reason; no new orders (issue #141). */
+    @Test
+    void suspendRow() {
+        Actor driver = newDriver();
+        long version = approved(driver).version();
+        assertCode(() -> admission.suspend(driver, UUID.randomUUID(), driver.id(), version, "self"),
+                ErrorCode.ACCESS_DENIED);
+        assertCode(() -> admission.suspend(newStaff("ACTIVE"), UUID.randomUUID(), driver.id(), version,
+                "no permission"), ErrorCode.ACCESS_DENIED);
+        Actor reviewer = reviewer();
+        UUID command = UUID.randomUUID();
+
+        DriverProfile suspended = admission.suspend(reviewer, command, driver.id(), version, "Complaint");
+        assertThat(suspended.reviewStatus()).isEqualTo(ReviewStatus.SUSPENDED);
+        assertThat(admission.admissionOf(driver.id()).admitted()).isFalse();
+
+        assertThat(admission.suspend(reviewer, command, driver.id(), version, "Complaint")).isEqualTo(suspended);
+        assertCode(() -> admission.suspend(reviewer, UUID.randomUUID(), driver.id(), version, "again"),
+                ErrorCode.VERSION_CONFLICT);
+    }
+
     // ------------------------------------------------------------ suspension and expiry
 
     @Test

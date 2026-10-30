@@ -74,6 +74,18 @@ class OrderCore {
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
     }
 
+    /**
+     * Locks the order only if no other transaction holds it, without waiting; false when it is held. For a caller that
+     * already holds a driver's capacity and so must not wait for an order (issue #141).
+     */
+    boolean tryLockOrder(UUID orderId) {
+        return !jdbc.sql("select id from ride_order where id = :id for update skip locked")
+                .param("id", orderId)
+                .query(UUID.class)
+                .list()
+                .isEmpty();
+    }
+
     /** Changes the status, bumps the version and writes the history row and the outbox event. */
     void setPaymentState(UUID orderId, String state) {
         jdbc.sql("update ride_order set payment_state = :state where id = :id")
@@ -157,6 +169,16 @@ class OrderCore {
                 .param("id", driverId)
                 .query((rs, i) -> new Capacity(rs.getString(1), rs.getObject(2, UUID.class)))
                 .single();
+    }
+
+    /** The driver's shift is open and accepting orders; read under the capacity lock. */
+    boolean accepting(UUID driverId) {
+        return jdbc.sql("""
+                        select count(*) from work_session
+                        where driver_id = :id and state = 'OPEN' and intent = 'ACCEPTING'""")
+                .param("id", driverId)
+                .query(Integer.class)
+                .single() > 0;
     }
 
     void setOccupancy(UUID driverId, String occupancy, UUID assignmentId) {
@@ -347,7 +369,8 @@ class OrderCore {
 
     /**
      * Drivers that may get this order now, nearest first, within {@code radius} metres: open
-     * accepting session in the order's city with a fresh heartbeat and location, active account,
+     * accepting session in the order's city with a fresh heartbeat and a fresh location no less accurate than
+     * {@code blizz.presence.eligibility-accuracy-meters} (REQ-GEO-04), active account,
      * admission, an approved vehicle with the class, free capacity, and no earlier offer for this
      * order (REQ-DSP-01); for payment at the terminal only drivers with one (personal offers never fall back to cash).
      * The final check repeats under locks when the offer is made.
@@ -366,6 +389,7 @@ class OrderCore {
                           and ws.last_heartbeat_at > :heartbeatSince
                           and ws.last_location_at > :locationSince
                           and ws.location_refused_at is null
+                          and (ws.last_location_accuracy is null or ws.last_location_accuracy <= :accuracy)
                           and d.account_state = 'ACTIVE'
                           and d.review_status = 'APPROVED'
                           and v.state = 'APPROVED'
@@ -387,6 +411,7 @@ class OrderCore {
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("includeOffered", includeOffered)
+                .param("accuracy", presence.eligibilityAccuracyMeters())
                 .param("radius", radius)
                 .param("limit", limit == null ? properties.candidateLimit() : limit)
                 .query((rs, i) -> new Candidate(rs.getObject("driver_id", UUID.class),
@@ -416,6 +441,7 @@ class OrderCore {
                                       or ws.last_location_at is null or ws.last_location_at <= :locationSince
                                       or ws.last_location is null or ws.location_refused_at is not null
                                       then 'STALE_LOCATION'
+                                 when ws.last_location_accuracy > :accuracy then 'INACCURATE_LOCATION'
                                  when ws.intent <> 'ACCEPTING' then 'PAUSED'
                                  when d.account_state <> 'ACTIVE' or d.review_status <> 'APPROVED'
                                       or v.state <> 'APPROVED' then 'NOT_ADMITTED'
@@ -444,6 +470,7 @@ class OrderCore {
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("radius", radius)
+                .param("accuracy", presence.eligibilityAccuracyMeters())
                 .param("limit", limit)
                 .query((rs, i) -> new Considered(rs.getObject("driver_id", UUID.class),
                         (Integer) rs.getObject("distance_m"), rs.getString("reason")))

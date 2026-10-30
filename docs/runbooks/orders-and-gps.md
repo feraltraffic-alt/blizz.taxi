@@ -14,7 +14,7 @@
 - `blizz_dispatch_first_offer_seconds_count/sum` — первое предложение за всё время заказа, от первого начала поиска.
 - `blizz_dispatch_assigned_seconds_count/sum{source}` — назначение OFFER/BROADCAST/RESERVATION от первого начала поиска, включая повторный поиск. Для резерва без поиска длительность нулевая, ожидание времени предзаказа не входит.
 - `blizz_offers_total{outcome}` — ACCEPTED/DECLINED/EXPIRED/REVOKED, ровно одно завершение каждого предложения.
-- `blizz_dispatch_excluded_total{reason}` — исключения кандидатов в раунде журнала: STALE_LOCATION, PAUSED, NOT_ADMITTED, CLASS, PAYMENT, RESTRICTED, PREVIOUS_DRIVER, ALREADY_OFFERED, BUSY, TOO_FAR.
+- `blizz_dispatch_excluded_total{reason}` — исключения кандидатов в раунде журнала: STALE_LOCATION, INACCURATE_LOCATION, PAUSED, NOT_ADMITTED, CLASS, PAYMENT, RESTRICTED, PREVIOUS_DRIVER, ALREADY_OFFERED, BUSY, TOO_FAR.
 
 Неизвестные канал, сторона отмены, источник назначения, исход предложения или причина исключения сводятся в `OTHER` с предупреждением, чтобы новая метка не прерывала заказ или раздачу. В предупреждении только имя метрики и безопасное имя значения; возможные ID и телефоны скрываются.
 
