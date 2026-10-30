@@ -182,7 +182,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                                fulfilled_count, cancelled_count, closed_at
                         from operator_bonus_period
                         where cast(:afterKey as date) is null
-                           or (period_key < :afterKey and cast(:afterStaff as uuid) is not null)
+                           or (period_key, staff_id) < (:afterKey, cast(:afterStaff as uuid))
                         order by period_key desc, staff_id desc limit :limit
                         """)
                 .param("afterKey", after == null ? null : after.date(0))

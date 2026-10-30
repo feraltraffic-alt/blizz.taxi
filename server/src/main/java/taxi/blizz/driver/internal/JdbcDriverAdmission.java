@@ -462,7 +462,7 @@ class JdbcDriverAdmission implements DriverAdmission {
                                             d.created_at) as since
                             from driver d where d.review_status = :status) q
                         where cast(:afterAt as timestamptz) is null
-                           or (q.since > :afterAt and cast(:afterId as uuid) is not null)
+                           or (q.since, q.id) > (:afterAt, cast(:afterId as uuid))
                         order by q.since, q.id limit :limit""")
                 .param("status", wanted.name())
                 .param("afterAt", after == null ? null : after.time(0))

@@ -110,7 +110,7 @@ class JdbcReportExports implements ReportExports {
         return jdbc.sql(SELECT + """
                         where requested_by = :by
                           and (cast(:afterAt as timestamptz) is null
-                               or (created_at < :afterAt and cast(:afterId as uuid) is not null))
+                               or (created_at, id) < (:afterAt, cast(:afterId as uuid)))
                         order by created_at desc, id desc limit :limit""")
                 .param("by", actor.id())
                 .param("afterAt", after == null ? null : after.time(0))

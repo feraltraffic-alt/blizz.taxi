@@ -122,7 +122,7 @@ class JdbcClientDeletions implements ClientDeletions {
         var query = jdbc.sql("""
                         select id, deletion_previous_state, deletion_requested_at from client
                         where account_state = 'DELETION_PENDING'"""
-                        + (after == null ? "" : " and deletion_requested_at > :afterAt and :afterId is not null")
+                        + (after == null ? "" : " and (deletion_requested_at, id) > (:afterAt, :afterId)")
                         + " order by deletion_requested_at, id limit :limit")
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
