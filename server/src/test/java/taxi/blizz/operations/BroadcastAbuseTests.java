@@ -15,6 +15,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +61,7 @@ class BroadcastAbuseTests {
     @Autowired QuoteService quotes;
     @Autowired JsonMapper json;
     @Autowired JdbcClient jdbc;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
 
     MockMvc mvc;
     TestRides rides;
@@ -124,11 +126,19 @@ class BroadcastAbuseTests {
     }
 
     private MvcResult claim(IssuedSession device, UUID orderId) throws Exception {
-        return send(post("/api/driver/v1/orders/" + orderId + "/claim"), device, Map.of("command_id", UUID.randomUUID()));
+        return claim(device, orderId, UUID.randomUUID());
+    }
+
+    private MvcResult claim(IssuedSession device, UUID orderId, UUID commandId) throws Exception {
+        return send(post("/api/driver/v1/orders/" + orderId + "/claim"), device, Map.of("command_id", commandId));
     }
 
     private MvcResult accept(IssuedSession device, UUID offerId) throws Exception {
-        return send(post("/api/driver/v1/offers/" + offerId + "/accept"), device, Map.of("command_id", UUID.randomUUID()));
+        return accept(device, offerId, UUID.randomUUID());
+    }
+
+    private MvcResult accept(IssuedSession device, UUID offerId, UUID commandId) throws Exception {
+        return send(post("/api/driver/v1/offers/" + offerId + "/accept"), device, Map.of("command_id", commandId));
     }
 
     private MvcResult list(IssuedSession device) throws Exception {
@@ -180,19 +190,44 @@ class BroadcastAbuseTests {
     // ------------------------------------------------------------ E4: budgets
 
     @Test
-    void theThirtyFirstClaimInTenMinutesIsRefusedButAnotherDriverIsNot() throws Exception {
+    void refusedClaimsCountAndThe31stIs429BeforeTheOrderIsLockedOrRead() throws Exception {
         OrderView order = broadcastOrder();
-        Driver bot = online(1000);
-        for (int i = 0; i < 30; i++) {
-            // A script probing order ids: every attempt counts, whatever its answer.
-            assertThat(claim(bot.phone(), UUID.randomUUID()).getResponse().getStatus()).isNotEqualTo(429);
+        Driver bot = online(8000);   // outside the radius: every claim of the real order is refused
+        // Every attempt counts, whatever its answer: refused for the device, for the distance, an unknown order.
+        for (int i = 0; i < 15; i++) {
+            assertProblem(claim(bot.tablet(), order.id()), 409, "STATE_CONFLICT");
         }
-        MvcResult limited = claim(bot.phone(), UUID.randomUUID());
-        assertProblem(limited, 429, "RATE_LIMITED");
-        assertThat(limited.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        for (int i = 0; i < 14; i++) {
+            assertProblem(claim(bot.phone(), order.id()), 422, "PICKUP_TOO_FAR");
+        }
+        assertProblem(claim(bot.phone(), UUID.randomUUID()), 404, "NOT_FOUND");
 
-        // Even a real order: still over the budget, and the order stays for others.
-        assertProblem(claim(bot.phone(), order.id()), 429, "RATE_LIMITED");
+        // The 31st, while another transaction holds the order row: the 429 comes at once, so it is decided before
+        // any lock or read of the order (a script cannot load order rows with refused claims).
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            pool.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("select id from ride_order where id = :id for update").param("id", order.id())
+                        .query(UUID.class).single();
+                locked.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+            MvcResult limited = pool.submit(() -> claim(bot.phone(), order.id())).get(5, TimeUnit.SECONDS);
+            assertProblem(limited, 429, "RATE_LIMITED");
+            assertThat(limited.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
+
+        // Another driver is not affected, and the order is still there for him.
         Driver other = online(1200);
         assertThat(claim(other.phone(), order.id()).getResponse().getStatus()).isEqualTo(200);
     }
@@ -224,16 +259,25 @@ class BroadcastAbuseTests {
         assertThat(jdbc.sql("select state from offer where id = :id").param("id", offerId).query(String.class).single())
                 .isEqualTo("OPEN");
         assertThat(assignments(offered.id())).isZero();
-        MvcResult accepted = accept(driver.phone(), offerId);
+        UUID acceptCommand = UUID.randomUUID();
+        MvcResult accepted = accept(driver.phone(), offerId, acceptCommand);
         assertThat(accepted.getResponse().getStatus()).as(accepted.getResponse().getContentAsString()).isEqualTo(200);
+        // The phone's command repeated from the tablet is another request (the device is part of it): a conflict,
+        // never the phone's stored assignment returned to the tablet.
+        assertProblem(accept(driver.tablet(), offerId, acceptCommand), 409, "IDEMPOTENCY_CONFLICT");
+        assertThat(accept(driver.phone(), offerId, acceptCommand).getResponse().getStatus()).as("the phone's repeat")
+                .isEqualTo(200);
 
         // Claim: the same rule in the ALL tab.
         OrderView order = broadcastOrder();
         Driver claimer = online(1000);
         assertProblem(claim(claimer.tablet(), order.id()), 409, "STATE_CONFLICT");
         assertThat(assignments(order.id())).isZero();
-        MvcResult claimed = claim(claimer.phone(), order.id());
+        UUID claimCommand = UUID.randomUUID();
+        MvcResult claimed = claim(claimer.phone(), order.id(), claimCommand);
         assertThat(claimed.getResponse().getStatus()).as(claimed.getResponse().getContentAsString()).isEqualTo(200);
+        assertProblem(claim(claimer.tablet(), order.id(), claimCommand), 409, "IDEMPOTENCY_CONFLICT");
+        assertThat(assignments(order.id())).isEqualTo(1);
     }
 
     // ------------------------------------------------------------ E6: two claims at once
