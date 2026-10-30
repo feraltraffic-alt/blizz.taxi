@@ -190,17 +190,33 @@ for(const {f,s} of testSources) for(const h of helpers.filter(h=>h.f===f && (h.h
     coverage.push({method,path:javaPath(a.values[h.pathIndex]),source:at(f,s,m.index),via:h.source});
   }
 }
-// The contract-driven isolation sweep constructs requests at runtime. Model its explicit
-// selection rule only while the selector and actual HTTP invocation remain recognizable.
+// The contract-driven isolation sweep constructs requests at runtime. Recognize the
+// selector AND the real stranger invocation; this is inventory evidence, not execution proof.
+const isolationHelper=testSources.find(({f})=>f.endsWith('/IsolationContract.java'));
 for (const {f,s} of testSources) {
-  const selector=s.match(/List\.of\(("get"[^)]*)\)/g)?.find(x=>x.includes('"put"') && x.includes('"delete"'));
-  if (!selector || !s.includes('path.contains("{")') || !s.includes('item.containsKey(method)')
-      || !s.includes('perform(request(call.method(), url), strangerToken)')) continue;
+  let selector=s.match(/List\.of\(("get"[^)]*)\)/g)?.find(x=>x.includes('"put"') && x.includes('"delete"'));
+  let entries=[];
+  const legacy=selector && s.includes('path.contains("{")') && s.includes('item.containsKey(method)')
+    && s.includes('perform(request(call.method(), url), strangerToken)');
+  if (legacy) entries=[...s.matchAll(/\bcalls\("([^"/]+\.yaml)"\)/g)];
+  else if (/\bIsolationContract\.operations\("/.test(s)) {
+    const helper=isolationHelper?.s??'';
+    selector=helper.match(/List\.of\(("get"[^)]*)\)/g)?.find(x=>x.includes('"put"') && x.includes('"delete"'));
+    if (!selector || !helper.includes('path.contains("{")')
+        || !helper.includes('result.add(new Operation(contract, method, path, map(definition)))')
+        || !s.includes('@MethodSource("contractOperations")')
+        || !s.includes('verify(operation, fixture(operation))')
+        || !s.includes('perform(request(operation, path, payload), fixture.stranger())')) {
+      unresolvedCoverage.push({source:f,reason:'Unrecognized isolation selector or stranger HTTP invocation; not classified as covered'});
+      continue;
+    }
+    entries=[...s.matchAll(/\bIsolationContract\.operations\("([^"/]+\.yaml)"\)/g)];
+  } else continue;
   const methods=strings(selector).map(m=>m.toUpperCase());
-  for (const call of s.matchAll(/\bcalls\("([^"/]+\.yaml)"\)/g)) {
+  for (const call of entries) {
     const file=`packages/contracts/openapi/${call[1]}`;
     let path=null;
-    // Match the unbundled paths the test reads: a path-item $ref has no direct method key.
+    // Match the unbundled paths the test reads: an unsupported path-item reference cannot invent coverage.
     for (const line of read(file).split('\n')) {
       const match=line.match(/^  (\/\S+):\s*$/);
       if(match) {path=match[1];continue;}
