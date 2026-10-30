@@ -33,6 +33,14 @@ final class ProductionSafety {
     private ProductionSafety() {
     }
 
+    /**
+     * Whether the server was started without any profile (threat model O1): Spring's own {@code default} profile is all
+     * it has. It used to fall back to {@code dev}, the keys and fake providers of this repository.
+     */
+    static boolean withoutProfile(Environment env) {
+        return env.getActiveProfiles().length == 0 && Arrays.asList(env.getDefaultProfiles()).equals(List.of("default"));
+    }
+
     static boolean production(Environment env) {
         return Arrays.asList(env.getActiveProfiles()).contains(PRODUCTION);
     }

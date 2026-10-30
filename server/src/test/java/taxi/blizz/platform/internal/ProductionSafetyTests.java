@@ -89,6 +89,18 @@ class ProductionSafetyTests {
     }
 
     @Test
+    void onlySpringsOwnDefaultCountsAsNoProfile() {
+        MockEnvironment none = new MockEnvironment();
+        assertThat(ProductionSafety.withoutProfile(none)).isTrue();
+        MockEnvironment devByDefault = new MockEnvironment();
+        devByDefault.setDefaultProfiles("dev");
+        assertThat(ProductionSafety.withoutProfile(devByDefault)).as("the tests' default").isFalse();
+        MockEnvironment prod = new MockEnvironment();
+        prod.setActiveProfiles("prod");
+        assertThat(ProductionSafety.withoutProfile(prod)).isFalse();
+    }
+
+    @Test
     void outsideProductionNothingIsChecked() {
         MockEnvironment env = new MockEnvironment();
         env.setActiveProfiles("sandbox");
