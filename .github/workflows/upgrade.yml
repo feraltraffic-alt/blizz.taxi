@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       from:
-        description: "The older version (tag, branch or commit)"
+        description: "The older version: a tag, a branch or a full commit hash (checkout does not take a short one)"
         default: main
   # TEMPORARY, removed before the PR: a run on this branch before the workflow is on main.
   push:
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.from || '8a296ac' }}
+          ref: ${{ inputs.from || '8a296ac4871c6a4d86462a8a3d719e247073a36c' }}
           path: older
       - uses: actions/setup-java@v6
         with:
