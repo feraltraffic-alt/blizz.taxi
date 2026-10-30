@@ -59,7 +59,8 @@ fi
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
   \"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,\"pickup_label\":\"вул. Дмитрівська\",\"dropoff\":$DROPOFF,
   \"dropoff_label\":\"Нивки\",\"payment_method\":\"CARD\",\"wallet_minor\":$WALLET}" | jq -r .id)
-expect 201
+# A card hold is awaited: 202 (REQ-API-11). Bonuses that cover the whole fare leave nothing for the card: 201.
+if [[ "$PAYMENT" == CARD ]]; then expect 202; else expect 201; fi
 if [[ "$PAYMENT" == CARD ]]; then
     wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state AUTHORIZED
 else

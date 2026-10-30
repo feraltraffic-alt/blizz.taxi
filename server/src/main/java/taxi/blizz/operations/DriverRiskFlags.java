@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Suspicions about drivers for a person to review (REQ-DS-08, REQ-SEC-11, issue #71). A flag never blocks, ends a
@@ -35,8 +36,15 @@ public interface DriverRiskFlags {
                 String reviewReason, long version) {
     }
 
-    /** Newest first, at most 100, in the staff member's cities; every filter optional. */
-    List<Flag> list(Actor staff, UUID cityId, State state, UUID driverId, OffsetDateTime before, int limit);
+    /** Newest first, after {@code after}, in the staff member's cities; every filter optional. */
+    List<Flag> list(Actor staff, UUID cityId, State state, UUID driverId, PageCursor after, int limit);
+
+    String FLAGS = "risk-flags";
+
+    /** Flags are listed newest raised first, then by id (REQ-API-09). */
+    static PageCursor position(Flag flag) {
+        return PageCursor.of(FLAGS, flag.raisedAt(), flag.id());
+    }
 
     Flag get(Actor staff, UUID flagId);
 

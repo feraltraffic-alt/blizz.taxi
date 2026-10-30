@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.platform.CorrelationId;
+import taxi.blizz.platform.PageCursor;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -79,7 +80,13 @@ class StaffActivityLog {
     }
 
     record Query(String role, UUID staffId, String kind, OffsetDateTime from, OffsetDateTime to,
-                 OffsetDateTime before, int limit) {
+                 PageCursor after, int limit) {
+    }
+
+    static final String ACTIVITY = "staff-activity";
+
+    static PageCursor position(Entry entry) {
+        return PageCursor.of(ACTIVITY, entry.occurredAt(), entry.id());
     }
 
     @Transactional(readOnly = true)
@@ -94,11 +101,14 @@ class StaffActivityLog {
                           and (cast(:kind as text) is null or kind = :kind)
                           and (cast(:from as timestamptz) is null or occurred_at >= :from)
                           and (cast(:to as timestamptz) is null or occurred_at < :to)
-                          and (cast(:before as timestamptz) is null or occurred_at < :before)
+                          and (cast(:afterAt as timestamptz) is null
+                               or (occurred_at, id) < (:afterAt, cast(:afterId as uuid)))
                         order by occurred_at desc, id desc limit :limit""")
                 .param("role", q.role()).param("staff", q.staffId()).param("kind", q.kind())
-                .param("from", q.from()).param("to", q.to()).param("before", q.before())
-                .param("limit", Math.max(1, Math.min(q.limit(), 200)))
+                .param("from", q.from()).param("to", q.to())
+                .param("afterAt", q.after() == null ? null : q.after().time(0))
+                .param("afterId", q.after() == null ? null : q.after().id(1))
+                .param("limit", Math.max(1, Math.min(q.limit(), PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new Entry(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class),
                         rs.getString(3), rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6), rs.getString(7),
                         rs.getString(8), rs.getString(9),

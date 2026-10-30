@@ -16,6 +16,8 @@ import taxi.blizz.identity.StaffPermissions;
 import taxi.blizz.platform.CorrelationTrail;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * The logs of all staff, filterable by role and member (owner decision 27.10.2026): what each one did in the
@@ -51,10 +53,11 @@ class StaffLogsController {
 
     private static final int LIMIT = 200;
 
-    record ActivityPage(List<StaffActivityLog.Entry> entries) {
+    /** Pages of the logs (REQ-API-09); {@code page} is new and optional for older clients. */
+    record ActivityPage(List<StaffActivityLog.Entry> entries, Page.Info page) {
     }
 
-    record ChangesPage(List<AuditLog.Record> changes) {
+    record ChangesPage(List<AuditLog.Record> changes, Page.Info page) {
     }
 
     @GetMapping("/api/admin/v1/logs/activity")
@@ -64,14 +67,19 @@ class StaffLogsController {
                           @RequestParam(required = false) String kind,
                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+                          @RequestParam(required = false) String cursor,
                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
-                          @RequestParam(defaultValue = "50") int limit) {
+                          @RequestParam(required = false) Integer limit) {
         access.require(claims.actor(), StaffPermissions.AUDIT_VIEW);
         if (kind != null && !kind.equals("REQUEST") && !kind.equals("SIGN_IN")) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "kind is REQUEST or SIGN_IN");
         }
-        return new ActivityPage(activity.find(new StaffActivityLog.Query(role == null ? null : role.name(), staffId,
-                kind, from, to, before, limit)));
+        int size = PageCursor.limit(limit);
+        PageCursor after = PageCursor.read(StaffActivityLog.ACTIVITY, cursor, before);
+        Page<StaffActivityLog.Entry> page = Page.of(activity.find(new StaffActivityLog.Query(
+                role == null ? null : role.name(), staffId, kind, from, to, after, size + 1)), size,
+                StaffActivityLog::position);
+        return new ActivityPage(page.items(), page.page());
     }
 
     @GetMapping("/api/admin/v1/logs/changes")
@@ -83,10 +91,15 @@ class StaffLogsController {
                         @RequestParam(name = "resource_id", required = false) String resourceId,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+                        @RequestParam(required = false) String cursor,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
-                        @RequestParam(defaultValue = "50") int limit) {
+                        @RequestParam(required = false) Integer limit) {
         access.require(claims.actor(), StaffPermissions.AUDIT_VIEW);
-        return new ChangesPage(audit.find(new AuditLog.Query("STAFF", staffId, role == null ? null : role.name(),
-                action, resourceType, resourceId, from, to, before, limit)));
+        int size = PageCursor.limit(limit);
+        PageCursor after = PageCursor.read(AuditLog.CHANGES, cursor, before);
+        Page<AuditLog.Record> page = Page.of(audit.find(new AuditLog.Query("STAFF", staffId,
+                role == null ? null : role.name(), action, resourceType, resourceId, from, to, after, size + 1)), size,
+                AuditLog::position);
+        return new ChangesPage(page.items(), page.page());
     }
 }

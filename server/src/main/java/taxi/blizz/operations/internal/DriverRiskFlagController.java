@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.operations.DriverRiskFlags;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Driver risk flags in the admin panel — admin.v1.yaml (issue #71). */
 @RestController
@@ -30,7 +32,8 @@ class DriverRiskFlagController {
         this.flags = flags;
     }
 
-    record FlagList(List<DriverRiskFlags.Flag> flags) {
+    /** A page of flags (REQ-API-09); {@code page} is new and optional for older clients. */
+    record FlagList(List<DriverRiskFlags.Flag> flags, Page.Info page) {
     }
 
     record Raise(@NotNull UUID commandId, @NotNull UUID driverId, @NotNull UUID cityId, @NotBlank String reason) {
@@ -43,9 +46,14 @@ class DriverRiskFlagController {
     FlagList list(AccessClaims claims, @RequestParam(name = "city_id", required = false) UUID cityId,
                   @RequestParam(required = false) DriverRiskFlags.State state,
                   @RequestParam(name = "driver_id", required = false) UUID driverId,
+                  @RequestParam(required = false) String cursor,
                   @RequestParam(required = false) OffsetDateTime before,
-                  @RequestParam(defaultValue = "50") int limit) {
-        return new FlagList(flags.list(claims.actor(), cityId, state, driverId, before, limit));
+                  @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor after = PageCursor.read(DriverRiskFlags.FLAGS, cursor, before);
+        Page<DriverRiskFlags.Flag> page = Page.of(flags.list(claims.actor(), cityId, state, driverId, after,
+                size + 1), size, DriverRiskFlags::position);
+        return new FlagList(page.items(), page.page());
     }
 
     @PostMapping

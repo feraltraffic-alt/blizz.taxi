@@ -26,6 +26,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -59,7 +60,7 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Flag> list(Actor actor, UUID cityId, State state, UUID driverId, OffsetDateTime before, int limit) {
+    public List<Flag> list(Actor actor, UUID cityId, State state, UUID driverId, PageCursor after, int limit) {
         StaffAccess.Scope scope = staff.scope(actor, RISK_PERMISSION);
         if (!scope.allCities() && scope.cityIds().isEmpty()) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + RISK_PERMISSION);
@@ -73,12 +74,15 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                           and (cast(:city as uuid) is null or city_id = :city)
                           and (cast(:state as text) is null or state = :state)
                           and (cast(:driver as uuid) is null or driver_id = :driver)
-                          and (cast(:before as timestamptz) is null or raised_at < :before)
-                        order by raised_at desc, id limit :limit""")
+                          and (cast(:afterAt as timestamptz) is null
+                               or (raised_at, id) < (:afterAt, cast(:afterId as uuid)))
+                        order by raised_at desc, id desc limit :limit""")
                 .param("all", scope.allCities()).param("cities", cities.toArray(UUID[]::new))
                 .param("city", cityId).param("state", state == null ? null : state.name())
-                .param("driver", driverId).param("before", before)
-                .param("limit", Math.max(1, Math.min(limit, 100)))
+                .param("driver", driverId)
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> map(rs)).list();
     }
 

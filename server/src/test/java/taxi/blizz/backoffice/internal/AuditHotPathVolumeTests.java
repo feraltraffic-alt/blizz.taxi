@@ -253,7 +253,7 @@ class AuditHotPathVolumeTests {
             oldParams.put("priority",filter.priority()==null?null:filter.priority().name());
             oldParams.put("category",filter.category()==null?null:filter.category().name());
             oldParams.put("assignee",filter.assignedStaffId());oldParams.put("unassigned",filter.unassignedOnly());
-            oldParams.put("before",filter.before());oldParams.put("overdue",filter.overdueOnly());
+            oldParams.put("before",null);oldParams.put("overdue",filter.overdueOnly());
             oldParams.put("now",OffsetDateTime.now());oldParams.put("limit",50);
             JsonNode before=tx.execute(status->{
                 jdbc.sql("drop index if exists support_case_queue_order_idx").update();
@@ -295,10 +295,13 @@ class AuditHotPathVolumeTests {
             if(filter.state()==null && !filter.overdueOnly())
                 assertThat(result).extracting(SupportCases.Case::state)
                         .contains(SupportCases.State.OPEN,SupportCases.State.RESOLVED);
+            // The next page starts right after the last case in the queue's own order (REQ-API-09).
             var page=cases.queue(staff,new SupportCases.QueueFilter(filter.cityId(),filter.state(),filter.priority(),
-                filter.category(),filter.assignedStaffId(),filter.unassignedOnly(),result.getLast().createdAt(),50,
-                filter.overdueOnly()));
+                filter.category(),filter.assignedStaffId(),filter.unassignedOnly(),
+                SupportCases.position(result.getLast(),filter.overdueOnly()),50,filter.overdueOnly()));
             assertThat(page).noneMatch(c->result.stream().anyMatch(previous->previous.id().equals(c.id())));
+            var both=new java.util.ArrayList<>(result);both.addAll(page);
+            assertThat(both).isSortedAccordingTo(ordering);
         }
     }
 }

@@ -210,7 +210,9 @@ class OrderHistoryApiTests {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> array(MvcResult result) throws Exception {
-        return json.readValue(result.getResponse().getContentAsString(), List.class);
+        // A page of the list (REQ-API-09): its rows are under items.
+        return (List<Map<String, Object>>) json.readValue(result.getResponse().getContentAsString(), Map.class)
+                .get("items");
     }
 
     private static Map<String, Object> byId(List<Map<String, Object>> values, UUID id) {

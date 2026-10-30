@@ -424,7 +424,9 @@ paths:
     get:
       operationId: listOperatorOrders
       summary: Orders of one city
-      description: Newest first. The operator needs orders.view for the requested city.
+      description: |
+        Newest first (created_at, then id); read the next page with page.next_cursor (REQ-API-09). The operator
+        needs orders.view for the requested city.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -440,31 +442,26 @@ paths:
             type: string
             enum: [active, all]
             default: active
-        - name: before
-          in: query
-          required: false
-          description: Exclusive created_at cursor; returns older orders.
-          schema:
-            type: string
-            format: date-time
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
-          description: Orders of the requested city, newest first.
+          description: One page of the orders of the requested city.
           content:
             application/json:
               schema:
-                type: array
-                maxItems: 100
-                items:
-                  $ref: "#/components/schemas/OperatorOrder"
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/OperatorOrder"
+                  page:
+                    $ref: "./common.yaml#/components/schemas/PageInfo"
         "400":
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
@@ -783,17 +780,8 @@ paths:
           schema:
             type: boolean
             default: false
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
