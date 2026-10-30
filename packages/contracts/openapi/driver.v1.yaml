@@ -369,8 +369,9 @@ paths:
       summary: Go online
       description: |
         Requires an active account, admission, an approved own vehicle and a fresh location inside a
-        published city (REQ-DRV-04). The device of the access token becomes the controlling device;
-        another device gets STATE_CONFLICT and must use handover (REQ-DRV-03).
+        published city (REQ-DRV-04) in which the driver is admitted (REQ-DSP-01, REQ-DS-06, issue #141: 409
+        DRIVER_NOT_ELIGIBLE with ADMISSION_CITY otherwise). The device of the access token becomes the controlling
+        device; another device gets STATE_CONFLICT and must use handover (REQ-DRV-03).
       tags: [Work session]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -883,6 +884,14 @@ paths:
       tags: [Dispatch]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: zone_id
+          in: query
+          description: >-
+            Only orders whose pickup is inside this published zone of the driver's city (REQ-DSP-07, issue #141); the
+            driver's own choice. A zone that does not exist, is not published or is of another city → 400
+            VALIDATION_FAILED.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
       responses:
         "200":
           description: OK
@@ -892,6 +901,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/BroadcastOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "429":
@@ -2216,10 +2227,18 @@ components:
     DriverProfile:
       type: object
       additionalProperties: false
-      required: [id, review_status, has_payment_terminal, version, vehicles, documents]
+      required: [id, review_status, has_payment_terminal, admission_city_ids, version, vehicles, documents]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        admission_city_ids:
+          description: >-
+            The cities the driver is admitted in (REQ-DSP-01, issue #141), set by staff. The driver goes online, is
+            offered orders and sees the ALL tab only in these; empty — nowhere yet.
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
         name:
           type: [string, "null"]
         language:
@@ -2464,7 +2483,9 @@ components:
             Why no new order is offered, e.g. ACCOUNT_BLOCKED, ADMISSION_EXPIRED, LOCATION_STALE, OCCUPANCY_ON_TRIP,
             DEBT_LIMIT (the debt to the service is above the admin's limit, REQ-PAY-16), LOCATION_INACCURATE (the
             last accepted fix reported an accuracy worse than `blizz.presence.eligibility-accuracy-meters`, 100 m by
-            default; REQ-GEO-04, issue #141: eligible again with the next accurate fix).
+            default; REQ-GEO-04, issue #141: eligible again with the next accurate fix), ADMISSION_CITY (not admitted
+            in the session's city; issue #141), LOCATION_OUTSIDE_CITY (the last fix is further outside the city's
+            polygon than the city's return zone; REQ-DS-07: never touches a current trip).
           type: array
           items:
             type: string

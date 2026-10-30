@@ -66,6 +66,7 @@ class DriverAdmissionTests {
                 .param("id", id)
                 .param("phone", "+38097" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
                 .update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, id);
         return new Actor(SubjectType.DRIVER, id);
     }
 

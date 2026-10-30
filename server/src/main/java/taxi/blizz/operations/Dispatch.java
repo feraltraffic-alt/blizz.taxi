@@ -23,7 +23,15 @@ public interface Dispatch {
     void reject(Actor driver, UUID commandId, UUID offerId);
 
     /** Orders in the "ALL" tab the driver may claim now; empty when the driver is not eligible. */
-    List<BroadcastOrderView> broadcast(Actor driver);
+    default List<BroadcastOrderView> broadcast(Actor driver) {
+        return broadcast(driver, null);
+    }
+
+    /**
+     * The same, only with the pickup inside {@code zoneId} when given: a published zone of the driver's city, the
+     * driver's own choice (REQ-DSP-07, issue #141); another zone is VALIDATION_FAILED.
+     */
+    List<BroadcastOrderView> broadcast(Actor driver, UUID zoneId);
 
     /**
      * Takes an order from the "ALL" tab; exactly one of many concurrent claims wins (T-05). Within the tab's radius

@@ -52,6 +52,15 @@ insert into driver (id, phone_normalized, name, language, account_state, review_
     ('5a000000-0000-4000-8000-000000000405', '+48500000002', 'Anna Wiśniewska', 'pl', 'ACTIVE', 'APPROVED', now(), now())
 on conflict (id) do nothing;
 
+-- Admission cities (issue #141): the Ukrainian drivers work in Kyiv, the Polish ones in Warsaw.
+insert into driver_admission_city (driver_id, city_id, granted_by, granted_at) values
+    ('5a000000-0000-4000-8000-000000000401', '5a000000-0000-4000-8000-000000000001', null, now()),
+    ('5a000000-0000-4000-8000-000000000402', '5a000000-0000-4000-8000-000000000001', null, now()),
+    ('5a000000-0000-4000-8000-000000000403', '5a000000-0000-4000-8000-000000000001', null, now()),
+    ('5a000000-0000-4000-8000-000000000404', '5a000000-0000-4000-8000-000000000002', null, now()),
+    ('5a000000-0000-4000-8000-000000000405', '5a000000-0000-4000-8000-000000000002', null, now())
+on conflict do nothing;
+
 insert into vehicle (id, driver_id, registration_number, make, model, color, production_year, state, class_approvals,
                      created_at, updated_at) values
     ('5a000000-0000-4000-8000-000000000501', '5a000000-0000-4000-8000-000000000401', 'AA0001TX', 'Skoda', 'Octavia', 'white', 2021, 'APPROVED', '{STANDARD,COMFORT}', now(), now()),

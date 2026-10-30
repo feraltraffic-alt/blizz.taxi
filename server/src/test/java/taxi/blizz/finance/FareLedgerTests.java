@@ -138,6 +138,7 @@ class FareLedgerTests {
                 .param("id", driverId)
                 .param("phone", "+38097" + String.format("%07d", Math.floorMod(driverId.hashCode(), 10_000_000)))
                 .update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, driverId);
         UUID vehicle = UUID.randomUUID();
         jdbc.sql("""
                         insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,

@@ -18,6 +18,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.geo.City;
+import taxi.blizz.geo.CityOperations;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccountDirectory;
@@ -68,13 +69,15 @@ class JdbcWorkSessions implements WorkSessions {
     private final OrderCore core;
     private final DispatchEngine engine;
     private final TransactionTemplate transactions;
+    private final CityOperations cityOperations;
     private final Clock clock;
 
     JdbcWorkSessions(JdbcClient jdbc, IdempotentCommands commands, Outbox outbox, AuditLog auditLog,
                      AccountDirectory accounts, DriverAdmission admission, CityResolver cities,
                      PresenceProperties presence, RiskProperties risk, ImpossibleMovementFlags movementFlags,
                      LegalDocuments legal, OrderCore core, DispatchEngine engine,
-                     TransactionTemplate transactions, Clock clock) {
+                     TransactionTemplate transactions, CityOperations cityOperations, Clock clock) {
+        this.cityOperations = cityOperations;
         this.legal = legal;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -131,6 +134,10 @@ class JdbcWorkSessions implements WorkSessions {
                     City city = cities.resolve(location.point())
                             .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA,
                                     "The location is outside every service area"));
+                    // Only in a city the driver is admitted in (REQ-DSP-01, REQ-DS-06, issue #141).
+                    if (!admission.admissionOf(driver.id()).admittedIn(city.id())) {
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "ADMISSION_CITY");
+                    }
                     UUID sessionId = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into work_session (id, driver_id, vehicle_id, city_id, device_session_id,
@@ -224,6 +231,9 @@ class JdbcWorkSessions implements WorkSessions {
                 throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is closing");
             }
             List<String> reasons = admissionReasons(driver, session.vehicleId());
+            if (!admission.admissionOf(driver.id()).admittedIn(session.cityId())) {
+                reasons.add("ADMISSION_CITY");
+            }
             if (!reasons.isEmpty()) {
                 throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, String.join(", ", reasons));
             }
@@ -457,6 +467,9 @@ class JdbcWorkSessions implements WorkSessions {
         if (!admitted.vehicleApproved(session.vehicleId())) {
             reasons.add("VEHICLE_NOT_APPROVED");
         }
+        if (!admitted.admittedIn(session.cityId())) {
+            reasons.add("ADMISSION_CITY");
+        }
         if (!"OPEN".equals(session.state())) {
             reasons.add("SESSION_" + session.state());
         }
@@ -474,6 +487,10 @@ class JdbcWorkSessions implements WorkSessions {
                 && session.lastLocationAccuracy() > presence.eligibilityAccuracyMeters()) {
             reasons.add("LOCATION_INACCURATE");
         }
+        // Outside the city further than its return zone: no new order; a current trip goes on (REQ-DS-07).
+        if (session.lastLocationAt() != null && !withinReturnZone(session)) {
+            reasons.add("LOCATION_OUTSIDE_CITY");
+        }
         if (!"FREE".equals(occupancy)) {
             reasons.add("OCCUPANCY_" + occupancy);
         }
@@ -484,6 +501,17 @@ class JdbcWorkSessions implements WorkSessions {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** The last position is inside the session city's polygon or within its return zone (ADR 0004: reads city). */
+    private boolean withinReturnZone(Session session) {
+        return jdbc.sql("""
+                        select coalesce(ST_DWithin(c.polygon::geography, ws.last_location::geography, :zone), false)
+                        from work_session ws join city c on c.id = ws.city_id where ws.id = :id""")
+                .param("zone", cityOperations.of(session.cityId()).returnZoneMeters())
+                .param("id", session.id())
+                .query(Boolean.class)
+                .single();
+    }
 
     private interface SessionChange {
         void apply(Session session);

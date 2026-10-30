@@ -250,6 +250,7 @@ class OperatorOrderApiTests {
                                             eligibility_rules, created_at, updated_at)
                         values (:id, :phone, now(), 'Synthetic Driver', 'ACTIVE', 'APPROVED', '{}', now(), now())""")
                 .param("id", driver).param("phone", phone).update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, driver);
         UUID vehicle = UUID.randomUUID();
         jdbc.sql("""
                         insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,
