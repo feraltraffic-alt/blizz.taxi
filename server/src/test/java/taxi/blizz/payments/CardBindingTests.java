@@ -74,7 +74,7 @@ class CardBindingTests {
         jdbc.sql("""
                         insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', true, now(), now())""")
-                .param("id", id).param("phone", "+48" + String.format("%09d", Math.floorMod(id.hashCode(), 1_000_000_000)))
+                .param("id", id).param("phone", taxi.blizz.TestPhones.unique("+48", 9))
                 .update();
         return new Actor(SubjectType.CLIENT, id);
     }

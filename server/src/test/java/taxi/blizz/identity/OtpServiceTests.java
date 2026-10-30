@@ -40,7 +40,7 @@ class OtpServiceTests {
     void freshPhone() {
         delivery.sent.clear();
         // A unique number per test keeps rate limits and accounts independent.
-        phone = "+38067" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        phone = taxi.blizz.TestPhones.unique("+38067", 7);
     }
 
     private String lastCode() {
@@ -164,7 +164,7 @@ class OtpServiceTests {
         String ip = "203.0.113." + Math.floorMod(UUID.randomUUID().hashCode(), 250);
         jdbc.sql("delete from otp_challenge where client_ip = :ip").param("ip", ip).update();
         for (int i = 0; i < 30; i++) {
-            otp.requestChallenge(OtpAudience.DRIVER, "+4852" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000)), null, ip);
+            otp.requestChallenge(OtpAudience.DRIVER, taxi.blizz.TestPhones.unique("+4852", 7), null, ip);
         }
 
         assertThatThrownBy(() -> otp.requestChallenge(OtpAudience.CLIENT, phone, null, ip))

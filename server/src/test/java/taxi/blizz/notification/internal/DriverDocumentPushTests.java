@@ -44,7 +44,7 @@ class DriverDocumentPushTests {
                                             updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', :language, now(), now())""")
                 .param("id", id).param("language", language)
-                .param("phone", "+38095" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38095", 7))
                 .update();
         return new Actor(SubjectType.DRIVER, id);
     }

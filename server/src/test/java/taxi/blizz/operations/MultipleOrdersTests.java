@@ -103,7 +103,7 @@ class MultipleOrdersTests {
     }
 
     private static String newPhone() {
-        return "+38073" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return taxi.blizz.TestPhones.unique("+38073", 7);
     }
 
     private OrderView appOrder(Actor rider) {

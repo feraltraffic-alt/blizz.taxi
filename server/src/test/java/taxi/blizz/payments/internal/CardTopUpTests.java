@@ -77,7 +77,7 @@ class CardTopUpTests {
                         insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', true, now(), now())""")
                 .param("id", clientId)
-                .param("phone", "+48" + String.format("%09d", Math.floorMod(clientId.hashCode(), 1_000_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+48", 9))
                 .update();
         rider = new Actor(SubjectType.CLIENT, clientId);
         UUID driverId = UUID.randomUUID();
@@ -85,7 +85,7 @@ class CardTopUpTests {
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', now(), now())""")
                 .param("id", driverId)
-                .param("phone", "+38097" + String.format("%07d", Math.floorMod(driverId.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38097", 7))
                 .update();
         driver = new Actor(SubjectType.DRIVER, driverId);
     }

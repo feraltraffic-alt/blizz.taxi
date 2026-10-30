@@ -44,7 +44,7 @@ class DocumentRemindersTests {
                                             updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', 'uk', now(), now())""")
                 .param("id", id)
-                .param("phone", "+38096" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38096", 7))
                 .update();
         return id;
     }

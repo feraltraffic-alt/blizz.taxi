@@ -88,7 +88,7 @@ class BroadcastAbuseTests {
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', 'APPROVED', now(), now())""")
                 .param("id", id)
-                .param("phone", "+38073" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38073", 7))
                 .update();
         taxi.blizz.TestAdmission.inEveryCity(jdbc, id);
         UUID vehicle = UUID.randomUUID();

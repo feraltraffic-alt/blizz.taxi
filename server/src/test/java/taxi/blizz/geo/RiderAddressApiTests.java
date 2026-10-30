@@ -108,7 +108,7 @@ class RiderAddressApiTests {
     void driverTokenIsRejectedForRiderEndpoint() throws Exception {
         UUID driver = UUID.randomUUID();
         jdbc.sql("insert into driver(id, phone_normalized, account_state, created_at, updated_at) values (:id,:phone,'ACTIVE',now(),now())")
-                .param("id", driver).param("phone", "+38067" + String.format("%07d", Math.floorMod(driver.hashCode(), 10_000_000))).update();
+                .param("id", driver).param("phone", taxi.blizz.TestPhones.unique("+38067", 7)).update();
         IssuedSession token = sessions.open(new VerifiedSubject(new Actor(SubjectType.DRIVER, driver), "ACTIVE", false), "driver-test");
         MvcResult result = mvc.perform(get("/api/rider/v1/addresses")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)).param("query", "Хрещатик")
@@ -160,7 +160,7 @@ class RiderAddressApiTests {
     private IssuedSession riderSession() {
         UUID rider = UUID.randomUUID();
         jdbc.sql("insert into client(id, phone_normalized, account_state, has_app, created_at, updated_at) values (:id,:phone,'ACTIVE',true,now(),now())")
-                .param("id", rider).param("phone", "+38068" + String.format("%07d", Math.floorMod(rider.hashCode(), 10_000_000))).update();
+                .param("id", rider).param("phone", taxi.blizz.TestPhones.unique("+38068", 7)).update();
         return sessions.open(new VerifiedSubject(new Actor(SubjectType.CLIENT, rider), "ACTIVE", false), "rider-test");
     }
 
