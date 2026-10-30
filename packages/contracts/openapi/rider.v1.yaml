@@ -1885,6 +1885,16 @@ components:
       additionalProperties: false
       required: [command_id, quote_id, vehicle_class, pickup, dropoff, payment_method]
       properties:
+        comment:
+          description: >-
+            For the driver (REQ-DRV-07, issue #143): what to know at the pickup, up to 500 characters. Shown in the
+            offer and the trip.
+          type: [string, "null"]
+          maxLength: 500
+        entrance:
+          description: Where exactly to come, e.g. "entrance 3, from the yard", up to 100 characters.
+          type: [string, "null"]
+          maxLength: 100
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         quote_id:
@@ -2325,6 +2335,12 @@ components:
           oneOf:
             - $ref: "#/components/schemas/DriverCard"
             - type: "null"
+        comment:
+          description: The rider's or operator's note for the driver (REQ-DRV-07, issue #143).
+          type: [string, "null"]
+        entrance:
+          description: Where exactly to come (REQ-DRV-07, issue #143).
+          type: [string, "null"]
         driver_change:
           description: >-
             Set after the driver was changed before the start, with a reason the rider may see; null otherwise.

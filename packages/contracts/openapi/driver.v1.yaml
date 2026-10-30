@@ -2686,7 +2686,8 @@ components:
     Offer:
       type: object
       additionalProperties: false
-      required: [id, order_id, expires_at, vehicle_class, pickup, pickup_label, dropoff_label, payment_method]
+      required: [id, order_id, expires_at, server_time, seconds_left, vehicle_class, pickup, pickup_label,
+                 dropoff_label, payment_method, price_kind]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -2694,6 +2695,34 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         expires_at:
           $ref: "./common.yaml#/components/schemas/Timestamp"
+        server_time:
+          description: >-
+            The server's time when this answer was made (REQ-DRV-07): the app counts down from expires_at −
+            server_time, never from its own clock.
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        seconds_left:
+          description: Whole seconds until expires_at at server_time, at least 0.
+          type: integer
+          minimum: 0
+        price_kind:
+          description: >-
+            What price_minor is (REQ-DRV-07): FIXED — the fare agreed with the rider; paid waiting after the free
+            minutes is added on top, by the tariff.
+          type: string
+          enum: [FIXED]
+        expected_earnings_minor:
+          description: >-
+            An estimate of the driver's part of price_minor after the service's commission, by the same split as the
+            settlement of the trip (the quote's commission rate); waiting would add to it. Null without a price.
+          type: [integer, "null"]
+          format: int64
+        comment:
+          description: The rider's or operator's note for the driver (REQ-DRV-07, issue #143).
+          type: [string, "null"]
+        entrance:
+          description: Where exactly to come (REQ-DRV-07, issue #143).
+          type: [string, "null"]
+
         vehicle_class:
           type: string
         pickup:
@@ -2923,6 +2952,12 @@ components:
         phase:
           type: string
           enum: [TO_PICKUP, WAITING, IN_PROGRESS, COMPLETED, ABORTED]
+        comment:
+          description: The rider's or operator's note for the driver (REQ-DRV-07, issue #143).
+          type: [string, "null"]
+        entrance:
+          description: Where exactly to come (REQ-DRV-07, issue #143).
+          type: [string, "null"]
         version:
           type: integer
           format: int64
