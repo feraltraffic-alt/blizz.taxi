@@ -150,6 +150,8 @@ class DriverStateTests {
                 OrderView order = rides.order(rides.client(), city, PICKUP, DROPOFF);
                 OfferView offer = onlyOffer(driver);
                 long version = version(driver);
+                // The pause is the faster command; holding it back by 0-45 ms in turn lets both sides win.
+                long pauseDelay = (round % 4) * 15L;
                 CountDownLatch start = new CountDownLatch(1);
                 Future<AssignmentView> accept = pool.submit(() -> {
                     start.await();
@@ -157,6 +159,7 @@ class DriverStateTests {
                 });
                 Future<DriverAvailability> pause = pool.submit(() -> {
                     start.await();
+                    Thread.sleep(pauseDelay);
                     return sessions.pause(driver.actor(), UUID.randomUUID(), driver.device(), version);
                 });
                 start.countDown();
@@ -193,6 +196,8 @@ class DriverStateTests {
                 // Out of the next rounds: the driver is paused or busy either way.
             }
             assertThat(accepted + paused).isEqualTo(30);
+            assertThat(accepted).as("the accept won some rounds").isPositive();
+            assertThat(paused).as("the pause won some rounds").isPositive();
         } finally {
             pool.shutdownNow();
         }
