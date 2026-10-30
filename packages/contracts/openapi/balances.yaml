@@ -29,8 +29,9 @@ components:
                 type: integer
                 format: int64
         entries:
-          description: Newest first.
+          description: Newest first (time, then transaction id); one page of them when read with GET.
           type: array
+          maxItems: 100
           items:
             type: object
             required: [id, at, kind, currency, amount_minor, reason]
@@ -62,6 +63,9 @@ components:
                 oneOf:
                   - $ref: "./common.yaml#/components/schemas/Uuid"
                   - type: "null"
+        page:
+          description: The page of entries (REQ-API-09); only in a GET of the statement.
+          $ref: "./common.yaml#/components/schemas/PageInfo"
 
     TransferRule:
       type: object

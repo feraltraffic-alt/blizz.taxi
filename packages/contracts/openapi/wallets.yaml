@@ -72,10 +72,14 @@ components:
           items:
             $ref: "#/components/schemas/WalletBalance"
         entries:
-          description: Newest first.
+          description: Newest first (time, then transaction id); one page of them when read with GET.
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/WalletEntry"
+        page:
+          description: The page of entries (REQ-API-09); only in a GET of the account, not in a top-up's answer.
+          $ref: "./common.yaml#/components/schemas/PageInfo"
 
     StaffTopUp:
       type: object

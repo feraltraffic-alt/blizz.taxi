@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.backoffice.ClientDeletionReview;
 import taxi.blizz.backoffice.ReportExports;
 import taxi.blizz.driver.DriverAdmission;
+import taxi.blizz.finance.RiderWallets;
 import taxi.blizz.operatorbonus.OperatorBonuses;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.PageCursor;
@@ -42,6 +43,8 @@ class CursorListsTests {
     ReportExports exports;
     @Autowired
     OperatorBonuses bonuses;
+    @Autowired
+    RiderWallets wallets;
     @Autowired
     JdbcClient jdbc;
 
@@ -153,6 +156,25 @@ class CursorListsTests {
                 OperatorBonuses.ClosedPeriod::staffId, OperatorBonuses::position, staffIds);
         assertThat(seen).hasSize(3).doesNotHaveDuplicates().containsExactlyElementsOf(sorted(staffIds).reversed());
         jdbc.sql("delete from operator_bonus_period where period_key = :day").param("day", day).update();
+    }
+
+    @Test
+    void walletMovementsAreReadPageByPageNewestFirst() {
+        UUID client = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
+                        values (:id, :phone, 'ACTIVE', true, now(), now())""")
+                .param("id", client).param("phone", "+48" + String.format("%09d", Math.floorMod(client.hashCode(),
+                        1_000_000_000))).update();
+        Actor clerk = staff(RiderWallets.MANAGE_PERMISSION);
+        for (int i = 1; i <= 3; i++) {
+            wallets.topUp(clerk, UUID.randomUUID(), client, "UAH", 100L * i, "Paging " + i);
+        }
+        List<UUID> made = wallets.of(clerk, client, 10).entries().stream().map(RiderWallets.Entry::id).toList();
+        assertThat(made).hasSize(3);
+        List<UUID> seen = pages((after, limit) -> wallets.of(clerk, client, after, limit).entries(),
+                RiderWallets.Entry::id, RiderWallets::position, made);
+        assertThat(seen).containsExactlyElementsOf(made);
     }
 
     /** PostgreSQL orders uuids by their bytes: the order of their hex text. */
