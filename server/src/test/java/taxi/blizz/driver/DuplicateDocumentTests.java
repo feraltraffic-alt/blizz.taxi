@@ -53,6 +53,7 @@ class DuplicateDocumentTests {
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
+    @Autowired taxi.blizz.operations.DriverRiskFlags riskFlags;
 
     MockMvc mvc;
 
@@ -166,16 +167,63 @@ class DuplicateDocumentTests {
         document(third, uniqueJpeg());
         assertThat(duplicateFlags(third.id())).isEmpty();
 
-        // The reviewer sees it on the document.
+        // The reviewer sees it on the driver's current document (the latest of the type), naming the other driver.
         String reviewer = staffToken(DriverAdmission.REVIEW_PERMISSION);
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> duplicates = (List<Map<String, Object>>) reviewCase(reviewer, second.id())
-                .get("duplicates");
+        Map<String, Object> review = reviewCase(reviewer, second.id());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> profile = (Map<String, Object>) review.get("profile");
+        @SuppressWarnings("unchecked")
+        Object current = ((List<Map<String, Object>>) profile.get("documents")).getFirst().get("id");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> duplicates = (List<Map<String, Object>>) review.get("duplicates");
+        assertThat(duplicates).isNotEmpty().allSatisfy(d -> assertThat(d)
+                .containsEntry("document_id", current)
+                .containsEntry("other_driver_id", first.id().toString()));
         assertThat(duplicates).anySatisfy(d -> assertThat(d)
-                .containsEntry("document_id", secondDocument.toString())
-                .containsEntry("other_driver_id", first.id().toString())
                 .containsEntry("other_document_id", firstDocument.toString()));
         assertThat(reviewCase(reviewer, third.id()).get("duplicates")).isEqualTo(List.of());
+    }
+
+    @Test
+    void aFlagOfNoCityIsForStaffWithAllCitiesOnly() {
+        byte[] licence = uniqueJpeg();
+        document(newDriver(), licence);
+        Actor second = newDriver();
+        document(second, licence);
+        UUID flagId = jdbc.sql("select id from driver_risk_flag where kind = 'DUPLICATE_DOCUMENT' and driver_id = :d")
+                .param("d", second.id()).query(UUID.class).single();
+        assertThat(jdbc.sql("select city_id is null from driver_risk_flag where id = :id").param("id", flagId)
+                .query(Boolean.class).single()).isTrue();
+
+        Actor oneCity = staff(false, UUID.randomUUID());
+        assertThat(riskFlags.list(oneCity, null, null, second.id(), null, 50)).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> riskFlags.get(oneCity, flagId))
+                .isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(e -> ((taxi.blizz.platform.DomainException) e).code())
+                .isEqualTo(taxi.blizz.platform.ErrorCode.ACCESS_DENIED);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> riskFlags.review(oneCity, UUID.randomUUID(), flagId,
+                        0, false, "Not mine to decide"))
+                .isInstanceOf(taxi.blizz.platform.DomainException.class);
+
+        Actor allCities = staff(true);
+        assertThat(riskFlags.list(allCities, null, null, second.id(), null, 50))
+                .extracting(taxi.blizz.operations.DriverRiskFlags.Flag::id).containsExactly(flagId);
+        long version = riskFlags.get(allCities, flagId).version();
+        assertThat(riskFlags.review(allCities, UUID.randomUUID(), flagId, version, false, "Same licence photo, checked")
+                .state()).isEqualTo(taxi.blizz.operations.DriverRiskFlags.State.DISMISSED);
+    }
+
+    private Actor staff(boolean allCities, UUID... cities) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, state, all_cities, city_scope,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Risk', 'ADMIN', :permissions, 'ACTIVE', :all, :scope, now(), now())""")
+                .param("id", id).param("login", "risk-" + id)
+                .param("permissions", new String[]{taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION})
+                .param("all", allCities).param("scope", cities).update();
+        return new Actor(SubjectType.STAFF, id);
     }
 
     // ------------------------------------------------------------ E6
