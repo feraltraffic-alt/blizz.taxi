@@ -85,7 +85,7 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
     @Transactional(readOnly = true)
     public Flag get(Actor actor, UUID flagId) {
         Flag flag = find(flagId, false).orElseThrow(JdbcDriverRiskFlags::notFound);
-        staff.require(actor, RISK_PERMISSION, flag.cityId());
+        requireFor(actor, flag.cityId());
         return flag;
     }
 
@@ -127,7 +127,7 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                        String reason) {
         String why = reason(reason);
         Flag before = find(flagId, false).orElseThrow(JdbcDriverRiskFlags::notFound);
-        staff.require(actor, RISK_PERMISSION, before.cityId());
+        requireFor(actor, before.cityId());
         return commands.execute(new CommandKey(actor, "driver_risk_flag.review", commandId),
                 new ReviewRequest(flagId, expectedVersion, confirm, why), Flag.class, () -> {
                     Flag locked = find(flagId, true).orElseThrow(JdbcDriverRiskFlags::notFound);
@@ -153,6 +153,15 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                 });
     }
 
+    /** The flag's city; a flag of no city (DUPLICATE_DOCUMENT) needs all cities (AGENTS.md). */
+    private void requireFor(Actor actor, UUID cityId) {
+        if (cityId != null) {
+            staff.require(actor, RISK_PERMISSION, cityId);
+        } else if (!staff.scope(actor, RISK_PERMISSION).allCities()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "A flag of no city needs all cities");
+        }
+    }
+
     /**
      * An automatic flag, in the caller's transaction; a second one with the same {@code dedupeKey} (one per work
      * session and hour) is not raised. Returns whether a flag was raised.
@@ -170,7 +179,9 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
         if (raised == 1) {
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("driver_id", driverId.toString());
-            after.put("city_id", cityId.toString());
+            if (cityId != null) {
+                after.put("city_id", cityId.toString());
+            }
             after.put("kind", kind.name());
             audit.record(new AuditEntry(Actor.system(), "driver_risk_flag.raise", "driver_risk_flag", id.toString(),
                     null, null, after));

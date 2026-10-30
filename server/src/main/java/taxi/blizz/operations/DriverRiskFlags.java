@@ -18,7 +18,12 @@ public interface DriverRiskFlags {
     enum Kind {
         IMPOSSIBLE_MOVEMENT, MANUAL,
         /** The driver reported cash as not received, and support found the rider had paid (owner decision 28.10.2026). */
-        CASH_DISPUTE
+        CASH_DISPUTE,
+        /**
+         * A document with the same file content as another driver's (issue #105). Of no city: an applicant has none,
+         * so only staff with all cities see and review it.
+         */
+        DUPLICATE_DOCUMENT
     }
 
     enum State {

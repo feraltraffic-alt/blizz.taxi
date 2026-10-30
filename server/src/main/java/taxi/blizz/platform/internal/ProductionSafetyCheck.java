@@ -7,8 +7,8 @@ import org.springframework.context.EnvironmentAware;
 import org.springframework.core.env.Environment;
 
 /**
- * Runs {@link ProductionSafety} before any bean is made, so a misconfigured production instance stops before it
- * touches the database (Flyway) or a provider.
+ * Runs {@link ProductionSafety} before any bean is made, so a misconfigured production instance, or one started
+ * without any profile, stops before it touches the database (Flyway) or a provider.
  */
 class ProductionSafetyCheck implements BeanFactoryPostProcessor, EnvironmentAware {
 
@@ -21,6 +21,10 @@ class ProductionSafetyCheck implements BeanFactoryPostProcessor, EnvironmentAwar
 
     @Override
     public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+        if (ProductionSafety.withoutProfile(environment)) {
+            throw new IllegalStateException("No profile is active: start a real instance with "
+                    + "SPRING_PROFILES_ACTIVE=prod, local development with dev (threat model O1)");
+        }
         if (!ProductionSafety.production(environment)) {
             return;
         }

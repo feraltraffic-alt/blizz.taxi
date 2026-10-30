@@ -228,8 +228,37 @@ class JdbcDriverAdmission implements DriverAdmission {
                     .param("validTo", document.validTo())
                     .param("now", now())
                     .update();
+            duplicates(driver.id(), id, document.fileId()).stream().findFirst().ifPresent(other -> {
+                // The same photo at another driver (issue #105, D2): a risk flag for a person; nothing is blocked.
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("driver_id", driver.id().toString());
+                payload.put("document_id", id.toString());
+                payload.put("other_driver_id", other.otherDriverId().toString());
+                payload.put("other_document_id", other.otherDocumentId().toString());
+                outbox.publish(new OutboxEvent("DriverDocumentDuplicated", 1, "Driver", driver.id(), 0, payload));
+            });
             return id;
         });
+    }
+
+    /**
+     * Documents of other drivers whose file has the same content as {@code fileId}, oldest first. The content match
+     * comes from the files module's API; the documents are this module's own.
+     */
+    private List<Duplicate> duplicates(UUID driverId, UUID documentId, UUID fileId) {
+        List<UUID> same = files.sameContent(fileId, FilePurpose.DRIVER_DOCUMENT);
+        if (same.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                        select id, driver_id from driver_document
+                        where file_id = any(cast(:files as uuid[])) and driver_id <> :driver
+                        order by created_at, id""")
+                .param("files", same.toArray(UUID[]::new))
+                .param("driver", driverId)
+                .query((rs, i) -> new Duplicate(documentId, rs.getObject("driver_id", UUID.class),
+                        rs.getObject("id", UUID.class)))
+                .list();
     }
 
     record VersionedRequest(UUID driverId, long expectedVersion) {
@@ -455,7 +484,11 @@ class JdbcDriverAdmission implements DriverAdmission {
                         ReviewStatus.valueOf(rs.getString(2)), rs.getString(3), rs.getObject(4, UUID.class),
                         rs.getString(5), rs.getObject(6, OffsetDateTime.class)))
                 .list();
-        return new ReviewCase(profile, phone, history);
+        List<Duplicate> duplicates = profile.documents().stream()
+                .filter(d -> d.fileId() != null)
+                .flatMap(d -> duplicates(driverId, d.id(), d.fileId()).stream())
+                .toList();
+        return new ReviewCase(profile, phone, history, duplicates);
     }
 
     @Override

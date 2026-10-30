@@ -30,3 +30,20 @@ tests:
       - eval_time: 190h
         alertname: OtpHourlyAlarm
         exp_alerts: []
+
+  # A file has waited 30 minutes, then keeps waiting: the alert fires after an hour and 5 minutes, not before (#105).
+  - interval: 1m
+    input_series:
+      - series: 'blizz_files_quarantine_oldest_seconds'
+        values: '1800+60x60'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: FileQuarantineStuck
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: FileQuarantineStuck
+        exp_alerts:
+          - exp_labels: {severity: warning, owner: backend-oncall}
+            exp_annotations:
+              summary: "An uploaded file has waited more than an hour for its antivirus verdict"
+              runbook: docs/runbooks/providers.md
