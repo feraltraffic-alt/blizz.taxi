@@ -135,7 +135,7 @@ class TripInterruptionTests {
         assertThat(dispatch.offers(rescue.actor())).extracting(OfferView::orderId).containsExactly(followUp.id());
 
         // The rescue driver finishes the ride; the rider owes nothing, the service pays the driver's share.
-        dispatch.accept(rescue.actor(), UUID.randomUUID(), dispatch.offers(rescue.actor()).getFirst().id());
+        dispatch.accept(rescue.actor(), rescue.device(), UUID.randomUUID(), dispatch.offers(rescue.actor()).getFirst().id());
         TripView trip = trips.current(rescue.actor()).orElseThrow();
         rides.moveTo(rescue, TestRides.north(stop, 20));
         TripView waiting = trips.arrive(rescue.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);

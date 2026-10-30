@@ -178,7 +178,7 @@ class OrderHistoryApiTests {
         rides.moveTo(driver, TestRides.north(pickup, 1000));
         OrderView order = rides.order(payer, city, pickup, dropoff);
         OfferView offer = dispatch.offers(driver.actor()).getFirst();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), offer.id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer.id());
         return new Assigned(order, trips.current(driver.actor()).orElseThrow());
     }
 

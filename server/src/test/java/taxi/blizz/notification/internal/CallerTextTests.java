@@ -140,7 +140,7 @@ class CallerTextTests {
     }
 
     private void accept(TestRides.Driver driver) {
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
     }
 
     private List<String> textsTo(String phone) {

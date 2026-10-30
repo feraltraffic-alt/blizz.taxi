@@ -148,7 +148,7 @@ class CardCaptureTests {
         Actor rider = riderWithCard();
         OrderView order = heldOrder(rider);
         deliverEvents();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
@@ -170,6 +170,17 @@ class CardCaptureTests {
                         select sum(l.debit_minor) from journal_line l join journal_transaction t on t.id = l.transaction_id
                         where t.basis_id = :order and l.account = 'PROVIDER_CLEARING'""")
                 .param("order", order.id()).query(Long.class).single()).isEqualTo(paid.finalPriceMinor());
+
+        // Payment and order both publish these types, each with its own payload and schema (#112).
+        assertThat(jdbc.sql("""
+                        select distinct aggregate_type || ' ' || event_type from outbox
+                        where (aggregate_id = :order or payload ->> 'order_id' = :orderText)
+                          and event_type in ('CardHoldAuthorized', 'CardPaymentSettled')""")
+                .param("order", order.id()).param("orderText", order.id().toString()).query(String.class).list())
+                .containsExactlyInAnyOrder("PaymentIntent CardHoldAuthorized", "Order CardHoldAuthorized",
+                        "PaymentIntent CardPaymentSettled", "Order CardPaymentSettled");
+        taxi.blizz.EventContracts.assertOrderEventsConform(jdbc, order.id(), "CardHoldAuthorized",
+                "CardPaymentSettled");
     }
 
     /** T-27: the driver reports cash on a card order — the card pays, the cash is not counted a second time. */
@@ -179,7 +190,7 @@ class CardCaptureTests {
         Actor rider = riderWithCard();
         OrderView order = heldOrder(rider);
         deliverEvents();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 20));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
