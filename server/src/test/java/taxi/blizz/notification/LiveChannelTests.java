@@ -2,6 +2,7 @@ package taxi.blizz.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -17,8 +18,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -41,6 +45,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** The live channel (section 20, REQ-NTF-04/05): who gets which order changes, and nothing personal in them. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
+@ExtendWith(OutputCaptureExtension.class)
 class LiveChannelTests {
 
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 45.5);
@@ -96,10 +101,23 @@ class LiveChannelTests {
         }
     }
 
-    private WebSocket connect(String path, String bearer, String queryToken, Inbox inbox) {
-        WebSocket.Builder builder = HttpClient.newHttpClient().newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5));
+    private WebSocket connect(String path, String bearer, String protocolToken, Inbox inbox) {
+        return connect(path, bearer, protocolToken, null, inbox);
+    }
+
+    /**
+     * The mobile apps send {@code Authorization: Bearer}; a browser, which cannot set headers on a WebSocket, sends the
+     * token as a subprotocol next to {@code blizz.v1} (REQ-SEC-08). {@code queryToken} is the first version's
+     * {@code ?access_token=}, which put the token in every proxy log and is refused now.
+     */
+    private WebSocket connect(String path, String bearer, String protocolToken, String queryToken, Inbox inbox) {
+        WebSocket.Builder builder = HttpClient.newHttpClient().newWebSocketBuilder()
+                .connectTimeout(Duration.ofSeconds(5));
         if (bearer != null) {
             builder.header("Authorization", "Bearer " + bearer);
+        }
+        if (protocolToken != null) {
+            builder.subprotocols("blizz.v1", "blizz.bearer." + protocolToken);
         }
         String uri = "ws://localhost:" + port + path + (queryToken == null ? "" : "?access_token=" + queryToken);
         return builder.buildAsync(URI.create(uri), inbox).join();
@@ -134,7 +152,9 @@ class LiveChannelTests {
         Inbox driverInbox = new Inbox();
         Inbox strangerInbox = new Inbox();
         connect("/ws/v1/rider", token(rider), null, riderInbox);
-        connect("/ws/v1/driver", null, token(driver.actor()), driverInbox); // the browser way
+        WebSocket browser = connect("/ws/v1/driver", null, token(driver.actor()), driverInbox); // the browser way
+        assertThat(browser.getSubprotocol()).as("the server answers the protocol, never the token")
+                .isEqualTo("blizz.v1");
         connect("/ws/v1/rider", token(stranger), null, strangerInbox);
         for (int i = 0; i < 50 && riderInbox.messages.isEmpty(); i++) {
             TimeUnit.MILLISECONDS.sleep(100);
@@ -184,6 +204,24 @@ class LiveChannelTests {
         auth.revokeAll(rider, "test: account blocked");
         // The tests recheck every second (blizz.live.recheck); a real server every 15 s.
         assertThat(closing.closedWith.get(10, TimeUnit.SECONDS)).isEqualTo(4403);
+    }
+
+    /** REQ-SEC-08, issue #145 E4: the token never travels in the address, so no proxy or server log can hold it. */
+    @Test
+    void aTokenInTheAddressIsRefusedAndNoLogLineCarriesAToken(CapturedOutput output) {
+        Actor rider = rides.client();
+        String token = token(rider);
+        assertThatThrownBy(() -> connect("/ws/v1/rider", null, null, token, new Inbox()))
+                .as("?access_token= is not accepted any more")
+                .isInstanceOf(CompletionException.class).hasCauseInstanceOf(WebSocketHandshakeException.class);
+        assertThat(((WebSocketHandshakeException) catchThrowable(() -> connect("/ws/v1/rider", null, null, token,
+                new Inbox())).getCause()).getResponse().statusCode()).isEqualTo(401);
+        WebSocket ok = connect("/ws/v1/rider", null, token, new Inbox());
+        assertThat(ok.getSubprotocol()).isEqualTo("blizz.v1");
+        assertThatThrownBy(() -> connect("/ws/v1/rider", null, "not-a-token", new Inbox()))
+                .isInstanceOf(CompletionException.class).hasCauseInstanceOf(WebSocketHandshakeException.class);
+        assertThat(output.getAll()).as("no log line holds the token").doesNotContain(token)
+                .doesNotContain("not-a-token");
     }
 
     @Test
