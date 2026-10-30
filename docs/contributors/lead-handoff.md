@@ -22,21 +22,16 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 
 ## Work in flight
 
-| Item | Who | State |
-|---|---|---|
-| #118 retention settings in the admin panel (Q-19 decided by the owner) | Codex | One-time backfill of the "attached" marker approved from three tables (`driver_document`, `support_message_attachment`, `call_recording`), ADR 0004 exception authorised, `CALL_RECORDING` excluded from the cleanup in code |
-| #124 isolation sweep must reach the access check | Codex | After #118 |
-| #102 dispatch abuse (threat model §6–7) | Second Claude | B2 radius already on main (#117) |
-| #105 document uploads (threat model §5) | Second Claude | After #102; PDF `#xx` and Flate (#117), PNG and WebP metadata (#121) already on main |
-| #112 deferred audit findings | Lead | See below |
+Audit of 30.10.2026: `docs/status/2026-10-30-server-audit.md` (what is left on the server and in which issue).
 
-### Left in #112
+| Who | Queue (in order) |
+|---|---|
+| Codex | #130 (retention, approved; resolving the conflict with `main`) → #124 → #136 web foundation → #140 payments → #142 admin orders → #144 privacy |
+| Second Claude | #135 documents encrypted at rest (E6 after #130) → #137 rider app → #141 driver states → #143 operator and driver |
+| Lead | merges in migration order, reviews, #139 API conventions → #145 operations → #146 pilot proofs |
 
-- Code budget per country prefix (LOW).
-- The same event type published by payment and order: an event contract question. No runtime bug, because every
-  consumer filters by `aggregateType`.
-
-The client card showing support-case subjects across cities stays as it is: owner decision of 30.10.2026.
+Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
+Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
 
 ### Reminders (no work now)
 
@@ -59,6 +54,8 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
    - read the results on branch `sandbox-runs`, in `runs/<run id>/results.txt`.
 
    Docs-only changes may go straight to `main`.
+   - In auto mode the session's permission check refuses `gh api -X PUT .../pulls/N/merge` as a merge without
+     review, even after the lead's review is posted: ask the owner, or the owner adds a permission rule.
 3. **After merging several PRs**, run the full sandbox on `main` once more.
 4. **After a review with findings,** add a case to `lessons.md` and the habit to `AGENTS.md`.
 
@@ -74,6 +71,8 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
 
 ## Recent history (29–30.10.2026)
 
+- **#126 (lead):** OTP budget per range of numbers (`blizz.otp.max-per-range-per-hour`, 500); the tests and the
+  sandbox raise it in their own config.
 - **Full code audit:** #113 to #117, then #119 to #122. Lessons 10 and 11.
 - **Codex:** #109 reconciliation, #123 contract drift audit (`scripts/audit/contract-drift.mjs`), #125 hot-path
   indexes and background debt refresh.
