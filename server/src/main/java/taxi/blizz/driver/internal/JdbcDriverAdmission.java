@@ -47,7 +47,7 @@ import taxi.blizz.platform.SubjectType;
  * outbox event in the same transaction.
  */
 @Service
-class JdbcDriverAdmission implements DriverAdmission {
+class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAccounts {
 
     private static final Set<ReviewStatus> EDITABLE =
             EnumSet.of(ReviewStatus.NOT_SUBMITTED, ReviewStatus.CHANGES_REQUIRED, ReviewStatus.APPROVED,
@@ -88,12 +88,14 @@ class JdbcDriverAdmission implements DriverAdmission {
     @Override
     @Transactional(readOnly = true)
     public DriverProfile profile(UUID driverId) {
-        record Row(String name, String language, String status, long version, boolean terminal) {
+        record Row(String name, String language, String status, long version, boolean terminal, String account) {
         }
-        Row row = jdbc.sql("select name, language, review_status, version, has_payment_terminal from driver where id = :id")
+        Row row = jdbc.sql("""
+                        select name, language, review_status, version, has_payment_terminal, account_state
+                        from driver where id = :id""")
                 .param("id", driverId)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getLong(4),
-                        rs.getBoolean(5)))
+                        rs.getBoolean(5), rs.getString(6)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Driver not found"));
 
@@ -120,7 +122,7 @@ class JdbcDriverAdmission implements DriverAdmission {
                         rs.getString("decision"), rs.getString("decision_reason")))
                 .list();
 
-        return new DriverProfile(driverId, row.name(), row.language(), ReviewStatus.valueOf(row.status()),
+        return new DriverProfile(driverId, row.account(), row.name(), row.language(), ReviewStatus.valueOf(row.status()),
                 row.version(), row.terminal(), List.copyOf(admissionCities(driverId)), vehicles, documents);
     }
 
@@ -515,6 +517,42 @@ class JdbcDriverAdmission implements DriverAdmission {
                             payload));
                     return profile(driverId);
                 });
+    }
+
+    // ---------------------------------------------------------------- account block (issue #141)
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void block(Actor staffMember, UUID driverId, long expectedVersion, String reason) {
+        changeAccountState(staffMember, driverId, expectedVersion, reason, "ACTIVE", "BLOCKED",
+                "driver.block", "DriverAccountBlocked");
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void unblock(Actor staffMember, UUID driverId, long expectedVersion, String reason) {
+        changeAccountState(staffMember, driverId, expectedVersion, reason, "BLOCKED", "ACTIVE",
+                "driver.unblock", "DriverAccountUnblocked");
+    }
+
+    private void changeAccountState(Actor staffMember, UUID driverId, long expectedVersion, String reason,
+                                    String from, String to, String action, String event) {
+        requireReason(reason);
+        lockVersion(driverId, expectedVersion);
+        String state = jdbc.sql("select account_state from driver where id = :id").param("id", driverId)
+                .query(String.class).single();
+        if (!from.equals(state)) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                    "Only a driver " + from + " can be changed so, this one is " + state);
+        }
+        long version = jdbc.sql("""
+                        update driver set account_state = :to, updated_at = :now, version = version + 1
+                        where id = :id returning version""")
+                .param("to", to).param("now", now()).param("id", driverId).query(Long.class).single();
+        auditLog.record(new AuditEntry(staffMember, action, "driver", driverId.toString(), reason,
+                Map.of("account_state", from), Map.of("account_state", to)));
+        outbox.publish(new OutboxEvent(event, 1, "Driver", driverId, version,
+                new LinkedHashMap<>(Map.of("driver_id", driverId.toString()))));
     }
 
     // ---------------------------------------------------------------- reviewer views

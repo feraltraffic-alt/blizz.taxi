@@ -341,6 +341,34 @@ class JdbcWorkSessions implements WorkSessions {
     private record OpenOffer(UUID id, UUID orderId) {
     }
 
+    /**
+     * For a block of the driver's account (issue #141), in the caller's transaction: locks the order of the open
+     * offer, if any, before anything else, as {@link #withOfferedOrderLocked} does for a pause.
+     */
+    Optional<UUID> lockOfferedOrder(UUID driverId) {
+        Optional<UUID> offeredOrder = openOffer(driverId).map(OpenOffer::orderId);
+        offeredOrder.ifPresent(core::lockOrder);
+        return offeredOrder;
+    }
+
+    /**
+     * The blocked driver gets no new work (REQ-DS-01): the shift stops taking orders — NOT_ACCEPTING when free,
+     * PAUSE_AFTER_CURRENT on a trip, so the trip goes on — and the open offer is revoked (DRIVER_BLOCKED). Call after
+     * {@link #lockOfferedOrder} in the same transaction.
+     */
+    void stopNewWork(Actor driver, Optional<UUID> offeredOrder) {
+        lockCapacity(driver.id());
+        Optional<Session> current = currentSession(driver.id());
+        if (current.isPresent() && "OPEN".equals(current.get().state())) {
+            String intent = busy(driver.id()) ? "PAUSE_AFTER_CURRENT" : "NOT_ACCEPTING";
+            if (!intent.equals(current.get().intent()) && !"NOT_ACCEPTING".equals(current.get().intent())) {
+                long version = update(current.get(), "intent = :intent", Map.of("intent", intent));
+                publish("WorkSessionIntentChanged", current.get().id(), version, Map.of("intent", intent));
+            }
+        }
+        revokeOpenOffer(driver, offeredOrder, "DRIVER_BLOCKED");
+    }
+
     private Optional<OpenOffer> openOffer(UUID driverId) {
         return jdbc.sql("select id, order_id from offer where driver_id = :d and state = 'OPEN' order by created_at")
                 .param("d", driverId)

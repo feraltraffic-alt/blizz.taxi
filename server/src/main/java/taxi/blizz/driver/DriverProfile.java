@@ -7,6 +7,8 @@ import java.util.UUID;
 /** What a driver or a reviewer sees about one driver's admission. */
 public record DriverProfile(
         UUID id,
+        /** ACTIVE, BLOCKED (a limited session only, issue #141), DELETION_PENDING or ANONYMIZED. */
+        String accountState,
         String name,
         String language,
         ReviewStatus reviewStatus,

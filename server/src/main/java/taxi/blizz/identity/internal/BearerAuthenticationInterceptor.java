@@ -6,10 +6,12 @@ import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.servlet.HandlerInterceptor;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.SessionService;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.SubjectType;
 
 /**
  * Authenticates every request to {@code /api/{audience}/v1/**} by bearer token for exactly that
@@ -23,9 +25,11 @@ class BearerAuthenticationInterceptor implements HandlerInterceptor {
     private static final String BEARER = "Bearer ";
 
     private final SessionService sessions;
+    private final AccountDirectory accounts;
 
-    BearerAuthenticationInterceptor(SessionService sessions) {
+    BearerAuthenticationInterceptor(SessionService sessions, AccountDirectory accounts) {
         this.sessions = sessions;
+        this.accounts = accounts;
     }
 
     @Override
@@ -38,6 +42,13 @@ class BearerAuthenticationInterceptor implements HandlerInterceptor {
         if (claims.isEmpty()) {
             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
             throw new DomainException(ErrorCode.UNAUTHENTICATED, "A valid access token is required");
+        }
+        // A blocked driver keeps a limited session (REQ-DS-01, issue #141): reads, the current trip, support.
+        if (claims.get().actor().type() == SubjectType.DRIVER
+                && "BLOCKED".equals(accounts.accountState(claims.get().actor()).orElse(null))
+                && !DriverLimitedSession.allows(request.getMethod(),
+                        request.getRequestURI().substring(request.getContextPath().length()))) {
+            throw new DomainException(ErrorCode.ACCOUNT_BLOCKED, "The account is blocked: no new work");
         }
         request.setAttribute(CLAIMS_ATTRIBUTE, claims.get());
         return true;
