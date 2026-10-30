@@ -82,7 +82,8 @@ class FileRetirement {
 
     private Attempt retire(UUID id, String eligibility, Map<String, Object> params, OffsetDateTime now) {
         Claimed claimed = tx.execute(status -> {
-            var row = jdbc.sql("select id,storage_key,staging_key,plain_key_pending_delete,state,retention_claim,retention_attempts from file_object where id=:id and "
+            var row = jdbc.sql("select id,storage_key,staging_key,plain_key_pending_delete,state,retention_claim,"
+                            + "retention_attempts from file_object where id=:id and "
                             + eligibility + " and " + AVAILABLE + " for update skip locked")
                     .params(params).param("id", id).query((rs, i) -> new Claimed(rs.getObject(1, UUID.class),
                             rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), UUID.randomUUID(),

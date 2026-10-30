@@ -75,7 +75,10 @@ class DocumentEncryption {
     private record Leftover(UUID fileId, String key) {
     }
 
-    /** Deletes plain files switched more than {@link #GRACE} ago, then encrypts at most {@value #PER_RUN} due files; returns how many it switched. */
+    /**
+     * Deletes plain files switched more than {@link #GRACE} ago, then encrypts at most {@value #PER_RUN} due files;
+     * returns how many it switched.
+     */
     int encryptDue() {
         Optional<FileCipher> cipher = encryption.cipher();
         if (cipher.isEmpty()) {

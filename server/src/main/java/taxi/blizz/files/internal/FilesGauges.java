@@ -20,12 +20,14 @@ class FilesGauges extends DatabaseGauges {
         gauge("blizz.files.documents.plain", "Driver documents still stored in the clear",
                 () -> jdbc.sql("""
                                 select count(*) from file_object
-                                where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null and storage_key is not null""")
+                                where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null
+                                  and storage_key is not null""")
                         .query(Long.class).single());
         gauge("blizz.files.documents.encryption_failing", "Driver documents whose re-encryption failed at least once",
                 () -> jdbc.sql("""
                                 select count(*) from file_object
-                                where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null and storage_key is not null
+                                where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null
+                                  and storage_key is not null
                                   and encrypt_attempts > 1""")
                         .query(Long.class).single());
     }

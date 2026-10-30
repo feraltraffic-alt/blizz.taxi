@@ -9,7 +9,7 @@ A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profil
 | Variable | Rule |
 |---|---|
 | `OTP_SECRET`, `ACCESS_TOKEN_SECRET` | set, at least 32 characters, not a value from this repository |
-| `SECRETS_MASTER_KEY` | set (`openssl rand -base64 32`), not the dev or sandbox key; keep it with the backups of the database **and** of the files directory |
+| `SECRETS_MASTER_KEY` | set (`openssl rand -base64 32`), not the dev/sandbox key; keep it with DB and files backups |
 | `DB_PASSWORD` | set |
 | `INSTANCE_ID` | set once for the instance and never changed (REQ-TEN-02); not the dev or sandbox id |
 | `PUBLIC_BASE_URL` | the instance's public `https://` address |

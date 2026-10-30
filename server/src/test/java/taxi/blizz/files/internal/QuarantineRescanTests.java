@@ -134,7 +134,9 @@ class QuarantineRescanTests {
         assertThat(clamd.scans()).isEqualTo(before + 1);
     }
 
-    /** Issue #135, E2: a document waiting in quarantine is stored encrypted; the rescan decrypts its copy to scan it. */
+    /**
+     * Issue #135, E2: a document waiting in quarantine is stored encrypted; the rescan decrypts its copy to scan it.
+     */
     @Test
     void anEncryptedDocumentInQuarantineIsDecryptedForTheRescan() throws Exception {
         byte[] cleanBody = FakeClamd.jpegCarrying("clean " + UUID.randomUUID());
@@ -145,7 +147,9 @@ class QuarantineRescanTests {
         assertThat(files.upload(driver, clean, "image/jpeg", cleanBody.length, new ByteArrayInputStream(cleanBody))
                 .state()).isEqualTo(FileState.QUARANTINE);
         clamd.restart();
-        assertThat(jdbc.sql("select count(*) from file_object where id in (:a, :b) and encryption = 'AES256GCM-STREAM-1'")
+        assertThat(jdbc.sql("""
+                        select count(*) from file_object
+                        where id in (:a, :b) and encryption = 'AES256GCM-STREAM-1'""")
                 .param("a", infected).param("b", clean).query(Integer.class).single())
                 .as("both stored encrypted while waiting").isEqualTo(2);
 

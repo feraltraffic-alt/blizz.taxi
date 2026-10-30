@@ -262,7 +262,8 @@ class DocumentEncryptionTests {
             assertThat(column(doc.id(), "encryption")).isNull();
             assertThat(column(doc.id(), "storage_key")).isEqualTo(doc.key());
             assertThat(column(doc.id(), "encrypt_attempts")).isEqualTo("1");
-            assertThat(jdbc.sql("select next_encrypt_at > now() + interval '20 seconds' from file_object where id = :id")
+            assertThat(jdbc.sql("""
+                            select next_encrypt_at > now() + interval '20 seconds' from file_object where id = :id""")
                     .param("id", doc.id()).query(Boolean.class).single()).as("backed off").isTrue();
             assertThat(Files.exists(path(doc.key() + DocumentEncryption.SUFFIX))).isFalse();
         }
@@ -272,11 +273,14 @@ class DocumentEncryptionTests {
         dueNow(missing.id());
         job.encryptDue();
         assertThat(column(missing.id(), "encrypt_attempts")).isEqualTo("2");
-        assertThat(jdbc.sql("select next_encrypt_at > now() + interval '50 seconds' from file_object where id = :id")
+        assertThat(jdbc.sql("""
+                        select next_encrypt_at > now() + interval '50 seconds' from file_object where id = :id""")
                 .param("id", missing.id()).query(Boolean.class).single()).isTrue();
         assertThat(jdbc.sql("""
-                        select count(*) from file_object where id = :id and encryption is null and encrypt_attempts > 1""")
-                .param("id", missing.id()).query(Integer.class).single()).as("counted by the failing gauge").isEqualTo(1);
+                        select count(*) from file_object
+                        where id = :id and encryption is null and encrypt_attempts > 1""")
+                .param("id", missing.id()).query(Integer.class).single())
+                .as("counted by the failing gauge").isEqualTo(1);
         Files.delete(path(unreadable.key()));
     }
 
