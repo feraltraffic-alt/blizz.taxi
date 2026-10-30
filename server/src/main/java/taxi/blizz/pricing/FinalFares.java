@@ -44,6 +44,17 @@ public interface FinalFares {
                      Breakdown breakdown) {
     }
 
+    /** The service's commission and the driver's share of an amount. */
+    record Split(long commissionMinor, long driverShareMinor) {
+    }
+
+    /**
+     * Splits {@code amountMinor} by the commission rate of the quote's tariff snapshot exactly as
+     * {@link #finalizeFare} does: commission = round_half_up(amount × rate), share = amount − commission. The offer's
+     * expected earnings use it, so the estimate and the settlement cannot drift apart (issue #143).
+     */
+    Split split(UUID quoteId, long amountMinor);
+
     /**
      * Joins the caller's transaction. Idempotent per order: a repeat returns the stored version 1
      * unchanged (AC-14).

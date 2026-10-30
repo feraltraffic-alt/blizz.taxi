@@ -470,7 +470,7 @@ class JdbcTrips implements Trips {
                         rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review"),
                         rs.getLong("wallet_minor"), rs.getLong("discount_minor"),
                         recipient(rs.getString("contact_name"), rs.getString("contact_phone"),
-                                rs.getObject("completed_at", OffsetDateTime.class))))
+                                rs.getObject("completed_at", OffsetDateTime.class)), null, null))
                 .single();
     }
 

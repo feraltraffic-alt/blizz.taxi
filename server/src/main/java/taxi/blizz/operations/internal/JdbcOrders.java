@@ -536,6 +536,11 @@ class JdbcOrders implements Orders {
     }
 
     @Override
+    public OrderView manualOffer(Actor staffActor, UUID commandId, UUID orderId, UUID driverId, String reason) {
+        throw new UnsupportedOperationException("issue #143: the manual offer comes in the next commit");
+    }
+
+    @Override
     public OrderView revokeAssignment(Actor staffActor, UUID commandId, UUID orderId, long expectedVersion, String reason) {
         if (staffActor.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can take a driver off an order");

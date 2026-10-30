@@ -15,6 +15,8 @@ public interface Orders {
     String VIEW_PERMISSION = "orders.view";
     String CANCEL_PERMISSION = "orders.cancel";
     String REASSIGN_PERMISSION = "orders.reassign";
+    /** Offer an order to a chosen driver (REQ-OPS-04, issue #143). */
+    String OFFER_PERMISSION = "orders.offer";
 
     record HistoryVehicle(String make, String model, String color, String registrationNumber) {
     }
@@ -61,6 +63,15 @@ public interface Orders {
      * (REQ-OPS-05). Staff with {@link #REASSIGN_PERMISSION} for the order's city.
      */
     OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason);
+
+    /**
+     * A dispatcher offers a SEARCHING order to a chosen driver (REQ-OPS-04, REQ-DSP-10, issue #143), with a reason;
+     * {@link #OFFER_PERMISSION} for the order's city, audited. The same offer as an automatic one: the order, then the
+     * driver's capacity are locked; the driver must be a candidate (else DRIVER_NOT_ELIGIBLE with the reason, or
+     * DRIVER_BUSY); it lasts the personal offer time, never past the search's total deadline; accepted through the
+     * same accept. An order with an open offer → STATE_CONFLICT, nothing is revoked.
+     */
+    OrderView manualOffer(Actor staff, UUID commandId, UUID orderId, UUID driverId, String reason);
 
     OrderView get(UUID orderId);
 

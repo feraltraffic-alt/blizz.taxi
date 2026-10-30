@@ -76,11 +76,11 @@ class JdbcDispatch implements Dispatch {
                 .param("driver", driver.id())
                 .param("now", core.now())
                 .query((rs, i) -> new OfferView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
-                        rs.getObject("expires_at", OffsetDateTime.class), rs.getString("vehicle_class"),
+                        rs.getObject("expires_at", OffsetDateTime.class), null, 0, rs.getString("vehicle_class"),
                         new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")), rs.getString("pickup_label"),
                         rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),
                         (Long) rs.getObject("price_minor"), rs.getString("currency"),
-                        (Integer) rs.getObject("distance_m")))
+                        (Integer) rs.getObject("distance_m"), null, null, null, null))
                 .list();
     }
 
