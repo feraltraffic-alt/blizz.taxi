@@ -57,7 +57,8 @@ class FakeCallSource implements FakeCallEvents, RecordingSource {
     }
 
     @Override
-    public void discard(String channelId) {
+    public boolean discard(String channelId) {
         withoutRecording.remove(channelId);
+        return false; // No persistent source bytes.
     }
 }

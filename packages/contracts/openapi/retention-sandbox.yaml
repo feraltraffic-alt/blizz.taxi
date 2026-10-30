@@ -1,0 +1,107 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — sandbox retention
+  version: 1.0.0
+  description: Sandbox profile only. Requires an ADMIN bearer, retention.manage and all-city scope. No routes exist in production.
+  license: {name: Proprietary, identifier: LicenseRef-Proprietary}
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; each instance has its own trusted domain.
+security:
+  - SubjectBearer: []
+tags:
+  - name: SandboxRetention
+    description: Synthetic old/recent/FAILED events and explicit bounded cleanup
+paths:
+  /sandbox/v1/retention/run:
+    post:
+      operationId: sandboxRunRetention
+      summary: Run one bounded cleanup invocation per kind
+      description: Reads the real current policy. A zero setting does nothing. Removes at most 1,000 cleanup items per kind; files and linked metadata count as one recording item. Failures remain retryable and appear in the result.
+      tags: [SandboxRetention]
+      responses:
+        '200':
+          description: Result for every kind, including zero-count runs and explicit failures.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sessions, sign_in_codes, code_deliveries, delivered_events, consumer_receipts, command_receipts, upload_sessions, quarantined_files, call_recordings]
+                properties:
+                  sessions: {$ref: '#/components/schemas/BatchResult'}
+                  sign_in_codes: {$ref: '#/components/schemas/BatchResult'}
+                  code_deliveries: {$ref: '#/components/schemas/BatchResult'}
+                  delivered_events: {$ref: '#/components/schemas/BatchResult'}
+                  consumer_receipts: {$ref: '#/components/schemas/BatchResult'}
+                  command_receipts: {$ref: '#/components/schemas/BatchResult'}
+                  upload_sessions: {$ref: '#/components/schemas/BatchResult'}
+                  quarantined_files: {$ref: '#/components/schemas/BatchResult'}
+                  call_recordings: {$ref: '#/components/schemas/BatchResult'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+  /sandbox/v1/retention/fixtures/{fixture}:
+    parameters:
+      - name: fixture
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: sandboxCreateRetentionFixtures
+      summary: Create synthetic old DONE, recent DONE and old FAILED events
+      description: Restricted to the supplied fixture UUID and RetentionSandboxFixture event type. Restore through DELETE in an EXIT trap. Never creates business events or payments.
+      tags: [SandboxRetention]
+      responses:
+        '200':
+          description: Fixture counts after insertion.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FixtureCounts'}
+        '400': {$ref: './common.yaml#/components/responses/BadRequest'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+    get:
+      operationId: sandboxReadRetentionFixtures
+      summary: Count surviving synthetic retention events
+      description: Only the requested fixture group is counted; an absent group has zero counts.
+      tags: [SandboxRetention]
+      responses:
+        '200':
+          description: Current counts.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FixtureCounts'}
+        '400': {$ref: './common.yaml#/components/responses/BadRequest'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+    delete:
+      operationId: sandboxRemoveRetentionFixtures
+      summary: Remove only synthetic rows of this fixture group
+      description: Test cleanup can also remove its deliberately FAILED fixture; production retention never deletes FAILED events.
+      tags: [SandboxRetention]
+      responses:
+        '204': {description: 'Fixture removed, including an already absent group.'}
+        '400': {$ref: './common.yaml#/components/responses/BadRequest'}
+        '401': {$ref: './common.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: './common.yaml#/components/responses/Forbidden'}
+components:
+  securitySchemes:
+    SubjectBearer:
+      $ref: './common.yaml#/components/securitySchemes/SubjectBearer'
+  schemas:
+    BatchResult:
+      type: object
+      additionalProperties: false
+      required: [deleted, failures, examined]
+      properties:
+        deleted: {type: integer, minimum: 0, maximum: 1000}
+        failures: {type: integer, minimum: 0, maximum: 1000}
+        examined: {type: integer, minimum: 0, maximum: 1000}
+    FixtureCounts:
+      type: object
+      additionalProperties: false
+      required: [old_done, recent_done, failed]
+      properties:
+        old_done: {type: integer, format: int64, minimum: 0}
+        recent_done: {type: integer, format: int64, minimum: 0}
+        failed: {type: integer, format: int64, minimum: 0}

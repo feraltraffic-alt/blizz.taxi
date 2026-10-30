@@ -2145,6 +2145,50 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/retention:
+    get:
+      operationId: getRetention
+      summary: Technical data retention by kind
+      description: Requires retention.manage with all-city scope. Version 0 contains the defaults; each setting is a number of days and 0 keeps that kind forever.
+      tags: [Settings]
+      responses:
+        "200":
+          description: Current retention policy.
+          content:
+            application/json:
+              schema:
+                $ref: "./retention.yaml#/components/schemas/RetentionVersion"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    put:
+      operationId: changeRetention
+      summary: Change technical data retention
+      description: Requires retention.manage with all-city scope. A named, idempotent command; expected_version prevents lost updates. Every version, author and reason is retained and audited. 0 keeps forever. Changes apply on the next cleanup run; deleted data cannot be restored.
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./retention.yaml#/components/schemas/ChangeRetention"
+      responses:
+        "200":
+          description: New retention version, or the stored outcome of the same command.
+          content:
+            application/json:
+              schema:
+                $ref: "./retention.yaml#/components/schemas/RetentionVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/settings:
     get:
       operationId: getServiceSettings

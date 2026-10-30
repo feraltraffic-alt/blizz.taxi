@@ -7,14 +7,34 @@ import java.nio.file.Path;
 /** Raw byte storage under opaque keys. Local disk now; object storage is another implementation. */
 interface FileStorage {
 
-    /** Writes the stream to a temporary location and returns its path for checking. */
-    Path stage(InputStream body, long maxBytes) throws IOException, TooLargeException;
+    /** Reserve empty raw/encrypted staging paths while the metadata row is locked; no body I/O here. */
+    Path reserve(String key) throws IOException;
+
+    /** Writes only to the reserved path; never recreates a path that cleanup already removed. */
+    Path stage(InputStream body, long maxBytes, String key) throws IOException, TooLargeException;
+
+    /** Removes raw/encrypted/partial staging bytes but preserves a successfully stored final object. */
+    void clearStage(String key) throws IOException;
 
     void store(Path staged, String key) throws IOException;
 
     InputStream open(String key) throws IOException;
 
-    void delete(String key) throws IOException;
+    /** Returns whether any path was removed; failures identify whether a partial deletion occurred. */
+    boolean delete(String key) throws IOException;
+
+    final class DeletionFailure extends IOException {
+        private final boolean removed;
+
+        DeletionFailure(String message, boolean removed, Throwable cause) {
+            super(message, cause);
+            this.removed = removed;
+        }
+
+        boolean removed() {
+            return removed;
+        }
+    }
 
     final class TooLargeException extends Exception {
         TooLargeException() {

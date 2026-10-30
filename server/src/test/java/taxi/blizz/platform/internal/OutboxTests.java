@@ -116,6 +116,58 @@ class OutboxTests {
     }
 
     @Test
+    void retentionPreservesCompletedConsumersWhenAFailedEventIsRequeued() {
+        UUID eventId = tx.execute(status -> outbox.publish(event()));
+        var laterFails = new java.util.concurrent.atomic.AtomicBoolean(true);
+        OutboxHandler second = new OutboxHandler() {
+            public String consumerId() { return "retention-second"; }
+            public boolean supports(String type) { return type.equals("AssignmentCommitted"); }
+            public void handle(OutboxMessage message) {
+                if (laterFails.get()) throw new IllegalStateException("Second consumer unavailable");
+            }
+        };
+        var testRelay = new OutboxRelay(jdbc, tx, List.of(handler, second),
+                new OutboxProperties(false, java.time.Duration.ofSeconds(1), 100,
+                        java.time.Duration.ofSeconds(30), 1), java.time.Clock.systemUTC());
+        testRelay.runOnce();
+        assertThat(state(eventId)).isEqualTo("FAILED");
+        jdbc.sql("update consumer_inbox set completed_at=now()-interval '200 days' where event_id=:id")
+                .param("id", eventId).update();
+        jdbc.sql("update outbox set occurred_at=now()-interval '200 days' where event_id=:id")
+                .param("id", eventId).update();
+        var platform = new PlatformRetention(jdbc, tx.getTransactionManager());
+        var now = java.time.OffsetDateTime.now();
+        var works = List.of(platform.consumerReceiptRetention(), platform.deliveredEventRetention());
+        var allWork = new java.util.ArrayList<taxi.blizz.platform.RetentionWork>(works);
+        for (String kind : taxi.blizz.platform.RetentionPolicy.KINDS) {
+            if (works.stream().noneMatch(w -> w.kind().equals(kind))) {
+                allWork.add(new taxi.blizz.platform.RetentionWork() {
+                    public String kind() { return kind; }
+                    public String selectionSql(int limit) { throw new AssertionError(); }
+                    public Result run(java.time.OffsetDateTime cutoff, java.time.OffsetDateTime at, int limit) {
+                        return new Result(0, 0);
+                    }
+                });
+            }
+        }
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        var runner = new RetentionRunner(() -> taxi.blizz.platform.RetentionPolicy.KINDS.stream()
+                .collect(java.util.stream.Collectors.toMap(k -> k, k -> 1)), allWork, meters, java.time.Clock.systemUTC());
+        try { runner.runOnce(); } finally { meters.close(); }
+        jdbc.sql("update outbox set state='PENDING',next_attempt_at=now(),attempts=0 where event_id=:id")
+                .param("id", eventId).update();
+        laterFails.set(false);
+        testRelay.runOnce();
+        assertThat(state(eventId)).isEqualTo("DONE");
+        assertThat(handler.received()).extracting(OutboxMessage::eventId).containsExactly(eventId);
+        assertThat(jdbc.sql("select count(*) from consumer_inbox where event_id=:id")
+                .param("id", eventId).query(Long.class).single()).isEqualTo(2);
+        jdbc.sql("update consumer_inbox set completed_at=:at where event_id=:id")
+                .param("at", now.minusDays(200)).param("id", eventId).update();
+        assertThat(platform.consumerReceiptRetention().run(now.minusDays(1), now, 1000).deleted()).isEqualTo(2);
+    }
+
+    @Test
     void leasedEventIsNotClaimedByAnotherRelay() {
         UUID eventId = tx.execute(status -> outbox.publish(event()));
         jdbc.sql("update outbox set lease_owner = 'other', lease_until = now() + interval '1 minute'").update();
