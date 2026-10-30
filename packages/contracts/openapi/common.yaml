@@ -221,8 +221,22 @@ components:
       name: cursor
       in: query
       required: false
+      description: |
+        Opaque position from page.next_cursor of the previous page (REQ-API-09); absent for the first page. A cursor
+        belongs to its list: one from another list, or a damaged one, is a 400 VALIDATION_FAILED.
       schema:
         type: string
+    Before:
+      name: before
+      in: query
+      required: false
+      deprecated: true
+      description: |
+        The first version's cursor: rows created strictly before this time. Rows created in the same microsecond as
+        the boundary can be skipped; use cursor instead. Ignored when cursor is given; to be removed once the apps
+        use cursor.
+      schema:
+        $ref: "#/components/schemas/Timestamp"
     Limit:
       name: limit
       in: query

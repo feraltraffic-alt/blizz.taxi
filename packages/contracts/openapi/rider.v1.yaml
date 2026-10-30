@@ -304,31 +304,34 @@ paths:
     get:
       operationId: listRiderOrderHistory
       summary: Own order history
-      description: Own orders as payer, newest first. Use created_at of the last item as the next before cursor.
+      description: |
+        Own orders as payer, newest first (created_at, then id). Read the next page with page.next_cursor
+        (REQ-API-09).
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
-          description: Order history.
+          description: One page of the order history.
           content:
             application/json:
               schema:
-                type: array
-                maxItems: 50
-                items:
-                  $ref: "#/components/schemas/OrderHistoryItem"
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/OrderHistoryItem"
+                  page:
+                    $ref: "./common.yaml#/components/schemas/PageInfo"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
     post:
