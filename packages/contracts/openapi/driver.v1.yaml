@@ -1449,17 +1449,9 @@ paths:
       tags: [Support]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: before
-          in: query
-          schema:
-            $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Before"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
