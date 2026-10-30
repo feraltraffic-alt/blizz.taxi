@@ -28,6 +28,8 @@ import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
 import taxi.blizz.files.FileContent;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Driver review in the admin panel (section 6), with {@code driver.review} — admin.v1.yaml. */
 @RestController
@@ -40,7 +42,8 @@ class AdminDriverReviewController {
         this.admission = admission;
     }
 
-    record Queue(List<DriverAdmission.ReviewItem> drivers) {
+    /** A page of the queue (REQ-API-09); {@code page} is new and optional for older clients. */
+    record Queue(List<DriverAdmission.ReviewItem> drivers, Page.Info page) {
     }
 
     record Decision(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull ReviewDecision decision,
@@ -54,9 +57,15 @@ class AdminDriverReviewController {
 
     @GetMapping
     Queue queue(AccessClaims claims, @RequestParam(required = false) ReviewStatus status,
+                @RequestParam(required = false) String cursor,
                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime after,
-                @RequestParam(defaultValue = "50") int limit) {
-        return new Queue(admission.reviewQueue(claims.actor(), status, after, limit));
+                @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor position = cursor != null ? PageCursor.decode(DriverAdmission.REVIEW_QUEUE, cursor)
+                : PageCursor.after(DriverAdmission.REVIEW_QUEUE, after);
+        Page<DriverAdmission.ReviewItem> page = Page.of(admission.reviewQueue(claims.actor(), status, position,
+                size + 1), size, DriverAdmission::position);
+        return new Queue(page.items(), page.page());
     }
 
     @GetMapping("/{driverId}")

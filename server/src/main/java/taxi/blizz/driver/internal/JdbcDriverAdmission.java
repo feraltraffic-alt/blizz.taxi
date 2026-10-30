@@ -37,6 +37,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 /**
@@ -450,7 +451,7 @@ class JdbcDriverAdmission implements DriverAdmission {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, OffsetDateTime after, int limit) {
+    public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, PageCursor after, int limit) {
         requireReviewer(reviewer);
         ReviewStatus wanted = status == null ? ReviewStatus.IN_REVIEW : status;
         return jdbc.sql("""
@@ -460,11 +461,13 @@ class JdbcDriverAdmission implements DriverAdmission {
                                              where e.driver_id = d.id and e.to_status = d.review_status),
                                             d.created_at) as since
                             from driver d where d.review_status = :status) q
-                        where cast(:after as timestamptz) is null or q.since > :after
+                        where cast(:afterAt as timestamptz) is null
+                           or (q.since, q.id) > (:afterAt, cast(:afterId as uuid))
                         order by q.since, q.id limit :limit""")
                 .param("status", wanted.name())
-                .param("after", after)
-                .param("limit", Math.max(1, Math.min(limit, 100)))
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new ReviewItem(rs.getObject("id", UUID.class), rs.getString("name"),
                         rs.getString("phone_normalized"), ReviewStatus.valueOf(rs.getString("review_status")),
                         rs.getObject("since", OffsetDateTime.class), rs.getLong("version")))

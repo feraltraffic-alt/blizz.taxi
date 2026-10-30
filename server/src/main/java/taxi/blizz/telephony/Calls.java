@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Calls of the call centre through the service's Asterisk (REQ-OPS-01/07/08/10, issues #64, #67): one record per
@@ -65,10 +66,21 @@ public interface Calls {
     }
 
     /**
-     * Newest first, at most 100, in the cities where the staff member has {@link #ANSWER_PERMISSION} or
+     * Newest first, after {@code after}, in the cities where the staff member has {@link #ANSWER_PERMISSION} or
      * {@link #LISTEN_PERMISSION}; with {@code orderId}, only the calls that order was made during or placed from.
      */
-    List<Call> recent(Actor staff, State state, UUID orderId, int limit);
+    List<Call> recent(Actor staff, State state, UUID orderId, PageCursor after, int limit);
+
+    default List<Call> recent(Actor staff, State state, UUID orderId, int limit) {
+        return recent(staff, state, orderId, null, limit);
+    }
+
+    String RECENT = "calls";
+
+    /** Calls are listed newest started first, then by id (REQ-API-09). */
+    static PageCursor position(Call call) {
+        return PageCursor.of(RECENT, call.startedAt(), call.id());
+    }
 
     /** "I took this call": records who answered; a call another operator took, or one that is over, is a conflict. */
     Call answer(Actor staff, UUID commandId, UUID callId);

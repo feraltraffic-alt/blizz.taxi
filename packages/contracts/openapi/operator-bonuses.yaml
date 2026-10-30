@@ -181,10 +181,14 @@ components:
             $ref: "#/components/schemas/OperatorBonusEntry"
 
     Periods:
+      description: One page of closed periods, newest first (period, then staff id) (REQ-API-09).
       type: object
-      required: [periods]
+      required: [periods, page]
       properties:
         periods:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/OperatorBonusPeriod"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"

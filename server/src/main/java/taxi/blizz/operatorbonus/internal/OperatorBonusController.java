@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.operatorbonus.OperatorBonuses;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 @RestController
 class OperatorBonusController {
@@ -27,7 +29,8 @@ class OperatorBonusController {
 
     record Accounts(List<OperatorBonuses.Account> accounts) {}
     record Entries(List<OperatorBonuses.Entry> entries) {}
-    record Periods(List<OperatorBonuses.ClosedPeriod> periods) {}
+    /** A page of closed periods (REQ-API-09); {@code page} is new and optional for older clients. */
+    record Periods(List<OperatorBonuses.ClosedPeriod> periods, Page.Info page) {}
 
     record Change(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                   @NotNull OperatorBonuses.Settings settings,
@@ -50,8 +53,12 @@ class OperatorBonusController {
     }
 
     @GetMapping("/api/admin/v1/operator-bonuses/periods")
-    Periods periods(AccessClaims claims, @RequestParam(defaultValue = "50") int limit) {
-        return new Periods(bonuses.periods(claims.actor(), limit));
+    Periods periods(AccessClaims claims, @RequestParam(required = false) String cursor,
+                    @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        Page<OperatorBonuses.ClosedPeriod> page = Page.of(bonuses.periods(claims.actor(),
+                PageCursor.decode(OperatorBonuses.PERIODS, cursor), size + 1), size, OperatorBonuses::position);
+        return new Periods(page.items(), page.page());
     }
 
     @GetMapping("/api/admin/v1/settings/operator-bonuses")

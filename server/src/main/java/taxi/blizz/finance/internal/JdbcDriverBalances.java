@@ -29,6 +29,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 @Service
@@ -68,20 +69,20 @@ class JdbcDriverBalances implements DriverBalances {
 
     @Override
     @Transactional(readOnly = true)
-    public Statement mine(Actor driver, int limit) {
+    public Statement mine(Actor driver, PageCursor after, int limit) {
         requireDriver(driver);
-        return statement(driver.id(), limit);
+        return statement(driver.id(), after, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Statement of(Actor actor, UUID driverId, int limit) {
+    public Statement of(Actor actor, UUID driverId, PageCursor after, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         requireExists(driverId);
-        return statement(driverId, limit);
+        return statement(driverId, after, limit);
     }
 
-    private Statement statement(UUID driverId, int limit) {
+    private Statement statement(UUID driverId, PageCursor after, int limit) {
         List<Balance> balances = ledger.balances(Account.DRIVER_PAYABLE, driverId).stream()
                 .map(b -> new Balance(b.currency(), b.creditMinor() - b.debitMinor())).toList();
         List<Entry> entries = jdbc.sql("""
@@ -93,9 +94,14 @@ class JdbcDriverBalances implements DriverBalances {
                         left join driver_balance_top_up u on t.basis_type = 'DRIVER_TOP_UP' and u.id = t.basis_id
                         left join driver_transfer x on t.basis_type = 'DRIVER_TRANSFER' and x.id = t.basis_id
                         where l.account = 'DRIVER_PAYABLE' and l.party_id = :driver
-                        order by t.occurred_at desc, t.id
+                          and (cast(:afterAt as timestamptz) is null
+                               or (t.occurred_at, t.id) < (:afterAt, cast(:afterId as uuid)))
+                        order by t.occurred_at desc, t.id desc
                         limit :limit""")
-                .param("driver", driverId).param("limit", Math.max(1, Math.min(limit, 200)))
+                .param("driver", driverId)
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> {
                     String basis = rs.getString("basis_type");
                     long amount = rs.getLong("amount");
@@ -160,7 +166,7 @@ class JdbcDriverBalances implements DriverBalances {
                     audit.record(new AuditEntry(actor, "driverBalance.topUp", "driver", driverId.toString(), why,
                             null, Map.of("currency", currency, "amount_minor", amountMinor, "kind", kind.name(),
                                     "top_up_id", id.toString())));
-                    return statement(driverId, 20);
+                    return statement(driverId, null, 20);
                 });
     }
 

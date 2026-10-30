@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.backoffice.ReportExports;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Report exports in the admin panel (admin.v1.yaml, REQ-ADM-07). */
 @RestController
@@ -33,7 +35,8 @@ class ReportExportController {
                          @NotNull LocalDate from, @NotNull LocalDate to) {
     }
 
-    record ExportList(List<ReportExports.Export> exports) {
+    /** A page of exports (REQ-API-09); {@code page} is new and optional for older clients. */
+    record ExportList(List<ReportExports.Export> exports, Page.Info page) {
     }
 
     @PostMapping("/api/admin/v1/reports/exports")
@@ -43,8 +46,12 @@ class ReportExportController {
     }
 
     @GetMapping("/api/admin/v1/reports/exports")
-    ExportList mine(AccessClaims claims, @RequestParam(defaultValue = "20") int limit) {
-        return new ExportList(exports.mine(claims.actor(), limit));
+    ExportList mine(AccessClaims claims, @RequestParam(required = false) String cursor,
+                    @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        Page<ReportExports.Export> page = Page.of(exports.mine(claims.actor(),
+                PageCursor.decode(ReportExports.MINE, cursor), size + 1), size, ReportExports::position);
+        return new ExportList(page.items(), page.page());
     }
 
     @GetMapping("/api/admin/v1/reports/exports/{exportId}")

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.finance.DriverBalances;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** The driver's balance: history, transfers (driver.v1.yaml) and top-ups, transfer rules (admin.v1.yaml), ADR 0010. */
 @RestController
@@ -46,9 +48,22 @@ class DriverBalanceAdminController {
                       @NotNull Long minBalanceAfterMinor, @NotBlank String reason) {
     }
 
+    /** The balances with one page of movements (REQ-API-09); {@code page} is new and optional for older clients. */
+    record StatementPage(UUID driverId, List<DriverBalances.Balance> balances, List<DriverBalances.Entry> entries,
+                         Page.Info page) {
+
+        static StatementPage of(DriverBalances.Statement statement, int size) {
+            Page<DriverBalances.Entry> page = Page.of(statement.entries(), size, DriverBalances::position);
+            return new StatementPage(statement.driverId(), statement.balances(), page.items(), page.page());
+        }
+    }
+
     @GetMapping("/api/driver/v1/balance/history")
-    DriverBalances.Statement mine(AccessClaims claims, @RequestParam(defaultValue = "50") int limit) {
-        return balances.mine(claims.actor(), limit);
+    StatementPage mine(AccessClaims claims, @RequestParam(required = false) String cursor,
+                       @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        return StatementPage.of(balances.mine(claims.actor(), PageCursor.decode(DriverBalances.MOVEMENTS, cursor),
+                size + 1), size);
     }
 
     @PostMapping("/api/driver/v1/transfers")
@@ -64,9 +79,11 @@ class DriverBalanceAdminController {
     }
 
     @GetMapping("/api/admin/v1/drivers/{driverId}/balance")
-    DriverBalances.Statement of(AccessClaims claims, @PathVariable UUID driverId,
-                                @RequestParam(defaultValue = "50") int limit) {
-        return balances.of(claims.actor(), driverId, limit);
+    StatementPage of(AccessClaims claims, @PathVariable UUID driverId, @RequestParam(required = false) String cursor,
+                     @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        return StatementPage.of(balances.of(claims.actor(), driverId,
+                PageCursor.decode(DriverBalances.MOVEMENTS, cursor), size + 1), size);
     }
 
     @PostMapping("/api/admin/v1/drivers/{driverId}/balance/top-ups")

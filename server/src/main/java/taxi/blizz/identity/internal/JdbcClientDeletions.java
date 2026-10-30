@@ -24,6 +24,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 @Service
@@ -117,15 +118,15 @@ class JdbcClientDeletions implements ClientDeletions {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Pending> pending(OffsetDateTime after, int limit) {
+    public List<Pending> pending(PageCursor after, int limit) {
         var query = jdbc.sql("""
                         select id, deletion_previous_state, deletion_requested_at from client
                         where account_state = 'DELETION_PENDING'"""
-                        + (after == null ? "" : " and deletion_requested_at > :after")
+                        + (after == null ? "" : " and (deletion_requested_at, id) > (:afterAt, :afterId)")
                         + " order by deletion_requested_at, id limit :limit")
-                .param("limit", Math.max(1, Math.min(limit, 100)));
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
-            query = query.param("after", after);
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query((rs, i) -> new Pending(rs.getObject(1, UUID.class), rs.getString(2),
                         rs.getObject(3, OffsetDateTime.class)))

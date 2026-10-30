@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /** Bonus points for staff who create phone orders (ADR 0011). */
 public interface OperatorBonuses {
@@ -51,7 +52,18 @@ public interface OperatorBonuses {
 
     List<Entry> history(Actor staff, UUID staffId, int limit);
 
-    List<ClosedPeriod> periods(Actor staff, int limit);
+    /** Closed periods, newest first (period, then staff id), after {@code after} (REQ-API-09). */
+    List<ClosedPeriod> periods(Actor staff, PageCursor after, int limit);
+
+    default List<ClosedPeriod> periods(Actor staff, int limit) {
+        return periods(staff, null, limit);
+    }
+
+    String PERIODS = "bonus-periods";
+
+    static PageCursor position(ClosedPeriod period) {
+        return PageCursor.of(PERIODS, period.periodKey(), period.staffId());
+    }
 
     /** Invoked by the reset worker; idempotent for every account/period. */
     void resetDueAccounts();

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Driver admission (section 6, transitions of section 12.2 for the admission axis).
@@ -88,8 +89,14 @@ public interface DriverAdmission {
                       long version) {
     }
 
-    /** Drivers in {@code status} (IN_REVIEW: the queue), oldest first, after {@code after}; at most 100. */
-    List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, java.time.OffsetDateTime after, int limit);
+    /** Drivers in {@code status} (IN_REVIEW: the queue), oldest first (since, then id), after {@code after}. */
+    List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, PageCursor after, int limit);
+
+    String REVIEW_QUEUE = "driver-review";
+
+    static PageCursor position(ReviewItem item) {
+        return PageCursor.of(REVIEW_QUEUE, item.since(), item.driverId());
+    }
 
     /** Full profile with the history of review decisions, for the reviewer. */
     record ReviewEvent(ReviewStatus from, ReviewStatus to, String actorType, UUID actorId, String reason,
