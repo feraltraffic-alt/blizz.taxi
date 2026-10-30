@@ -102,6 +102,13 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Habit:** **only an explicit answer is a result.** Anything a provider did not state stays UNKNOWN and is asked again.
 - **Habit:** **for every job that claims work, compare its lease with the longest time the work can take.**
 
+## 12. A lead's answer that did not reach the PR (PR #127, issue #102)
+
+- **Task:** refuse an implausible heartbeat position for dispatch, with a per-driver baseline.
+- **Handed in:** a strong PR. The baseline survives sign-out and a new shift, the location is STALE everywhere freshness is judged (proven by a mutation), and the sandbox transcript showed the only refused heartbeat was the deliberate jump.
+- **Missed:** the lead approved the plan with one addition: a test that a refusal heals on its own once `distance / 250 km/h` has passed. That answer came after the plan, and the PR did not carry it. The code healed correctly, but nothing would catch a later change that moves the baseline on every refusal and keeps a driver STALE for 30 minutes.
+- **Habit:** **before you open the PR, re-read the issue from your plan onwards.** Every request of the lead gets its own row in the Acceptance table.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

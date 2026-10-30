@@ -26,14 +26,13 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 |---|---|---|
 | #118 retention settings in the admin panel (Q-19 decided by the owner) | Codex | One-time backfill of the "attached" marker approved from three tables (`driver_document`, `support_message_attachment`, `call_recording`), ADR 0004 exception authorised, `CALL_RECORDING` excluded from the cleanup in code |
 | #124 isolation sweep must reach the access check | Codex | After #118 |
-| #102 dispatch abuse (threat model §6–7) | Second Claude | Plan approved 30.10 (two PRs: G1/G2, then B1–B3) with additions: refusal heals after distance/250 km/h, 429 before any lock, device + idempotency replay rule, reuse `RiskProperties.impossibleSpeedKph`. B2 radius already on main (#117) |
+| #102 dispatch abuse (threat model §6–7) | Second Claude | #128 (part 2, B1–B3) reviewed and approved, waiting for the merge; #127 (part 1, G1/G2) asked for one more test (a refusal heals after distance/250 km/h). #127 merges after #128 and then renames its migration to sort after `V20261030_0751_5` |
 | #105 document uploads (threat model §5) | Second Claude | After #102; PDF `#xx` and Flate (#117), PNG and WebP metadata (#121) already on main |
 | #112 deferred audit findings | Lead | See below |
 
 ### Left in #112
 
-- The same event type published by payment and order: an event contract question. No runtime bug, because every
-  consumer filters by `aggregateType`.
+- #129 (lead): one payload schema per aggregate for `CardHoldAuthorized`, `CardHoldDeclined` and `CardPaymentSettled`. CI green, sandbox running; closes the last item.
 
 The client card showing support-case subjects across cities stays as it is: owner decision of 30.10.2026.
 
@@ -58,6 +57,8 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
    - read the results on branch `sandbox-runs`, in `runs/<run id>/results.txt`.
 
    Docs-only changes may go straight to `main`.
+   - In auto mode the session's permission check refuses `gh api -X PUT .../pulls/N/merge` as a merge without
+     review, even after the lead's review is posted: ask the owner, or the owner adds a permission rule.
 3. **After merging several PRs**, run the full sandbox on `main` once more.
 4. **After a review with findings,** add a case to `lessons.md` and the habit to `AGENTS.md`.
 
