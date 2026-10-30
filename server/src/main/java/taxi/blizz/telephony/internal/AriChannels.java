@@ -102,12 +102,18 @@ class AriChannels implements ChannelControl {
         return HttpRequest.newBuilder(URI.create(base + address)).header("Authorization", authorization);
     }
 
+    private record Sent<T>(HttpResponse<T> response, IOException error) {
+    }
+
+    /** A 5xx counts against the breaker; any other answer is Asterisk's, a business "no" at most. */
     private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> body) throws IOException {
-        try {
-            return client.send(request, body);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted", e);
+        Sent<T> sent = breakers.call(Provider.ASTERISK, () -> new Sent<>(client.send(request, body), null),
+                s -> s.response() != null && s.response().statusCode() >= 500,
+                e -> new Sent<>(null, e instanceof IOException io ? io : new IOException("Interrupted", e)),
+                () -> new Sent<>(null, new Refused("Asterisk is not taking calls right now")));
+        if (sent.error() != null) {
+            throw sent.error();
         }
+        return sent.response();
     }
 }
