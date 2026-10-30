@@ -12,6 +12,9 @@ on:
       from:
         description: "The older version (tag, branch or commit)"
         default: main
+  # TEMPORARY, removed before the PR: a run on this branch before the workflow is on main.
+  push:
+    branches: [claude/pilot-proofs]
 
 permissions:
   contents: read
@@ -39,7 +42,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.from }}
+          ref: ${{ inputs.from || '8a296ac' }}
           path: older
       - uses: actions/setup-java@v6
         with:
