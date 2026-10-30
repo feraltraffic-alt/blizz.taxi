@@ -122,6 +122,19 @@ class RetentionVolumeTests {
                 default -> throw new AssertionError(kind);
             };
             assertThat(indexes).as(kind+" uses the exact retention index").contains(expected);
+            if (kind.equals("consumer_receipts")) {
+                assertThat(indexes).as("one indexed outbox lookup per candidate, no full history scan").contains("outbox_pkey");
+                JsonNode withoutEventKey = tx.execute(status -> {
+                    jdbc.sql("alter table outbox drop constraint outbox_pkey").update();
+                    String without = jdbc.sql("explain (format json) " + sql)
+                        .params(Map.of("cutoff",now.minusDays(30),"now",now)).query(String.class).single();
+                    status.setRollbackOnly();return json.readTree(without).get(0);
+                });
+                List<String> withoutEventIndexes = new ArrayList<>();collect(withoutEventKey.path("Plan"),withoutEventIndexes);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> assertThat(withoutEventIndexes).contains("outbox_pkey"))
+                    .as("missing event-key control rejects full history scans").isInstanceOf(AssertionError.class);
+                System.out.println("RETENTION MISSING EVENT KEY consumer_receipts\n" + withoutEventKey);
+            }
             JsonNode missing=tx.execute(status->{
                 jdbc.sql("drop index "+expected).update();
                 String without=jdbc.sql("explain (analyze,buffers,format json) "+sql)

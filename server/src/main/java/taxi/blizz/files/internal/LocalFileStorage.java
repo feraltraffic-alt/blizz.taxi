@@ -98,9 +98,18 @@ class LocalFileStorage implements FileStorage {
     }
 
     @Override
-    public void delete(String key) throws IOException {
-        clearStage(key);
-        Files.deleteIfExists(resolve(key));
+    public boolean delete(String key) throws IOException {
+        Path raw = staged(key), target = resolve(key);
+        boolean removed = false;
+        try {
+            removed |= Files.deleteIfExists(raw);
+            removed |= Files.deleteIfExists(raw.resolveSibling(raw.getFileName() + ".sealed"));
+            removed |= Files.deleteIfExists(target.resolveSibling(target.getFileName() + ".partial"));
+            removed |= Files.deleteIfExists(target);
+            return removed;
+        } catch (IOException ex) {
+            throw new DeletionFailure("File deletion failed", removed, ex);
+        }
     }
 
     private Path resolve(String key) {

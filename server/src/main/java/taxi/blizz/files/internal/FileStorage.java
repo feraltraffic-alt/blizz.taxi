@@ -20,7 +20,21 @@ interface FileStorage {
 
     InputStream open(String key) throws IOException;
 
-    void delete(String key) throws IOException;
+    /** Returns whether any path was removed; failures identify whether a partial deletion occurred. */
+    boolean delete(String key) throws IOException;
+
+    final class DeletionFailure extends IOException {
+        private final boolean removed;
+
+        DeletionFailure(String message, boolean removed, Throwable cause) {
+            super(message, cause);
+            this.removed = removed;
+        }
+
+        boolean removed() {
+            return removed;
+        }
+    }
 
     final class TooLargeException extends Exception {
         TooLargeException() {

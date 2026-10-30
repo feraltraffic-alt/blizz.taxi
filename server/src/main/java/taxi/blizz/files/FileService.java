@@ -27,7 +27,11 @@ public interface FileService {
     void markAttached(Actor owner, UUID fileId, FilePurpose purpose);
 
     /** Removes a system recording's bytes before its metadata. No open transaction; retry-safe if already absent. */
-    boolean deleteRecording(UUID fileId);
+    RecordingDeletion deleteRecording(UUID fileId);
+
+    /** A remaining fenced file may have lost bytes and must keep its owning recording fenced too. */
+    record RecordingDeletion(boolean gone, boolean fenced) {
+    }
 
     /** Opens a SAFE file for its owner; anyone else gets NOT_FOUND (no hint that it exists). */
     FileContent open(Actor requester, UUID fileId);

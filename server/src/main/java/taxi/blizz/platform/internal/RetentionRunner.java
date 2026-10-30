@@ -39,9 +39,16 @@ class RetentionRunner implements taxi.blizz.platform.RetentionRuns {
     }
     RetentionWork.Result runKindAt(String kind,OffsetDateTime now) {
         if(!RetentionPolicy.KINDS.contains(kind))throw new IllegalArgumentException("Unknown retention kind");
-        Integer days=policy.days().get(kind);
-        if(days==null||days<0)throw new IllegalStateException("Invalid retention policy: "+kind);
         RetentionWork.Result total=new RetentionWork.Result(0,0);
+        Integer days;
+        try {
+            days=policy.days().get(kind);
+            if(days==null||days<0)throw new IllegalStateException("Invalid retention policy: "+kind);
+        } catch(RuntimeException ex) {
+            log.warn("Retention policy read failed for {} ({})",kind,ex.getClass().getSimpleName());
+            count("blizz.retention.failures",kind,1);
+            return new RetentionWork.Result(0,1,0);
+        }
         List<RetentionWork> own=work.stream().filter(item->item.kind().equals(kind)).toList();
         if(days!=0)for(int i=0;i<own.size();i++) {
             int remaining=1000-total.examined();if(remaining<=0)break;

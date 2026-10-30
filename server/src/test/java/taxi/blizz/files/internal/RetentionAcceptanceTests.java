@@ -248,6 +248,9 @@ class RetentionAcceptanceTests {
         assertThat(request("PUT",stranger,command(version+1,days(1),UUID.randomUUID())).getResponse().getStatus()).isEqualTo(403);
         String cityOnly=staff(true,false);
         assertThat(request("GET",cityOnly,null).getResponse().getStatus()).isEqualTo(403);
+        long beforeScopedPut = jdbc.sql("select count(*) from command_receipt").query(Long.class).single();
+        assertThat(request("PUT",cityOnly,command(version+1,days(1),UUID.randomUUID())).getResponse().getStatus()).isEqualTo(403);
+        assertThat(jdbc.sql("select count(*) from command_receipt").query(Long.class).single()).isEqualTo(beforeScopedPut);
         jdbc.sql("update staff_user set permissions='{}' where id=cast(:id as uuid)").param("id",saved.path("changed_by").asText()).update();
         assertThat(request("PUT",token,body).getResponse().getStatus()).as("lost rights before receipt replay").isEqualTo(403);
     }
@@ -264,8 +267,70 @@ class RetentionAcceptanceTests {
         double before=meters.find("blizz.retention.failures").tag("kind","upload_sessions").counters().stream().mapToDouble(c->c.count()).sum();
         run("upload_sessions",now);assertThat(count(row)).isEqualTo(1);assertThat(Files.exists(path)).isTrue();
         assertThat(meters.find("blizz.retention.failures").tag("kind","upload_sessions").counter().count()).isEqualTo(before+1);
-        Files.delete(path.resolve("blocked"));run("upload_sessions",now);assertPresent(row,false);
+        Files.delete(path.resolve("blocked"));run("upload_sessions",now.plusMinutes(2));assertPresent(row,false);
     }
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void fileFailureReleasesUntouchedBytesButKeepsAPartialDeletionFencedWhenPolicyBecomesZero(boolean partial) throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();Row row=seed("upload_sessions",now.minusDays(400));
+        Path target=root.resolve(row.storageKey()), blocked;
+        String stageKey="driver_document/retention/"+UUID.randomUUID();
+        Path stage=storage.reserve(stageKey);
+        Files.writeString(stage,"original staged bytes");
+        if(partial) {
+            jdbc.sql("update file_object set staging_key=:key where id=:id").param("key",stageKey).param("id",row.id()).update();
+            blocked=target;
+        } else {
+            // Fail on the first path, preserving the final object's readable bytes.
+            Files.delete(stage);Files.createDirectory(stage);Files.writeString(stage.resolve("blocked"),"block");
+            jdbc.sql("update file_object set staging_key=:key where id=:id").param("key",stageKey).param("id",row.id()).update();
+            blocked=stage;
+        }
+        if(partial) {Files.delete(target);Files.createDirectory(target);Files.writeString(target.resolve("blocked"),"block");}
+        Map<String,Object> p=days(0);p.put("upload_sessions",1);policy(p);
+        try {
+            run("upload_sessions",now);
+            policy(days(0));run("upload_sessions",now.plusDays(2));assertPresent(row,true);
+            var owner=new Actor(SubjectType.DRIVER,row.id());
+            var files=context.getBean(taxi.blizz.files.FileService.class);
+            if(partial) {
+                org.assertj.core.api.Assertions.assertThatThrownBy(()->files.open(owner,row.id()))
+                    .isInstanceOf(taxi.blizz.platform.DomainException.class);
+                assertThat(Files.exists(stage)).isFalse();
+            } else {
+                try(var in=files.open(owner,row.id()).stream()) {
+                    assertThat(new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("retention fixture");
+                }
+                tx.executeWithoutResult(status->files.markAttached(owner,row.id(),taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT));
+                assertThat(jdbc.sql("select attached_at is not null from file_object where id=:id").param("id",row.id()).query(Boolean.class).single()).isTrue();
+            }
+            assertThat(jdbc.sql("select retention_claim is not null from file_object where id=:id")
+                .param("id",row.id()).query(Boolean.class).single()).isEqualTo(partial);
+        } finally {
+            Files.deleteIfExists(blocked.resolve("blocked"));
+            if(Files.isDirectory(blocked))Files.delete(blocked);
+            storage.delete(stageKey);Files.deleteIfExists(target);
+            jdbc.sql("delete from file_object where id=:id").param("id",row.id()).update();
+        }
+    }
+
+    @Test void aThousandUnknownLegacyFilesBackOffSoUntouchedRowsCanProgress() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();String prefix=UUID.randomUUID().toString();
+        jdbc.sql("""
+            insert into file_object(id,owner_type,owner_id,purpose,declared_content_type,declared_size_bytes,state,upload_expires_at,created_at)
+            select md5(:prefix||g)::uuid,'DRIVER',md5(:prefix||g)::uuid,'DRIVER_DOCUMENT','image/png',1,'SAFE',:at,:at
+            from generate_series(1,1000) g
+            """).param("prefix",prefix).param("at",now.minusDays(500)).update();
+        Row healthy=seed("upload_sessions",now.minusDays(400));
+        Map<String,Object> p=days(0);p.put("upload_sessions",1);policy(p);
+        try {
+            run("upload_sessions",now);assertPresent(healthy,true);
+            run("upload_sessions",now);assertPresent(healthy,false);
+        } finally {
+            jdbc.sql("delete from file_object where id in (select md5(:prefix||g)::uuid from generate_series(1,1000) g)")
+                .param("prefix",prefix).update();
+        }
+    }
+
     @Test void failedAndPendingEventsAndUnfinishedReceiptsSurviveEverySettingAtOne() throws Exception {
         OffsetDateTime now=OffsetDateTime.now(ZoneOffset.UTC);
         Row failed=seed("delivered_events",now.minusDays(200)),pending=seed("delivered_events",now.minusDays(200));
@@ -570,6 +635,10 @@ class RetentionAcceptanceTests {
         double before=metrics.find("blizz.retention.failures").tag("kind",kind).counters().stream().mapToDouble(c->c.count()).sum();
         try {
             run(kind,now);run(kind,now);
+            assertThat(metrics.find("blizz.retention.failures").tag("kind",kind).counter().count()).isEqualTo(before+1);
+            run(kind,now.plusMinutes(1));
+            assertThat(jdbc.sql("select retention_until>:at from file_object where id=:id")
+                .param("at",now.plusMinutes(2)).param("id",id).query(Boolean.class).single()).isTrue();
             assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",id).query(Long.class).single()).isEqualTo(1);
             assertThat(metrics.find("blizz.retention.failures").tag("kind",kind).counter().count()).isEqualTo(before+2);
         } finally {

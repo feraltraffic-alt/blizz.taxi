@@ -310,7 +310,7 @@ class JdbcFileService implements FileService {
     }
 
     @Override
-    public boolean deleteRecording(UUID fileId) {
+    public RecordingDeletion deleteRecording(UUID fileId) {
         if(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Recording deletion must run outside a database transaction");
         return retirement.recording(fileId);

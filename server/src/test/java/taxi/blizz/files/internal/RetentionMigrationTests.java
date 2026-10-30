@@ -97,9 +97,20 @@ class RetentionMigrationTests {
                 .as("historical referenced file survives: "+id).isEqualTo(1);
         }
         assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",unused).query(Long.class).single()).isZero();
+        // Exercise CALL_RECORDING's own orphan selector, which has no purpose exclusion to hide a missing backfill.
+        var orphanWork = context.getBean(FileRetention.class).orphanRecordingRetention();
+        assertThat(orphanWork.run(OffsetDateTime.now().minusDays(1), OffsetDateTime.now(), 1000).deleted()).isZero();
         assertThat(jdbc.sql("select count(*) from file_object where attached_at is not null").query(Long.class).single()).isEqualTo(3);
+        assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",recording).query(Long.class).single()).isEqualTo(1);
+        days.put("call_recordings",1);
+        jdbc.sql("insert into retention_settings(version,days,changed_by,reason,changed_at) values(2,cast(:days as jsonb),gen_random_uuid(),'Recording path',now())")
+            .param("days",json.writeValueAsString(days)).update();
+        ReflectionTestUtils.invokeMethod(runner,"runKindAt","call_recordings",OffsetDateTime.now());
+        assertThat(jdbc.sql("select count(*) from call_recording where call_id=:id").param("id",call).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",recording).query(Long.class).single()).isZero();
+        days.put("call_recordings",0);
         days.put("upload_sessions",0);
-        jdbc.sql("insert into retention_settings(version,days,changed_by,reason,changed_at) values(2,cast(:days as jsonb),gen_random_uuid(),'Keep forever',now())")
+        jdbc.sql("insert into retention_settings(version,days,changed_by,reason,changed_at) values(3,cast(:days as jsonb),gen_random_uuid(),'Keep forever',now())")
             .param("days",json.writeValueAsString(days)).update();
         UUID forever=file("DRIVER_DOCUMENT");
         for(String kind:RetentionAcceptanceTests.KINDS)ReflectionTestUtils.invokeMethod(runner,"runKindAt",kind,OffsetDateTime.now());

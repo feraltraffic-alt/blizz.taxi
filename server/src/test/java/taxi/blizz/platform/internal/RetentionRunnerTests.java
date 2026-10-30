@@ -32,6 +32,20 @@ class RetentionRunnerTests {
             assertThat(metrics.find("blizz.retention.failures").tag("kind","call_recordings").counter().count()).isEqualTo(failedSource?1:0);
         } finally {metrics.close();}
     }
+    @org.junit.jupiter.api.Test
+    void policyReadFailureIsReportedForTheAffectedKind() {
+        var allocated = new AtomicInteger();
+        var work = RetentionPolicy.KINDS.stream().map(k -> part(k, false, allocated)).toList();
+        var metrics = new SimpleMeterRegistry();
+        try {
+            var runner = new RetentionRunner(() -> { throw new IllegalStateException("Policy unavailable"); },
+                    work, metrics, Clock.systemUTC());
+            assertThat(runner.runKindAt("sessions", OffsetDateTime.now()).failures()).isEqualTo(1);
+            assertThat(allocated).hasValue(0);
+            assertThat(metrics.find("blizz.retention.failures").tag("kind", "sessions").counter().count()).isEqualTo(1);
+        } finally { metrics.close(); }
+    }
+
     RetentionWork part(String kind,boolean fails,AtomicInteger allocated) {
         return new RetentionWork() {
             public String kind(){return kind;}

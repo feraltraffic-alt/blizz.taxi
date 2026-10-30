@@ -46,6 +46,34 @@ class RecordingRetentionTests {
     @Autowired FakeCallSource fake;
     @Autowired PlatformTransactionManager transactions;
     @Value("${blizz.files.local-dir}") Path root;
+    @Autowired org.springframework.context.ApplicationContext context;
+    @Autowired CallRecordings recordings;
+
+    @org.junit.jupiter.api.AfterEach void cleanOwnDatabase() {
+        jdbc.sql("delete from call_recording").update();
+        jdbc.sql("delete from file_object").update();
+    }
+
+    void keepRecordingsForever() {
+        var json=new tools.jackson.databind.json.JsonMapper();
+        var days=taxi.blizz.platform.RetentionPolicy.KINDS.stream().collect(java.util.stream.Collectors.toMap(k->k,k->0));
+        jdbc.sql("""
+            insert into retention_settings(version,days,changed_by,reason,changed_at)
+            select coalesce(max(version),0)+1,cast(:days as jsonb),gen_random_uuid(),'Keep recordings forever',now() from retention_settings
+            """).param("days",json.writeValueAsString(days)).update();
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(context.getBean("retentionRunner"),
+            "runKindAt","call_recordings",OffsetDateTime.now().plusDays(2));
+    }
+
+    Actor listener() {
+        UUID id=UUID.randomUUID();
+        jdbc.sql("""
+            insert into staff_user(id,login,name,role,permissions,all_cities,state,created_at,updated_at)
+            values(:id,:login,'Listener','ADMIN',:permissions,true,'ACTIVE',now(),now())
+            """).param("id",id).param("login","retention-listener-"+id)
+            .param("permissions",new String[]{taxi.blizz.telephony.Calls.LISTEN_PERMISSION}).update();
+        return new Actor(taxi.blizz.platform.SubjectType.STAFF,id);
+    }
     UUID recording(String state,UUID file,OffsetDateTime at) {
         UUID id=UUID.randomUUID();
         jdbc.sql("insert into call(id,channel_id,called_number,state,started_at,ended_at) values(:id,:channel,'retention','ENDED',:at,:at)")
@@ -101,7 +129,7 @@ class RecordingRetentionTests {
         try(Ari ari=new Ari()) {
             ari.status.set(503);var failed=ari.work().run(now.minusDays(30),now,1000);
             assertThat(failed.failures()).isEqualTo(1);assertThat(count(id)).isEqualTo(1);assertThat(ari.copy).isTrue();
-            ari.status.set(204);var success=ari.work().run(now.minusDays(30),now,1000);
+            ari.status.set(204);var success=ari.work().run(now.minusDays(30),now.plusMinutes(2),1000);
             assertThat(success.deleted()).isEqualTo(1);assertThat(count(id)).isZero();assertThat(ari.copy).isFalse();
             assertThat(ari.calls).hasValue(2);
         }
@@ -117,11 +145,68 @@ class RecordingRetentionTests {
             assertThat(failed.failures()).isEqualTo(1);assertThat(count(id)).isEqualTo(1);assertThat(ari.copy).isFalse();
             assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",stored.fileId()).query(Long.class).single()).isEqualTo(1);
             Files.delete(path.resolve("blocked"));ari.status.set(404);
-            var success=ari.work().run(now.minusDays(30),now.plusSeconds(1),1000);
+            jdbc.sql("update file_object set retention_until=now()-interval '1 second' where id=:id").param("id",stored.fileId()).update();
+            var success=ari.work().run(now.minusDays(30),now.plusMinutes(2),1000);
             assertThat(success.deleted()).isEqualTo(1);assertThat(count(id)).isZero();assertThat(Files.exists(path)).isFalse();
             assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",stored.fileId()).query(Long.class).single()).isZero();
         }
     }
+    @Test void untouchedRecordingsPlayAndPendingRecordingsFetchAfterAFailureAndZeroPolicy() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();byte[] wav=WavFiles.tone(1);
+        var stored=files.storeSystemFile(FilePurpose.CALL_RECORDING,"audio/wav",new java.io.ByteArrayInputStream(wav),1000000);
+        UUID playable=recording("STORED",stored.fileId(),now.minusDays(400));
+        UUID pending=recording("PENDING",null,now.minusDays(400));
+        try(Ari ari=new Ari()) {
+            ari.status.set(503);
+            assertThat(ari.work().run(now.minusDays(30),now,1000).failures()).isEqualTo(2);
+            keepRecordingsForever();
+            try(var in=recordings.listen(listener(),playable).stream()) {assertThat(in.readAllBytes()).isEqualTo(wav);}
+            assertThat(recordings.fetchDue()).isEqualTo(1);
+            assertThat(jdbc.sql("select state from call_recording where call_id=:id").param("id",pending).query(String.class).single()).isEqualTo("STORED");
+            assertThat(jdbc.sql("select count(*) from call_recording where retention_claim is null").query(Long.class).single()).isEqualTo(2);
+            assertThat(ari.calls).hasValue(2);
+        }
+    }
+
+    @Test void anAbsentSourceAndUntouchedLocalFileFailureAlsoReleaseTheRecordingFence() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();byte[] wav=WavFiles.tone(1);
+        var stored=files.storeSystemFile(FilePurpose.CALL_RECORDING,"audio/wav",new java.io.ByteArrayInputStream(wav),1000000);
+        UUID id=recording("STORED",stored.fileId(),now.minusDays(400));
+        String key=jdbc.sql("select storage_key from file_object where id=:id").param("id",stored.fileId()).query(String.class).single();
+        String stageKey="call_recording/retention/"+UUID.randomUUID();
+        Path stage=root.resolve("staging").resolve(UUID.nameUUIDFromBytes(stageKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))+".bin");
+        Files.createDirectory(stage);Files.writeString(stage.resolve("blocked"),"cannot delete");
+        jdbc.sql("update file_object set staging_key=:key where id=:id").param("key",stageKey).param("id",stored.fileId()).update();
+        try(Ari ari=new Ari()) {
+            ari.status.set(404);
+            assertThat(ari.work().run(now.minusDays(30),now,1000).failures()).isEqualTo(1);
+            // Parent retry can become due before the file's independent deadline; this is still an untouched failure.
+            assertThat(ari.work().run(now.minusDays(30),now.plusMinutes(2),1000).failures()).isEqualTo(1);
+            assertThat(jdbc.sql("select retention_claim is null from call_recording where call_id=:id").param("id",id).query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("select retention_claim is null from file_object where id=:id").param("id",stored.fileId()).query(Boolean.class).single()).isTrue();
+            keepRecordingsForever();
+            try(var in=recordings.listen(listener(),id).stream()) {assertThat(in.readAllBytes()).isEqualTo(wav);}
+        } finally {Files.delete(stage.resolve("blocked"));Files.delete(stage);Files.deleteIfExists(root.resolve(key));}
+    }
+
+    @Test void providerFailureBudgetYieldsAndBackoffLetsUntouchedRecordingsProceed() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();
+        List<UUID> ids=java.util.stream.IntStream.range(0,4).mapToObj(i->recording("NONE",null,now.minusDays(400))).toList();
+        try(Ari ari=new Ari()) {
+            ari.status.set(503);
+            var first=ari.work().run(now.minusDays(30),now,1000);
+            assertThat(first.failures()).isEqualTo(3);assertThat(first.examined()).isEqualTo(3);
+            assertThat(ari.calls).hasValue(3);
+            ari.status.set(204);
+            assertThat(ari.work().run(now.minusDays(30),now,1000).deleted()).isEqualTo(1);
+            assertThat(ari.calls).hasValue(4);
+            ari.status.set(503);
+            assertThat(ari.work().run(now.minusDays(30),now.plusMinutes(1),1000).failures()).isEqualTo(3);
+            assertThat(jdbc.sql("select count(*) from call_recording where retention_until>:at")
+                .param("at",now.plusMinutes(2)).query(Long.class).single()).isEqualTo(3);
+        }
+    }
+
     @Test void anActiveFetchIsKeptAndAnExpiredDeleteClaimIsRecovered() throws Exception {
         OffsetDateTime now=OffsetDateTime.now();UUID active=recording("PENDING",null,now.minusDays(400));
         UUID expired=recording("NONE",null,now.minusDays(400));
