@@ -50,7 +50,7 @@ class QuarantineRescan {
         this.clock = clock;
     }
 
-    private record Due(UUID fileId, String key, String stagingKey, int attempts) {
+    private record Due(UUID fileId, String key, String encryption, String stagingKey, int attempts) {
     }
 
     /** Scans the files that are due, at most {@value #PER_RUN}; returns how many got a verdict. */
@@ -72,13 +72,13 @@ class QuarantineRescan {
         OffsetDateTime now = now();
         return tx.execute(status -> {
             var row = jdbc.sql("""
-                            select id, storage_key, staging_key, scan_attempts from file_object
+                            select id, storage_key, encryption, staging_key, scan_attempts from file_object
                             where state = 'QUARANTINE' and storage_key is not null and retention_claim is null
                               and next_scan_at <= :now
                             order by next_scan_at, id limit 1 for update skip locked
                             """).param("now", now)
                     .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                            rs.getInt(4) + 1))
+                            rs.getString(4), rs.getInt(5) + 1))
                     .optional();
             if (row.isEmpty()) {
                 return Optional.empty();
@@ -104,7 +104,8 @@ class QuarantineRescan {
                               version = version + 1 where id = :id
                             """).param("attempts", previous.attempts()).param("lease", now.plus(LEASE))
                     .param("stage", stageKey).param("id", previous.fileId()).update();
-            return Optional.of(new Due(previous.fileId(), previous.key(), stageKey, previous.attempts()));
+            return Optional.of(new Due(previous.fileId(), previous.key(), previous.encryption(), stageKey,
+                    previous.attempts()));
         });
     }
 
@@ -112,7 +113,8 @@ class QuarantineRescan {
     private boolean rescan(Due due) {
         Path copy = null;
         try {
-            try (InputStream in = storage.open(due.key())) {
+            // A document is stored encrypted: the copy that is scanned is the decrypted one (issue #135).
+            try (InputStream in = files.openStored(due.key(), due.encryption())) {
                 copy = storage.stage(in, properties.maxBytes(), due.stagingKey());
             }
             Optional<String> malware = antivirus.scan(copy);

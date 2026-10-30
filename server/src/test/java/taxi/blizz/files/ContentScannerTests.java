@@ -142,9 +142,10 @@ class ContentScannerTests {
         waitFor(() -> "REJECTED".equals(state(infected.fileId())), "the infected file to be REJECTED");
         assertThat(files.requireAttachable(driver, clean.fileId(), FilePurpose.DRIVER_DOCUMENT).state())
                 .isEqualTo(FileState.SAFE);
-        assertThat(jdbc.sql("select storage_key from file_object where id = :id").param("id", infected.fileId())
-                .query((rs, i) -> java.util.Optional.ofNullable(rs.getString(1))).single())
-                .as("the infected bytes are deleted").isEmpty();
+        // The worker commits REJECTED first and clears the key after deleting the bytes: wait for that too.
+        waitFor(() -> jdbc.sql("select storage_key from file_object where id = :id").param("id", infected.fileId())
+                .query((rs, i) -> java.util.Optional.ofNullable(rs.getString(1))).single().isEmpty(),
+                "the infected bytes to be deleted");
     }
 
     @Test

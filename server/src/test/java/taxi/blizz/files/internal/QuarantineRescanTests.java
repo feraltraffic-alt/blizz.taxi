@@ -133,6 +133,36 @@ class QuarantineRescanTests {
         assertThat(state(id)).isEqualTo("SAFE");
         assertThat(clamd.scans()).isEqualTo(before + 1);
     }
+
+    /**
+     * Issue #135, E2: a document waiting in quarantine is stored encrypted; the rescan decrypts its copy to scan it.
+     */
+    @Test
+    void anEncryptedDocumentInQuarantineIsDecryptedForTheRescan() throws Exception {
+        byte[] cleanBody = FakeClamd.jpegCarrying("clean " + UUID.randomUUID());
+        UUID infected = quarantined(FakeClamd.EICAR);
+        clamd.stop();
+        UUID clean = files.openUpload(driver, UUID.randomUUID(), FilePurpose.DRIVER_DOCUMENT, "image/jpeg",
+                cleanBody.length).fileId();
+        assertThat(files.upload(driver, clean, "image/jpeg", cleanBody.length, new ByteArrayInputStream(cleanBody))
+                .state()).isEqualTo(FileState.QUARANTINE);
+        clamd.restart();
+        assertThat(jdbc.sql("""
+                        select count(*) from file_object
+                        where id in (:a, :b) and encryption = 'AES256GCM-STREAM-1'""")
+                .param("a", infected).param("b", clean).query(Integer.class).single())
+                .as("both stored encrypted while waiting").isEqualTo(2);
+
+        dueNow(List.of(infected, clean));
+        rescan.rescanDue();
+
+        assertThat(state(infected)).as("EICAR found in the decrypted copy").isEqualTo("REJECTED");
+        assertThat(state(clean)).isEqualTo("SAFE");
+        try (java.io.InputStream in = files.open(driver, clean).stream()) {
+            assertThat(in.readAllBytes()).isEqualTo(cleanBody);
+        }
+    }
+
     private record RescanPause(CountDownLatch entered, CountDownLatch release,
                                java.util.concurrent.atomic.AtomicReference<java.nio.file.Path> path) {
     }
