@@ -236,11 +236,15 @@ components:
             - type: "null"
 
     ReportExportList:
+      description: One page of own exports, newest first (created_at, then id) (REQ-API-09).
       type: object
       additionalProperties: false
-      required: [exports]
+      required: [exports, page]
       properties:
         exports:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/ReportExport"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
