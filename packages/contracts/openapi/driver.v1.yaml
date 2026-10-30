@@ -6,10 +6,10 @@ info:
     API for the driver app (/api/driver/v1, REQ-API-02). Every operation needs an access token issued
     for the `driver` audience; tokens of other audiences are rejected (REQ-USR-08).
     A **blocked** driver (account_state BLOCKED, REQ-DS-01, issue #141) keeps a limited session: signing in and
-    refreshing work, every GET works, and so do the current trip's commands (arrive, start, complete, cancel,
-    no-show, messages), the shift's heartbeat, pause, close and handover, location batches, support cases and
-    uploads, push devices and the rating of the passenger. Any other command answers 403 ACCOUNT_BLOCKED; no new
-    order is offered.
+    refreshing work, every GET works except the reads of new work (broadcast-orders, offers, preorders), and so
+    do the current trip's commands (arrive, start, complete, cancel, no-show, messages), the shift's heartbeat,
+    pause, close and handover, location batches, support cases and uploads, push devices and the rating of the
+    passenger. Anything else answers 403 ACCOUNT_BLOCKED; no new order is offered.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -664,6 +664,8 @@ paths:
                   $ref: "#/components/schemas/Offer"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
 
   /api/driver/v1/preorders:
     get:
@@ -685,6 +687,8 @@ paths:
                 $ref: "#/components/schemas/PreorderList"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
@@ -936,6 +940,8 @@ paths:
           $ref: "./common.yaml#/components/responses/BadRequest"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
 

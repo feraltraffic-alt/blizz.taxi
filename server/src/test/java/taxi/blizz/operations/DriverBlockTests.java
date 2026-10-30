@@ -216,6 +216,14 @@ class DriverBlockTests {
                 "/api/driver/v1/work-sessions/current")) {
             assertThat(status(get(path), token)).as("GET %s", path).isEqualTo(200);
         }
+        // Reads of new work are refused like commands (review of #158): the ALL tab, offers, pre-orders to reserve.
+        for (String path : List.of("/api/driver/v1/broadcast-orders", "/api/driver/v1/offers",
+                "/api/driver/v1/preorders")) {
+            assertBlocked(get(path), token);
+        }
+        assertThat(status(get("/api/driver/v1/balance"), token)).as("the balance stays readable").isEqualTo(200);
+        assertThat(status(get("/api/driver/v1/preorders/reservations"), token)).as("own reservations")
+                .isEqualTo(200);
         // Commands outside the limited session.
         assertBlocked(patch("/api/driver/v1/profile")
                 .content("{\"command_id\":\"" + UUID.randomUUID() + "\",\"name\":\"New name\"}"), token);

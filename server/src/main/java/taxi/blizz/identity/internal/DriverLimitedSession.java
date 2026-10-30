@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * What a blocked driver may still do (REQ-DS-01, issue #141, answer of the lead on the plan): read everything (GET),
+ * What a blocked driver may still do (REQ-DS-01, issue #141, answer of the lead on the plan): read everything (GET)
+ * except the reads that hand out new work — the ALL tab, the personal offers and the pre-orders open to reserve, with
+ * riders' pickups (review of #158) —
  * finish the current trip, keep the shift's connection and end it, report positions, reach support and keep push
  * devices, and rate the passenger of the finished trip. Anything else answers 403 ACCOUNT_BLOCKED, so no new work starts: no shift, resume, offer, claim,
  * pre-order, profile, document, vehicle, legal acceptance, phone change, top-up or transfer.
@@ -27,12 +29,18 @@ final class DriverLimitedSession {
             path("/api/driver/v1/push-devices"),
             path("/api/driver/v1/push-devices/" + SEGMENT + "/remove"));
 
+    /** Reads of new work: denied even as GET. The driver's own reservations stay readable. */
+    private static final List<Pattern> NEW_WORK = List.of(
+            path("/api/driver/v1/broadcast-orders"),
+            path("/api/driver/v1/offers"),
+            path("/api/driver/v1/preorders"));
+
     private DriverLimitedSession() {
     }
 
     static boolean allows(String method, String path) {
         if ("GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method)) {
-            return true;
+            return NEW_WORK.stream().noneMatch(p -> p.matcher(path).matches());
         }
         return COMMANDS.stream().anyMatch(p -> p.matcher(path).matches());
     }

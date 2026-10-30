@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A driver blocked on a trip (issue #141, REQ-DS-01, E3). Andrii takes an order and starts the trip; staff block his
 # account. He still reads his trip and balance, completes the trip (the fare is posted) and writes to support; a
-# profile change and resuming the shift answer 403 ACCOUNT_BLOCKED, and the next order is not offered to him.
+# profile change, resuming the shift and the reads of new work (ALL tab, offers) answer 403 ACCOUNT_BLOCKED.
 source "$(dirname "$0")/../lib.sh"
 
 ANDRII_ID="5a000000-0000-4000-8000-000000000403"
@@ -93,6 +93,8 @@ api GET /api/driver/v1/balance "$ANDRII" >/dev/null; expect 200
 REFUSED=$(api PATCH /api/driver/v1/profile "$ANDRII" "{\"command_id\":\"$(uuid)\",\"name\":\"Андрій\"}")
 expect 403
 [[ "$(jq -r .code <<<"$REFUSED")" == ACCOUNT_BLOCKED ]]
+REFUSED=$(api GET /api/driver/v1/broadcast-orders "$ANDRII"); expect 403
+[[ "$(jq -r .code <<<"$REFUSED")" == ACCOUNT_BLOCKED ]]
 
 say "He completes the trip and writes to support"
 move "$ANDRII" "$SESSION" "$DROPOFF_LAT" "$DROPOFF_LON"
@@ -114,5 +116,6 @@ expect 403
 [[ "$(jq -r .code <<<"$REFUSED")" == ACCOUNT_BLOCKED ]]
 move "$ANDRII" "$SESSION" 50.4528 "$PICKUP_LON"
 NEXT=$(order)
-[[ "$(api GET /api/driver/v1/offers "$ANDRII" | jq length)" == 0 ]]
+api GET /api/driver/v1/offers "$ANDRII" >/dev/null; expect 403
+[[ "$(api GET "/api/operator/v1/orders/$NEXT" "$OPERATOR" | jq -r '.assignment.driver_id // empty')" != "$ANDRII_ID" ]]
 note "Done: blocked on trip $TRIP, Andrii completed it and reached support; new work answered ACCOUNT_BLOCKED."

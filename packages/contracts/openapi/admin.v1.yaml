@@ -844,8 +844,8 @@ paths:
         ACTIVE → BLOCKED (REQ-DS-01, issue #141). Needs driver.review; reason required; audited (event
         DriverAccountBlocked). In the same transaction the driver's open offer is revoked and the shift stops taking
         orders: NOT_ACCEPTING when free, PAUSE_AFTER_CURRENT on a trip. The driver keeps a limited session: the current
-        trip can be completed, support reached, and everything read (GET) — trips, balance, earnings, documents; any
-        other command answers 403 ACCOUNT_BLOCKED. A driver not ACTIVE → 409.
+        trip can be completed, support reached, and everything read (GET) — trips, balance, earnings, documents — but
+        not new work (the ALL tab, offers, pre-orders); anything else answers 403 ACCOUNT_BLOCKED. A driver not ACTIVE → 409.
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
