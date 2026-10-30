@@ -216,7 +216,7 @@ class DispatchPositionTests {
         OrderView order = rides.order(rides.client(), city, TestRides.north(HOME, 200), TestRides.north(HOME, 3000));
         assertThat(dispatch.offers(driver)).isEmpty();
         assertThat(orders.get(order.id()).searchPhase()).isEqualTo("BROADCAST");
-        assertThatThrownBy(() -> dispatch.claim(driver, UUID.randomUUID(), order.id()))
+        assertThatThrownBy(() -> dispatch.claim(driver, phone.sessionId(), UUID.randomUUID(), order.id()))
                 .isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.DRIVER_NOT_ELIGIBLE);
 

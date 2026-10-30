@@ -152,7 +152,7 @@ class FareLedgerTests {
         UUID quote = new TestQuotes(jdbc, quoteService).quote(payer, cityId, "STANDARD", PICKUP, DROPOFF).id();
         OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP,
                 "Home", DROPOFF, "Work", PaymentMethod.CASH, quote));
-        dispatch.accept(driver, UUID.randomUUID(), dispatch.offers(driver).getFirst().id());
+        dispatch.accept(driver, device.sessionId(), UUID.randomUUID(), dispatch.offers(driver).getFirst().id());
         TestRides.timePassed(jdbc, driver.id());
         sessions.heartbeat(driver, device.sessionId(),
                 new LocationFix(new GeoPoint(PICKUP.lat() + 0.0003, PICKUP.lon()), 5.0, OffsetDateTime.now(), sequence++));

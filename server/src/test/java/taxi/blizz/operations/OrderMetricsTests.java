@@ -134,7 +134,7 @@ class OrderMetricsTests {
     void driverCancellationCountsOnlyCommittedCommandsAndNotReplay() {
         var driver = rides.driverNear(PICKUP);
         order(rides.client());
-        dispatch.accept(driver.actor(), UUID.randomUUID(), offer(driver));
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer(driver));
         var trip = trips.current(driver.actor()).orElseThrow();
         UUID command = UUID.randomUUID();
         double before = counter("blizz.orders.cancelled", "by", "DRIVER", "reason", "PASSENGER_ASKED");
@@ -218,8 +218,8 @@ class OrderMetricsTests {
             double elapsed = seconds("blizz.dispatch.assigned", "source", source);
             double accepted = counter("blizz.offers", "outcome", "ACCEPTED");
             Runnable assign = () -> {
-                if (offer != null) dispatch.accept(d.actor(), command, offer);
-                else dispatch.claim(d.actor(), command, order.id());
+                if (offer != null) dispatch.accept(d.actor(), d.device(), command, offer);
+                else dispatch.claim(d.actor(), d.device(), command, order.id());
             };
             rollback(() -> { assign.run(); assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before); });
             assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before);

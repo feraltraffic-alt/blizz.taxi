@@ -112,7 +112,7 @@ class SandboxPushTests {
         OrderView order = rides.order(rider, cityId, PICKUP, DROPOFF);
         deliverEvents();
         sendPushes();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         deliverEvents();
         sendPushes();
 

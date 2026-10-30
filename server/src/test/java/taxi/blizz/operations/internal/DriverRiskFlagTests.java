@@ -171,7 +171,7 @@ class DriverRiskFlagTests {
         UUID quote = new TestQuotes(jdbc, quoteService).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
                 "Pickup", DROPOFF, "Dropoff", PaymentMethod.CASH, quote));
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         String tripBefore = tripState(order.id());
 
         // Early in the previous hour, so all points fall into one hour whatever the clock says.

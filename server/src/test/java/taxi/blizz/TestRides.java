@@ -140,7 +140,7 @@ public final class TestRides {
         Actor payer = client();
         moveTo(driver, north(pickup, 1000));
         OrderView order = order(payer, cityId, pickup, dropoff);
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         return new Ride(payer, driver, order, trips.current(driver.actor()).orElseThrow());
     }
 
