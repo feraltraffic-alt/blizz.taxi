@@ -52,6 +52,9 @@ blizz:
   push:
     # Pushes are only logged; the sandbox has no Firebase project.
     provider: FAKE
+    # A new push waits 3 s, so a scenario can replace a driver before "driver assigned" leaves and show it is then
+    # never sent (issue #143, E3). A real instance sends at once.
+    initial-delay: PT3S
   geocoding:
     # Address search through the fake provider; GOOGLE or VISICOM can be chosen in the sandbox's admin panel.
     provider: FAKE

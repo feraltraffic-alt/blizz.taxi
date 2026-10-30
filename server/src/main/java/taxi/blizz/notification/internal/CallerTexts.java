@@ -84,9 +84,25 @@ class CallerTexts implements OutboxHandler {
                         on conflict (event_id, recipient_id, channel) do nothing""")
                 .param("id", UUID.randomUUID()).param("event", message.eventId()).param("order", n.orderId())
                 .param("template", template).param("locale", language).param("body", text)
-                .param("data", json.writeValueAsString(Map.of("order_id", n.orderId().toString(),
-                        "event_type", message.type())))
+                .param("data", json.writeValueAsString(data(message, n)))
                 .param("now", now).param("deadline", from.plus(DEADLINE)).update();
+    }
+
+    /**
+     * The order and event, and for "driver assigned" the assignment: the SMS is sent only while that assignment is
+     * still the order's (AC-19, issue #143).
+     */
+    private Map<String, String> data(OutboxMessage message, Orders.CallerNotice n) {
+        Map<String, String> data = new java.util.LinkedHashMap<>();
+        data.put("order_id", n.orderId().toString());
+        data.put("event_type", message.type());
+        if ("AssignmentCommitted".equals(message.type())) {
+            Object assignment = json.readValue(message.payload(), Map.class).get("assignment_id");
+            if (assignment != null) {
+                data.put("assignment_id", assignment.toString());
+            }
+        }
+        return data;
     }
 
     /** Short enough for one SMS where it can be; the plate is what the caller looks for in the street. */
