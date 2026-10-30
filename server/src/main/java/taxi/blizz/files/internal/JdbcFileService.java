@@ -34,8 +34,10 @@ import taxi.blizz.platform.IdempotentCommands;
 
 /**
  * Upload pipeline: claim the session → stage with a size limit → detect the real type → strip image
- * metadata → scan → store under a random key → SAFE. Any failed check makes the file REJECTED and
- * removes its bytes. The database only records state; long I/O never runs inside a transaction.
+ * metadata → structural scan → antivirus → store under a random key → SAFE. Any failed check makes the file REJECTED
+ * and removes its bytes. When the antivirus cannot answer, the bytes are stored but the file stays in QUARANTINE until
+ * {@link QuarantineRescan} gets a verdict (issue #105). The database only records state; long I/O never runs inside a
+ * transaction.
  */
 @Service
 class JdbcFileService implements FileService {
@@ -44,19 +46,22 @@ class JdbcFileService implements FileService {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcFileService.class);
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
+    /** What the uploader is told; the signature's name stays in the log. */
+    static final String MALWARE = "The file did not pass the malware check";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
     private final IdempotentCommands commands;
     private final FileStorage storage;
     private final FileScanner scanner;
+    private final ContentScanner antivirus;
     private final FilesProperties properties;
     private final FileEncryption encryption;
     private final Clock clock;
 
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
-                    FileScanner scanner, FilesProperties properties, FileEncryption encryption, Clock clock,
-                    taxi.blizz.platform.RateLimits rateLimits) {
+                    FileScanner scanner, ContentScanner antivirus, FilesProperties properties,
+                    FileEncryption encryption, Clock clock, taxi.blizz.platform.RateLimits rateLimits) {
 
         this.rateLimits = rateLimits;
         this.jdbc = jdbc;
@@ -64,6 +69,7 @@ class JdbcFileService implements FileService {
         this.commands = commands;
         this.storage = storage;
         this.scanner = scanner;
+        this.antivirus = antivirus;
         this.properties = properties;
         this.encryption = encryption;
         this.clock = clock;
@@ -132,33 +138,64 @@ class JdbcFileService implements FileService {
             if (finding.isPresent()) {
                 return reject(fileId, staged, finding.get());
             }
+            Optional<String> malware;
+            boolean verdict = true;
+            try {
+                malware = antivirus.scan(staged);
+            } catch (ContentScanner.Unavailable e) {
+                log.warn("No antivirus verdict for file {}, kept in quarantine: {}", fileId, e.getMessage());
+                malware = Optional.empty();
+                verdict = false;
+            }
+            if (malware.isPresent()) {
+                log.warn("File {} rejected by {}: {}", fileId, antivirus.engine(), malware.get());
+                StoredFile rejected = reject(fileId, staged, MALWARE);
+                jdbc.sql("update file_object set scan_engine = :engine where id = :id")
+                        .param("engine", engine()).param("id", fileId).update();
+                return rejected;
+            }
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
             String key = claimed.purpose().name().toLowerCase(Locale.ROOT) + "/" + MONTH.format(now()) + "/" + fileId;
             storage.store(staged, key);
             staged = null;
             OffsetDateTime now = now();
+            // Without a verdict the stored bytes wait in QUARANTINE for the rescan job, never SAFE by default.
             jdbc.sql("""
                             update file_object
-                            set state = 'SAFE', detected_content_type = :type, size_bytes = :size, sha256 = :hash,
-                                storage_key = :key, uploaded_at = :now, scanned_at = :now, scan_engine = :engine,
+                            set state = case when :verdict then 'SAFE' else 'QUARANTINE' end,
+                                detected_content_type = :type, size_bytes = :size, sha256 = :hash,
+                                storage_key = :key, uploaded_at = :now,
+                                scanned_at = case when :verdict then cast(:now as timestamptz) end,
+                                scan_engine = case when :verdict then :engine end,
+                                scan_attempts = 1,
+                                next_scan_at = case when :verdict then null
+                                                    else cast(:now as timestamptz) + cast(:retry as interval) end,
                                 version = version + 1
                             where id = :id and state = 'QUARANTINE'""")
+                    .param("verdict", verdict)
                     .param("type", detected.get())
                     .param("size", size)
                     .param("hash", hash)
                     .param("key", key)
                     .param("now", now)
-                    .param("engine", scanner.engine())
+                    .param("engine", engine())
+                    .param("retry", properties.rescan().firstRetry().toSeconds() + " seconds")
                     .param("id", fileId)
                     .update();
-            return new StoredFile(fileId, FileState.SAFE, detected.get(), size, null);
+            return new StoredFile(fileId, verdict ? FileState.SAFE : FileState.QUARANTINE, detected.get(), size,
+                    null);
         } catch (IOException e) {
             log.warn("Upload of file {} failed", fileId, e);
             return reject(fileId, staged, "The upload could not be completed");
         } finally {
             deleteQuietly(staged);
         }
+    }
+
+    /** The engines a SAFE file passed, e.g. {@code structural+clamav}. */
+    String engine() {
+        return antivirus.engine().isEmpty() ? scanner.engine() : scanner.engine() + "+" + antivirus.engine();
     }
 
     private Claimed claim(Actor owner, UUID fileId, String contentType, long contentLength) {

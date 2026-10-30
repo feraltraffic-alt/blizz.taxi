@@ -75,7 +75,25 @@ public final class FakeClamd {
         stop();
         ServerSocket socket = new ServerSocket();
         socket.setReuseAddress(true);
-        socket.bind(new InetSocketAddress("127.0.0.1", port));
+        long until = System.currentTimeMillis() + 5_000;
+        while (true) {
+            try {
+                socket.bind(new InetSocketAddress("127.0.0.1", port));
+                break;
+            } catch (java.net.BindException busy) {
+                // the old listening socket is still being released
+                if (System.currentTimeMillis() > until) {
+                    socket.close();
+                    throw busy;
+                }
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw busy;
+                }
+            }
+        }
         server = socket;
         Thread accept = new Thread(() -> serve(socket), "fake-clamd");
         accept.setDaemon(true);

@@ -18,7 +18,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Names are read as a PDF reader reads them: {@code /J#61vaScript} is {@code /JavaScript}, and names inside
  * compressed streams (object streams of PDF 1.5) are looked at too (audit 29.10.2026: both slipped through). A file
- * whose streams unpack to more than {@link #MAX_INFLATED} is refused rather than half read.
+ * whose streams unpack to more than {@link #MAX_INFLATED} is refused rather than half read, and so is an object stream
+ * that does not unpack at all (another filter, or damaged data): what it holds cannot be checked (issue #105).
  */
 @Component
 class StructuralFileScanner implements FileScanner {
@@ -51,6 +52,9 @@ class StructuralFileScanner implements FileScanner {
                 if (unpacked == null) {
                     return Optional.of("PDF too large to check");
                 }
+                if (unpacked.length == 0 && isObjectStream(raw, start.start())) {
+                    return Optional.of("PDF with an object stream that cannot be checked");
+                }
                 inflated += unpacked.length;
                 content.append('\n').append(new String(unpacked, StandardCharsets.ISO_8859_1));
             }
@@ -62,6 +66,13 @@ class StructuralFileScanner implements FileScanner {
             }
         }
         return Optional.empty();
+    }
+
+    /** Whether the dictionary of the stream starting at {@code streamAt} says {@code /Type /ObjStm}, escapes read. */
+    private static boolean isObjectStream(String raw, int streamAt) {
+        int object = raw.lastIndexOf("obj", streamAt);
+        String dictionary = raw.substring(Math.max(object, 0), streamAt);
+        return decodeNames(dictionary).contains("/ObjStm");
     }
 
     /** {@code #xx} in names stands for a byte: a reader sees {@code /J#61vaScript} as {@code /JavaScript}. */

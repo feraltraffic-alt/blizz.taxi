@@ -278,7 +278,9 @@ paths:
       description: |
         The raw body with the declared Content-Type. The server checks the real type by content,
         the size, removes photo metadata and scans the file. The result is SAFE or REJECTED with a
-        reason; a rejected file is deleted and needs a new session.
+        reason; a rejected file is deleted and needs a new session. QUARANTINE when the antivirus could not
+        answer: the file is kept and scanned again until it is SAFE or REJECTED (issue #105); it cannot be
+        attached meanwhile, so try attaching it later.
       tags: [Files]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2269,7 +2271,8 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         state:
           type: string
-          enum: [SAFE, REJECTED]
+          description: QUARANTINE while the antivirus has not given its verdict yet (issue #105).
+          enum: [SAFE, QUARANTINE, REJECTED]
         content_type:
           type: [string, "null"]
         size_bytes:
