@@ -204,7 +204,7 @@ class DispatchTests {
         Driver driver = driverAt(north(300));
         OrderView order = order(client());
 
-        AssignmentView assignment = dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+        AssignmentView assignment = dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), onlyOffer(driver).id());
 
         assertThat(assignment.state()).isEqualTo("COMMITTED");
         assertThat(assignment.tripPhase()).isEqualTo("TO_PICKUP");
@@ -224,11 +224,11 @@ class DispatchTests {
         UUID offerId = onlyOffer(driver).id();
         UUID command = UUID.randomUUID();
 
-        AssignmentView first = dispatch.accept(driver.actor(), command, offerId);
-        AssignmentView repeat = dispatch.accept(driver.actor(), command, offerId);
+        AssignmentView first = dispatch.accept(driver.actor(), driver.device(), command, offerId);
+        AssignmentView repeat = dispatch.accept(driver.actor(), driver.device(), command, offerId);
 
         assertThat(repeat).isEqualTo(first);
-        assertCode(() -> dispatch.accept(driver.actor(), UUID.randomUUID(), offerId), ErrorCode.OFFER_REVOKED);
+        assertCode(() -> dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offerId), ErrorCode.OFFER_REVOKED);
     }
 
     @Test
@@ -240,7 +240,7 @@ class DispatchTests {
         dispatch.reject(first.actor(), UUID.randomUUID(), onlyOffer(first).id());
 
         assertThat(occupancy(first)).isEqualTo("FREE");
-        AssignmentView assignment = dispatch.accept(second.actor(), UUID.randomUUID(), onlyOffer(second).id());
+        AssignmentView assignment = dispatch.accept(second.actor(), second.device(), UUID.randomUUID(), onlyOffer(second).id());
         assertThat(assignment.orderId()).isEqualTo(order.id());
         assertThat(jdbc.sql("select count(*) from offer where order_id = :id").param("id", order.id())
                 .query(Integer.class).single()).isEqualTo(2);
@@ -258,7 +258,7 @@ class DispatchTests {
         makeDue(order.id());
         worker.runOnce();
 
-        assertCode(() -> dispatch.accept(slow.actor(), UUID.randomUUID(), offerId), ErrorCode.OFFER_EXPIRED);
+        assertCode(() -> dispatch.accept(slow.actor(), slow.device(), UUID.randomUUID(), offerId), ErrorCode.OFFER_EXPIRED);
         assertThat(occupancy(slow)).isEqualTo("FREE");
         assertThat(onlyOffer(next).orderId()).isEqualTo(order.id());
     }
@@ -271,7 +271,7 @@ class DispatchTests {
         jdbc.sql("update offer set expires_at = now() - interval '1 second' where order_id = :id")
                 .param("id", order.id()).update();
 
-        assertCode(() -> dispatch.accept(driver.actor(), UUID.randomUUID(), offerId), ErrorCode.OFFER_EXPIRED);
+        assertCode(() -> dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offerId), ErrorCode.OFFER_EXPIRED);
         assertThat(activeAssignments(order.id())).isZero();
     }
 
@@ -285,14 +285,14 @@ class DispatchTests {
         // Audit 29.10.2026: outside the ALL tab's radius (5 km) the order is neither listed nor claimable.
         Driver far = driverAt(north(8000));
         assertThat(dispatch.broadcast(far.actor())).isEmpty();
-        assertCode(() -> dispatch.claim(far.actor(), UUID.randomUUID(), order.id()), ErrorCode.DRIVER_NOT_ELIGIBLE);
+        assertCode(() -> dispatch.claim(far.actor(), far.device(), UUID.randomUUID(), order.id()), ErrorCode.PICKUP_TOO_FAR);
 
         Driver driver = driverAt(north(1000));
         List<BroadcastOrderView> visible = dispatch.broadcast(driver.actor());
         assertThat(visible).extracting(BroadcastOrderView::orderId).containsExactly(order.id());
         assertThat(visible.getFirst().distanceM()).isBetween(900, 1100);
 
-        AssignmentView assignment = dispatch.claim(driver.actor(), UUID.randomUUID(), order.id());
+        AssignmentView assignment = dispatch.claim(driver.actor(), driver.device(), UUID.randomUUID(), order.id());
 
         assertThat(assignment.source()).isEqualTo("BROADCAST");
         assertThat(orders.get(order.id()).status()).isEqualTo("ASSIGNED");
@@ -306,7 +306,7 @@ class DispatchTests {
         jdbc.sql("update driver set review_status = 'SUSPENDED' where id = :id").param("id", driver.actor().id()).update();
 
         assertThat(dispatch.broadcast(driver.actor())).isEmpty();
-        assertCode(() -> dispatch.claim(driver.actor(), UUID.randomUUID(), order.id()), ErrorCode.DRIVER_NOT_ELIGIBLE);
+        assertCode(() -> dispatch.claim(driver.actor(), driver.device(), UUID.randomUUID(), order.id()), ErrorCode.DRIVER_NOT_ELIGIBLE);
     }
 
     @Test
@@ -319,7 +319,7 @@ class DispatchTests {
 
         List<Callable<AssignmentView>> claims = new ArrayList<>();
         for (Driver driver : drivers) {
-            claims.add(() -> dispatch.claim(driver.actor(), UUID.randomUUID(), order.id()));
+            claims.add(() -> dispatch.claim(driver.actor(), driver.device(), UUID.randomUUID(), order.id()));
         }
         Outcomes outcomes = runTogether(claims, 16);
 
@@ -338,8 +338,8 @@ class DispatchTests {
         Driver driver = driverAt(north(300));
 
         Outcomes outcomes = runTogether(List.of(
-                () -> dispatch.claim(driver.actor(), UUID.randomUUID(), first.id()),
-                () -> dispatch.claim(driver.actor(), UUID.randomUUID(), second.id())), 2);
+                () -> dispatch.claim(driver.actor(), driver.device(), UUID.randomUUID(), first.id()),
+                () -> dispatch.claim(driver.actor(), driver.device(), UUID.randomUUID(), second.id())), 2);
 
         assertThat(outcomes.succeeded()).isEqualTo(1);
         assertThat(outcomes.codes()).containsOnly(ErrorCode.DRIVER_BUSY);
@@ -360,7 +360,7 @@ class DispatchTests {
             long version = orders.get(order.id()).version();
 
             runTogether(List.of(
-                    () -> dispatch.accept(driver.actor(), UUID.randomUUID(), offerId),
+                    () -> dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offerId),
                     () -> orders.cancel(payer, UUID.randomUUID(), order.id(), version, "CHANGED_MIND")), 2);
 
             OrderView result = orders.get(order.id());
@@ -380,7 +380,7 @@ class DispatchTests {
         Actor payer = client();
         Driver driver = driverAt(north(200));
         OrderView order = order(payer);
-        dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), onlyOffer(driver).id());
         DriverAvailability busy = sessions.availability(driver.actor().id());
         sessions.pause(driver.actor(), UUID.randomUUID(), driver.device(), busy.sessionVersion());
 
@@ -445,7 +445,7 @@ class DispatchTests {
     void lateWorkerNeverUndoesAnAcceptedOrder() {
         Driver driver = driverAt(north(200));
         OrderView order = order(client());
-        dispatch.accept(driver.actor(), UUID.randomUUID(), onlyOffer(driver).id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), onlyOffer(driver).id());
         jdbc.sql("""
                         update dispatch_attempt set next_action_at = now() - interval '1 second',
                                                     total_deadline = now() - interval '1 second'

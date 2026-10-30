@@ -153,7 +153,7 @@ class PushNotificationTests {
                     .isLessThanOrEqualTo(NotificationFeed.OFFER_DEADLINE).isPositive();
         });
 
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         deliverEvents();
         deliverEvents(); // a repeated round adds nothing
         sendPushes();

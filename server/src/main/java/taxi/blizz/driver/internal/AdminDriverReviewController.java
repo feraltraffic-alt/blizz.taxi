@@ -73,7 +73,8 @@ class AdminDriverReviewController {
                 .contentLength(content.sizeBytes())
                 .cacheControl(CacheControl.noStore().cachePrivate())
                 .header("X-Content-Type-Options", "nosniff")
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().build().toString())
+                // Never rendered in the admin's browser: a PDF is opened by a viewer, not inline (issue #105, D3).
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().build().toString())
                 .body(new InputStreamResource(content.stream()));
     }
 

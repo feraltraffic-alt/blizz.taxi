@@ -30,7 +30,7 @@ class OperationsGauges extends DatabaseGauges {
                 () -> jdbc.sql("""
                                 select count(*) from work_session
                                 where state in ('OPEN', 'CLOSING')
-                                  and (last_location_at is null
+                                  and (last_location_at is null or location_refused_at is not null
                                        or last_location_at < now() - make_interval(secs => :fresh))""")
                         .param("fresh", freshSeconds).query(Long.class).single());
     }

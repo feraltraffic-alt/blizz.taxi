@@ -173,7 +173,7 @@ class ChargebackEvidenceTests {
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
                 "Home", DROPOFF, "Work", PaymentMethod.CARD, quote));
         deliverEvents();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         chat.post(rider, UUID.randomUUID(), order.id(), "I am at the gate, " + TYPED);
         chat.post(driver.actor(), UUID.randomUUID(), order.id(), "Coming, mine is +48 512 345 678");

@@ -254,7 +254,7 @@ class MultipleOrdersTests {
         assertThat(trips.current(driver.actor())).isEmpty();
 
         OfferView offer = offers.stream().filter(o -> o.orderId().equals(order.id())).findFirst().orElseThrow();
-        dispatch.accept(driver.actor(), UUID.randomUUID(), offer.id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer.id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         assertThat(trip.recipient()).isEqualTo(new TripView.Recipient("Granny Olha", recipientPhone));
         assertThat(orders.get(order.id()).payerClientId()).as("the rider still pays").isEqualTo(rider.id());

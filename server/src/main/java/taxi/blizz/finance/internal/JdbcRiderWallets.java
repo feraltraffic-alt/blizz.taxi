@@ -42,9 +42,11 @@ class JdbcRiderWallets implements RiderWallets {
     private final AuditLog audit;
     private final DriverDebts debts;
     private final Clock clock;
+    private final StaffTopUpLimit topUpLimit;
 
     JdbcRiderWallets(JdbcClient jdbc, Ledger ledger, IdempotentCommands commands, StaffAccess staff,
-                     AccountDirectory accounts, CityCatalog cities, AuditLog audit, DriverDebts debts, Clock clock) {
+                     AccountDirectory accounts, CityCatalog cities, AuditLog audit, DriverDebts debts, Clock clock,
+                     StaffTopUpLimit topUpLimit) {
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.commands = commands;
@@ -54,6 +56,7 @@ class JdbcRiderWallets implements RiderWallets {
         this.audit = audit;
         this.debts = debts;
         this.clock = clock;
+        this.topUpLimit = topUpLimit;
     }
 
     @Override
@@ -107,6 +110,7 @@ class JdbcRiderWallets implements RiderWallets {
         return commands.execute(new CommandKey(actor, "wallet.topUp", commandId),
                 new TopUpRequest(clientId, currency, amountMinor, why), Wallet.class, () -> {
                     OffsetDateTime now = now();
+                    topUpLimit.check(actor, currency, amountMinor, now);
                     ensureAccount(clientId, currency, now);
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""

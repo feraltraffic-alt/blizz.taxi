@@ -38,12 +38,17 @@ public enum ErrorCode {
     /** The pickup city does not offer this payment method (REQ-TEN-03). */
     PAYMENT_METHOD_NOT_OFFERED(422),
     LOCATION_NOT_FRESH(422),
-    /** Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). */
+    /**
+     * Arrival reported far from the pickup point; can be confirmed with an exception reason (REQ-ASG-06). Also a claim
+     * from the ALL tab whose pickup is outside the tab's radius from the driver (issue #102).
+     */
     PICKUP_TOO_FAR(422),
     /** A one-time code for a number outside the served countries (blizz.otp.allowed-country-codes, issue #101). */
     PHONE_COUNTRY_NOT_SERVED(422),
     /** A chargeback above what is left of the order's card payment, or on an order not paid by card (issue #103). */
     CHARGEBACK_NOT_ALLOWED(422),
+    /** A staff top-up over the service's limit for one staff member in 24 hours (threat model C3). */
+    TOP_UP_DAILY_LIMIT(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

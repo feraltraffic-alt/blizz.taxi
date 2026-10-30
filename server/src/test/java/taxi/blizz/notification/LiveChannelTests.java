@@ -150,7 +150,7 @@ class LiveChannelTests {
         await(riderInbox, order.id(), "OrderSearchStarted");
         await(driverInbox, order.id(), "OfferMade");
 
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         while (relay.runOnce() > 0) {
             // deliver
         }

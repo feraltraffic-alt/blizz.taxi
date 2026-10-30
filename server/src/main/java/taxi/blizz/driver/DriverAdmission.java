@@ -96,7 +96,15 @@ public interface DriverAdmission {
                        java.time.OffsetDateTime at) {
     }
 
-    record ReviewCase(DriverProfile profile, String phone, List<ReviewEvent> history) {
+    /**
+     * {@code duplicates}: the driver's current documents whose file has the same content as a document of another
+     * driver (issue #105, D2), for the reviewer to look at; nothing is blocked by it.
+     */
+    record ReviewCase(DriverProfile profile, String phone, List<ReviewEvent> history, List<Duplicate> duplicates) {
+    }
+
+    /** A document of this driver with the same file content as {@code otherDocumentId} of {@code otherDriverId}. */
+    record Duplicate(UUID documentId, UUID otherDriverId, UUID otherDocumentId) {
     }
 
     ReviewCase reviewCase(Actor reviewer, UUID driverId);
