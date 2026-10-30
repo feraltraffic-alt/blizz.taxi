@@ -43,8 +43,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class CursorPaginationTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.5, 62.5);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.45, 62.55);
+    static final GeoPoint PICKUP = new GeoPoint(-39.5, -134.5);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.45, -134.45);
 
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
@@ -66,7 +66,7 @@ class CursorPaginationTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         rides = new TestRides(jdbc, orders, dispatch, trips, workSessions, auth, quoteService);
-        city = rides.city("test-cursor-pages", "UAH", 62.0);
+        city = rides.city("test-cursor-pages", "UAH", -135);
     }
 
     /** Five cancelled orders of one rider, all created in the same microsecond. */

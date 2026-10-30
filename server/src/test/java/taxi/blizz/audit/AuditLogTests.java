@@ -49,6 +49,34 @@ class AuditLogTests {
         assertThat(row.get("correlation_id")).isEqualTo(correlation);
     }
 
+    /** REQ-API-09: changes made in the same microsecond are each listed once across pages. */
+    @Test
+    void changesOfTheSameMomentPageEachOnce() {
+        UUID staff = UUID.randomUUID();
+        java.util.List<UUID> made = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.sql("""
+                            insert into audit_log (id, occurred_at, actor_type, actor_id, action, resource_type)
+                            values (:id, timestamptz '2026-10-30 09:00:00.654321+00', 'STAFF', :staff, 'page.test',
+                                    'test')""")
+                    .param("id", id).param("staff", staff).update();
+            made.add(id);
+        }
+        java.util.List<UUID> seen = new java.util.ArrayList<>();
+        taxi.blizz.platform.PageCursor after = null;
+        for (int page = 0; page < 5; page++) {
+            java.util.List<AuditLog.Record> rows = auditLog.find(new AuditLog.Query("STAFF", staff, null, null, null,
+                    null, null, null, after, 2));
+            seen.add(rows.getFirst().id());
+            if (rows.size() < 2) {
+                break;
+            }
+            after = AuditLog.position(rows.getFirst());
+        }
+        assertThat(seen).hasSize(3).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(made);
+    }
+
     @Test
     void updateIsRejected() {
         UUID id = record();

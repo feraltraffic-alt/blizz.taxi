@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.platform.CorrelationId;
+import taxi.blizz.platform.PageCursor;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -61,9 +62,15 @@ public class AuditLog {
                          String after, UUID correlationId) {
     }
 
-    /** Filters are optional (null); newest first, before {@code before} when given; at most 200. */
+    /** Filters are optional (null); newest first, after {@code after} when given (REQ-API-09). */
     public record Query(String actorType, UUID actorId, String actorRole, String action, String resourceType,
-                        String resourceId, OffsetDateTime from, OffsetDateTime to, OffsetDateTime before, int limit) {
+                        String resourceId, OffsetDateTime from, OffsetDateTime to, PageCursor after, int limit) {
+    }
+
+    public static final String CHANGES = "changes";
+
+    public static PageCursor position(Record change) {
+        return PageCursor.of(CHANGES, change.occurredAt(), change.id());
     }
 
     @Transactional(readOnly = true)
@@ -97,8 +104,13 @@ public class AuditLog {
         equal(sql, params, "resource_id", q.resourceId());
         if (q.from() != null) { sql.append(" and occurred_at >= :from"); params.put("from", q.from()); }
         if (q.to() != null) { sql.append(" and occurred_at < :to"); params.put("to", q.to()); }
-        if (q.before() != null) { sql.append(" and occurred_at < :before"); params.put("before", q.before()); }
-        sql.append(" order by occurred_at desc, id desc limit ").append(Math.max(1, Math.min(q.limit(), 200)));
+        if (q.after() != null) {
+            sql.append(" and (occurred_at, id) < (:afterAt, :afterId)");
+            params.put("afterAt", q.after().time(0));
+            params.put("afterId", q.after().id(1));
+        }
+        sql.append(" order by occurred_at desc, id desc limit ")
+                .append(Math.max(1, Math.min(q.limit(), PageCursor.MAX_FETCH)));
         return new AuditSql(sql.toString(), java.util.Map.copyOf(params));
     }
 

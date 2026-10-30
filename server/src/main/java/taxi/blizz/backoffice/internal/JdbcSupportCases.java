@@ -170,7 +170,8 @@ class JdbcSupportCases implements SupportCases {
         if (f.overdueOnly()) { sql.append(" and state = 'OPEN' and respond_by < :now"); params.put("now", now()); }
         if (f.after() != null) {
             // Everything after the cursor in the queue's own order (REQ-API-09); the rank is the index's expression.
-            String rest = "(created_at < :afterAt or :afterRank < 0 or :afterId is null)";
+            String rest = "(" + RANK + " > :afterRank or (" + RANK + " = :afterRank"
+                    + " and (created_at, id) < (:afterAt, :afterId)))";
             int key = 0;
             if (f.overdueOnly()) {
                 sql.append(" and (respond_by > :afterDue or (respond_by = :afterDue and ").append(rest).append("))");
