@@ -38,7 +38,8 @@ final class ProductionSafety {
      * it has. It used to fall back to {@code dev}, the keys and fake providers of this repository.
      */
     static boolean withoutProfile(Environment env) {
-        return env.getActiveProfiles().length == 0 && Arrays.asList(env.getDefaultProfiles()).equals(List.of("default"));
+        return env.getActiveProfiles().length == 0
+                && Arrays.asList(env.getDefaultProfiles()).equals(List.of("default"));
     }
 
     static boolean production(Environment env) {
