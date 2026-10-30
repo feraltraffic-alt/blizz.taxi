@@ -41,6 +41,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 8. **Evidence is proof, not a location**: a run link, a test name, a command with its output. "See `file.mjs`" is not evidence.
 9. **The test reaches the code it is about.** A request refused earlier (401 without a token, 400 on the body) proves nothing about the check after it: sign in and send a valid body, then vary only what you test. Before debugging the server, check that your tool sent what you meant (the sandbox `api` helper sends extra headers only through `API_HEADERS`).
 10. **Re-read the issue before you open the PR.** Every comment since your plan, the lead's above all, is part of the task: each request gets a row in the Acceptance table (lessons case 12).
+11. **Test parsers and protocols on realistic input**: several elements of each kind (two streams, two chunks, two records), every way an element can be damaged, and a peer that hangs. Every network call has a total deadline, writes included (lessons case 13).
 
 ## Rules that must not be broken
 
