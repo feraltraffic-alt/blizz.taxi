@@ -108,6 +108,8 @@ go_offline "$FAR"
 ACCEPT_WON=0; PAUSE_WON=0
 for round in 1 2 3 4 5; do
     resume "$NEAR"
+    # A heartbeat each round: the rounds take longer than the 15 s after which a silent driver is STALE.
+    move "$NEAR" "$NEAR_SESSION" 50.4519 "$PICKUP_LON"; expect 200
     ORDER=$(order)
     OFFER=$(offer_of "$NEAR" "$ORDER"); expect 200
     [[ -n "$OFFER" ]]
@@ -153,7 +155,6 @@ note "E5: $ACCEPT_WON rounds won by the accept, $PAUSE_WON by the pause; one win
 
 say "E4: a fix with 250 m accuracy keeps Near out of new orders; an accurate one brings him back"
 resume "$NEAR"
-drive_to "$NEAR" 50.4519 "$PICKUP_LON"
 INACCURATE=$(api POST "/api/driver/v1/work-sessions/$NEAR_SESSION/heartbeat" "$NEAR" \
     "{\"location\":$(location 50.4519 "$PICKUP_LON" | jq -c '.accuracy_m = 250')}")
 expect 200
