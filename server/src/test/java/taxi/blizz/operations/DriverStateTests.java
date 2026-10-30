@@ -29,7 +29,7 @@ import taxi.blizz.pricing.QuoteService;
 /**
  * Driver states and dispatch eligibility (issue #141, part 1): a free driver who pauses or closes the shift loses the
  * open offer at once and the search goes on (AC-11 rows "Пауза", "Выйти"; E2), a pause racing an accept has exactly
- * one winner (E5), and a fix less accurate than {@code blizz.presence.eligibility-accuracy-meters} takes the driver
+ * one winner over 50 rounds (E5), and a fix less accurate than {@code blizz.presence.eligibility-accuracy-meters} takes the driver
  * out of new orders until an accurate one (REQ-GEO-04; E4). Its own city at longitude 143.
  */
 @SpringBootTest
@@ -145,7 +145,7 @@ class DriverStateTests {
         try {
             int accepted = 0;
             int paused = 0;
-            for (int round = 0; round < 30; round++) {
+            for (int round = 0; round < 50; round++) {
                 TestRides.Driver driver = rides.driverNear(PICKUP);
                 OrderView order = rides.order(rides.client(), city, PICKUP, DROPOFF);
                 OfferView offer = onlyOffer(driver);
@@ -195,7 +195,7 @@ class DriverStateTests {
                 }
                 // Out of the next rounds: the driver is paused or busy either way.
             }
-            assertThat(accepted + paused).isEqualTo(30);
+            assertThat(accepted + paused).isEqualTo(50);
             assertThat(accepted).as("the accept won some rounds").isPositive();
             assertThat(paused).as("the pause won some rounds").isPositive();
         } finally {
