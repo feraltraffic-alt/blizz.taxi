@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.identity.SessionService;
 
 @Configuration(proxyBeanMethods = false)
@@ -12,8 +13,10 @@ class AuthWebConfiguration implements WebMvcConfigurer {
 
     private final SessionService sessions;
     private final StaffActivityLog activity;
+    private final AccountDirectory accounts;
 
-    AuthWebConfiguration(SessionService sessions, StaffActivityLog activity) {
+    AuthWebConfiguration(SessionService sessions, StaffActivityLog activity, AccountDirectory accounts) {
+        this.accounts = accounts;
         this.sessions = sessions;
         this.activity = activity;
     }
@@ -24,7 +27,7 @@ class AuthWebConfiguration implements WebMvcConfigurer {
         registry.addInterceptor(new StaffActivityInterceptor(activity))
                 .addPathPatterns("/api/admin/**", "/api/operator/**");
         // /api/config/v1 is public start-up data of the apps (brand, languages, cities): no token.
-        registry.addInterceptor(new BearerAuthenticationInterceptor(sessions)).addPathPatterns("/api/**")
+        registry.addInterceptor(new BearerAuthenticationInterceptor(sessions, accounts)).addPathPatterns("/api/**")
                 .excludePathPatterns("/api/config/**");
     }
 

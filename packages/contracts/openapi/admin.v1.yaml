@@ -836,6 +836,87 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/drivers/{driver_id}/block:
+    post:
+      operationId: blockDriver
+      summary: Block a driver account
+      description: >-
+        ACTIVE → BLOCKED (REQ-DS-01, issue #141). Needs driver.review; reason required; audited (event
+        DriverAccountBlocked). In the same transaction the driver's open offer is revoked and the shift stops taking
+        orders: NOT_ACCEPTING when free, PAUSE_AFTER_CURRENT on a trip. The driver keeps a limited session: the current
+        trip can be completed, support reached, and everything read (GET) — trips, balance, earnings, documents — but
+        not new work (the ALL tab, offers, pre-orders); anything else answers 403 ACCOUNT_BLOCKED. A driver not ACTIVE → 409.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewChange"
+      responses:
+        "200":
+          description: The driver after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/drivers/{driver_id}/unblock:
+    post:
+      operationId: unblockDriver
+      summary: Unblock a driver account
+      description: >-
+        BLOCKED → ACTIVE (issue #141). Needs driver.review; reason required; audited (event
+        DriverAccountUnblocked). The shift stays as it is; the driver resumes it. A driver not BLOCKED → 409.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewChange"
+      responses:
+        "200":
+          description: The driver after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/drivers/{driver_id}/reinstate:
     post:
       operationId: reinstateDriver
