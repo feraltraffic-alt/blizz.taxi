@@ -26,13 +26,12 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 |---|---|---|
 | #118 retention settings in the admin panel (Q-19 decided by the owner) | Codex | One-time backfill of the "attached" marker approved from three tables (`driver_document`, `support_message_attachment`, `call_recording`), ADR 0004 exception authorised, `CALL_RECORDING` excluded from the cleanup in code |
 | #124 isolation sweep must reach the access check | Codex | After #118 |
-| #102 dispatch abuse (threat model §6–7) | Second Claude | B2 radius already on main (#117) |
+| #102 dispatch abuse (threat model §6–7) | Second Claude | Plan approved 30.10 (two PRs: G1/G2, then B1–B3) with additions: refusal heals after distance/250 km/h, 429 before any lock, device + idempotency replay rule, reuse `RiskProperties.impossibleSpeedKph`. B2 radius already on main (#117) |
 | #105 document uploads (threat model §5) | Second Claude | After #102; PDF `#xx` and Flate (#117), PNG and WebP metadata (#121) already on main |
 | #112 deferred audit findings | Lead | See below |
 
 ### Left in #112
 
-- Code budget per country prefix (LOW).
 - The same event type published by payment and order: an event contract question. No runtime bug, because every
   consumer filters by `aggregateType`.
 
@@ -74,6 +73,8 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
 
 ## Recent history (29–30.10.2026)
 
+- **#126 (lead):** OTP budget per range of numbers (`blizz.otp.max-per-range-per-hour`, 500); the tests and the
+  sandbox raise it in their own config.
 - **Full code audit:** #113 to #117, then #119 to #122. Lessons 10 and 11.
 - **Codex:** #109 reconciliation, #123 contract drift audit (`scripts/audit/contract-drift.mjs`), #125 hot-path
   indexes and background debt refresh.
