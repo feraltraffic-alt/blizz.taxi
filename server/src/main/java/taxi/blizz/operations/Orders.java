@@ -153,6 +153,12 @@ public interface Orders {
 
     Optional<CallerNotice> callerNotice(UUID orderId);
 
+    /** A notification about this offer may still go out: it is OPEN (REQ-NTF-03, AC-19, issue #143). */
+    boolean offerOpen(UUID offerId);
+
+    /** A notification about this assignment may still go out: it is RESERVED or COMMITTED, not replaced (AC-19). */
+    boolean assignmentCurrent(UUID assignmentId);
+
     /**
      * The times of an order and of its last trip, for a chargeback's evidence (REQ-PAY-23): created, the last
      * assignment, arrival, start and completion, with that assignment's driver and vehicle. The caller has checked

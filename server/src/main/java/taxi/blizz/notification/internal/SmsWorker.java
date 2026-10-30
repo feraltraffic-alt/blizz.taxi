@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.identity.PhoneNumber;
@@ -37,9 +38,11 @@ class SmsWorker {
     private final Outbox outbox;
     private final Clock clock;
     private final CommittedMetrics metrics;
+    private final JsonMapper json;
 
     SmsWorker(JdbcClient jdbc, TransactionTemplate tx, TextMessages texts, Orders orders, Outbox outbox,
-              Clock clock, CommittedMetrics metrics) {
+              Clock clock, CommittedMetrics metrics, JsonMapper json) {
+        this.json = json;
         this.metrics = metrics;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -49,7 +52,8 @@ class SmsWorker {
         this.clock = clock;
     }
 
-    record Claimed(UUID id, UUID orderId, String template, String body, OffsetDateTime deadline, int attempts) {
+    record Claimed(UUID id, UUID orderId, String template, String body, OffsetDateTime deadline, int attempts,
+                   String data) {
     }
 
     /** Sends what is due; returns how many SMS were taken. */
@@ -82,10 +86,11 @@ class SmsWorker {
                         update notification n
                         set state = 'SENDING', lease_until = :lease, attempts = n.attempts + 1
                         from due where n.id = due.id
-                        returning n.id, n.recipient_id, n.template, n.body, n.deadline, n.attempts""")
+                        returning n.id, n.recipient_id, n.template, n.body, n.deadline, n.attempts, n.data::text""")
                 .param("now", now).param("lease", now.plus(PushWorker.LEASE)).param("limit", PushWorker.BATCH)
                 .query((rs, i) -> new Claimed(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getString(3), rs.getString(4), rs.getObject(5, OffsetDateTime.class), rs.getInt(6)))
+                        rs.getString(3), rs.getString(4), rs.getObject(5, OffsetDateTime.class), rs.getInt(6),
+                        rs.getString(7)))
                 .list());
         return claimed == null ? List.of() : claimed;
     }
@@ -94,6 +99,13 @@ class SmsWorker {
         OffsetDateTime now = now();
         if (!sms.deadline().isAfter(now)) {
             giveUp(sms, "EXPIRED", "The deadline passed before it was sent");
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> data = sms.data() == null ? Map.of() : json.readValue(sms.data(), Map.class);
+        if (!PushWorker.stillCurrent(orders, data)) {
+            // Replaced, not failed: no CallerNotNotified task for the dispatchers (issue #143).
+            finish(sms.id(), "SUPERSEDED", "No longer current: the assignment was replaced", null);
             return;
         }
         String phone = orders.callerNotice(sms.orderId()).map(Orders.CallerNotice::contactPhone).orElse(null);

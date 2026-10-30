@@ -55,7 +55,8 @@ class PushWorker {
     private final Clock clock;
 
     PushWorker(JdbcClient jdbc, TransactionTemplate tx, PushDevices devices, PushProvider provider,
-               SessionService sessions, JsonMapper json, Clock clock) {
+               SessionService sessions, JsonMapper json, Clock clock, taxi.blizz.operations.Orders orders) {
+        this.orders = orders;
         this.jdbc = jdbc;
         this.tx = tx;
         this.devices = devices;
@@ -64,6 +65,8 @@ class PushWorker {
         this.json = json;
         this.clock = clock;
     }
+
+    private final taxi.blizz.operations.Orders orders;
 
     record Claimed(UUID id, String recipientType, UUID recipientId, String title, String body, String data,
                    OffsetDateTime deadline, int attempts) {
@@ -117,6 +120,10 @@ class PushWorker {
         }
         @SuppressWarnings("unchecked")
         Map<String, String> data = json.readValue(n.data(), Map.class);
+        if (!stillCurrent(orders, data)) {
+            finish(n.id(), "SUPERSEDED", "No longer current: the offer closed or the assignment was replaced", null);
+            return;
+        }
         Duration ttl = Duration.between(now, n.deadline());
         int sent = 0;
         int retry = 0;
@@ -160,6 +167,19 @@ class PushWorker {
     /** 2, 4, 8 … seconds, at most a minute. */
     static Duration backoff(int attempts) {
         return Duration.ofSeconds(Math.min(60, 1L << Math.min(attempts, 6)));
+    }
+
+    /**
+     * The offer or assignment a notification announces is still current (REQ-NTF-03, AC-19, issue #143): a push or
+     * SMS about a closed offer or a replaced driver is never sent. A notification without a subject is always current.
+     */
+    static boolean stillCurrent(taxi.blizz.operations.Orders orders, Map<String, String> data) {
+        String offer = data.get("offer_id");
+        if (offer != null && !offer.isBlank() && !orders.offerOpen(UUID.fromString(offer))) {
+            return false;
+        }
+        String assignment = data.get("assignment_id");
+        return assignment == null || assignment.isBlank() || orders.assignmentCurrent(UUID.fromString(assignment));
     }
 
     private void finish(UUID id, String state, String error, OffsetDateTime sentAt) {

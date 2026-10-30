@@ -156,7 +156,7 @@ class DispatchEngine {
                 core.setOccupancy(candidate.driverId(), "OFFERED", null);
                 core.recordEvent(attempt.orderId(), core.touch(attempt.orderId()), "OfferMade", OrderCore.system(),
                         null, Map.of("offer_id", offerId.toString(), "driver_id", candidate.driverId().toString(),
-                                "distance_m", candidate.distanceM()));
+                                "distance_m", candidate.distanceM(), "expires_at", expiresAt.toString()));
                 schedule(attempt, expiresAt);
                 journal.round(attempt, widest, considered, candidate.driverId(), now);
                 return true;

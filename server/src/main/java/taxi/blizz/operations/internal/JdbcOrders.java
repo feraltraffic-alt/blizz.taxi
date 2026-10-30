@@ -901,6 +901,20 @@ class JdbcOrders implements Orders {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean offerOpen(UUID offerId) {
+        return jdbc.sql("select count(*) from offer where id = :id and state = 'OPEN'")
+                .param("id", offerId).query(Integer.class).single() > 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean assignmentCurrent(UUID assignmentId) {
+        return jdbc.sql("select count(*) from assignment where id = :id and state in ('RESERVED', 'COMMITTED')")
+                .param("id", assignmentId).query(Integer.class).single() > 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<CallerNotice> callerNotice(UUID orderId) {
         return jdbc.sql("""
                         select o.id, o.city_id, c.phone, d.name as driver_name, v.make, v.model, v.color,

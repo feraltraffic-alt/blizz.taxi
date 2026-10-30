@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class NotificationFeed implements OutboxHandler {
 
-    /** An offer is answered within seconds; a late push only confuses. */
+    /** An offer is answered within seconds; a late push only confuses. Used when the event carries no expiry. */
     static final Duration OFFER_DEADLINE = Duration.ofSeconds(30);
     static final Duration DEFAULT_DEADLINE = Duration.ofMinutes(10);
 
@@ -39,9 +39,11 @@ class NotificationFeed implements OutboxHandler {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final Clock clock;
+    private final PushProperties properties;
 
     NotificationFeed(Orders orders, AccountDirectory accounts, ServiceSettings settings, JdbcClient jdbc,
-                     JsonMapper json, Clock clock) {
+                     JsonMapper json, Clock clock, PushProperties properties) {
+        this.properties = properties;
         this.orders = orders;
         this.accounts = accounts;
         this.settings = settings;
@@ -51,10 +53,22 @@ class NotificationFeed implements OutboxHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Payload(UUID driverId, String cancelledBy, UUID followUpOrderId) {
+    record Payload(UUID driverId, String cancelledBy, UUID followUpOrderId, UUID offerId, UUID assignmentId,
+                   OffsetDateTime expiresAt) {
+        Payload(UUID driverId, String cancelledBy, UUID followUpOrderId) {
+            this(driverId, cancelledBy, followUpOrderId, null, null, null);
+        }
     }
 
-    record Push(Actor recipient, String template, Duration deadline) {
+    /**
+     * {@code until}: an absolute deadline from the event itself (the offer's expiry, REQ-NTF-03), else {@code deadline}
+     * counts from the event. {@code subject}: what must still be current when it is sent — {@code offer_id} or
+     * {@code assignment_id} in the push data (AC-19, issue #143).
+     */
+    record Push(Actor recipient, String template, Duration deadline, OffsetDateTime until, Map<String, String> subject) {
+        Push(Actor recipient, String template, Duration deadline) {
+            this(recipient, template, deadline, null, Map.of());
+        }
     }
 
     @Override
@@ -94,10 +108,17 @@ class NotificationFeed implements OutboxHandler {
             case "OfferMade" -> {
                 if (payload.driverId() != null) {
                     pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()), "driver.offer",
-                            OFFER_DEADLINE));
+                            OFFER_DEADLINE, payload.expiresAt(), payload.offerId() == null ? Map.of()
+                            : Map.of("offer_id", payload.offerId().toString())));
                 }
             }
-            case "AssignmentCommitted" -> toRider.accept("rider.driver-assigned");
+            case "AssignmentCommitted" -> {
+                if (rider != null) {
+                    pushes.add(new Push(new Actor(SubjectType.CLIENT, rider), "rider.driver-assigned",
+                            DEFAULT_DEADLINE, null, payload.assignmentId() == null ? Map.of()
+                            : Map.of("assignment_id", payload.assignmentId().toString())));
+                }
+            }
             case "DriverArrived" -> toRider.accept("rider.driver-arrived");
             case "TripCompleted" -> toRider.accept("rider.trip-completed");
             case "OrderUnfulfilled" -> toRider.accept("rider.no-driver");
@@ -130,6 +151,7 @@ class NotificationFeed implements OutboxHandler {
         data.put("event_id", message.eventId().toString());
         data.put("order_id", message.aggregateId().toString());
         data.put("order_version", String.valueOf(message.aggregateVersion()));
+        data.putAll(push.subject());
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         // The deadline counts from the event, not from when the relay got to it.
         OffsetDateTime from = message.occurredAt() == null ? now
@@ -139,14 +161,15 @@ class NotificationFeed implements OutboxHandler {
                                                   template_version, locale, title, body, data, state, next_attempt_at,
                                                   deadline, created_at)
                         values (:id, :event, :type, :recipient, 'PUSH', :template, :version, :locale, :title, :body,
-                                cast(:data as jsonb), 'PENDING', :now, :deadline, :now)
+                                cast(:data as jsonb), 'PENDING', :due, :deadline, :now)
                         on conflict (event_id, recipient_id, channel) do nothing""")
                 .param("id", UUID.randomUUID()).param("event", message.eventId())
                 .param("type", push.recipient().type().name()).param("recipient", push.recipient().id())
                 .param("template", push.template()).param("version", PushTemplates.VERSION)
                 .param("locale", language).param("title", text.title()).param("body", text.body())
                 .param("data", json.writeValueAsString(data)).param("now", now)
-                .param("deadline", from.plus(push.deadline())).update();
+                .param("due", now.plus(properties.initialDelay()))
+                .param("deadline", push.until() != null ? push.until() : from.plus(push.deadline())).update();
     }
 
     /** The language of the person's profile, else the service's (REQ-NTF-07). */

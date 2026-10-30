@@ -2313,15 +2313,15 @@ components:
           enum: [PERSONAL, BROADCAST, STOPPED, EXHAUSTED, null]
         assignment:
           description: >-
-            The current assignment only (REQ-RID-05, issue #143): null once it is revoked or released, so the old
-            driver leaves the screen.
+            The order's assignment (REQ-RID-05, issue #143): null while the order searches again after a driver change,
+            so the old driver leaves the screen; a cancelled order keeps its released assignment as history.
           oneOf:
             - $ref: "#/components/schemas/Assignment"
             - type: "null"
         driver:
           description: >-
-            Who is coming (REQ-RID-05): the driver and car of the current assignment; null without one. No phone —
-            calls go through the order.
+            Who is coming (REQ-RID-05): the driver and car of an assignment that stands (reserved, committed or
+            completed); null otherwise. No phone — calls go through the order.
           oneOf:
             - $ref: "#/components/schemas/DriverCard"
             - type: "null"

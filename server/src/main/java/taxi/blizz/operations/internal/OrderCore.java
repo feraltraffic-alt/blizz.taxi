@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -299,13 +300,44 @@ class OrderCore {
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
     }
 
-    private static OrderView withAssignment(OrderView o, Optional<AssignmentView> assignment) {
+    /**
+     * The snapshot with its assignment, the driver card and the last driver change in the rider's terms (REQ-RID-05,
+     * issue #143). While the order searches again after a driver change, the old assignment is hidden, so the old
+     * driver leaves the rider's screen; a cancelled order keeps its released assignment as history. The card is shown
+     * only for an assignment that stands (RESERVED, COMMITTED or COMPLETED).
+     */
+    private OrderView withAssignment(OrderView o, Optional<AssignmentView> assignment) {
+        AssignmentView current = "SEARCHING".equals(o.status()) ? null : assignment.orElse(null);
+        boolean stands = current != null && Set.of("RESERVED", "COMMITTED", "COMPLETED").contains(current.state());
         return new OrderView(o.id(), o.shortNumber(), o.status(), o.statusReason(), o.version(), o.channel(),
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
-                o.searchPhase(),
-                assignment.orElse(null), o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder(),
-                o.relatedOrderId(), o.walletMinor(), o.discountMinor());
+                o.searchPhase(), current, o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder(),
+                o.relatedOrderId(), o.walletMinor(), o.discountMinor(), null,
+                stands ? driverCard(current) : null, driverChange(o.id()));
+    }
+
+    /** Reads {@code driver} and {@code vehicle} as ADR 0004 allows for operations. No phone. */
+    private OrderView.DriverCard driverCard(AssignmentView assignment) {
+        return jdbc.sql("""
+                        select d.name, v.make, v.model, v.color, v.registration_number
+                        from driver d join vehicle v on v.id = :vehicle where d.id = :driver""")
+                .param("driver", assignment.driverId()).param("vehicle", assignment.vehicleId())
+                .query((rs, i) -> new OrderView.DriverCard(rs.getString("name"), rs.getString("make"),
+                        rs.getString("model"), rs.getString("color"), rs.getString("registration_number"), null))
+                .optional().orElse(null);
+    }
+
+    private OrderView.DriverChange driverChange(UUID orderId) {
+        return jdbc.sql("""
+                        select type, occurred_at from order_event
+                        where order_id = :id and type in ('AssignmentRevoked', 'AssignmentWithdrawn')
+                        order by sequence desc limit 1""")
+                .param("id", orderId)
+                .query((rs, i) -> new OrderView.DriverChange(
+                        "AssignmentWithdrawn".equals(rs.getString("type")) ? "DRIVER_CANCELLED" : "SERVICE_REASSIGNED",
+                        rs.getObject("occurred_at", OffsetDateTime.class)))
+                .optional().orElse(null);
     }
 
     @SuppressWarnings("unchecked")
