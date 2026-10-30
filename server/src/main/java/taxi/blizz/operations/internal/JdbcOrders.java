@@ -37,6 +37,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 import taxi.blizz.pricing.QuoteService;
 import taxi.blizz.pricing.VehicleClasses;
@@ -577,31 +578,31 @@ class JdbcOrders implements Orders {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderView> inCity(Actor staffActor, UUID cityId, boolean activeOnly, OffsetDateTime before, int limit) {
+    public List<OrderView> inCity(Actor staffActor, UUID cityId, boolean activeOnly, PageCursor after, int limit) {
         requireStaff(staffActor, VIEW_PERMISSION, cityId);
-        int size = Math.max(1, Math.min(limit, 100));
+        int size = Math.max(1, Math.min(limit, PageCursor.MAX_FETCH));
         String active = activeOnly
                 ? " and status in ('SCHEDULED', 'AWAITING_PAYMENT', 'READY', 'SEARCHING', 'ASSIGNED', 'IN_SERVICE')"
                 : "";
-        String cursor = before == null ? "" : " and created_at < :before";
+        String cursor = after == null ? "" : " and (created_at, id) < (:afterAt, :afterId)";
         JdbcClient.StatementSpec query = jdbc.sql("select id from ride_order where city_id = :city" + active + cursor
                         + " order by created_at desc, id desc limit :limit")
                 .param("city", cityId)
                 .param("limit", size);
-        if (before != null) {
-            query = query.param("before", before);
+        if (after != null) {
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query(UUID.class).list().stream().map(core::view).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<HistoryItem> history(Actor payer, OffsetDateTime before, int limit) {
+    public List<HistoryItem> history(Actor payer, PageCursor after, int limit) {
         if (payer.type() != SubjectType.CLIENT) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a rider can read rider order history");
         }
-        int size = Math.max(1, Math.min(limit, 50));
-        String cursor = before == null ? "" : " and o.created_at < :before";
+        int size = Math.max(1, Math.min(limit, PageCursor.MAX_FETCH));
+        String cursor = after == null ? "" : " and (o.created_at, o.id) < (:afterAt, :afterId)";
         JdbcClient.StatementSpec query = jdbc.sql("""
                         select o.id, o.short_number, o.status, o.created_at, o.pickup_label, o.dropoff_label,
                                o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
@@ -620,8 +621,8 @@ class JdbcOrders implements Orders {
                         where o.payer_client_id = :payer
                         """ + cursor + " order by o.created_at desc, o.id desc limit :limit")
                 .param("payer", payer.id()).param("limit", size);
-        if (before != null) {
-            query = query.param("before", before);
+        if (after != null) {
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
         }
         return query.query((rs, i) -> {
             UUID assignmentId = rs.getObject("assignment_id", UUID.class);

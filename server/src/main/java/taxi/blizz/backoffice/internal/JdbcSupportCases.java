@@ -27,6 +27,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 @Service
@@ -84,14 +85,17 @@ class JdbcSupportCases implements SupportCases {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Case> mine(Actor requester, OffsetDateTime before, int limit) {
+    public List<Case> mine(Actor requester, PageCursor after, int limit) {
         requireRequester(requester);
         return jdbc.sql(SELECT + """
                         where requester_type = :type and requester_id = :id
-                          and (cast(:before as timestamptz) is null or created_at < :before)
+                          and (cast(:afterAt as timestamptz) is null
+                               or (created_at, id) < (:afterAt, cast(:afterId as uuid)))
                         order by created_at desc, id desc limit :limit""")
-                .param("type", requester.type().name()).param("id", requester.id()).param("before", before)
-                .param("limit", Math.max(1, Math.min(limit, 50)))
+                .param("type", requester.type().name()).param("id", requester.id())
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> map(rs, List.of())).list();
     }
 
@@ -143,6 +147,10 @@ class JdbcSupportCases implements SupportCases {
     record SupportQueueQuery(String sql, Map<String, Object> params) {
     }
 
+    /** The priority rank of {@link SupportCases#rank}, as written in the queue indexes. */
+    private static final String RANK =
+            "(case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end)";
+
     SupportQueueQuery queueQuery(QueueFilter f) {
         StringBuilder sql = new StringBuilder(SELECT);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -159,12 +167,26 @@ class JdbcSupportCases implements SupportCases {
             sql.append(" and assigned_staff_id = :assignee"); params.put("assignee", f.assignedStaffId());
         }
         if (f.unassignedOnly()) sql.append(" and assigned_staff_id is null");
-        if (f.before() != null) { sql.append(" and created_at < :before"); params.put("before", f.before()); }
         if (f.overdueOnly()) { sql.append(" and state = 'OPEN' and respond_by < :now"); params.put("now", now()); }
+        if (f.after() != null) {
+            // Everything after the cursor in the queue's own order (REQ-API-09); the rank is the index's expression.
+            String rest = "(" + RANK + " > :afterRank or (" + RANK + " = :afterRank"
+                    + " and (created_at, id) < (:afterAt, :afterId)))";
+            int key = 0;
+            if (f.overdueOnly()) {
+                sql.append(" and (respond_by > :afterDue or (respond_by = :afterDue and ").append(rest).append("))");
+                params.put("afterDue", f.after().time(key++));
+            } else {
+                sql.append(" and ").append(rest);
+            }
+            params.put("afterRank", f.after().number(key++));
+            params.put("afterAt", f.after().time(key++));
+            params.put("afterId", f.after().id(key));
+        }
         sql.append(" order by ");
         if (f.overdueOnly()) sql.append("respond_by, ");
-        sql.append("case priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,")
-                .append(" created_at desc, id desc limit ").append(Math.max(1, Math.min(f.limit(), 100)));
+        sql.append(RANK).append(", created_at desc, id desc limit ")
+                .append(Math.max(1, Math.min(f.limit(), PageCursor.MAX_FETCH)));
         // The bounded integer is SQL, so a generic plan knows the true row budget.
         return new SupportQueueQuery(sql.toString(), Map.copyOf(params));
     }

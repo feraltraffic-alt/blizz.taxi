@@ -121,6 +121,51 @@ class SupportCasesTests {
         return cases.queue(staff, new QueueFilter(cityId, state, null, null, null, false, null, 100));
     }
 
+    /**
+     * REQ-API-09: the queue is sorted by priority first, then newest first. A cursor holds all of it, so pages of two
+     * through six cases created in the same microsecond, two of each priority, return each case once and in order.
+     * The first version cut by created_at only: here every case after the first page would have been lost.
+     */
+    @Test
+    void theQueuePagesThroughPrioritiesAndEqualTimesEachCaseOnce() {
+        UUID pagesCity = rides.city("test-support-pages", "UAH", -122);
+        Actor rider = rides.client();
+        List<UUID> made = new java.util.ArrayList<>();
+        for (Priority priority : new Priority[] {Priority.LOW, Priority.URGENT, Priority.NORMAL, Priority.URGENT,
+                Priority.LOW, Priority.NORMAL}) {
+            Case opened = cases.open(rider, UUID.randomUUID(), Category.OTHER, null, "Page", "Paging " + priority);
+            jdbc.sql("update support_case set city_id = :city, priority = :priority, created_at = :at where id = :id")
+                    .param("city", pagesCity).param("priority", priority.name())
+                    .param("at", java.time.OffsetDateTime.parse("2026-10-30T10:00:00.123456Z"))
+                    .param("id", opened.id()).update();
+            made.add(opened.id());
+        }
+        Actor staff = staff("OPERATOR", pagesCity, SupportCases.MANAGE_PERMISSION);
+
+        List<Case> seen = new java.util.ArrayList<>();
+        taxi.blizz.platform.PageCursor after = null;
+        for (int page = 0; page < 10; page++) {
+            List<Case> rows = cases.queue(staff, new QueueFilter(pagesCity, null, null, null, null, false, after, 3));
+            List<Case> items = rows.subList(0, Math.min(2, rows.size()));
+            seen.addAll(items);
+            if (rows.size() <= 2) {
+                break;
+            }
+            after = SupportCases.position(items.getLast(), false);
+        }
+        assertThat(seen).extracting(Case::id).hasSize(6).doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(made);
+        assertThat(seen).extracting(Case::priority).containsExactly(Priority.URGENT, Priority.URGENT,
+                Priority.NORMAL, Priority.NORMAL, Priority.LOW, Priority.LOW);
+        assertThat(seen.subList(0, 2)).extracting(c -> c.id().toString()).isSortedAccordingTo(
+                java.util.Comparator.reverseOrder());
+
+        // A cursor of the rider's own list is not a queue position.
+        String mine = SupportCases.minePosition(seen.getFirst()).encode();
+        assertCode(() -> cases.queue(staff, new QueueFilter(pagesCity, null, null, null, null, false,
+                taxi.blizz.platform.PageCursor.decode(SupportCases.CASE_QUEUE, mine), 3)), ErrorCode.VALIDATION_FAILED);
+    }
+
     @Test
     void aRiderReportsALostItemAndSupportWorksTheCaseWithInternalNotesHidden() {
         Ride ride = rides.started(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);

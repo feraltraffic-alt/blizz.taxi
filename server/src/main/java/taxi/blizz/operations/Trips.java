@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Commands of the assigned driver on the trip (sections 9, 10). Only the driver of the active
@@ -20,7 +21,14 @@ public interface Trips {
     Optional<TripView> current(Actor driver);
 
     /** Completed and aborted trips of the signed-in driver, newest first; limit is capped at 50. */
-    List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit);
+    /** The driver's trips, newest first, after {@code after} (REQ-API-09). */
+    List<HistoryItem> history(Actor driver, PageCursor after, int limit);
+
+    String DRIVER_TRIPS = "driver-trips";
+
+    static PageCursor position(HistoryItem item) {
+        return PageCursor.of(DRIVER_TRIPS, item.createdAt(), item.id());
+    }
 
     /**
      * TO_PICKUP → WAITING. The driver's last server-side position must be fresh, accurate enough

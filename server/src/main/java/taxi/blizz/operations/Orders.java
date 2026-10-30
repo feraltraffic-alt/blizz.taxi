@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 /** Order lifecycle commands (section 9). Every change is a named command with a command id. */
@@ -63,11 +64,22 @@ public interface Orders {
 
     OrderView get(UUID orderId);
 
-    /** Orders of one city visible to staff, newest first; limit is capped at 100 (REQ-OPS-01). */
-    List<OrderView> inCity(Actor staff, UUID cityId, boolean activeOnly, OffsetDateTime before, int limit);
+    /** Orders of one city visible to staff, newest first, after {@code after} (REQ-OPS-01, REQ-API-09). */
+    List<OrderView> inCity(Actor staff, UUID cityId, boolean activeOnly, PageCursor after, int limit);
 
-    /** The signed-in payer's orders, newest first; the limit is capped at 50 (REQ-RID-*). */
-    List<HistoryItem> history(Actor payer, OffsetDateTime before, int limit);
+    /** The signed-in payer's orders, newest first, after {@code after} (REQ-RID-*, REQ-API-09). */
+    List<HistoryItem> history(Actor payer, PageCursor after, int limit);
+
+    String CITY_ORDERS = "city-orders";
+    String RIDER_ORDERS = "rider-orders";
+
+    static PageCursor position(OrderView order) {
+        return PageCursor.of(CITY_ORDERS, order.createdAt(), order.id());
+    }
+
+    static PageCursor position(HistoryItem item) {
+        return PageCursor.of(RIDER_ORDERS, item.createdAt(), item.id());
+    }
 
     /**
      * Who did what with the order, oldest first, for the order card in the operator and admin panels: the actor's

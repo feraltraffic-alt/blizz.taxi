@@ -219,6 +219,31 @@ class DriverRiskFlagTests {
 
     // ------------------------------------------------------------ people
 
+    /** REQ-API-09: flags raised in the same microsecond are each listed once across pages. */
+    @Test
+    void flagsOfTheSameMomentPageEachOnce() {
+        Driver driver = driverOnShift();
+        Actor reviewer = staff(cityId, DriverRiskFlags.RISK_PERMISSION);
+        List<UUID> raised = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            raised.add(flags.raise(reviewer, UUID.randomUUID(), driver.id(), cityId, "Same moment " + i).id());
+        }
+        jdbc.sql("update driver_risk_flag set raised_at = now() - interval '1 minute' where id in (:ids)")
+                .param("ids", raised).update();
+
+        List<UUID> seen = new java.util.ArrayList<>();
+        taxi.blizz.platform.PageCursor after = null;
+        for (int page = 0; page < 5; page++) {
+            List<DriverRiskFlags.Flag> rows = flags.list(reviewer, cityId, null, driver.id(), after, 2);
+            seen.add(rows.getFirst().id());
+            if (rows.size() < 2) {
+                break;
+            }
+            after = DriverRiskFlags.position(rows.getFirst());
+        }
+        assertThat(seen).hasSize(3).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(raised);
+    }
+
     @Test
     void reviewIsOnceWithAReasonForTheFlagsCityAndASuspensionCanNameTheFlag() {
         Driver driver = driverOnShift();

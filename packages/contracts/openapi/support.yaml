@@ -178,14 +178,21 @@ components:
           items:
             $ref: "#/components/schemas/Message"
     CaseList:
+      description: |
+        One page of cases (REQ-API-09). Own cases: newest first (created_at, then id). The staff queue: by due time
+        when overdue only, then priority (URGENT first), then newest first; it pages by cursor only, a before is a
+        400.
       type: object
       additionalProperties: false
-      required: [cases]
+      required: [cases, page]
       properties:
         cases:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/Case"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
     OpenCase:
       type: object
       additionalProperties: false

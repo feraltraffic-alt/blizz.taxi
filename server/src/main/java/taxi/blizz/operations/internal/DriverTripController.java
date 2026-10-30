@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.operations.TripView;
 import taxi.blizz.operations.Trips;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Trip commands of the assigned driver — packages/contracts/openapi/driver.v1.yaml. */
 @RestController
@@ -46,11 +48,14 @@ class DriverTripController {
                            @NotNull OffsetDateTime reportedAt, Boolean cashReceived) {
     }
 
+    /** {@code before} is the deprecated cursor of the first version: kept until the apps use {@code cursor}. */
     @GetMapping
-    List<Trips.HistoryItem> history(AccessClaims claims,
+    Page<Trips.HistoryItem> history(AccessClaims claims, @RequestParam(required = false) String cursor,
                                     @RequestParam(required = false) OffsetDateTime before,
-                                    @RequestParam(defaultValue = "20") int limit) {
-        return trips.history(claims.actor(), before, limit);
+                                    @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        return Page.of(trips.history(claims.actor(), PageCursor.read(Trips.DRIVER_TRIPS, cursor, before), size + 1),
+                size, Trips::position);
     }
 
     @GetMapping("/current")
