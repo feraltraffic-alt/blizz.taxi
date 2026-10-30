@@ -40,6 +40,8 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 7. **Answer every review point**: "done" with the evidence, or "not doing, because …". A point dropped without a word is worse than a refusal with a reason.
 8. **Evidence is proof, not a location**: a run link, a test name, a command with its output. "See `file.mjs`" is not evidence.
 9. **The test reaches the code it is about.** A request refused earlier (401 without a token, 400 on the body) proves nothing about the check after it: sign in and send a valid body, then vary only what you test. Before debugging the server, check that your tool sent what you meant (the sandbox `api` helper sends extra headers only through `API_HEADERS`).
+10. **Re-read the issue before you open the PR.** Every comment since your plan, the lead's above all, is part of the task: each request gets a row in the Acceptance table (lessons case 12).
+11. **Test parsers and protocols on realistic input**: several elements of each kind (two streams, two chunks, two records), every way an element can be damaged, and a peer that hangs. Every network call has a total deadline, writes included (lessons case 13).
 
 ## Rules that must not be broken
 
@@ -87,6 +89,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - A staff command on an object that belongs to a city passes that city to `StaffAccess.require`; an object of no city (a promotion for every city, a new city) needs all cities. Name the city, or why there is none, in the PR.
 - A provider answer without the status you asked about is not a result: it stays UNKNOWN and is asked again. Only an explicit code (e.g. WayForPay 1127 "Order Not Found") may decide.
 - Inside a PostgreSQL transaction, a unique-key race is handled with `ON CONFLICT`, never by catching `DuplicateKeyException`: the transaction is already aborted.
+- For every row a cleanup deletes or fences, name which mechanisms read it and test those readers after cleanup, including replay and access after a failed deletion.
 - A lease is longer than the longest work it covers (a batch of provider calls with their timeouts), or each item is re-claimed just before it is worked on.
 - Collections in a hashed idempotency request serialize the same on every instance: sorted sets or lists, never `Set.copyOf`.
 - A query that runs on a schedule or on every request reads a bounded set (a lookback window, active rows, an index), never the whole history; prove it with a volume test and its `EXPLAIN`.

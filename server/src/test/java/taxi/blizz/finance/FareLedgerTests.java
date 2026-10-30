@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 import taxi.blizz.TestQuotes;
+import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.finance.Ledger.Line;
@@ -152,6 +153,7 @@ class FareLedgerTests {
         OrderView order = orders.create(payer, UUID.randomUUID(), new CreateOrder(payer.id(), "STANDARD", PICKUP,
                 "Home", DROPOFF, "Work", PaymentMethod.CASH, quote));
         dispatch.accept(driver, device.sessionId(), UUID.randomUUID(), dispatch.offers(driver).getFirst().id());
+        TestRides.timePassed(jdbc, driver.id());
         sessions.heartbeat(driver, device.sessionId(),
                 new LocationFix(new GeoPoint(PICKUP.lat() + 0.0003, PICKUP.lon()), 5.0, OffsetDateTime.now(), sequence++));
         TripView trip = trips.current(driver).orElseThrow();

@@ -279,4 +279,57 @@ class DocumentEncryptionTests {
                 .param("id", missing.id()).query(Integer.class).single()).as("counted by the failing gauge").isEqualTo(1);
         Files.delete(path(unreadable.key()));
     }
+
+    // ------------------------------------------------------------ E6 (#130's retention)
+
+    @Autowired
+    FileRetirement retirement;
+
+    /** Every path under the files directory, staging included, whose name mentions the file. */
+    private List<Path> leftovers(UUID id) throws Exception {
+        try (var paths = Files.walk(localDir.toAbsolutePath().normalize())) {
+            return paths.filter(p -> p.toString().contains(id.toString())).toList();
+        }
+    }
+
+    private void retireDue(UUID id) {
+        jdbc.sql("""
+                        update file_object set uploaded_at = now() - interval '400 days',
+                                               scanned_at = now() - interval '400 days',
+                                               upload_expires_at = now() - interval '400 days'
+                        where id = :id""").param("id", id).update();
+        retirement.run("upload_sessions", java.time.OffsetDateTime.now().minusDays(1),
+                java.time.OffsetDateTime.now(), 100);
+    }
+
+    @Test
+    void aRetiredEncryptedDocumentLeavesNothingOnDisk() throws Exception {
+        byte[] jpeg = taxi.blizz.files.FakeClamd.jpegCarrying("retired " + UUID.randomUUID());
+        UUID id = files.openUpload(driver, UUID.randomUUID(), taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT,
+                "image/jpeg", jpeg.length).fileId();
+        files.upload(driver, id, "image/jpeg", jpeg.length, new java.io.ByteArrayInputStream(jpeg));
+        assertThat(column(id, "encryption")).isEqualTo("AES256GCM-STREAM-1");
+        assertThat(leftovers(id)).isNotEmpty();
+
+        retireDue(id);
+
+        assertThat(jdbc.sql("select count(*) from file_object where id = :id").param("id", id)
+                .query(Integer.class).single()).as("the row is retired").isZero();
+        assertThat(leftovers(id)).as("no encrypted, plain or staging copy left").isEmpty();
+    }
+
+    @Test
+    void aRetiredReEncryptedDocumentTakesItsPlainCopyWithIt() throws Exception {
+        Plain doc = plainDocument();
+        job.encryptDue();   // switched; the plain copy waits for its grace period
+        assertThat(column(doc.id(), "plain_key_pending_delete")).isEqualTo(doc.key());
+        assertThat(Files.exists(path(doc.key()))).isTrue();
+
+        retireDue(doc.id());
+
+        assertThat(jdbc.sql("select count(*) from file_object where id = :id").param("id", doc.id())
+                .query(Integer.class).single()).isZero();
+        assertThat(Files.exists(path(doc.key()))).as("the plain copy is gone").isFalse();
+        assertThat(leftovers(doc.id())).isEmpty();
+    }
 }

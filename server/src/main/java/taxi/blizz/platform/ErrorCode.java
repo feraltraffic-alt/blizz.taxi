@@ -47,6 +47,8 @@ public enum ErrorCode {
     PHONE_COUNTRY_NOT_SERVED(422),
     /** A chargeback above what is left of the order's card payment, or on an order not paid by card (issue #103). */
     CHARGEBACK_NOT_ALLOWED(422),
+    /** A staff top-up over the service's limit for one staff member in 24 hours (threat model C3). */
+    TOP_UP_DAILY_LIMIT(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

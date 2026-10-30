@@ -2,7 +2,6 @@ package taxi.blizz.files.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -70,7 +69,7 @@ class DocumentEncryption {
         steps = value == null ? step -> { } : value;
     }
 
-    private record Due(UUID fileId, String key, int attempts) {
+    private record Due(UUID fileId, String key, String stagingKey, int attempts) {
     }
 
     private record Leftover(UUID fileId, String key) {
@@ -118,43 +117,72 @@ class DocumentEncryption {
         }
     }
 
+    /**
+     * Claims one due file and reserves its staging paths while the row is locked (the storage writes only to reserved
+     * paths, and retention cleans a row's {@code staging_key}); file I/O follows the commit.
+     */
     private Optional<Due> claim() {
         OffsetDateTime now = now();
-        return tx.execute(status -> jdbc.sql("""
-                        update file_object
-                        set encrypt_attempts = encrypt_attempts + 1, next_encrypt_at = :lease
-                        where id = (select id from file_object
-                                    where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null
-                                      and storage_key is not null
-                                      and (next_encrypt_at is null or next_encrypt_at <= :now)
-                                    order by next_encrypt_at nulls first, id
-                                    limit 1 for update skip locked)
-                        returning id, storage_key, encrypt_attempts""")
-                .param("now", now).param("lease", now.plus(LEASE))
-                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getInt(3)))
-                .optional());
+        return tx.execute(status -> {
+            Optional<Due> row = jdbc.sql("""
+                            select id, storage_key, staging_key, encrypt_attempts from file_object
+                            where purpose = 'DRIVER_DOCUMENT' and state = 'SAFE' and encryption is null
+                              and storage_key is not null and retention_claim is null
+                              and (next_encrypt_at is null or next_encrypt_at <= :now)
+                            order by next_encrypt_at nulls first, id
+                            limit 1 for update skip locked""")
+                    .param("now", now)
+                    .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
+                            rs.getInt(4) + 1))
+                    .optional();
+            if (row.isEmpty()) {
+                return Optional.<Due>empty();
+            }
+            Due previous = row.get();
+            String stage = "document_encryption/" + previous.fileId() + "/" + previous.attempts();
+            try {
+                if (previous.stagingKey() != null) {
+                    storage.clearStage(previous.stagingKey());
+                }
+                storage.clearStage(stage);
+                storage.reserve(stage);
+            } catch (IOException e) {
+                jdbc.sql("update file_object set encrypt_attempts = :attempts, next_encrypt_at = :next where id = :id")
+                        .param("attempts", previous.attempts()).param("next", now.plus(wait(previous.attempts())))
+                        .param("id", previous.fileId()).update();
+                log.warn("Cannot reserve the encryption stage of document {} ({})", previous.fileId(),
+                        e.getClass().getSimpleName());
+                return Optional.<Due>empty();
+            }
+            jdbc.sql("""
+                            update file_object set encrypt_attempts = :attempts, next_encrypt_at = :lease,
+                                                   staging_key = :stage
+                            where id = :id""")
+                    .param("attempts", previous.attempts()).param("lease", now.plus(LEASE)).param("stage", stage)
+                    .param("id", previous.fileId()).update();
+            return Optional.of(new Due(previous.fileId(), previous.key(), stage, previous.attempts()));
+        });
     }
 
     /** True when the row was switched to the encrypted copy. */
     private boolean encrypt(Due due, FileCipher cipher) {
         String target = due.key() + SUFFIX;
-        Path plain = null;
-        Path sealed = null;
         try {
+            Path plain;
             try (InputStream in = storage.open(due.key())) {
-                plain = storage.stage(in, properties.maxBytes());
+                plain = storage.stage(in, properties.maxBytes(), due.stagingKey());
             }
-            sealed = Files.createTempFile(plain.getParent(), "sealed-", ".bin");
-            cipher.encrypt(plain, sealed, target);
+            Path sealed = plain.resolveSibling(plain.getFileName() + ".sealed");
+            cipher.encryptReserved(plain, sealed, target);
             storage.delete(target); // a copy left by an earlier, interrupted run
             storage.store(sealed, target);
-            sealed = null;
             steps.after("written");
             int switched = jdbc.sql("""
                             update file_object
                             set storage_key = :target, encryption = :scheme, plain_key_pending_delete = :plain,
-                                plain_pending_since = :now, next_encrypt_at = null
-                            where id = :id and storage_key = :plain and encryption is null and state = 'SAFE'""")
+                                plain_pending_since = :now, next_encrypt_at = null, staging_key = null
+                            where id = :id and storage_key = :plain and encryption is null and state = 'SAFE'
+                              and retention_claim is null""")
                     .param("target", target).param("scheme", FileCipher.SCHEME).param("plain", due.key())
                     .param("now", now())
                     .param("id", due.fileId()).update();
@@ -174,8 +202,12 @@ class DocumentEncryption {
                     .param("next", now().plus(wait)).param("id", due.fileId()).update();
             return false;
         } finally {
-            deleteQuietly(plain);
-            deleteQuietly(sealed);
+            try {
+                storage.clearStage(due.stagingKey());
+            } catch (IOException | RuntimeException e) {
+                log.warn("The encryption stage of document {} could not be cleared ({}); retention removes it",
+                        due.fileId(), e.getClass().getSimpleName());
+            }
         }
     }
 
@@ -185,16 +217,6 @@ class DocumentEncryption {
             wait = wait.multipliedBy(2);
         }
         return wait.compareTo(LONGEST_RETRY) > 0 ? LONGEST_RETRY : wait;
-    }
-
-    private static void deleteQuietly(Path path) {
-        if (path != null) {
-            try {
-                Files.deleteIfExists(path);
-            } catch (IOException ignored) {
-                // a temporary file
-            }
-        }
     }
 
     private OffsetDateTime now() {

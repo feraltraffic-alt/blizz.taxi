@@ -45,10 +45,11 @@ class JdbcDriverBalances implements DriverBalances {
     private final AuditLog audit;
     private final Clock clock;
     private final DriverTransferTimeZone transferTimeZone;
+    private final StaffTopUpLimit topUpLimit;
 
     JdbcDriverBalances(JdbcClient jdbc, Ledger ledger, DriverDebts debts, IdempotentCommands commands,
                        StaffAccess staff, AccountDirectory accounts, CityCatalog cities, AuditLog audit, Clock clock,
-                       DriverTransferTimeZone transferTimeZone) {
+                       DriverTransferTimeZone transferTimeZone, StaffTopUpLimit topUpLimit) {
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.debts = debts;
@@ -59,6 +60,7 @@ class JdbcDriverBalances implements DriverBalances {
         this.audit = audit;
         this.clock = clock;
         this.transferTimeZone = transferTimeZone;
+        this.topUpLimit = topUpLimit;
     }
 
     // ---------------------------------------------------------------- statements
@@ -138,6 +140,7 @@ class JdbcDriverBalances implements DriverBalances {
         requireExists(driverId);
         return commands.execute(new CommandKey(actor, "driverBalance.topUp", commandId),
                 new TopUpRequest(driverId, currency, amountMinor, kind, ref, why), Statement.class, () -> {
+                    topUpLimit.check(actor, currency, amountMinor, now());
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into driver_balance_top_up (id, driver_id, currency, amount_minor, kind,

@@ -562,7 +562,7 @@ paths:
               $ref: "#/components/schemas/Heartbeat"
       responses:
         "200":
-          description: State after the heartbeat.
+          description: State after the heartbeat, with `accepted`.
           content:
             application/json:
               schema:
@@ -2467,6 +2467,13 @@ components:
           type: array
           items:
             type: string
+        accepted:
+          description: |
+            Only in the heartbeat answer (issue #102): false when the location sent was not taken as the dispatch
+            position because it implies a movement faster than 250 km/h from the driver's last accepted position
+            (geolocation is then STALE until a plausible fix arrives) or its time is ahead of the server's; true
+            otherwise, also without a location or for an older sequence, which is ignored as before. Keep sending.
+          type: boolean
 
     Command:
       type: object

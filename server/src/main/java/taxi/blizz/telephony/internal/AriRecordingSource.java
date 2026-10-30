@@ -39,11 +39,14 @@ class AriRecordingSource implements RecordingSource {
         if (!NAME.matcher(channelId).matches()) {
             return Optional.empty();
         }
-        Path file = Files.createTempFile("call-recording-", ".wav");
+        Path file = downloaded(channelId);
+        Files.createDirectories(file.getParent());
+        Files.deleteIfExists(file);
+        Files.createFile(file,java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
         boolean keep = false;
         try {
             HttpResponse<Path> response = send(request(channelId, "/file").GET()
-                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file));
+                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file, java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING));
             if (response.statusCode() == 404) {
                 return Optional.empty();
             }
@@ -60,15 +63,32 @@ class AriRecordingSource implements RecordingSource {
     }
 
     @Override
-    public void discard(String channelId) throws IOException {
+    public boolean discard(String channelId) throws IOException {
         if (!NAME.matcher(channelId).matches()) {
-            return;
+            throw new DeletionFailure("Unsupported stored recording name", false, null);
         }
-        HttpResponse<Void> response = send(request(channelId, "").DELETE().timeout(Duration.ofSeconds(30)).build(),
-                HttpResponse.BodyHandlers.discarding());
+        HttpRequest deletion;
+        try {
+            deletion = request(channelId, "").DELETE().timeout(Duration.ofSeconds(30)).build();
+        } catch (IOException | RuntimeException ex) {
+            throw new DeletionFailure("Could not prepare source deletion", false, ex);
+        }
+        HttpResponse<Void> response = send(deletion, HttpResponse.BodyHandlers.discarding());
         if (response.statusCode() != 204 && response.statusCode() != 404) {
-            throw new IOException("Asterisk answered " + response.statusCode());
+            throw new DeletionFailure("Asterisk answered " + response.statusCode(), false, null);
         }
+        try {
+            boolean localRemoved = Files.deleteIfExists(downloaded(channelId));
+            return response.statusCode() == 204 || localRemoved;
+        } catch (IOException ex) {
+            throw new DeletionFailure("Source removed but local download remains", true, ex);
+        }
+    }
+
+    /** Stable on this local filesystem: retention can remove a download left by a crashed fetch on the same host. */
+    private static Path downloaded(String channelId) {
+        String name = java.util.UUID.nameUUIDFromBytes(channelId.getBytes(StandardCharsets.UTF_8)) + ".wav";
+        return Path.of(System.getProperty("java.io.tmpdir"), "blizz-call-recording-downloads", name);
     }
 
     private HttpRequest.Builder request(String channelId, String suffix) throws IOException {

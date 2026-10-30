@@ -204,6 +204,7 @@ class JdbcDriverAdmission implements DriverAdmission {
         return commands.execute(new CommandKey(driver, "driver.document.add", commandId), document, UUID.class, () -> {
             requireEditable(lock(driver.id()));
             files.requireAttachable(driver, document.fileId(), FilePurpose.DRIVER_DOCUMENT);
+            files.markAttached(driver, document.fileId(), FilePurpose.DRIVER_DOCUMENT);
             if (document.vehicleId() != null) {
                 int owned = jdbc.sql("select count(*) from vehicle where id = :id and driver_id = :driverId")
                         .param("id", document.vehicleId())

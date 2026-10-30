@@ -56,6 +56,11 @@ class QuarantineRescanTests {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired FileRetirement retirement;
+    @Autowired FileStorage storage;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean ContentScanner antivirus;
+    @org.springframework.beans.factory.annotation.Value("${blizz.files.local-dir}") java.nio.file.Path root;
+
     private final Actor driver = new Actor(SubjectType.DRIVER, UUID.randomUUID());
 
     private UUID quarantined(String payload) throws Exception {
@@ -153,4 +158,135 @@ class QuarantineRescanTests {
             assertThat(in.readAllBytes()).isEqualTo(cleanBody);
         }
     }
+
+    private record RescanPause(CountDownLatch entered, CountDownLatch release,
+                               java.util.concurrent.atomic.AtomicReference<java.nio.file.Path> path) {
+    }
+
+    private RescanPause pauseAfterVerdict(boolean secondUnavailable) throws Exception {
+        RescanPause pause = new RescanPause(new CountDownLatch(1),new CountDownLatch(1),
+                new java.util.concurrent.atomic.AtomicReference<>());
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (calls.incrementAndGet()>1 && secondUnavailable) throw new ContentScanner.Unavailable("Second scan unavailable");
+            Object result = invocation.callRealMethod();
+            pause.path().set(invocation.getArgument(0,java.nio.file.Path.class));
+            pause.entered().countDown();
+            if (!pause.release().await(10,java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("Rescan control timed out");
+            return result;
+        }).when(antivirus).scan(org.mockito.ArgumentMatchers.any());
+        return pause;
+    }
+
+    private void fence(UUID id) {
+        jdbc.sql("update file_object set retention_claim=:claim,retention_until=now()+interval '10 minutes' where id=:id")
+                .param("claim",UUID.randomUUID()).param("id",id).update();
+    }
+
+    private void clean(UUID id) throws Exception {
+        var keys = jdbc.sql("select storage_key,staging_key from file_object where id=:id").param("id",id)
+                .query((rs,i)->java.util.Arrays.asList(rs.getString(1),rs.getString(2))).list();
+        for (var row : keys) for (String key : row) if (key!=null) storage.delete(key);
+        jdbc.sql("delete from file_object where id=:id").param("id",id).update();
+    }
+
+    @Test
+    void retentionRemovesTheRegisteredRescanCopyBeforeItsMetadata() throws Exception {
+        UUID id = quarantined("copy " + UUID.randomUUID());
+        jdbc.sql("update file_object set quarantine_at=now()-interval '400 days' where id=:id").param("id",id).update();
+        dueNow(List.of(id));
+        RescanPause pause = pauseAfterVerdict(false);
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        Future<Integer> result = worker.submit(rescan::rescanDue);
+        try {
+            assertThat(pause.entered().await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(java.nio.file.Files.exists(pause.path().get())).isTrue();
+            String registeredStage = jdbc.sql("select staging_key from file_object where id=:id")
+                    .param("id",id).query(String.class).single();
+            var now = java.time.OffsetDateTime.now();
+            assertThat(retirement.run("quarantined_files",now.minusDays(1),now,1000).deleted()).isEqualTo(1);
+            assertThat(java.nio.file.Files.exists(pause.path().get())).as("private rescan bytes removed before row").isFalse();
+            assertThat(registeredStage).startsWith("quarantine_scan/");
+            assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",id).query(Long.class).single()).isZero();
+            pause.release().countDown();
+            assertThat(result.get(10,java.util.concurrent.TimeUnit.SECONDS)).as("a removed row got no SAFE verdict").isZero();
+        } finally {
+            pause.release().countDown();worker.shutdownNow();worker.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS);clean(id);
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void aRetirementFenceStopsARescanBeforeClaimAndBeforeVerdict(boolean alreadyScanning) throws Exception {
+        UUID id = quarantined("fenced " + UUID.randomUUID());dueNow(List.of(id));
+        int before = clamd.scans();
+        if (!alreadyScanning) {
+            try {
+                fence(id);
+                assertThat(rescan.rescanDue()).isZero();
+                assertThat(clamd.scans()).as("a retired file is not claimed for scanning").isEqualTo(before);
+                assertThat(state(id)).isEqualTo("QUARANTINE");
+            } finally { clean(id); }
+            return;
+        }
+        RescanPause pause = pauseAfterVerdict(false);
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        Future<Integer> result = worker.submit(rescan::rescanDue);
+        try {
+            assertThat(pause.entered().await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            fence(id);pause.release().countDown();
+            assertThat(result.get(10,java.util.concurrent.TimeUnit.SECONDS)).isZero();
+            assertThat(state(id)).as("late SAFE must not overwrite a retirement claim").isEqualTo("QUARANTINE");
+            assertThat(clamd.scans()).isEqualTo(before+1);
+        } finally {
+            pause.release().countDown();worker.shutdownNow();worker.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS);clean(id);
+        }
+    }
+
+    @Test
+    void anExpiredWorkersVerdictCannotReplaceANewerUnsettledAttempt() throws Exception {
+        UUID id = quarantined("late " + UUID.randomUUID());dueNow(List.of(id));
+        RescanPause pause = pauseAfterVerdict(true);
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        Future<Integer> old = worker.submit(rescan::rescanDue);
+        try {
+            assertThat(pause.entered().await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            dueNow(List.of(id));
+            assertThat(rescan.rescanDue()).as("the new attempt has no antivirus verdict").isZero();
+            assertThat(state(id)).isEqualTo("QUARANTINE");
+            pause.release().countDown();
+            assertThat(old.get(10,java.util.concurrent.TimeUnit.SECONDS)).as("old claim cannot settle newer attempt").isZero();
+            assertThat(state(id)).isEqualTo("QUARANTINE");
+        } finally {
+            pause.release().countDown();worker.shutdownNow();worker.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS);clean(id);
+        }
+    }
+
+    @Test
+    void aRejectedFilesStorageKeySurvivesARealDeletionFailure() throws Exception {
+        UUID id = quarantined(taxi.blizz.files.FakeClamd.EICAR);dueNow(List.of(id));
+        String key = jdbc.sql("select storage_key from file_object where id=:id").param("id",id).query(String.class).single();
+        java.nio.file.Path target = root.resolve(key);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            var verdict = (java.util.Optional<?>) invocation.callRealMethod();
+            assertThat(verdict).isPresent();
+            java.nio.file.Files.delete(target);java.nio.file.Files.createDirectory(target);
+            java.nio.file.Files.writeString(target.resolve("blocked"),"undeletable test bytes");
+            return verdict;
+        }).when(antivirus).scan(org.mockito.ArgumentMatchers.any());
+        try {
+            assertThat(rescan.rescanDue()).isZero();
+            assertThat(state(id)).isEqualTo("REJECTED");
+            assertThat(jdbc.sql("select storage_key from file_object where id=:id").param("id",id).query(String.class).single()).isEqualTo(key);
+            assertThat(java.nio.file.Files.exists(target.resolve("blocked"))).isTrue();
+            java.nio.file.Files.delete(target.resolve("blocked"));
+            jdbc.sql("update file_object set uploaded_at=now()-interval '400 days' where id=:id").param("id",id).update();
+            var now = java.time.OffsetDateTime.now();
+            assertThat(retirement.run("upload_sessions",now.minusDays(1),now,1000).deleted()).isEqualTo(1);
+            assertThat(java.nio.file.Files.exists(target)).isFalse();
+        } finally {
+            java.nio.file.Files.deleteIfExists(target.resolve("blocked"));clean(id);
+        }
+    }
+
 }

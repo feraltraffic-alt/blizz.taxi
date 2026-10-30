@@ -365,6 +365,7 @@ class OrderCore {
                         where o.id = :orderId
                           and ws.last_heartbeat_at > :heartbeatSince
                           and ws.last_location_at > :locationSince
+                          and ws.location_refused_at is null
                           and d.account_state = 'ACTIVE'
                           and d.review_status = 'APPROVED'
                           and v.state = 'APPROVED'
@@ -413,7 +414,8 @@ class OrderCore {
                                case
                                  when ws.last_heartbeat_at is null or ws.last_heartbeat_at <= :heartbeatSince
                                       or ws.last_location_at is null or ws.last_location_at <= :locationSince
-                                      or ws.last_location is null then 'STALE_LOCATION'
+                                      or ws.last_location is null or ws.location_refused_at is not null
+                                      then 'STALE_LOCATION'
                                  when ws.intent <> 'ACCEPTING' then 'PAUSED'
                                  when d.account_state <> 'ACTIVE' or d.review_status <> 'APPROVED'
                                       or v.state <> 'APPROVED' then 'NOT_ADMITTED'
