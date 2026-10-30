@@ -109,8 +109,9 @@ class CursorPaginationTests {
 
         assertThat(pages).isEqualTo(3);
         assertThat(seen).as("each order once, newest first, ties by id").hasSize(5).doesNotHaveDuplicates()
-                .containsExactlyElementsOf(ids.stream().sorted((a, b) -> b.compareTo(a)).map(UUID::toString)
-                        .toList());
+                // PostgreSQL orders uuids by their bytes, which is the order of their hex text, not UUID.compareTo.
+                .containsExactlyElementsOf(ids.stream().map(UUID::toString)
+                        .sorted(java.util.Comparator.reverseOrder()).toList());
 
         // The deprecated before still works: every order created strictly before it.
         Map<String, Object> older = object(mvc.perform(auth(get("/api/rider/v1/orders")
