@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restores a backup made by deploy/backup.sh into an EMPTY database (REQ-ENG-12, ADR 0013,
 # runbook docs/runbooks/restore-from-backup.md). Connection from PGHOST, PGPORT, PGUSER, PGPASSWORD; the target
-# database is the second argument and must already exist, created from the PostGIS template or with the extension.
+# database is the second argument and must already exist, empty; the dump creates the PostGIS extension itself.
 #
 #   deploy/restore.sh /backups/blizz-20261030T0300Z.dump blizz_restored
 #

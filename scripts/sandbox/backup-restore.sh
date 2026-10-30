@@ -33,7 +33,8 @@ done
 [[ -f "$ERASURE_JOURNAL_DIR/CLIENT-$CLIENT_ID" ]] || { note "**The deletion never reached the journal.**"; exit 1; }
 
 say "Restore into an empty database (deploy/restore.sh); over data it refuses"
-$PG_RUN psql -X -d blizz -c "create database blizz_restored template template_postgis" >/dev/null
+# An empty database; the dump creates the PostGIS extension itself (CREATE EXTENSION IF NOT EXISTS).
+$PG_RUN psql -X -v ON_ERROR_STOP=1 -d blizz -c "create database blizz_restored" >/dev/null
 $PG_RUN deploy/restore.sh blizz.dump blizz_restored | tee -a "$TRANSCRIPT"
 if $PG_RUN deploy/restore.sh blizz.dump blizz_restored 2>>"$TRANSCRIPT"; then
     note "**A restore over a database with data was not refused.**"; exit 1
