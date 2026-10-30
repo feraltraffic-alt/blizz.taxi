@@ -19,6 +19,12 @@ public final class TestPhones {
     /** {@code prefix} followed by {@code digits} digits, different from every other number this run made. */
     public static String unique(String prefix, int digits) {
         long modulus = (long) Math.pow(10, digits);
-        return prefix + String.format("%0" + digits + "d", Math.floorMod(NEXT.getAndIncrement(), modulus));
+        while (true) {
+            long next = Math.floorMod(NEXT.getAndIncrement(), modulus);
+            // A number ending in 0000 is one the fake SMS sender fails on purpose (FakeOtpSender): never handed out.
+            if (next % 10_000 != 0) {
+                return prefix + String.format("%0" + digits + "d", next);
+            }
+        }
     }
 }

@@ -151,7 +151,7 @@ class CallCentreTests {
     // ------------------------------------------------------------ fixtures
 
     private static String newPhone(String prefix) {
-        return prefix + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return taxi.blizz.TestPhones.unique(prefix, 7);
     }
 
     /** A free extension: three random digits after a 5, unique enough between test runs on one database. */

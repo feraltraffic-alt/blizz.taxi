@@ -37,7 +37,7 @@ class OtpRangeBudgetTests {
     JdbcClient jdbc;
 
     private static String number(String range) {
-        return range + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return taxi.blizz.TestPhones.unique(range, 7);
     }
 
     private long challenges(String phone) {
