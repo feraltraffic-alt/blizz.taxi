@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Staff check and complete riders' deletion requests (REQ-RID-10, REQ-PRV-04, issue #56). Completion is refused while
@@ -34,8 +35,14 @@ public interface ClientDeletionReview {
     record Decision(UUID clientId, String accountState) {
     }
 
-    /** Pending requests, oldest first, after {@code after} (exclusive); at most 100. */
-    List<Request> pending(Actor staff, OffsetDateTime after, int limit);
+    /** Pending requests, oldest first (requested_at, then client id), after {@code after} (REQ-API-09). */
+    List<Request> pending(Actor staff, PageCursor after, int limit);
+
+    String PENDING = "client-deletions";
+
+    static PageCursor position(Request request) {
+        return PageCursor.of(PENDING, request.requestedAt(), request.clientId());
+    }
 
     /** Anonymizes the client; {@code STATE_CONFLICT} while a blocker exists or without a pending request. */
     Decision complete(Actor staff, UUID commandId, UUID clientId, String reason);

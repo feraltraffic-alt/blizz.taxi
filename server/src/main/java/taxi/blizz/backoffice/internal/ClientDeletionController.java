@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.backoffice.ClientDeletionReview;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Riders' deletion requests in the admin panel — admin.v1.yaml (REQ-RID-10, issue #56). */
 @RestController
@@ -29,15 +31,21 @@ class ClientDeletionController {
     record Command(@NotNull UUID commandId, @NotBlank String reason) {
     }
 
-    record RequestList(List<ClientDeletionReview.Request> requests) {
+    /** A page of requests (REQ-API-09); {@code page} is new and optional for older clients. */
+    record RequestList(List<ClientDeletionReview.Request> requests, Page.Info page) {
     }
 
     @GetMapping("/api/admin/v1/client-deletions")
-    RequestList pending(AccessClaims claims,
+    RequestList pending(AccessClaims claims, @RequestParam(required = false) String cursor,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
                         OffsetDateTime after,
-                        @RequestParam(defaultValue = "50") int limit) {
-        return new RequestList(review.pending(claims.actor(), after, limit));
+                        @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor position = cursor != null ? PageCursor.decode(ClientDeletionReview.PENDING, cursor)
+                : PageCursor.after(ClientDeletionReview.PENDING, after);
+        Page<ClientDeletionReview.Request> page = Page.of(review.pending(claims.actor(), position, size + 1), size,
+                ClientDeletionReview::position);
+        return new RequestList(page.items(), page.page());
     }
 
     @PostMapping("/api/admin/v1/client-deletions/{clientId}/complete")

@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * A rider's request to delete the account (REQ-RID-10, section 36.4): ACTIVE or BLOCKED → DELETION_PENDING →
@@ -34,8 +35,8 @@ public interface ClientDeletions {
     /** A command: DELETION_PENDING → the state before the request, while staff have not completed it. */
     Status cancel(taxi.blizz.platform.Actor rider, UUID commandId);
 
-    /** Pending requests, oldest first, after {@code after} (exclusive) when given. */
-    List<Pending> pending(OffsetDateTime after, int limit);
+    /** Pending requests, oldest first (requested_at, then id), after {@code after} when given (REQ-API-09). */
+    List<Pending> pending(PageCursor after, int limit);
 
     Optional<Pending> pending(UUID clientId);
 

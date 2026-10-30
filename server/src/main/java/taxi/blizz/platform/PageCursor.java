@@ -60,6 +60,14 @@ public final class PageCursor {
         return before == null ? null : of(list, before, new UUID(0, 0));
     }
 
+    /**
+     * The deprecated {@code after} timestamp of the older lists read oldest first, as a cursor: every row strictly
+     * after it. The all-ones UUID is the largest, so a row at exactly {@code after} is not repeated.
+     */
+    public static PageCursor after(String list, OffsetDateTime after) {
+        return after == null ? null : of(list, after, new UUID(-1L, -1L));
+    }
+
     /** {@code cursor} wins over the deprecated {@code before}; both absent is the first page. */
     public static PageCursor read(String list, String cursor, OffsetDateTime before) {
         return cursor != null ? decode(list, cursor) : before(list, before);
