@@ -1,0 +1,96 @@
+# Upgrade test (AC-20, issue #146): a database made and filled by an older version is migrated by this one, and what
+# matters survives. The older version builds, starts on an empty database and runs every sandbox scenario; a snapshot
+# of trips, orders, the journal and the accounts is taken; then this version starts on the same database (Flyway
+# migrates it), the snapshot must be the same and the invariant checks clean.
+#   from — the older version: a release tag, or main (default) to check that a branch's migrations upgrade main's data
+# Start: `gh workflow run upgrade.yml --ref <branch> -f from=main`.
+name: Upgrade
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "The older version (tag, branch or commit)"
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+        env:
+          POSTGRES_DB: blizz
+          POSTGRES_USER: blizz
+          POSTGRES_PASSWORD: blizz-sandbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U blizz -d blizz" --health-interval 5s --health-retries 20
+    env:
+      PG_RUN: >-
+        docker run --rm --network host -i -e PGHOST=localhost -e PGUSER=blizz -e PGPASSWORD=blizz-sandbox
+        -e PGDATABASE=blizz postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.from }}
+          path: older
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Build both versions
+        run: |
+          (cd older/server && if [ -x mvnw ]; then ./mvnw -B -q -ntp -DskipTests package; else mvn -B -q -ntp -DskipTests package; fi)
+          (cd server && ./mvnw -B -q -ntp -DskipTests package)
+          (cd older/packages/contracts && npm ci --no-fund --no-audit)
+      - name: The older version fills the database
+        run: |
+          scripts/upgrade/start.sh older/server older.log
+          cd older
+          echo "# Older version ($(git rev-parse --short HEAD))" > ../older-transcript.md
+          for s in scripts/sandbox/scenarios/*.sh; do
+            if TRANSCRIPT=../older-transcript.md bash "$s" 2>/dev/null; then echo "✅ $(basename "$s" .sh)"; else echo "❌ $(basename "$s" .sh)"; fi
+          done | tee ../older-results.txt
+          cd ..
+          grep -q "✅ card-ride" older-results.txt && grep -q "✅ terminal-ride" older-results.txt
+          scripts/upgrade/stop.sh
+          $PG_RUN psql -X -At -c "select now()" > cutoff.txt
+          $PG_RUN psql -X -At -v ON_ERROR_STOP=1 -v cutoff="$(cat cutoff.txt)" < scripts/upgrade/snapshot.sql > before.txt
+          $PG_RUN psql -X -At -c "select max(version) from flyway_schema_history where success" > before-version.txt
+          cat before-version.txt before.txt
+      - name: This version starts on it and migrates it
+        run: |
+          scripts/upgrade/start.sh server newer.log
+          $PG_RUN psql -X -At -c "select max(version) from flyway_schema_history where success" > after-version.txt
+          echo "Schema $(cat before-version.txt) -> $(cat after-version.txt)"
+          $PG_RUN psql -X -At -v ON_ERROR_STOP=1 -v cutoff="$(cat cutoff.txt)" < scripts/upgrade/snapshot.sql > after.txt
+          if ! diff -u before.txt after.txt; then echo "::error title=Upgrade::the snapshot changed"; exit 1; fi
+          echo "# Newer version" > transcript.md
+          TRANSCRIPT=transcript.md bash scripts/sandbox/scenarios/zzz-invariants.sh
+          { echo "## Upgrade $(cat before-version.txt) -> $(cat after-version.txt)"; echo; echo '```'; cat after.txt; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upgrade-logs
+          path: |
+            older.log
+            newer.log
+            older-results.txt
+            older-transcript.md
+            transcript.md
+            before.txt
+            after.txt
+          if-no-files-found: ignore
