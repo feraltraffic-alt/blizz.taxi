@@ -42,7 +42,34 @@ public record OrderView(
         /** Taken off the price by the rider's promotions (ADR 0009); the service pays it. */
         long discountMinor,
         /** When the driver is on the way to the pickup; null otherwise or when no position is known (REQ-RID-04). */
-        PickupEta pickupEta) {
+        PickupEta pickupEta,
+        /** Who is coming: the current assignment's driver and car; null without one (REQ-RID-05, issue #143). */
+        DriverCard driver,
+        /** Why the driver changed before the start, in the rider's terms; null if never (REQ-RID-05). */
+        DriverChange driverChange) {
+
+    /** No phone: calls go through the order. {@code photoUrl} is null until driver photos exist (REQ-DRV-01). */
+    public record DriverCard(String name, String make, String model, String color, String registrationNumber,
+                             String photoUrl) {
+    }
+
+    /** DRIVER_CANCELLED — the driver withdrew; SERVICE_REASSIGNED — the service took the driver off. */
+    public record DriverChange(String reasonCode, OffsetDateTime at) {
+    }
+
+    /** Source compatibility for snapshots built before the driver card existed. */
+    public OrderView(UUID id, long shortNumber, String status, String statusReason, long version, String channel,
+                     UUID payerClientId, UUID cityId, String vehicleClass, GeoPoint pickup, String pickupLabel,
+                     GeoPoint dropoff, String dropoffLabel, PaymentMethod paymentMethod, String paymentState,
+                     Long priceMinor, Long finalPriceMinor, String currency, String searchPhase,
+                     AssignmentView assignment, OffsetDateTime createdAt, Cancellation cancellation,
+                     OffsetDateTime pickupAt, boolean preorder, UUID relatedOrderId, long walletMinor,
+                     long discountMinor, PickupEta pickupEta) {
+        this(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId, vehicleClass, pickup,
+                pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor, finalPriceMinor, currency,
+                searchPhase, assignment, createdAt, cancellation, pickupAt, preorder, relatedOrderId, walletMinor,
+                discountMinor, pickupEta, null, null);
+    }
 
     /** Source compatibility for snapshots built before the pickup ETA existed. */
     public OrderView(UUID id, long shortNumber, String status, String statusReason, long version, String channel,
@@ -55,7 +82,7 @@ public record OrderView(
         this(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId, vehicleClass, pickup,
                 pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor, finalPriceMinor, currency,
                 searchPhase, assignment, createdAt, cancellation, pickupAt, preorder, relatedOrderId, walletMinor,
-                discountMinor, null);
+                discountMinor, null, null, null);
     }
 
     /** The same snapshot with the pickup ETA as of now. */
@@ -63,7 +90,7 @@ public record OrderView(
         return new OrderView(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId,
                 vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor,
                 finalPriceMinor, currency, searchPhase, assignment, createdAt, cancellation, pickupAt, preorder,
-                relatedOrderId, walletMinor, discountMinor, eta);
+                relatedOrderId, walletMinor, discountMinor, eta, driver, driverChange);
     }
 
     /**
