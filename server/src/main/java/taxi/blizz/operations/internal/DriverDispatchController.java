@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.operations.AssignmentView;
@@ -48,8 +49,9 @@ class DriverDispatchController {
     }
 
     @GetMapping("/broadcast-orders")
-    List<BroadcastOrderView> broadcast(AccessClaims claims) {
-        return dispatch.broadcast(claims.actor());
+    List<BroadcastOrderView> broadcast(AccessClaims claims,
+                                       @RequestParam(name = "zone_id", required = false) UUID zoneId) {
+        return dispatch.broadcast(claims.actor(), zoneId);
     }
 
     @PostMapping("/orders/{orderId}/claim")

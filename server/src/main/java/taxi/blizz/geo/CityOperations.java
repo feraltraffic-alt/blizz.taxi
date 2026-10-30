@@ -31,16 +31,27 @@ public interface CityOperations {
         }
     }
 
-    record Settings(List<Hours> workingHours, Set<String> paymentMethods) {
+    /**
+     * {@code returnZoneMeters}: how far outside its polygon a driver may be and still get the city's new orders
+     * (REQ-DS-07, issue #141); null — unchanged.
+     */
+    record Settings(List<Hours> workingHours, Set<String> paymentMethods, Integer returnZoneMeters) {
         public Settings {
             workingHours = workingHours == null ? List.of() : List.copyOf(workingHours);
             paymentMethods = paymentMethods == null ? Set.of()
                     : java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(paymentMethods));
         }
+
+        public Settings(List<Hours> workingHours, Set<String> paymentMethods) {
+            this(workingHours, paymentMethods, null);
+        }
     }
 
-    record State(UUID cityId, List<Hours> workingHours, Set<String> paymentMethods, boolean ordersPaused,
-                 String pauseReason, OffsetDateTime pausedAt, long version) {
+    /** The highest return zone a city may set, in metres. */
+    int MAX_RETURN_ZONE_METERS = 50_000;
+
+    record State(UUID cityId, List<Hours> workingHours, Set<String> paymentMethods, int returnZoneMeters,
+                 boolean ordersPaused, String pauseReason, OffsetDateTime pausedAt, long version) {
     }
 
     State get(Actor staff, UUID cityId);

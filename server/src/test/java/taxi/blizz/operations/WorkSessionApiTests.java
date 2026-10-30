@@ -82,6 +82,7 @@ class WorkSessionApiTests {
                 .param("id", driverId)
                 .param("phone", "+38068" + String.format("%07d", Math.floorMod(driverId.hashCode(), 10_000_000)))
                 .update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, driverId);
         UUID vehicleId = UUID.randomUUID();
         jdbc.sql("""
                         insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,

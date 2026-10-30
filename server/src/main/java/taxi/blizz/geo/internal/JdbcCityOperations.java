@@ -82,7 +82,9 @@ class JdbcCityOperations implements CityOperations {
         return commands.execute(new CommandKey(actor, "city.operations.change", commandId),
                 new ChangeRequest(cityId, expectedVersion, clean, why), State.class, () -> {
                     State before = lockedState(cityId, expectedVersion);
-                    State after = new State(cityId, clean.workingHours(), clean.paymentMethods(),
+                    int returnZone = clean.returnZoneMeters() == null ? before.returnZoneMeters()
+                            : clean.returnZoneMeters();
+                    State after = new State(cityId, clean.workingHours(), clean.paymentMethods(), returnZone,
                             before.ordersPaused(), before.pauseReason(), before.pausedAt(), before.version() + 1);
                     write(after, actor);
                     audit.record(new AuditEntry(actor, "city.operations.change", "city", cityId.toString(), why,
@@ -113,7 +115,8 @@ class JdbcCityOperations implements CityOperations {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 pause ? "New orders are already paused" : "New orders are not paused");
                     }
-                    State after = new State(cityId, before.workingHours(), before.paymentMethods(), pause,
+                    State after = new State(cityId, before.workingHours(), before.paymentMethods(),
+                            before.returnZoneMeters(), pause,
                             pause ? why : null, pause ? now() : null, before.version() + 1);
                     write(after, actor);
                     audit.record(new AuditEntry(actor, action, "city", cityId.toString(), why, snapshot(before),
@@ -176,8 +179,8 @@ class JdbcCityOperations implements CityOperations {
     // ---------------------------------------------------------------- storage
 
     private static final String SELECT = """
-            select city_id, working_hours::text as working_hours, payment_methods, orders_paused, pause_reason,
-                   paused_at, version
+            select city_id, working_hours::text as working_hours, payment_methods, return_zone_meters,
+                   orders_paused, pause_reason, paused_at, version
             from city_operations""";
 
     private Optional<State> read(UUID cityId) {
@@ -207,16 +210,20 @@ class JdbcCityOperations implements CityOperations {
 
     private void write(State s, Actor actor) {
         jdbc.sql("""
-                        insert into city_operations (city_id, working_hours, payment_methods, orders_paused, pause_reason,
-                                                     paused_at, version, updated_by, updated_at)
-                        values (:city, cast(:hours as jsonb), :methods, :paused, :reason, :pausedAt, :version, :by, :now)
+                        insert into city_operations (city_id, working_hours, payment_methods, return_zone_meters,
+                                                     orders_paused, pause_reason, paused_at, version, updated_by,
+                                                     updated_at)
+                        values (:city, cast(:hours as jsonb), :methods, :returnZone, :paused, :reason, :pausedAt,
+                                :version, :by, :now)
                         on conflict (city_id) do update set working_hours = excluded.working_hours,
-                            payment_methods = excluded.payment_methods, orders_paused = excluded.orders_paused,
+                            payment_methods = excluded.payment_methods,
+                            return_zone_meters = excluded.return_zone_meters, orders_paused = excluded.orders_paused,
                             pause_reason = excluded.pause_reason, paused_at = excluded.paused_at,
                             version = excluded.version, updated_by = excluded.updated_by,
                             updated_at = excluded.updated_at""")
                 .param("city", s.cityId()).param("hours", json.writeValueAsString(stored(s.workingHours())))
                 .param("methods", new TreeSet<>(s.paymentMethods()).toArray(String[]::new))
+                .param("returnZone", s.returnZoneMeters())
                 .param("paused", s.ordersPaused()).param("reason", s.pauseReason()).param("pausedAt", s.pausedAt())
                 .param("version", s.version()).param("by", actor.id()).param("now", now()).update();
     }
@@ -234,7 +241,8 @@ class JdbcCityOperations implements CityOperations {
         }
         Array methods = rs.getArray("payment_methods");
         return new State(rs.getObject("city_id", UUID.class), hours,
-                Set.copyOf(Arrays.asList((String[]) methods.getArray())), rs.getBoolean("orders_paused"),
+                Set.copyOf(Arrays.asList((String[]) methods.getArray())), rs.getInt("return_zone_meters"),
+                rs.getBoolean("orders_paused"),
                 rs.getString("pause_reason"), rs.getObject("paused_at", OffsetDateTime.class), rs.getLong("version"));
     }
 
@@ -252,6 +260,7 @@ class JdbcCityOperations implements CityOperations {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("working_hours", stored(s.workingHours()));
         m.put("payment_methods", new TreeSet<>(s.paymentMethods()));
+        m.put("return_zone_meters", s.returnZoneMeters());
         m.put("orders_paused", s.ordersPaused());
         m.put("version", s.version());
         return m;
@@ -262,7 +271,7 @@ class JdbcCityOperations implements CityOperations {
     }
 
     private static State defaults(UUID cityId) {
-        return new State(cityId, List.of(), METHODS, false, null, null, 0);
+        return new State(cityId, List.of(), METHODS, 0, false, null, null, 0);
     }
 
     // ---------------------------------------------------------------- validation
@@ -286,6 +295,10 @@ class JdbcCityOperations implements CityOperations {
         }
         if (settings.paymentMethods().isEmpty() || !METHODS.containsAll(settings.paymentMethods())) {
             throw invalid("Payment methods are one or more of " + new TreeSet<>(METHODS));
+        }
+        if (settings.returnZoneMeters() != null
+                && (settings.returnZoneMeters() < 0 || settings.returnZoneMeters() > MAX_RETURN_ZONE_METERS)) {
+            throw invalid("The return zone is 0.." + MAX_RETURN_ZONE_METERS + " metres");
         }
         return settings;
     }

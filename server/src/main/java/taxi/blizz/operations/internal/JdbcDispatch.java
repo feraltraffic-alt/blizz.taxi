@@ -155,7 +155,7 @@ class JdbcDispatch implements Dispatch {
     }
 
     @Override
-    public List<BroadcastOrderView> broadcast(Actor driver) {
+    public List<BroadcastOrderView> broadcast(Actor driver, UUID zoneId) {
         requireDriver(driver);
         // Counted in its own short transaction, so the read below is not a read-only one (issue #102, B1).
         rateLimits.acquire(taxi.blizz.platform.RateLimits.BROADCAST_LIST, driver);

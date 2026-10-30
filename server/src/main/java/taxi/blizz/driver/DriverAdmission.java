@@ -19,10 +19,16 @@ public interface DriverAdmission {
     DriverProfile profile(UUID driverId);
 
     /** Admission facts other modules need to decide whether a driver may work (section 12.1). */
-    record AdmissionSnapshot(ReviewStatus reviewStatus, java.util.Map<UUID, List<String>> approvedVehicleClasses) {
+    record AdmissionSnapshot(ReviewStatus reviewStatus, java.util.Map<UUID, List<String>> approvedVehicleClasses,
+                             java.util.Set<UUID> cities) {
 
         public boolean admitted() {
             return reviewStatus == ReviewStatus.APPROVED;
+        }
+
+        /** Admitted to work in the city (REQ-DSP-01, REQ-DS-06, issue #141). */
+        public boolean admittedIn(UUID cityId) {
+            return cities.contains(cityId);
         }
 
         public boolean vehicleApproved(UUID vehicleId) {
@@ -70,6 +76,15 @@ public interface DriverAdmission {
      */
     DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason,
                           UUID riskFlagId);
+
+    /**
+     * Replaces the cities the driver is admitted in (REQ-DSP-01, issue #141), with a reason; audited and published as
+     * DriverAdmissionCitiesChanged. Needs {@link #REVIEW_PERMISSION} for every city added or removed; a city that
+     * does not exist is VALIDATION_FAILED. A driver online in a removed city keeps the shift and the current trip but
+     * gets no new order there.
+     */
+    DriverProfile setAdmissionCities(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
+                                     java.util.Set<UUID> cityIds, String reason);
 
     /** SUSPENDED → APPROVED with a reason, when the cause of the suspension is gone. */
     DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);

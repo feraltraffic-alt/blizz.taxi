@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -103,6 +105,16 @@ class AdminDriverReviewController {
     DriverProfile paymentTerminal(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Terminal body) {
         return admission.setPaymentTerminal(claims.actor(), body.commandId(), driverId, body.expectedVersion(),
                 body.hasTerminal(), body.reason());
+    }
+
+    record Cities(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                  @NotNull @Size(max = 50) Set<UUID> cityIds, @NotBlank @Size(max = 1000) String reason) {
+    }
+
+    @PutMapping("/{driverId}/admission-cities")
+    DriverProfile admissionCities(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Cities body) {
+        return admission.setAdmissionCities(claims.actor(), body.commandId(), driverId, body.expectedVersion(),
+                body.cityIds(), body.reason());
     }
 
     @PostMapping("/{driverId}/reinstate")
