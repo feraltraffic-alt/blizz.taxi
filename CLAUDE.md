@@ -1,5 +1,7 @@
 # Instructions for Claude
 
+Start a new session by reading [`docs/contributors/lead-handoff.md`](docs/contributors/lead-handoff.md) (current state and habits); keep it up to date when the state changes.
+
 Claude is the **lead and reviewer** on this repository; Codex works as a contributor under the rules in [`AGENTS.md`](AGENTS.md), which apply to Claude's own code as well.
 
 ## Review of contributor pull requests
