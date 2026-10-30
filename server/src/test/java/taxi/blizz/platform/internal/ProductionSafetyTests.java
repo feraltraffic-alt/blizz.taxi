@@ -95,6 +95,24 @@ class ProductionSafetyTests {
         assertThat(ProductionSafety.production(env)).isFalse();
     }
 
+    /**
+     * Threat model O1: a server started without a profile used to run as {@code dev}, with the keys and fake providers
+     * of this repository. It now stops before any bean and says which profile to set. The tests' own configuration
+     * makes {@code dev} their default, so this run sets Spring's own default back on the command line.
+     */
+    @Test
+    void anInstanceWithoutAProfileDoesNotStart() {
+        assertThatThrownBy(() -> new SpringApplicationBuilder(BlizzTaxiApplication.class)
+                .properties("spring.main.web-application-type=none",
+                        "DB_URL=jdbc:postgresql://127.0.0.1:1/no-database",
+                        "spring.datasource.hikari.connection-timeout=250")
+                .run("--spring.profiles.default=default"))
+                .extracting(e -> org.springframework.core.NestedExceptionUtils.getMostSpecificCause(e))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.THROWABLE)
+                .hasMessageContaining("No profile is active")
+                .hasMessageContaining("SPRING_PROFILES_ACTIVE=prod");
+    }
+
     /** The whole application: stops before any bean (no database is needed to see it) and lists every problem. */
     @Test
     void aMisconfiguredProductionInstanceDoesNotStart() {
