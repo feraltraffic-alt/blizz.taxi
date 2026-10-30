@@ -153,10 +153,6 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                 });
     }
 
-    /**
-     * An automatic flag, in the caller's transaction; a second one with the same {@code dedupeKey} (one per work
-     * session and hour) is not raised. Returns whether a flag was raised.
-     */
     /** The flag's city; a flag of no city (DUPLICATE_DOCUMENT) needs all cities (AGENTS.md). */
     private void requireFor(Actor actor, UUID cityId) {
         if (cityId != null) {
@@ -166,6 +162,10 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
         }
     }
 
+    /**
+     * An automatic flag, in the caller's transaction; a second one with the same {@code dedupeKey} (one per work
+     * session and hour) is not raised. Returns whether a flag was raised.
+     */
     boolean raiseAutomatic(UUID driverId, UUID cityId, Kind kind, Map<String, Object> evidence, String dedupeKey,
                            OffsetDateTime at) {
         UUID id = UUID.randomUUID();
