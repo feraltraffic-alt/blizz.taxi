@@ -121,6 +121,30 @@ location() { # LAT LON — the sequence grows across scenarios, so a later point
     echo "{\"lat\":$1,\"lon\":$2,\"accuracy_m\":5,\"recorded_at\":\"$(now_utc)\",\"sequence\":$(next_sequence)}"
 }
 
+# drive_to TOKEN LAT LON — waits as long as a car needs at 200 km/h from the last point this driver was sent to with
+# go_online or move, in any scenario. The server refuses a dispatch position faster than 250 km/h from the driver's
+# last accepted one of the last 30 minutes (issue #102), and the runner moves drivers within seconds.
+DRIVER_POSITIONS="${DRIVER_POSITIONS:-/tmp/sandbox-positions}"
+drive_to() {
+    local payload driver file wait
+    payload=$(cut -d. -f2 <<<"$1" | tr '_-' '/+')
+    while (( ${#payload} % 4 )); do payload+="="; done
+    driver=$(base64 -d <<<"$payload" 2>/dev/null | jq -r .sub)
+    mkdir -p "$DRIVER_POSITIONS"
+    file="$DRIVER_POSITIONS/$driver"
+    if [[ -s "$file" ]]; then
+        wait=$(awk -v lat="$2" -v lon="$3" -v now="$(date +%s)" 'function rad(x) { return x * 3.14159265358979 / 180 }
+            { a = sin(rad(lat - $1) / 2) ^ 2 + cos(rad($1)) * cos(rad(lat)) * sin(rad(lon - $2) / 2) ^ 2
+              metres = 2 * 6371000 * atan2(sqrt(a), sqrt(1 - a)); w = metres / 55.5 - (now - $3)
+              print (w > 0 ? int(w) + 1 : 0) }' "$file")
+        if (( wait > 0 )); then
+            note "(the car drives ${wait} s to the next point)"
+            sleep "$wait"
+        fi
+    fi
+    echo "$2 $3 $(date +%s)" >"$file"
+}
+
 # go_online TOKEN VEHICLE_ID LAT LON — opens a work session and prints its id. When the driver still has an open
 # session from an earlier scenario (another phone, T-16), this device takes it over and moves to LAT LON instead.
 go_online() {
@@ -135,6 +159,7 @@ go_online() {
         echo "$id"
         return
     fi
+    drive_to "$1" "$3" "$4"
     api POST /api/driver/v1/work-sessions "$1" \
         "{\"command_id\":\"$(uuid)\",\"vehicle_id\":\"$2\",\"location\":$(location "$3" "$4")}" | jq -r .session_id
     expect 201
@@ -156,5 +181,6 @@ go_offline() {
 # A hop faster than location.jump-kph (250 km/h) since the previous point is flagged JUMP and not used for
 # arrive: keep a driver's points within a few metres of each other when they follow within seconds.
 move() {
+    drive_to "$1" "$3" "$4"
     api POST "/api/driver/v1/work-sessions/$2/heartbeat" "$1" "{\"location\":$(location "$3" "$4")}" >/dev/null
 }

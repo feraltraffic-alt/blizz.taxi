@@ -122,7 +122,9 @@ public final class TestRides {
         return new Driver(actor, device.sessionId(), vehicle);
     }
 
+    /** A heartbeat at {@code point}, as if the time to drive there had passed ({@link #timePassed}). */
     public void moveTo(Driver driver, GeoPoint point) {
+        timePassed(jdbc, driver.actor().id());
         sessions.heartbeat(driver.actor(), driver.device(),
                 new LocationFix(point, 5.0, OffsetDateTime.now(), SEQUENCE.incrementAndGet()));
     }
@@ -155,6 +157,16 @@ public final class TestRides {
     public TripView complete(Ride ride, Boolean cashReceived) {
         return trips.complete(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
                 OffsetDateTime.now(), cashReceived);
+    }
+
+    /**
+     * Ages the driver's last accepted position out of the 30-minute baseline, as if an hour had passed since it: the
+     * next heartbeat may be anywhere without being refused as an impossible movement (issue #102). For tests that move
+     * a driver further than 250 km/h allows within the test's milliseconds.
+     */
+    public static void timePassed(JdbcClient jdbc, UUID driverId) {
+        jdbc.sql("update driver_last_position set accepted_at = accepted_at - interval '1 hour' where driver_id = :d")
+                .param("d", driverId).update();
     }
 
     public static GeoPoint north(GeoPoint point, int metres) {

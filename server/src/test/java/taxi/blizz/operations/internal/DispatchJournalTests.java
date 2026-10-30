@@ -255,6 +255,9 @@ class DispatchJournalTests {
         Driver stale = driverAt(north(200));
         jdbc.sql("update work_session set last_location_at = now() - interval '1 hour' where driver_id = :d")
                 .param("d", stale.id()).update();
+        Driver refused = driverAt(north(210));  // a fresh time, but its last fix was an impossible jump (#102)
+        jdbc.sql("update work_session set location_refused_at = now() where driver_id = :d")
+                .param("d", refused.id()).update();
         Driver paused = driverAt(north(250));
         DriverAvailability p = sessions.availability(paused.id());
         sessions.pause(paused.actor(), UUID.randomUUID(), paused.device(), p.sessionVersion());
@@ -280,6 +283,7 @@ class DispatchJournalTests {
 
         Map<UUID, String> reasons = reasons(order.id());
         assertThat(reasons).containsEntry(eligible.id(), "OK").containsEntry(stale.id(), "STALE_LOCATION")
+                .containsEntry(refused.id(), "STALE_LOCATION")
                 .containsEntry(paused.id(), "PAUSED").containsEntry(notAdmitted.id(), "NOT_ADMITTED")
                 .containsEntry(otherClass.id(), "CLASS").containsEntry(restricted.id(), "RESTRICTED")
                 .containsEntry(busy.id(), "BUSY").containsEntry(released.id(), "PREVIOUS_DRIVER")

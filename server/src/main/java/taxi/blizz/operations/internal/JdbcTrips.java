@@ -411,20 +411,21 @@ class JdbcTrips implements Trips {
 
     /** Distance from the driver's last server-side position to the pickup, and whether it is acceptable. */
     private Arrival arrivalCheck(Actor driver, UUID orderId) {
-        record Row(Integer distance, OffsetDateTime locationAt, Float accuracy) {
+        record Row(Integer distance, OffsetDateTime locationAt, Float accuracy, boolean refused) {
         }
         Optional<Row> row = jdbc.sql("""
                         select cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance,
-                               ws.last_location_at, ws.last_location_accuracy
+                               ws.last_location_at, ws.last_location_accuracy,
+                               ws.location_refused_at is not null as refused
                         from work_session ws, ride_order o
                         where ws.driver_id = :driver and ws.state in ('OPEN', 'CLOSING') and o.id = :order
                           and ws.last_location is not null""")
                 .param("driver", driver.id())
                 .param("order", orderId)
                 .query((rs, i) -> new Row((Integer) rs.getObject(1), rs.getObject(2, OffsetDateTime.class),
-                        (Float) rs.getObject(3)))
+                        (Float) rs.getObject(3), rs.getBoolean(4)))
                 .optional();
-        if (row.isEmpty() || row.get().locationAt() == null
+        if (row.isEmpty() || row.get().locationAt() == null || row.get().refused()
                 || row.get().locationAt().isBefore(core.now().minus(presence.gpsMaxAge()))) {
             return new Arrival(row.map(Row::distance).orElse(null), ErrorCode.LOCATION_NOT_FRESH,
                     "No current location; confirm with a reason");

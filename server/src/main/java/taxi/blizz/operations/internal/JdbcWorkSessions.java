@@ -18,6 +18,7 @@ import taxi.blizz.audit.AuditLog;
 import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.geo.City;
 import taxi.blizz.geo.CityResolver;
+import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.configuration.LegalDocuments;
 import taxi.blizz.operations.DriverAvailability;
@@ -37,9 +38,16 @@ import taxi.blizz.platform.SubjectType;
  * locks it first, so two devices or two requests cannot open two sessions or race a pause against
  * a close. Eligibility is computed from current facts on every read, so a suspended admission or a
  * stale location excludes the driver at once without touching the ongoing session (REQ-DRV-05).
+ * A location becomes the dispatch position only when it follows plausibly from the driver's last accepted one,
+ * whatever device or shift that came from (issue #102, threat model G1/G2).
  */
 @Service
 class JdbcWorkSessions implements WorkSessions {
+
+    /** How long the driver's last accepted position stays the baseline for the next one (issue #102). */
+    private static final Duration BASELINE_MAX_AGE = Duration.ofMinutes(30);
+    /** Added to the time between two fixes: phones send whole seconds and a request takes time to arrive. */
+    private static final Duration ELAPSED_TOLERANCE = Duration.ofSeconds(2);
 
     private final LegalDocuments legal;
 
@@ -51,11 +59,14 @@ class JdbcWorkSessions implements WorkSessions {
     private final DriverAdmission admission;
     private final CityResolver cities;
     private final PresenceProperties presence;
+    private final RiskProperties risk;
+    private final ImpossibleMovementFlags movementFlags;
     private final Clock clock;
 
     JdbcWorkSessions(JdbcClient jdbc, IdempotentCommands commands, Outbox outbox, AuditLog auditLog,
                      AccountDirectory accounts, DriverAdmission admission, CityResolver cities,
-                     PresenceProperties presence, LegalDocuments legal, Clock clock) {
+                     PresenceProperties presence, RiskProperties risk, ImpossibleMovementFlags movementFlags,
+                     LegalDocuments legal, Clock clock) {
         this.legal = legal;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -65,6 +76,8 @@ class JdbcWorkSessions implements WorkSessions {
         this.admission = admission;
         this.cities = cities;
         this.presence = presence;
+        this.risk = risk;
+        this.movementFlags = movementFlags;
         this.clock = clock;
     }
 
@@ -127,6 +140,19 @@ class JdbcWorkSessions implements WorkSessions {
                             .param("accuracy", location.accuracyMeters())
                             .param("sequence", location.sequence())
                             .update();
+                    // A new shift does not reset the baseline: an implausible fix opens it without a dispatch
+                    // position, and the next plausible heartbeat gives it one (issue #102).
+                    Optional<Movement> jump = implausible(driver.id(), location.point(), now);
+                    if (jump.isPresent()) {
+                        jdbc.sql("""
+                                        update work_session set last_location = null, last_location_at = null,
+                                            last_location_accuracy = null, last_location_sequence = null
+                                        where id = :id""")
+                                .param("id", sessionId).update();
+                        flag(driver.id(), sessionId, city.id(), jump.get(), now);
+                    } else {
+                        acceptedPosition(driver.id(), location.point(), now);
+                    }
                     publish("WorkSessionOpened", sessionId, 0, Map.of("driver_id", driver.id().toString(),
                             "city_id", city.id().toString(), "vehicle_id", vehicleId.toString()));
                     return availability(driver.id());
@@ -222,23 +248,101 @@ class JdbcWorkSessions implements WorkSessions {
                 .param("now", now)
                 .param("id", session.id())
                 .update();
-        if (location != null && !location.recordedAt().isAfter(now.plus(presence.futureTolerance()))) {
-            // Only a newer sequence moves the current position (REQ-GEO-02).
-            jdbc.sql("""
-                            update work_session
-                            set last_location = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), last_location_at = :now,
-                                last_location_accuracy = :accuracy, last_location_sequence = :sequence
-                            where id = :id
-                              and (last_location_sequence is null or last_location_sequence < :sequence)""")
-                    .param("lon", location.point().lon())
-                    .param("lat", location.point().lat())
+        if (location == null) {
+            return availability(driver.id()).withAccepted(true);
+        }
+        if (location.recordedAt().isAfter(now.plus(presence.futureTolerance()))) {
+            return availability(driver.id()).withAccepted(false);
+        }
+        // Only a newer sequence moves the current position (REQ-GEO-02); an older one is ignored, not refused.
+        boolean older = jdbc.sql("""
+                        select coalesce(last_location_sequence >= :sequence, false) from work_session where id = :id""")
+                .param("sequence", location.sequence())
+                .param("id", session.id())
+                .query(Boolean.class)
+                .single();
+        if (older) {
+            return availability(driver.id()).withAccepted(true);
+        }
+        Optional<Movement> jump = implausible(driver.id(), location.point(), now);
+        if (jump.isPresent()) {
+            // Not the dispatch position: the old point stays, STALE until a plausible fix (issue #102).
+            jdbc.sql("update work_session set location_refused_at = :now where id = :id")
                     .param("now", now)
-                    .param("accuracy", location.accuracyMeters())
-                    .param("sequence", location.sequence())
                     .param("id", session.id())
                     .update();
+            flag(driver.id(), session.id(), session.cityId(), jump.get(), now);
+            return availability(driver.id()).withAccepted(false);
         }
-        return availability(driver.id());
+        jdbc.sql("""
+                        update work_session
+                        set last_location = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), last_location_at = :now,
+                            last_location_accuracy = :accuracy, last_location_sequence = :sequence,
+                            location_refused_at = null
+                        where id = :id""")
+                .param("lon", location.point().lon())
+                .param("lat", location.point().lat())
+                .param("now", now)
+                .param("accuracy", location.accuracyMeters())
+                .param("sequence", location.sequence())
+                .param("id", session.id())
+                .update();
+        acceptedPosition(driver.id(), location.point(), now);
+        return availability(driver.id()).withAccepted(true);
+    }
+
+    // ---------------------------------------------------------------- plausible positions (issue #102)
+
+    private record Movement(int distanceM, double seconds, int speedKph) {
+    }
+
+    /**
+     * The movement from the driver's last accepted position to {@code point} when it is faster than
+     * {@code blizz.risk.impossible-speed-kph}; empty when it is plausible or there is no baseline of the last 30
+     * minutes. Time is the server's between the two receipts: the phone's {@code recorded_at} is the sender's word,
+     * and a back-dated baseline would make any jump look slow.
+     */
+    private Optional<Movement> implausible(UUID driverId, GeoPoint point, OffsetDateTime now) {
+        record Baseline(int distanceM, OffsetDateTime acceptedAt) {
+        }
+        return jdbc.sql("""
+                        select cast(ST_Distance(point::geography,
+                                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) as int) as distance_m,
+                               accepted_at
+                        from driver_last_position where driver_id = :id and accepted_at > :since""")
+                .param("lon", point.lon())
+                .param("lat", point.lat())
+                .param("id", driverId)
+                .param("since", now.minus(BASELINE_MAX_AGE))
+                .query((rs, i) -> new Baseline(rs.getInt("distance_m"),
+                        rs.getObject("accepted_at", OffsetDateTime.class)))
+                .optional()
+                .flatMap(baseline -> {
+                    Duration elapsed = Duration.between(baseline.acceptedAt(), now);
+                    double seconds = (Math.max(0, elapsed.toMillis()) + ELAPSED_TOLERANCE.toMillis()) / 1000.0;
+                    double kph = baseline.distanceM() / seconds * 3.6;
+                    return kph > risk.impossibleSpeedKph()
+                            ? Optional.of(new Movement(baseline.distanceM(), seconds, (int) Math.round(kph)))
+                            : Optional.empty();
+                });
+    }
+
+    private void acceptedPosition(UUID driverId, GeoPoint point, OffsetDateTime now) {
+        jdbc.sql("""
+                        insert into driver_last_position (driver_id, point, accepted_at)
+                        values (:id, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :now)
+                        on conflict (driver_id) do update set point = excluded.point, accepted_at = excluded.accepted_at""")
+                .param("id", driverId)
+                .param("lon", point.lon())
+                .param("lat", point.lat())
+                .param("now", now)
+                .update();
+    }
+
+    /** The same IMPOSSIBLE_MOVEMENT flag as from the track, once per shift and hour; it blocks nothing (REQ-DS-08). */
+    private void flag(UUID driverId, UUID sessionId, UUID cityId, Movement jump, OffsetDateTime now) {
+        movementFlags.raise(driverId, sessionId, cityId, jump.distanceM(), jump.seconds(), jump.speedKph(), now,
+                Map.of("source", "heartbeat"));
     }
 
     // ---------------------------------------------------------------- read model
@@ -273,11 +377,12 @@ class JdbcWorkSessions implements WorkSessions {
             reasons.add("NO_OPEN_SESSION");
             return new DriverAvailability(driverId, null, 0, "CLOSED", null, "DISCONNECTED", "UNAVAILABLE",
                     occupancy, accountState, admitted.reviewStatus().name(), null, null, null, null, false,
-                    List.copyOf(reasons));
+                    List.copyOf(reasons), null);
         }
         Session session = current.get();
         String connection = connection(session.lastHeartbeatAt(), now);
         String geolocation = session.lastLocationAt() == null ? "UNAVAILABLE"
+                : session.locationRefusedAt() != null ? "STALE"
                 : Duration.between(session.lastLocationAt(), now).compareTo(presence.gpsMaxAge()) <= 0 ? "FRESH"
                 : "STALE";
         if (!admitted.vehicleApproved(session.vehicleId())) {
@@ -301,7 +406,7 @@ class JdbcWorkSessions implements WorkSessions {
         return new DriverAvailability(driverId, session.id(), session.version(), session.state(), session.intent(),
                 connection, geolocation, occupancy, accountState, admitted.reviewStatus().name(), session.cityId(),
                 session.vehicleId(), session.lastHeartbeatAt(), session.lastLocationAt(), reasons.isEmpty(),
-                List.copyOf(reasons));
+                List.copyOf(reasons), null);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -325,20 +430,21 @@ class JdbcWorkSessions implements WorkSessions {
 
     private record Session(UUID id, UUID driverId, UUID vehicleId, UUID cityId, UUID deviceSessionId, String state,
                            String intent, OffsetDateTime lastHeartbeatAt, OffsetDateTime lastLocationAt,
-                           long version) {
+                           OffsetDateTime locationRefusedAt, long version) {
     }
 
     private Optional<Session> currentSession(UUID driverId) {
         return jdbc.sql("""
                         select id, driver_id, vehicle_id, city_id, device_session_id, state, intent, last_heartbeat_at,
-                               last_location_at, version
+                               last_location_at, location_refused_at, version
                         from work_session where driver_id = :id and state in ('OPEN', 'CLOSING')""")
                 .param("id", driverId)
                 .query((rs, i) -> new Session(rs.getObject("id", UUID.class), rs.getObject("driver_id", UUID.class),
                         rs.getObject("vehicle_id", UUID.class), rs.getObject("city_id", UUID.class),
                         rs.getObject("device_session_id", UUID.class), rs.getString("state"), rs.getString("intent"),
                         rs.getObject("last_heartbeat_at", OffsetDateTime.class),
-                        rs.getObject("last_location_at", OffsetDateTime.class), rs.getLong("version")))
+                        rs.getObject("last_location_at", OffsetDateTime.class),
+                        rs.getObject("location_refused_at", OffsetDateTime.class), rs.getLong("version")))
                 .optional();
     }
 

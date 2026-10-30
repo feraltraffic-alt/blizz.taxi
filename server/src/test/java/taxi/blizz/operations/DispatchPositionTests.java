@@ -153,8 +153,9 @@ class DispatchPositionTests {
                         select ST_Y(last_location) as lat, ST_X(last_location) as lon from work_session
                         where driver_id = :d and state = 'OPEN'""")
                 .param("d", driver.id())
-                .query((rs, i) -> rs.getObject("lat") == null ? null : new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")))
-                .single();
+                .query((rs, i) -> java.util.Optional.ofNullable(rs.getObject("lat") == null ? null
+                        : new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon"))))
+                .single().orElse(null);
     }
 
     private int flags(Actor driver) {

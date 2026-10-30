@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param impossibleSpeedKph two consecutive positions implying a speed above this are an impossible movement; the
  *                           location module reports jumps above its own {@code blizz.location.jump-kph} only, so a
- *                           lower value here has no effect
+ *                           lower value here has no effect on the track; it is also the limit above which a
+ *                           heartbeat's location is not taken as the dispatch position (issue #102)
  * @param minDistanceMeters  …over more than this distance (a short GPS glitch is not a case)
  */
 @ConfigurationProperties("blizz.risk")

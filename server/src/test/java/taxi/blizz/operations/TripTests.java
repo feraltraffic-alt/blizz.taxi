@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestQuotes;
+import taxi.blizz.TestRides;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.platform.Actor;
@@ -128,6 +129,7 @@ class TripTests {
     private long sequence = 10;
 
     private void moveTo(Driver driver, GeoPoint point) {
+        TestRides.timePassed(jdbc, driver.actor().id());
         sessions.heartbeat(driver.actor(), driver.device(), new LocationFix(point, 5.0, OffsetDateTime.now(), sequence++));
     }
 
@@ -221,6 +223,7 @@ class TripTests {
     @Test
     void arrivalWithAPoorFixNeedsAReasonAndIsFlagged() {
         Ride ride = assigned(PaymentMethod.CASH);
+        TestRides.timePassed(jdbc, ride.driver().actor().id());
         sessions.heartbeat(ride.driver().actor(), ride.driver().device(),
                 new LocationFix(north(30), 250.0, OffsetDateTime.now(), sequence++));
 
