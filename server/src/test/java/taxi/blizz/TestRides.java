@@ -122,6 +122,11 @@ public final class TestRides {
         return new Driver(actor, device.sessionId(), vehicle);
     }
 
+    /** Another signed-in phone of the driver, which does not control the shift. */
+    public UUID newDevice(Driver driver) {
+        return auth.open(new VerifiedSubject(driver.actor(), "ACTIVE", false), "phone").sessionId();
+    }
+
     /** A heartbeat at {@code point}, as if the time to drive there had passed ({@link #timePassed}). */
     public void moveTo(Driver driver, GeoPoint point) {
         timePassed(jdbc, driver.actor().id());

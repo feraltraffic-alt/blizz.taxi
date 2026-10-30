@@ -80,6 +80,18 @@ class LiveDriverBoardTests {
             assertThat((Map<String, Object>) d.get("location")).containsKeys("lat", "lon");
         });
         assertThat(result.getResponse().getContentAsString()).as("no phone numbers").doesNotContain("+38099");
+        // When each driver was last heard from, by server time (REQ-DS-03, issue #141).
+        for (TestRides.Driver driver : List.of(busy, free)) {
+            java.time.Instant heard = jdbc.sql("""
+                            select last_heartbeat_at from work_session where driver_id = :d and state = 'OPEN'""")
+                    .param("d", driver.actor().id()).query(java.time.OffsetDateTime.class).single().toInstant();
+            assertThat(drivers).anySatisfy(d -> {
+                assertThat(d).containsEntry("driver_id", driver.actor().id().toString());
+                assertThat(d.get("last_heartbeat_at")).as("last_heartbeat_at of %s", driver).isNotNull();
+                assertThat(java.time.OffsetDateTime.parse((String) d.get("last_heartbeat_at")).toInstant())
+                        .isEqualTo(heard);
+            });
+        }
 
         // Filters (REQ-ADM-08): by status, and by the part of the map in view.
         List<Map<String, Object>> onOrder = (List<Map<String, Object>>) json.readValue(mvc.perform(
