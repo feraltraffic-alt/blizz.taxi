@@ -90,7 +90,7 @@ class DriverBalanceTests {
     }
 
     private static String phone(UUID id) {
-        return "+38098" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000));
+        return taxi.blizz.TestPhones.unique("+38098", 7);
     }
 
     private long balance(Actor driver) {

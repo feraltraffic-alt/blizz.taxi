@@ -175,7 +175,7 @@ class DriverLocationApiTests {
         UUID id = UUID.randomUUID();
         jdbc.sql("insert into driver(id, phone_normalized, account_state, created_at, updated_at) values (:id,:phone,'ACTIVE',now(),now())")
                 .param("id", id)
-                .param("phone", "+38067" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38067", 7))
                 .update();
         IssuedSession session = sessions.open(new VerifiedSubject(new Actor(SubjectType.DRIVER, id), "ACTIVE", false),
                 "driver-track-test");

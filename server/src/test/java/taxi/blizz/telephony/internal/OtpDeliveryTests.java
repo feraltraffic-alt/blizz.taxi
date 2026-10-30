@@ -155,7 +155,7 @@ class OtpDeliveryTests {
     }
 
     private static String newPhone() {
-        return "+38063" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        return taxi.blizz.TestPhones.unique("+38063", 7);
     }
 
     private List<OtpDeliveries.Attempt> attempts(String phone) {

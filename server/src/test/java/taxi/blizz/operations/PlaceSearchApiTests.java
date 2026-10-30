@@ -74,7 +74,7 @@ class PlaceSearchApiTests {
                     return id;
                 });
         UUID clientId = UUID.randomUUID();
-        phone = "+48" + String.format("%09d", Math.floorMod(clientId.hashCode(), 1_000_000_000));
+        phone = taxi.blizz.TestPhones.unique("+48", 9);
         jdbc.sql("""
                         insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', true, now(), now())""")
@@ -112,7 +112,7 @@ class PlaceSearchApiTests {
                         insert into client (id, phone_normalized, account_state, has_app, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', true, now(), now())""")
                 .param("id", other.id())
-                .param("phone", "+48" + String.format("%09d", Math.floorMod(other.id().hashCode(), 1_000_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+48", 9))
                 .update();
         List<Map<String, Object>> places = (List<Map<String, Object>>) body(getAuth(
                 "/api/rider/v1/places?query=Хрещатик&lat=-39.5&lon=165.5", token(other))).get("places");

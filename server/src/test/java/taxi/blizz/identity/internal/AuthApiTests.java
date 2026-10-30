@@ -57,7 +57,7 @@ class AuthApiTests {
         List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
-        phone = "+38050" + String.format("%07d", Math.floorMod(UUID.randomUUID().hashCode(), 10_000_000));
+        phone = taxi.blizz.TestPhones.unique("+38050", 7);
         delivery.codes.clear();
     }
 

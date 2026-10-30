@@ -29,7 +29,7 @@ class ErasureReplayTests {
     @Test
     void aRestoredClientIsAnonymizedAgainAndTheOtherModulesAreToldAgain() {
         UUID client = UUID.randomUUID();
-        String phone = "+48" + String.format("%09d", Math.floorMod(client.hashCode(), 1_000_000_000));
+        String phone = taxi.blizz.TestPhones.unique("+48", 9);
         jdbc.sql("""
                         insert into client (id, phone_normalized, name, account_state, deletion_previous_state,
                                             deletion_requested_at, has_app, created_at, updated_at)

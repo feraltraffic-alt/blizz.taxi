@@ -91,7 +91,7 @@ class AdmissionCitiesMigrationTests {
                         insert into driver (id, phone_normalized, account_state, review_status, created_at, updated_at)
                         values (:id, :phone, 'ACTIVE', :status, now(), now())""")
                 .param("id", id).param("status", reviewStatus)
-                .param("phone", "+38093" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
+                .param("phone", taxi.blizz.TestPhones.unique("+38093", 7))
                 .update();
         return id;
     }
