@@ -24,17 +24,13 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 
 | Item | Who | State |
 |---|---|---|
-| #118 retention settings in the admin panel (Q-19 decided by the owner) | Codex | One-time backfill of the "attached" marker approved from three tables (`driver_document`, `support_message_attachment`, `call_recording`), ADR 0004 exception authorised, `CALL_RECORDING` excluded from the cleanup in code |
+| #118 retention settings (Q-19 decided) | Codex | #130 reviewed 30.10: two MAJOR (consumer receipts deleted for FAILED events; a failed deletion keeps the claim and hides the recording/file) and minors. Lead decided: legacy unclassified temp rows are kept and backed off, no recovery policy |
 | #124 isolation sweep must reach the access check | Codex | After #118 |
-| #102 dispatch abuse (threat model §6–7) | Second Claude | #128 (part 2, B1–B3) reviewed and approved, waiting for the merge; #127 (part 1, G1/G2) asked for one more test (a refusal heals after distance/250 km/h). #127 merges after #128 and then renames its migration to sort after `V20261030_0751_5` |
-| #105 document uploads (threat model §5) | Second Claude | After #102; PDF `#xx` and Flate (#117), PNG and WebP metadata (#121) already on main |
-| #112 deferred audit findings | Lead | See below |
-
-### Left in #112
-
-- #129 (lead): one payload schema per aggregate for `CardHoldAuthorized`, `CardHoldDeclined` and `CardPaymentSettled`. CI green, sandbox running; closes the last item.
-
-The client card showing support-case subjects across cities stays as it is: owner decision of 30.10.2026.
+| #102 dispatch abuse | Second Claude | #128 (part 2) merged. #127 (part 1) approved; author merges `main` and renames the migration after `V20261030_0751_5` |
+| #105 document uploads | Second Claude | #131 (part 1) reviewed: BLOCKER (`stream` matches inside `endstream`, normal PDFs with an object stream refused), MAJOR (ObjStm check bypassable; no total clamd deadline). Lead decided: empty ClamAV address stays "off"; part 2 adds a gauge for the oldest QUARANTINE file |
+| #129 one schema per aggregate (last item of #112) | Lead | Approved by the owner, CI green after merging `main`; merge blocked by the session's permission check |
+| #132 no default profile (threat model O1) | Lead | CI green, sandbox running |
+| #133 staff top-up daily limit (threat model C3, owner: a service setting) | Lead | CI green, sandbox running; the owner still has to set the amount |
 
 ### Reminders (no work now)
 
