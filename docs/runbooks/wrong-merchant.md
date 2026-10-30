@@ -8,7 +8,7 @@
 ## Признаки
 
 - Владелец или бухгалтерия видят платежи города на чужом счёте.
-- Растёт `blizz_payment_operations{state="UNKNOWN"}`, срабатывает алерт [payment-unknown.md](payment-unknown.md), в логах `bad signature` или `merchantSignature`.
+- Растёт `blizz_payments_unknown_oldest_seconds` (алерт [payment-unknown.md](payment-unknown.md)), в логах ошибки подписи ответа банка.
 - Ежедневная сверка находит расхождения у одного мерчанта ([payment-reconciliation.md](payment-reconciliation.md)).
 - «Проверить подключение» в админке (`POST /api/admin/v1/payment-merchants/{id}/check`) отвечает ошибкой.
 
