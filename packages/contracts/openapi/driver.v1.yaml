@@ -791,7 +791,7 @@ paths:
     post:
       operationId: acceptOffer
       summary: Accept an offer
-      description: Before the server deadline only; a late or revoked offer gets OFFER_EXPIRED / OFFER_REVOKED. A repeated command returns the original assignment (T-10).
+      description: Before the server deadline only; a late or revoked offer gets OFFER_EXPIRED / OFFER_REVOKED. A repeated command returns the original assignment (T-10). Only from the device that holds the open shift (409 STATE_CONFLICT from another signed-in device, issue #102); at most 60 accepts per driver in 10 minutes (429).
       tags: [Dispatch]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -823,6 +823,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
         "426":
           description: App build is below the minimum for its platform (REQ-API-10).
           content:
@@ -863,7 +865,9 @@ paths:
     get:
       operationId: listBroadcastOrders
       summary: Orders in the ALL tab
-      description: Only for an eligible driver, filtered by city, class and distance; no passenger contact (REQ-DRV-08).
+      description: |
+        Only for an eligible driver, filtered by city, class and distance; no passenger contact (REQ-DRV-08). At most
+        `blizz.rate-limits.buckets.broadcast-list` reads per driver (120 per minute; 429) (issue #102).
       tags: [Dispatch]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -878,12 +882,18 @@ paths:
                   $ref: "#/components/schemas/BroadcastOrder"
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
 
   /api/driver/v1/orders/{order_id}/claim:
     post:
       operationId: claimOrder
       summary: Take an order from the ALL tab
-      description: Exactly one of many simultaneous claims wins; the others get ORDER_ALREADY_ASSIGNED (T-05).
+      description: |
+        Exactly one of many simultaneous claims wins; the others get ORDER_ALREADY_ASSIGNED (T-05). Only from the
+        device that holds the open shift (409 STATE_CONFLICT from another signed-in device: take the shift over
+        first), only within the ALL tab's radius from the driver's current position (422 PICKUP_TOO_FAR), and at most
+        `blizz.rate-limits.buckets.broadcast-claim` claims per driver (30 per 10 minutes; 429) (issue #102).
       tags: [Dispatch]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -913,6 +923,10 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
 
   /api/driver/v1/assignments/current:
     get:

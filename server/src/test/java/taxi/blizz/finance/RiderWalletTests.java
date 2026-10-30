@@ -168,7 +168,7 @@ class RiderWalletTests {
                 .isEqualTo(new RiderWallets.Balance("UAH", 5_000, 3_000, 2_000));
         assertCode(() -> orderWithBonuses(rides.client(), PaymentMethod.CASH, 1), ErrorCode.WALLET_INSUFFICIENT);
 
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         assertThat(trip.walletMinor()).isEqualTo(3_000);
         rides.moveTo(driver, TestRides.north(PICKUP, 30));
@@ -203,7 +203,7 @@ class RiderWalletTests {
         wallets.topUp(admin, UUID.randomUUID(), rider.id(), "UAH", 5_000, "Welcome bonus");
         TestRides.Driver driver = rides.driverNear(PICKUP);
         OrderView order = orderWithBonuses(rider, PaymentMethod.CASH, 3_000);
-        dispatch.accept(driver.actor(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
+        dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), dispatch.offers(driver.actor()).getFirst().id());
         TripView trip = trips.current(driver.actor()).orElseThrow();
         rides.moveTo(driver, TestRides.north(PICKUP, 30));
         TripView waiting = trips.arrive(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), null);
