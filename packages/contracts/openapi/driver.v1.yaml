@@ -453,7 +453,10 @@ paths:
     post:
       operationId: pauseWorkSession
       summary: Stop receiving orders
-      description: FREE → NOT_ACCEPTING; on a trip → PAUSE_AFTER_CURRENT (REQ-DRV-13).
+      description: >-
+        FREE → NOT_ACCEPTING; on a trip → PAUSE_AFTER_CURRENT (REQ-DRV-13). An open personal offer is revoked in the
+        same transaction (AC-11, issue #141: event OfferRevoked, an accept of it after this gets 409 OFFER_REVOKED);
+        when the accept won the race, the driver is busy and the answer is PAUSE_AFTER_CURRENT.
       tags: [Work session]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -515,7 +518,9 @@ paths:
     post:
       operationId: closeWorkSession
       summary: Go offline
-      description: FREE → CLOSED; on a trip → CLOSING, closed when the trip ends (REQ-DRV-13).
+      description: >-
+        FREE → CLOSED; on a trip → CLOSING, closed when the trip ends (REQ-DRV-13). An open personal offer is revoked
+        in the same transaction, as for a pause (AC-11, issue #141).
       tags: [Work session]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2463,7 +2468,9 @@ components:
         ineligible_reasons:
           description: |
             Why no new order is offered, e.g. ACCOUNT_BLOCKED, ADMISSION_EXPIRED, LOCATION_STALE, OCCUPANCY_ON_TRIP,
-            DEBT_LIMIT (the debt to the service is above the admin's limit, REQ-PAY-16).
+            DEBT_LIMIT (the debt to the service is above the admin's limit, REQ-PAY-16), LOCATION_INACCURATE (the
+            last accepted fix reported an accuracy worse than `blizz.presence.eligibility-accuracy-meters`, 100 m by
+            default; REQ-GEO-04, issue #141: eligible again with the next accurate fix).
           type: array
           items:
             type: string
