@@ -109,6 +109,7 @@ class DispatchTests {
                 .param("id", id)
                 .param("phone", "+38095" + String.format("%07d", Math.floorMod(id.hashCode(), 10_000_000)))
                 .update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, id);
         UUID vehicle = UUID.randomUUID();
         jdbc.sql("""
                         insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,

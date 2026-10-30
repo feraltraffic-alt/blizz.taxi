@@ -25,6 +25,7 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 @Service
@@ -61,19 +62,19 @@ class JdbcRiderWallets implements RiderWallets {
 
     @Override
     @Transactional(readOnly = true)
-    public Wallet mine(Actor rider, int limit) {
+    public Wallet mine(Actor rider, PageCursor after, int limit) {
         if (rider == null || rider.type() != SubjectType.CLIENT) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Riders only");
         }
-        return wallet(rider.id(), limit);
+        return wallet(rider.id(), after, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Wallet of(Actor actor, UUID clientId, int limit) {
+    public Wallet of(Actor actor, UUID clientId, PageCursor after, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         requireClient(clientId);
-        return wallet(clientId, limit);
+        return wallet(clientId, after, limit);
     }
 
     @Override
@@ -248,6 +249,10 @@ class JdbcRiderWallets implements RiderWallets {
     }
 
     private Wallet wallet(UUID clientId, int limit) {
+        return wallet(clientId, null, limit);
+    }
+
+    private Wallet wallet(UUID clientId, PageCursor after, int limit) {
         List<Balance> balances = ledger.balances(Account.RIDER_WALLET, clientId).stream()
                 .map(b -> {
                     long balance = b.creditMinor() - b.debitMinor();
@@ -261,9 +266,14 @@ class JdbcRiderWallets implements RiderWallets {
                         join journal_transaction t on t.id = l.transaction_id
                         left join rider_wallet_top_up u on t.basis_type = 'WALLET_TOP_UP' and u.id = t.basis_id
                         where l.account = 'RIDER_WALLET' and l.party_id = :client
-                        order by t.occurred_at desc, t.id
+                          and (cast(:afterAt as timestamptz) is null
+                               or (t.occurred_at, t.id) < (:afterAt, cast(:afterId as uuid)))
+                        order by t.occurred_at desc, t.id desc
                         limit :limit""")
-                .param("client", clientId).param("limit", Math.max(1, Math.min(limit, 200)))
+                .param("client", clientId)
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> {
                     String basis = rs.getString("basis_type");
                     String kind = "WALLET_TOP_UP".equals(basis) ? rs.getString("source") + "_TOP_UP" : basis;

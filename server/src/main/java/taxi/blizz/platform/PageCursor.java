@@ -2,6 +2,7 @@ package taxi.blizz.platform;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -37,13 +38,14 @@ public final class PageCursor {
         this.keys = List.copyOf(keys);
     }
 
-    /** Keys in the list's sort order: times, ids or numbers. */
+    /** Keys in the list's sort order: times, dates, ids or numbers. */
     public static PageCursor of(String list, Object... keys) {
         List<String> values = new ArrayList<>(keys.length);
         for (Object key : keys) {
             values.add(switch (key) {
                 case OffsetDateTime time -> Long.toString(ChronoUnit.MICROS.between(Instant.EPOCH, time.toInstant()));
                 case Instant time -> Long.toString(ChronoUnit.MICROS.between(Instant.EPOCH, time));
+                case LocalDate date -> Long.toString(date.toEpochDay());
                 case UUID id -> id.toString();
                 case Number number -> Long.toString(number.longValue());
                 default -> throw new IllegalArgumentException("Unsupported cursor key: " + key.getClass());
@@ -58,6 +60,14 @@ public final class PageCursor {
      */
     public static PageCursor before(String list, OffsetDateTime before) {
         return before == null ? null : of(list, before, new UUID(0, 0));
+    }
+
+    /**
+     * The deprecated {@code after} timestamp of the older lists read oldest first, as a cursor: every row strictly
+     * after it. The all-ones UUID is the largest, so a row at exactly {@code after} is not repeated.
+     */
+    public static PageCursor after(String list, OffsetDateTime after) {
+        return after == null ? null : of(list, after, new UUID(-1L, -1L));
     }
 
     /** {@code cursor} wins over the deprecated {@code before}; both absent is the first page. */
@@ -101,6 +111,14 @@ public final class PageCursor {
         try {
             return OffsetDateTime.ofInstant(Instant.EPOCH.plus(Long.parseLong(key(index)), ChronoUnit.MICROS),
                     ZoneOffset.UTC);
+        } catch (RuntimeException e) {
+            throw invalid();
+        }
+    }
+
+    public LocalDate date(int index) {
+        try {
+            return LocalDate.ofEpochDay(Long.parseLong(key(index)));
         } catch (RuntimeException e) {
             throw invalid();
         }

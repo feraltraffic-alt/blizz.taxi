@@ -19,8 +19,9 @@ class OrderMetrics {
     private static final Set<String> CANCELLATIONS = Set.of("CHANGED_MIND", "WAIT_TOO_LONG", "WRONG_ADDRESS",
             "OTHER_TRANSPORT", "NO_SHOW", "PASSENGER_ASKED", "VEHICLE_PROBLEM", "CANNOT_REACH", "DUPLICATE",
             "NO_CARS", "TEST_ORDER");
-    private static final Set<String> EXCLUSIONS = Set.of("STALE_LOCATION", "PAUSED", "NOT_ADMITTED", "CLASS",
-            "PAYMENT", "RESTRICTED", "PREVIOUS_DRIVER", "ALREADY_OFFERED", "BUSY", "TOO_FAR");
+    private static final Set<String> EXCLUSIONS = Set.of("STALE_LOCATION", "INACCURATE_LOCATION", "OUTSIDE_CITY",
+            "CITY_NOT_ADMITTED", "PAUSED", "NOT_ADMITTED", "CLASS", "PAYMENT", "RESTRICTED", "PREVIOUS_DRIVER",
+            "ALREADY_OFFERED", "BUSY", "TOO_FAR");
     private final JdbcClient jdbc;
     private final Clock clock;
     private final CommittedMetrics metrics;

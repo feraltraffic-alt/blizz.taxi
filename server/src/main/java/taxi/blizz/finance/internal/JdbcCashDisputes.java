@@ -28,6 +28,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 
 @Service
 class JdbcCashDisputes implements CashDisputes {
@@ -89,15 +90,19 @@ class JdbcCashDisputes implements CashDisputes {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Dispute> open(Actor actor, int limit) {
+    public List<Dispute> open(Actor actor, PageCursor after, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         StaffAccess.Scope scope = staff.scope(actor, MANAGE_PERMISSION);
         return jdbc.sql(SELECT + " " + """
                          where decision is null
                            and (:all or order_id in (select id from ride_order where city_id = any(:cities)))
+                           and (cast(:afterAt as timestamptz) is null
+                                or (decide_by, order_id) > (:afterAt, cast(:afterId as uuid)))
                          order by decide_by, order_id limit :limit""")
                 .param("all", scope.allCities()).param("cities", scope.cityIds().toArray(UUID[]::new))
-                .param("limit", Math.max(1, Math.min(limit, 100))).query((rs, i) -> map(rs)).list();
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH))).query((rs, i) -> map(rs)).list();
     }
 
     record DecideRequest(UUID orderId, long expectedVersion, Decision decision, String reason) {

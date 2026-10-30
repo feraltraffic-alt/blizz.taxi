@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.files.FileContent;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.telephony.Calls;
 
 /** The call log of the operator workstation — operator.v1.yaml (REQ-OPS-01/08). */
@@ -55,7 +57,8 @@ class CallController {
         return new OperatorList(statuses.inCity(claims.actor(), cityId));
     }
 
-    record CallList(List<Calls.Call> calls) {
+    /** A page of calls (REQ-API-09); {@code page} is new and optional for older clients. */
+    record CallList(List<Calls.Call> calls, Page.Info page) {
     }
 
     record Answer(@NotNull UUID commandId) {
@@ -64,8 +67,12 @@ class CallController {
     @GetMapping("/api/operator/v1/calls")
     CallList recent(AccessClaims claims, @RequestParam(required = false) Calls.State state,
                     @RequestParam(name = "order_id", required = false) UUID orderId,
-                    @RequestParam(defaultValue = "50") int limit) {
-        return new CallList(calls.recent(claims.actor(), state, orderId, limit));
+                    @RequestParam(required = false) String cursor,
+                    @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        Page<Calls.Call> page = Page.of(calls.recent(claims.actor(), state, orderId,
+                PageCursor.decode(Calls.RECENT, cursor), size + 1), size, Calls::position);
+        return new CallList(page.items(), page.page());
     }
 
     /**

@@ -133,11 +133,14 @@ components:
 
     ExclusionReason:
       description: >-
-        STALE_LOCATION — no recent heartbeat or position; PAUSED — the shift does not take orders now; NOT_ADMITTED —
-        the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT —
-        no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an
-        active restriction (debt); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released
-        from this order (or its related one); TOO_FAR — beyond the search radius.
+        STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy
+        worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver
+        is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its
+        return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or
+        vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an
+        order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt);
+        ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its
+        related one); TOO_FAR — beyond the search radius.
       type: string
-      enum: [STALE_LOCATION, PAUSED, NOT_ADMITTED, CLASS, PAYMENT, BUSY, RESTRICTED, ALREADY_OFFERED, PREVIOUS_DRIVER,
-             TOO_FAR]
+      enum: [STALE_LOCATION, INACCURATE_LOCATION, CITY_NOT_ADMITTED, OUTSIDE_CITY, PAUSED, NOT_ADMITTED, CLASS, PAYMENT,
+             BUSY, RESTRICTED, ALREADY_OFFERED, PREVIOUS_DRIVER, TOO_FAR]

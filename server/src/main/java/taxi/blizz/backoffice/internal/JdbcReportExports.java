@@ -31,6 +31,7 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 /** See {@link ReportExports}. Jobs are taken with SKIP LOCKED, so every instance may run the worker. */
@@ -104,10 +105,17 @@ class JdbcReportExports implements ReportExports {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Export> mine(Actor actor, int limit) {
+    public List<Export> mine(Actor actor, PageCursor after, int limit) {
         requireStaff(actor);
-        return jdbc.sql(SELECT + "where requested_by = :by order by created_at desc, id limit :limit")
-                .param("by", actor.id()).param("limit", Math.max(1, Math.min(limit, 100)))
+        return jdbc.sql(SELECT + """
+                        where requested_by = :by
+                          and (cast(:afterAt as timestamptz) is null
+                               or (created_at, id) < (:afterAt, cast(:afterId as uuid)))
+                        order by created_at desc, id desc limit :limit""")
+                .param("by", actor.id())
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> export(rs)).list();
     }
 

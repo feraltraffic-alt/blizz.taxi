@@ -20,6 +20,8 @@ import taxi.blizz.geo.CityCatalog;
 import taxi.blizz.geo.CityOperations;
 import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.StaffAccess;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Service settings in the admin panel, and the public start-up data of the apps — admin.v1.yaml, config.v1.yaml. */
 @RestController
@@ -44,7 +46,8 @@ class SettingsController {
                   @NotNull ServiceSettings.Settings settings, @NotBlank String reason) {
     }
 
-    record History(List<ServiceSettings.Version> versions) {
+    /** A page of versions (REQ-API-09); {@code page} is new and optional for older clients. */
+    record History(List<ServiceSettings.Version> versions, Page.Info page) {
     }
 
     /** Working hours as "HH:MM" in the city's time zone; empty — around the clock (REQ-TEN-03). */
@@ -84,8 +87,12 @@ class SettingsController {
     }
 
     @GetMapping("/api/admin/v1/settings/history")
-    History history(AccessClaims claims, @RequestParam(defaultValue = "20") int limit) {
-        return new History(settings.history(claims.actor(), limit));
+    History history(AccessClaims claims, @RequestParam(required = false) String cursor,
+                    @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        Page<ServiceSettings.Version> page = Page.of(settings.history(claims.actor(),
+                PageCursor.decode(ServiceSettings.HISTORY, cursor), size + 1), size, ServiceSettings::position);
+        return new History(page.items(), page.page());
     }
 
     @GetMapping("/api/config/v1/bootstrap")

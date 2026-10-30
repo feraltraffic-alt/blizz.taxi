@@ -108,6 +108,7 @@ public final class TestRides {
                 .param("id", driverId)
                 .param("phone", "+38099" + String.format("%07d", Math.floorMod(driverId.hashCode(), 10_000_000)))
                 .update();
+        taxi.blizz.TestAdmission.inEveryCity(jdbc, driverId);
         UUID vehicle = UUID.randomUUID();
         jdbc.sql("""
                         insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,
@@ -120,6 +121,11 @@ public final class TestRides {
         sessions.open(actor, UUID.randomUUID(), device.sessionId(), vehicle,
                 new LocationFix(north(pickup, 1000), 5.0, OffsetDateTime.now(), 1));
         return new Driver(actor, device.sessionId(), vehicle);
+    }
+
+    /** Another signed-in phone of the driver, which does not control the shift. */
+    public UUID newDevice(Driver driver) {
+        return auth.open(new VerifiedSubject(driver.actor(), "ACTIVE", false), "phone").sessionId();
     }
 
     /** A heartbeat at {@code point}, as if the time to drive there had passed ({@link #timePassed}). */

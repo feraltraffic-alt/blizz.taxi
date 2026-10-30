@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.geo.GeoPoint;
+import taxi.blizz.geo.GeoZones;
 import taxi.blizz.operations.AssignmentView;
 import taxi.blizz.operations.BroadcastOrderView;
 import taxi.blizz.operations.Dispatch;
@@ -45,10 +46,12 @@ class JdbcDispatch implements Dispatch {
     private final WorkSessions workSessions;
     private final DispatchProperties properties;
     private final AssignmentCommitter committer;
+    private final GeoZones zones;
 
     JdbcDispatch(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
                  WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer,
-                 taxi.blizz.platform.RateLimits rateLimits) {
+                 taxi.blizz.platform.RateLimits rateLimits, GeoZones zones) {
+        this.zones = zones;
 
         this.rateLimits = rateLimits;
         this.committer = committer;
@@ -155,11 +158,20 @@ class JdbcDispatch implements Dispatch {
     }
 
     @Override
-    public List<BroadcastOrderView> broadcast(Actor driver) {
+    public List<BroadcastOrderView> broadcast(Actor driver, UUID zoneId) {
         requireDriver(driver);
         // Counted in its own short transaction, so the read below is not a read-only one (issue #102, B1).
         rateLimits.acquire(taxi.blizz.platform.RateLimits.BROADCAST_LIST, driver);
         DriverAvailability availability = workSessions.availability(driver.id());
+        if (zoneId != null) {
+            boolean usable = zones.zone(zoneId)
+                    .filter(z -> "PUBLISHED".equals(z.state()) && !GeoZones.CITY_LIMITS.equals(z.type()))
+                    .filter(z -> availability.cityId() == null || z.cityId().equals(availability.cityId()))
+                    .isPresent();
+            if (!usable) {
+                throw new DomainException(ErrorCode.VALIDATION_FAILED, "Not a published zone of your city");
+            }
+        }
         if (!availability.eligible()) {
             return List.of();
         }
@@ -177,6 +189,10 @@ class JdbcDispatch implements Dispatch {
                           and o.vehicle_class = any(v.class_approvals)
                           and (o.payment_method <> 'TERMINAL' or d.has_payment_terminal or o.terminal_fallback_cash)
                           and ST_DWithin(ws.last_location::geography, o.pickup::geography, :radius)
+                          -- The zone the driver chose (REQ-DSP-07); ADR 0004 lets dispatch read zone polygons.
+                          and (cast(:zone as uuid) is null or exists (
+                                select 1 from zone z
+                                where z.id = cast(:zone as uuid) and ST_Covers(z.polygon, o.pickup)))
                           -- Nor the driver of the interrupted trip a follow-up replaces (as for personal offers).
                           and not exists (select 1 from assignment x where x.driver_id = :driver
                                           and x.order_id in (o.id, o.related_order_id))
@@ -184,6 +200,7 @@ class JdbcDispatch implements Dispatch {
                         limit 50""")
                 .param("driver", driver.id())
                 .param("radius", properties.broadcastRadiusMeters())
+                .param("zone", zoneId)
                 .query((rs, i) -> new BroadcastOrderView(rs.getObject("id", UUID.class), rs.getString("vehicle_class"),
                         new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")), rs.getString("pickup_label"),
                         rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),

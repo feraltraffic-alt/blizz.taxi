@@ -13,10 +13,12 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.driver.DriverAdmission;
 import taxi.blizz.geo.City;
+import taxi.blizz.geo.CityOperations;
 import taxi.blizz.geo.CityResolver;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccountDirectory;
@@ -40,7 +42,9 @@ import taxi.blizz.platform.SubjectType;
  * a close. Eligibility is computed from current facts on every read, so a suspended admission or a
  * stale location excludes the driver at once without touching the ongoing session (REQ-DRV-05).
  * A location becomes the dispatch position only when it follows plausibly from the driver's last accepted one,
- * whatever device or shift that came from (issue #102, threat model G1/G2).
+ * whatever device or shift that came from (issue #102, threat model G1/G2). A free driver who pauses or closes loses
+ * the open offer in the same transaction and the search goes on (AC-11, issue #141); those two lock the offer's order
+ * before the capacity, in the order every assignment takes.
  */
 @Service
 class JdbcWorkSessions implements WorkSessions {
@@ -62,12 +66,18 @@ class JdbcWorkSessions implements WorkSessions {
     private final PresenceProperties presence;
     private final RiskProperties risk;
     private final ImpossibleMovementFlags movementFlags;
+    private final OrderCore core;
+    private final DispatchEngine engine;
+    private final TransactionTemplate transactions;
+    private final CityOperations cityOperations;
     private final Clock clock;
 
     JdbcWorkSessions(JdbcClient jdbc, IdempotentCommands commands, Outbox outbox, AuditLog auditLog,
                      AccountDirectory accounts, DriverAdmission admission, CityResolver cities,
                      PresenceProperties presence, RiskProperties risk, ImpossibleMovementFlags movementFlags,
-                     LegalDocuments legal, Clock clock) {
+                     LegalDocuments legal, OrderCore core, DispatchEngine engine,
+                     TransactionTemplate transactions, CityOperations cityOperations, Clock clock) {
+        this.cityOperations = cityOperations;
         this.legal = legal;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -79,6 +89,9 @@ class JdbcWorkSessions implements WorkSessions {
         this.presence = presence;
         this.risk = risk;
         this.movementFlags = movementFlags;
+        this.core = core;
+        this.engine = engine;
+        this.transactions = transactions;
         this.clock = clock;
     }
 
@@ -121,6 +134,10 @@ class JdbcWorkSessions implements WorkSessions {
                     City city = cities.resolve(location.point())
                             .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA,
                                     "The location is outside every service area"));
+                    // Only in a city the driver is admitted in (REQ-DSP-01, REQ-DS-06, issue #141).
+                    if (!admission.admissionOf(driver.id()).admittedIn(city.id())) {
+                        throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, "ADMISSION_CITY");
+                    }
                     UUID sessionId = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into work_session (id, driver_id, vehicle_id, city_id, device_session_id,
@@ -195,14 +212,16 @@ class JdbcWorkSessions implements WorkSessions {
 
     @Override
     public DriverAvailability pause(Actor driver, UUID commandId, UUID deviceSessionId, long expectedVersion) {
-        return controlled(driver, commandId, deviceSessionId, expectedVersion, "work_session.pause", session -> {
-            if (!"OPEN".equals(session.state())) {
-                throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is closing");
-            }
-            String intent = busy(session.driverId()) ? "PAUSE_AFTER_CURRENT" : "NOT_ACCEPTING";
-            long version = update(session, "intent = :intent", Map.of("intent", intent));
-            publish("WorkSessionIntentChanged", session.id(), version, Map.of("intent", intent));
-        });
+        return withOfferedOrderLocked(driver, offeredOrder -> controlled(driver, commandId, deviceSessionId,
+                expectedVersion, "work_session.pause", session -> {
+                    if (!"OPEN".equals(session.state())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is closing");
+                    }
+                    String intent = busy(session.driverId()) ? "PAUSE_AFTER_CURRENT" : "NOT_ACCEPTING";
+                    long version = update(session, "intent = :intent", Map.of("intent", intent));
+                    publish("WorkSessionIntentChanged", session.id(), version, Map.of("intent", intent));
+                    revokeOpenOffer(driver, offeredOrder, "DRIVER_PAUSED");
+                }));
     }
 
     @Override
@@ -212,6 +231,9 @@ class JdbcWorkSessions implements WorkSessions {
                 throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is closing");
             }
             List<String> reasons = admissionReasons(driver, session.vehicleId());
+            if (!admission.admissionOf(driver.id()).admittedIn(session.cityId())) {
+                reasons.add("ADMISSION_CITY");
+            }
             if (!reasons.isEmpty()) {
                 throw new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE, String.join(", ", reasons));
             }
@@ -222,18 +244,22 @@ class JdbcWorkSessions implements WorkSessions {
 
     @Override
     public DriverAvailability close(Actor driver, UUID commandId, UUID deviceSessionId, long expectedVersion) {
-        return controlled(driver, commandId, deviceSessionId, expectedVersion, "work_session.close", session -> {
-            if (!"OPEN".equals(session.state())) {
-                throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is already closing");
-            }
-            if (busy(session.driverId())) {
-                long version = update(session, "state = 'CLOSING', intent = 'PAUSE_AFTER_CURRENT'", Map.of());
-                publish("WorkSessionClosing", session.id(), version, Map.of("driver_id", session.driverId().toString()));
-            } else {
-                long version = update(session, "state = 'CLOSED', closed_at = :now", Map.of("now", now()));
-                publish("WorkSessionClosed", session.id(), version, Map.of("driver_id", session.driverId().toString()));
-            }
-        });
+        return withOfferedOrderLocked(driver, offeredOrder -> controlled(driver, commandId, deviceSessionId,
+                expectedVersion, "work_session.close", session -> {
+                    if (!"OPEN".equals(session.state())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The session is already closing");
+                    }
+                    Map<String, Object> payload = Map.of("driver_id", session.driverId().toString());
+                    if (busy(session.driverId())) {
+                        long version = update(session, "state = 'CLOSING', intent = 'PAUSE_AFTER_CURRENT'",
+                                Map.of());
+                        publish("WorkSessionClosing", session.id(), version, payload);
+                    } else {
+                        long version = update(session, "state = 'CLOSED', closed_at = :now", Map.of("now", now()));
+                        publish("WorkSessionClosed", session.id(), version, payload);
+                    }
+                    revokeOpenOffer(driver, offeredOrder, "DRIVER_CLOSED");
+                }));
     }
 
     @Override
@@ -290,6 +316,58 @@ class JdbcWorkSessions implements WorkSessions {
                 .update();
         acceptedPosition(driver.id(), location.point(), now);
         return availability(driver.id()).withAccepted(true);
+    }
+
+    // ---------------------------------------------------------------- open offers (AC-11, issue #141)
+
+    private interface OfferedOrderCommand {
+        DriverAvailability run(Optional<UUID> offeredOrder);
+    }
+
+    /**
+     * Runs a pause or close in one transaction that first locks the order of the driver's open offer, if any, and
+     * only then the capacity: the order every accept and every dispatch round takes, so a pause racing an accept
+     * waits for it instead of deadlocking (E5). The offer is read again under the locks by {@link #revokeOpenOffer}.
+     */
+    private DriverAvailability withOfferedOrderLocked(Actor driver, OfferedOrderCommand command) {
+        requireDriver(driver);
+        return transactions.execute(status -> {
+            Optional<UUID> offeredOrder = openOffer(driver.id()).map(OpenOffer::orderId);
+            offeredOrder.ifPresent(core::lockOrder);
+            return command.run(offeredOrder);
+        });
+    }
+
+    private record OpenOffer(UUID id, UUID orderId) {
+    }
+
+    private Optional<OpenOffer> openOffer(UUID driverId) {
+        return jdbc.sql("select id, order_id from offer where driver_id = :d and state = 'OPEN' order by created_at")
+                .param("d", driverId)
+                .query((rs, i) -> new OpenOffer(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class)))
+                .list().stream().findFirst();
+    }
+
+    /**
+     * Revokes the driver's open offer, read under the capacity lock, and lets the order's search go on with the next
+     * driver; an accept that comes after it gets OFFER_REVOKED. An offer made after the order was locked (another
+     * order, within the milliseconds before the capacity lock) is revoked only when its order can be locked without
+     * waiting; otherwise the command is refused as a conflict to repeat, never a deadlock.
+     */
+    private void revokeOpenOffer(Actor driver, Optional<UUID> lockedOrder, String reason) {
+        Optional<OpenOffer> open = openOffer(driver.id());
+        if (open.isEmpty()) {
+            return;
+        }
+        UUID orderId = open.get().orderId();
+        if (lockedOrder.filter(orderId::equals).isEmpty() && !core.tryLockOrder(orderId)) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "A new offer arrived at the same moment; try again");
+        }
+        core.closeOpenOffers(orderId, "REVOKED");
+        core.recordEvent(orderId, core.touch(orderId), "OfferRevoked", driver, reason,
+                Map.of("offer_id", open.get().id().toString(), "driver_id", driver.id().toString(),
+                        "reason", reason));
+        engine.liveAttempt(orderId).ifPresent(engine::advance);
     }
 
     // ---------------------------------------------------------------- plausible positions (issue #102)
@@ -389,6 +467,9 @@ class JdbcWorkSessions implements WorkSessions {
         if (!admitted.vehicleApproved(session.vehicleId())) {
             reasons.add("VEHICLE_NOT_APPROVED");
         }
+        if (!admitted.admittedIn(session.cityId())) {
+            reasons.add("ADMISSION_CITY");
+        }
         if (!"OPEN".equals(session.state())) {
             reasons.add("SESSION_" + session.state());
         }
@@ -401,6 +482,15 @@ class JdbcWorkSessions implements WorkSessions {
         if (!"FRESH".equals(geolocation)) {
             reasons.add("LOCATION_" + geolocation);
         }
+        // A fix this inaccurate does not say where the car is well enough for a new order (REQ-GEO-04, issue #141).
+        if (session.lastLocationAccuracy() != null
+                && session.lastLocationAccuracy() > presence.eligibilityAccuracyMeters()) {
+            reasons.add("LOCATION_INACCURATE");
+        }
+        // Outside the city further than its return zone: no new order; a current trip goes on (REQ-DS-07).
+        if (session.lastLocationAt() != null && !withinReturnZone(session)) {
+            reasons.add("LOCATION_OUTSIDE_CITY");
+        }
         if (!"FREE".equals(occupancy)) {
             reasons.add("OCCUPANCY_" + occupancy);
         }
@@ -411,6 +501,17 @@ class JdbcWorkSessions implements WorkSessions {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** The last position is inside the session city's polygon or within its return zone (ADR 0004: reads city). */
+    private boolean withinReturnZone(Session session) {
+        return jdbc.sql("""
+                        select coalesce(ST_DWithin(c.polygon::geography, ws.last_location::geography, :zone), false)
+                        from work_session ws join city c on c.id = ws.city_id where ws.id = :id""")
+                .param("zone", cityOperations.of(session.cityId()).returnZoneMeters())
+                .param("id", session.id())
+                .query(Boolean.class)
+                .single();
+    }
 
     private interface SessionChange {
         void apply(Session session);
@@ -431,13 +532,13 @@ class JdbcWorkSessions implements WorkSessions {
 
     private record Session(UUID id, UUID driverId, UUID vehicleId, UUID cityId, UUID deviceSessionId, String state,
                            String intent, OffsetDateTime lastHeartbeatAt, OffsetDateTime lastLocationAt,
-                           OffsetDateTime locationRefusedAt, long version) {
+                           Float lastLocationAccuracy, OffsetDateTime locationRefusedAt, long version) {
     }
 
     private Optional<Session> currentSession(UUID driverId) {
         return jdbc.sql("""
                         select id, driver_id, vehicle_id, city_id, device_session_id, state, intent, last_heartbeat_at,
-                               last_location_at, location_refused_at, version
+                               last_location_at, last_location_accuracy, location_refused_at, version
                         from work_session where driver_id = :id and state in ('OPEN', 'CLOSING')""")
                 .param("id", driverId)
                 .query((rs, i) -> new Session(rs.getObject("id", UUID.class), rs.getObject("driver_id", UUID.class),
@@ -445,6 +546,7 @@ class JdbcWorkSessions implements WorkSessions {
                         rs.getObject("device_session_id", UUID.class), rs.getString("state"), rs.getString("intent"),
                         rs.getObject("last_heartbeat_at", OffsetDateTime.class),
                         rs.getObject("last_location_at", OffsetDateTime.class),
+                        (Float) rs.getObject("last_location_accuracy"),
                         rs.getObject("location_refused_at", OffsetDateTime.class), rs.getLong("version")))
                 .optional();
     }

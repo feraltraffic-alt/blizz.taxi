@@ -10,8 +10,9 @@ const definitions = {
   blizz_dispatch_first_offer_seconds_count: {},
   blizz_dispatch_assigned_seconds_count: { source: ['OFFER', 'BROADCAST', 'RESERVATION', 'OTHER'] },
   blizz_offers_total: { outcome: ['ACCEPTED', 'DECLINED', 'EXPIRED', 'REVOKED', 'OTHER'] },
-  blizz_dispatch_excluded_total: { reason: ['STALE_LOCATION', 'PAUSED', 'NOT_ADMITTED', 'CLASS', 'PAYMENT',
-    'RESTRICTED', 'PREVIOUS_DRIVER', 'ALREADY_OFFERED', 'BUSY', 'TOO_FAR', 'OTHER'] },
+  blizz_dispatch_excluded_total: { reason: ['STALE_LOCATION', 'INACCURATE_LOCATION', 'OUTSIDE_CITY',
+    'CITY_NOT_ADMITTED', 'PAUSED', 'NOT_ADMITTED', 'CLASS', 'PAYMENT', 'RESTRICTED', 'PREVIOUS_DRIVER',
+    'ALREADY_OFFERED', 'BUSY', 'TOO_FAR', 'OTHER'] },
   blizz_sms_sent_total: { purpose: ['OTP', 'CALLER'], state: ['SENT', 'FAILED', 'UNKNOWN'] },
 };
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;

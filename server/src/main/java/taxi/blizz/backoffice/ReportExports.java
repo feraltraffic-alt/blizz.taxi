@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Report exports to CSV (REQ-ADM-07): the owner's reports of orders or money of a city, built by a background job.
@@ -31,8 +32,18 @@ public interface ReportExports {
     /** At most 92 days, {@code to} included, as the reports themselves. */
     Export request(Actor staff, UUID commandId, Kind kind, UUID cityId, LocalDate from, LocalDate to);
 
-    /** The staff member's own exports, newest first. */
-    List<Export> mine(Actor staff, int limit);
+    /** The staff member's own exports, newest first (created_at, then id), after {@code after} (REQ-API-09). */
+    List<Export> mine(Actor staff, PageCursor after, int limit);
+
+    default List<Export> mine(Actor staff, int limit) {
+        return mine(staff, null, limit);
+    }
+
+    String MINE = "report-exports";
+
+    static PageCursor position(Export export) {
+        return PageCursor.of(MINE, export.createdAt(), export.id());
+    }
 
     Export get(Actor staff, UUID exportId);
 

@@ -134,7 +134,9 @@ class DispatchEngine {
         for (int radius : properties.radiiMeters()) {
             for (OrderCore.Candidate candidate : core.candidates(attempt.orderId(), radius, null, false)) {
                 OrderCore.Capacity capacity = core.lockCapacity(candidate.driverId());
-                if (!"FREE".equals(capacity.occupancy())) {
+                // Read again under the capacity lock that a pause or close takes: the driver may have paused since
+                // the candidate query (issue #141, E5).
+                if (!"FREE".equals(capacity.occupancy()) || !core.accepting(candidate.driverId())) {
                     continue;
                 }
                 OffsetDateTime expiresAt = earliest(now.plus(properties.personalOfferTtl()), attempt.totalDeadline());

@@ -483,18 +483,16 @@ paths:
             type: string
             enum: [NOT_SUBMITTED, IN_REVIEW, CHANGES_REQUIRED, APPROVED, REJECTED, SUSPENDED, EXPIRED]
             default: IN_REVIEW
+        - $ref: "./common.yaml#/components/parameters/Cursor"
         - name: after
           in: query
-          description: Next page — since of the last driver of the previous page.
+          deprecated: true
+          description: |
+            The first version's cursor: rows after this time (the list is oldest first). Rows of the same microsecond
+            as the boundary can be skipped; use cursor instead. Ignored when cursor is given.
           schema:
             $ref: "./common.yaml#/components/schemas/Timestamp"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -724,6 +722,49 @@ paths:
       responses:
         "200":
           description: The driver after the decision.
+          content:
+            application/json:
+              schema:
+                $ref: "./driver.v1.yaml#/components/schemas/DriverProfile"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/drivers/{driver_id}/admission-cities:
+    put:
+      operationId: setDriverAdmissionCities
+      summary: Set the cities a driver is admitted in
+      description: >-
+        REQ-DSP-01, REQ-DS-06 (issue #141). Needs driver.review for every city added or removed; the reason is
+        required and the change is audited (event DriverAdmissionCitiesChanged). Replaces the whole list. A city that
+        does not exist → 400 VALIDATION_FAILED. A driver online in a city taken off the list keeps the current trip and the shift but
+        gets no new order there (ADMISSION_CITY).
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAdmissionCities"
+      responses:
+        "200":
+          description: The driver after the change.
           content:
             application/json:
               schema:
@@ -1584,13 +1625,8 @@ paths:
       tags: [Finance]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -2309,13 +2345,8 @@ paths:
       tags: [Settings]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: Newest first.
@@ -2525,13 +2556,8 @@ paths:
       tags: [Settings]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -2715,14 +2741,8 @@ paths:
       tags: [Reports]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -3800,13 +3820,8 @@ paths:
           required: true
           schema:
             $ref: "./common.yaml#/components/schemas/Uuid"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -4040,13 +4055,8 @@ paths:
           required: true
           schema:
             $ref: "./common.yaml#/components/schemas/Uuid"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -4435,21 +4445,16 @@ paths:
       tags: [Clients]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
         - name: after
           in: query
-          required: false
-          description: Only requests made after this moment (the last requested_at of the previous page).
+          deprecated: true
+          description: |
+            The first version's cursor: rows after this time (the list is oldest first). Rows of the same microsecond
+            as the boundary can be skipped; use cursor instead. Ignored when cursor is given.
           schema:
-            type: string
-            format: date-time
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK
@@ -5148,14 +5153,18 @@ components:
           minLength: 1
           maxLength: 500
     SettingsHistory:
+      description: One page of versions, newest first (REQ-API-09).
       type: object
       additionalProperties: false
-      required: [versions]
+      required: [versions, page]
       properties:
         versions:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/SettingsVersion"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
 
     ChangeSettings:
       type: object
@@ -5229,10 +5238,13 @@ components:
     CityOperations:
       type: object
       additionalProperties: false
-      required: [city_id, working_hours, payment_methods, orders_paused, pause_reason, paused_at, version]
+      required: [city_id, working_hours, payment_methods, return_zone_meters, orders_paused, pause_reason, paused_at,
+                 version]
       properties:
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        return_zone_meters:
+          $ref: "#/components/schemas/ReturnZoneMeters"
         working_hours:
           description: Empty — open around the clock.
           type: array
@@ -5256,6 +5268,15 @@ components:
           format: int64
           minimum: 0
 
+    ReturnZoneMeters:
+      description: >-
+        REQ-DS-07 (issue #141): how far outside the city's polygon a driver may be and still get new orders of the
+        city (the pickup radius applies as usual). 0 — none: outside the polygon the driver is not eligible
+        (LOCATION_OUTSIDE_CITY). Never ends or changes a current trip.
+      type: integer
+      minimum: 0
+      maximum: 50000
+
     ChangeCityOperations:
       type: object
       additionalProperties: false
@@ -5263,6 +5284,9 @@ components:
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
+        return_zone_meters:
+          description: Left out — unchanged.
+          $ref: "#/components/schemas/ReturnZoneMeters"
         expected_version:
           type: integer
           format: int64
@@ -5328,14 +5352,18 @@ components:
           type: integer
           format: int64
     CashDisputeList:
+      description: One page of undecided disputes, the soonest deadline first (decide_by, then order id) (REQ-API-09).
       type: object
       additionalProperties: false
-      required: [disputes]
+      required: [disputes, page]
       properties:
         disputes:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/CashDispute"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
     DecideCashDispute:
       type: object
       additionalProperties: false
@@ -6048,14 +6076,18 @@ components:
           format: int64
 
     ReviewQueue:
+      description: One page of the queue, oldest in the status first (since, then driver id) (REQ-API-09).
       type: object
       additionalProperties: false
-      required: [drivers]
+      required: [drivers, page]
       properties:
         drivers:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/ReviewItem"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
 
     ReviewEvent:
       type: object
@@ -6179,6 +6211,30 @@ components:
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
+
+    SetAdmissionCities:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, city_ids, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: The driver profile's version.
+          type: integer
+          format: int64
+          minimum: 0
+        city_ids:
+          description: The whole new list; empty — admitted nowhere.
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
 
     ReviewChange:
       type: object

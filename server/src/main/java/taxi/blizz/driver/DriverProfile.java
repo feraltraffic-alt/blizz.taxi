@@ -13,6 +13,8 @@ public record DriverProfile(
         long version,
         /** The driver takes cards at an own terminal (as a sole trader); phone orders paid at a terminal go to them. */
         boolean hasPaymentTerminal,
+        /** The cities the driver is admitted in (issue #141); empty — nowhere yet. */
+        List<UUID> admissionCityIds,
         List<Vehicle> vehicles,
         List<Document> documents) {
 

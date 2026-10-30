@@ -71,14 +71,18 @@ components:
           $ref: "#/components/schemas/DeletionBlockers"
 
     DeletionRequestList:
+      description: One page of pending requests, oldest first (requested_at, then client id) (REQ-API-09).
       type: object
       additionalProperties: false
-      required: [requests]
+      required: [requests, page]
       properties:
         requests:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/DeletionRequest"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
 
     DeletionDecisionCommand:
       type: object

@@ -28,6 +28,7 @@ import taxi.blizz.driver.ReviewStatus;
 import taxi.blizz.files.FilePurpose;
 import taxi.blizz.files.FileContent;
 import taxi.blizz.files.FileService;
+import taxi.blizz.geo.CityCatalog;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
@@ -37,6 +38,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 
 /**
@@ -62,11 +64,13 @@ class JdbcDriverAdmission implements DriverAdmission {
     private final AuditLog auditLog;
     private final FileService files;
     private final DriverProperties properties;
+    private final CityCatalog cities;
     private final Clock clock;
 
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
                         AuditLog auditLog, FileService files, DriverProperties properties, Clock clock, StaffAccess staff,
-                        DriverRiskFlagCheck riskFlags) {
+                        DriverRiskFlagCheck riskFlags, CityCatalog cities) {
+        this.cities = cities;
         this.staff = staff;
         this.riskFlags = riskFlags;
         this.jdbc = jdbc;
@@ -117,7 +121,7 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .list();
 
         return new DriverProfile(driverId, row.name(), row.language(), ReviewStatus.valueOf(row.status()),
-                row.version(), row.terminal(), vehicles, documents);
+                row.version(), row.terminal(), List.copyOf(admissionCities(driverId)), vehicles, documents);
     }
 
     @Override
@@ -134,7 +138,15 @@ class JdbcDriverAdmission implements DriverAdmission {
                 .query((rs, i) -> Map.entry(rs.getObject("id", UUID.class), textArray(rs.getArray("class_approvals"))))
                 .list()
                 .forEach(e -> vehicles.put(e.getKey(), e.getValue()));
-        return new AdmissionSnapshot(status, Map.copyOf(vehicles));
+        return new AdmissionSnapshot(status, Map.copyOf(vehicles), admissionCities(driverId));
+    }
+
+    private Set<UUID> admissionCities(UUID driverId) {
+        return new java.util.LinkedHashSet<>(jdbc.sql("""
+                        select city_id from driver_admission_city where driver_id = :id order by city_id""")
+                .param("id", driverId)
+                .query(UUID.class)
+                .list());
     }
 
     // ---------------------------------------------------------------- driver commands
@@ -446,11 +458,70 @@ class JdbcDriverAdmission implements DriverAdmission {
                 });
     }
 
+    record CitiesRequest(UUID driverId, long expectedVersion, List<UUID> cityIds, String reason) {
+    }
+
+    @Override
+    public DriverProfile setAdmissionCities(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
+                                            Set<UUID> cityIds, String reason) {
+        requireReviewer(reviewer);
+        requireReason(reason);
+        if (cityIds == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "city_ids is required");
+        }
+        // Sorted: the request is hashed for idempotency, and a set's order differs between instances.
+        List<UUID> wanted = cityIds.stream().sorted().toList();
+        return commands.execute(new CommandKey(reviewer, "driver.admission-cities", commandId),
+                new CitiesRequest(driverId, expectedVersion, wanted, reason), DriverProfile.class, () -> {
+                    lockVersion(driverId, expectedVersion);
+                    Set<UUID> before = admissionCities(driverId);
+                    List<UUID> added = wanted.stream().filter(c -> !before.contains(c)).toList();
+                    List<UUID> removed = before.stream().filter(c -> !wanted.contains(c)).sorted().toList();
+                    // The reviewer needs the permission in every city the change touches (ADR 0004: identity checks).
+                    List<UUID> touched = new ArrayList<>(added);
+                    touched.addAll(removed);
+                    staff.require(reviewer, REVIEW_PERMISSION, touched.toArray(UUID[]::new));
+                    for (UUID city : added) {
+                        if (cities.timezone(city).isEmpty()) {
+                            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Unknown city " + city);
+                        }
+                    }
+                    OffsetDateTime now = now();
+                    if (!removed.isEmpty()) {
+                        jdbc.sql("delete from driver_admission_city where driver_id = :id and city_id in (:cities)")
+                                .param("id", driverId).param("cities", removed).update();
+                    }
+                    for (UUID city : added) {
+                        jdbc.sql("""
+                                        insert into driver_admission_city (driver_id, city_id, granted_by, granted_at)
+                                        values (:id, :city, :by, :now)""")
+                                .param("id", driverId).param("city", city).param("by", reviewer.id())
+                                .param("now", now).update();
+                    }
+                    long version = jdbc.sql("""
+                                    update driver set updated_at = :now, version = version + 1 where id = :id
+                                    returning version""")
+                            .param("now", now).param("id", driverId).query(Long.class).single();
+                    List<String> after = wanted.stream().map(UUID::toString).toList();
+                    auditLog.record(new AuditEntry(reviewer, "driver.admission_cities", "driver", driverId.toString(),
+                            reason, Map.of("city_ids", before.stream().map(UUID::toString).toList()),
+                            Map.of("city_ids", after)));
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("driver_id", driverId.toString());
+                    payload.put("city_ids", after);
+                    payload.put("added", added.stream().map(UUID::toString).toList());
+                    payload.put("removed", removed.stream().map(UUID::toString).toList());
+                    outbox.publish(new OutboxEvent("DriverAdmissionCitiesChanged", 1, "Driver", driverId, version,
+                            payload));
+                    return profile(driverId);
+                });
+    }
+
     // ---------------------------------------------------------------- reviewer views
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, OffsetDateTime after, int limit) {
+    public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, PageCursor after, int limit) {
         requireReviewer(reviewer);
         ReviewStatus wanted = status == null ? ReviewStatus.IN_REVIEW : status;
         return jdbc.sql("""
@@ -460,11 +531,13 @@ class JdbcDriverAdmission implements DriverAdmission {
                                              where e.driver_id = d.id and e.to_status = d.review_status),
                                             d.created_at) as since
                             from driver d where d.review_status = :status) q
-                        where cast(:after as timestamptz) is null or q.since > :after
+                        where cast(:afterAt as timestamptz) is null
+                           or (q.since, q.id) > (:afterAt, cast(:afterId as uuid))
                         order by q.since, q.id limit :limit""")
                 .param("status", wanted.name())
-                .param("after", after)
-                .param("limit", Math.max(1, Math.min(limit, 100)))
+                .param("afterAt", after == null ? null : after.time(0))
+                .param("afterId", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new ReviewItem(rs.getObject("id", UUID.class), rs.getString("name"),
                         rs.getString("phone_normalized"), ReviewStatus.valueOf(rs.getString("review_status")),
                         rs.getObject("since", OffsetDateTime.class), rs.getLong("version")))

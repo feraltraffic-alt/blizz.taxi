@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,6 +30,8 @@ import taxi.blizz.driver.ReviewDecision;
 import taxi.blizz.driver.ReviewStatus;
 import taxi.blizz.files.FileContent;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Driver review in the admin panel (section 6), with {@code driver.review} — admin.v1.yaml. */
 @RestController
@@ -40,7 +44,8 @@ class AdminDriverReviewController {
         this.admission = admission;
     }
 
-    record Queue(List<DriverAdmission.ReviewItem> drivers) {
+    /** A page of the queue (REQ-API-09); {@code page} is new and optional for older clients. */
+    record Queue(List<DriverAdmission.ReviewItem> drivers, Page.Info page) {
     }
 
     record Decision(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull ReviewDecision decision,
@@ -54,9 +59,15 @@ class AdminDriverReviewController {
 
     @GetMapping
     Queue queue(AccessClaims claims, @RequestParam(required = false) ReviewStatus status,
+                @RequestParam(required = false) String cursor,
                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime after,
-                @RequestParam(defaultValue = "50") int limit) {
-        return new Queue(admission.reviewQueue(claims.actor(), status, after, limit));
+                @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        PageCursor position = cursor != null ? PageCursor.decode(DriverAdmission.REVIEW_QUEUE, cursor)
+                : PageCursor.after(DriverAdmission.REVIEW_QUEUE, after);
+        Page<DriverAdmission.ReviewItem> page = Page.of(admission.reviewQueue(claims.actor(), status, position,
+                size + 1), size, DriverAdmission::position);
+        return new Queue(page.items(), page.page());
     }
 
     @GetMapping("/{driverId}")
@@ -103,6 +114,16 @@ class AdminDriverReviewController {
     DriverProfile paymentTerminal(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Terminal body) {
         return admission.setPaymentTerminal(claims.actor(), body.commandId(), driverId, body.expectedVersion(),
                 body.hasTerminal(), body.reason());
+    }
+
+    record Cities(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
+                  @NotNull @Size(max = 50) Set<UUID> cityIds, @NotBlank @Size(max = 1000) String reason) {
+    }
+
+    @PutMapping("/{driverId}/admission-cities")
+    DriverProfile admissionCities(AccessClaims claims, @PathVariable UUID driverId, @Valid @RequestBody Cities body) {
+        return admission.setAdmissionCities(claims.actor(), body.commandId(), driverId, body.expectedVersion(),
+                body.cityIds(), body.reason());
     }
 
     @PostMapping("/{driverId}/reinstate")

@@ -47,11 +47,12 @@ class LiveDriverBoard {
     /**
      * {@code status}: FREE (may get an order now), ON_ORDER, PAUSED (not accepting), CLOSING (finishing the last
      * order), NO_SIGNAL (connection or position lost). {@code connection} and {@code geolocation} as in the driver's
-     * own state (section 12.1).
+     * own state (section 12.1). {@code lastHeartbeatAt}: server time the driver was last heard from, with or without a
+     * position (REQ-DS-03, issue #141).
      */
     record LiveDriver(UUID driverId, String name, Car car, boolean hasPaymentTerminal, String status,
                       String occupancy, String connection, String geolocation, Point location,
-                      OffsetDateTime lastLocationAt, UUID orderId) {
+                      OffsetDateTime lastLocationAt, OffsetDateTime lastHeartbeatAt, UUID orderId) {
     }
 
     record Board(UUID cityId, OffsetDateTime at, List<LiveDriver> drivers) {
@@ -114,7 +115,8 @@ class LiveDriverBoard {
                     return new LiveDriver(rs.getObject("driver_id", UUID.class), rs.getString("name"), car,
                             rs.getBoolean("has_payment_terminal"),
                             status(rs.getString("state"), rs.getString("intent"), occupancy, connection, geolocation),
-                            occupancy, connection, geolocation, point, located, rs.getObject("order_id", UUID.class));
+                            occupancy, connection, geolocation, point, located, heartbeat,
+                            rs.getObject("order_id", UUID.class));
                 })
                 .list().stream()
                 .filter(d -> status == null || status.isEmpty() || status.contains(d.status()))

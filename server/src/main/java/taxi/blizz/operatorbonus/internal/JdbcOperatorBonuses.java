@@ -32,6 +32,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.OutboxHandler;
 import taxi.blizz.platform.OutboxMessage;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.platform.SubjectType;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -174,14 +175,19 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ClosedPeriod> periods(Actor actor, int limit) {
+    public List<ClosedPeriod> periods(Actor actor, PageCursor after, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         return jdbc.sql("""
                         select staff_id, period_key, period_started_at, period_ended_at, points,
                                fulfilled_count, cancelled_count, closed_at
-                        from operator_bonus_period order by period_key desc, staff_id limit :limit
+                        from operator_bonus_period
+                        where cast(:afterKey as date) is null
+                           or (period_key, staff_id) < (:afterKey, cast(:afterStaff as uuid))
+                        order by period_key desc, staff_id desc limit :limit
                         """)
-                .param("limit", bounded(limit))
+                .param("afterKey", after == null ? null : after.date(0))
+                .param("afterStaff", after == null ? null : after.id(1))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new ClosedPeriod(rs.getObject("staff_id", UUID.class),
                         rs.getObject("period_key", LocalDate.class), rs.getObject("period_started_at", OffsetDateTime.class),
                         rs.getObject("period_ended_at", OffsetDateTime.class), rs.getInt("points"),

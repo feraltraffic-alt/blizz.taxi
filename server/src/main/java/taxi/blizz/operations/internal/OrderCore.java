@@ -41,8 +41,12 @@ class OrderCore {
     private final CardPayments payments;
     private final OrderMetrics metrics;
 
+    private final taxi.blizz.geo.CityOperations cityOperations;
+
     OrderCore(JdbcClient jdbc, Outbox outbox, JsonMapper json, DispatchProperties properties,
-              PresenceProperties presence, Clock clock, CardPayments payments, OrderMetrics metrics) {
+              PresenceProperties presence, Clock clock, CardPayments payments, OrderMetrics metrics,
+              taxi.blizz.geo.CityOperations cityOperations) {
+        this.cityOperations = cityOperations;
         this.metrics = metrics;
         this.payments = payments;
         this.jdbc = jdbc;
@@ -72,6 +76,18 @@ class OrderCore {
                         rs.getObject("city_id", UUID.class), rs.getString("vehicle_class")))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+    }
+
+    /**
+     * Locks the order only if no other transaction holds it, without waiting; false when it is held. For a caller that
+     * already holds a driver's capacity and so must not wait for an order (issue #141).
+     */
+    boolean tryLockOrder(UUID orderId) {
+        return !jdbc.sql("select id from ride_order where id = :id for update skip locked")
+                .param("id", orderId)
+                .query(UUID.class)
+                .list()
+                .isEmpty();
     }
 
     /** Changes the status, bumps the version and writes the history row and the outbox event. */
@@ -157,6 +173,16 @@ class OrderCore {
                 .param("id", driverId)
                 .query((rs, i) -> new Capacity(rs.getString(1), rs.getObject(2, UUID.class)))
                 .single();
+    }
+
+    /** The driver's shift is open and accepting orders; read under the capacity lock. */
+    boolean accepting(UUID driverId) {
+        return jdbc.sql("""
+                        select count(*) from work_session
+                        where driver_id = :id and state = 'OPEN' and intent = 'ACCEPTING'""")
+                .param("id", driverId)
+                .query(Integer.class)
+                .single() > 0;
     }
 
     void setOccupancy(UUID driverId, String occupancy, UUID assignmentId) {
@@ -347,9 +373,11 @@ class OrderCore {
 
     /**
      * Drivers that may get this order now, nearest first, within {@code radius} metres: open
-     * accepting session in the order's city with a fresh heartbeat and location, active account,
+     * accepting session in the order's city with a fresh heartbeat and a fresh location no less accurate than
+     * {@code blizz.presence.eligibility-accuracy-meters} (REQ-GEO-04), active account,
      * admission, an approved vehicle with the class, free capacity, and no earlier offer for this
-     * order (REQ-DSP-01); for payment at the terminal only drivers with one (personal offers never fall back to cash).
+     * order (REQ-DSP-01); admitted in the order's city and inside its polygon or return zone (issue #141, REQ-DS-07);
+     * for payment at the terminal only drivers with one (personal offers never fall back to cash).
      * The final check repeats under locks when the offer is made.
      */
     List<Candidate> candidates(UUID orderId, int radius, Integer limit, boolean includeOffered) {
@@ -361,11 +389,16 @@ class OrderCore {
                         join work_session ws on ws.city_id = o.city_id and ws.state = 'OPEN' and ws.intent = 'ACCEPTING'
                         join driver d on d.id = ws.driver_id
                         join vehicle v on v.id = ws.vehicle_id
+                        join city ct on ct.id = o.city_id
                         left join driver_capacity c on c.driver_id = ws.driver_id
                         where o.id = :orderId
+                          and exists (select 1 from driver_admission_city ac
+                                      where ac.driver_id = ws.driver_id and ac.city_id = o.city_id)
+                          and ST_DWithin(ct.polygon::geography, ws.last_location::geography, :returnZone)
                           and ws.last_heartbeat_at > :heartbeatSince
                           and ws.last_location_at > :locationSince
                           and ws.location_refused_at is null
+                          and (ws.last_location_accuracy is null or ws.last_location_accuracy <= :accuracy)
                           and d.account_state = 'ACTIVE'
                           and d.review_status = 'APPROVED'
                           and v.state = 'APPROVED'
@@ -387,6 +420,8 @@ class OrderCore {
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("includeOffered", includeOffered)
+                .param("accuracy", presence.eligibilityAccuracyMeters())
+                .param("returnZone", returnZone(orderId))
                 .param("radius", radius)
                 .param("limit", limit == null ? properties.candidateLimit() : limit)
                 .query((rs, i) -> new Candidate(rs.getObject("driver_id", UUID.class),
@@ -416,9 +451,15 @@ class OrderCore {
                                       or ws.last_location_at is null or ws.last_location_at <= :locationSince
                                       or ws.last_location is null or ws.location_refused_at is not null
                                       then 'STALE_LOCATION'
+                                 when ws.last_location_accuracy > :accuracy then 'INACCURATE_LOCATION'
+                                 when not ST_DWithin(ct.polygon::geography, ws.last_location::geography, :returnZone)
+                                      then 'OUTSIDE_CITY'
                                  when ws.intent <> 'ACCEPTING' then 'PAUSED'
                                  when d.account_state <> 'ACTIVE' or d.review_status <> 'APPROVED'
                                       or v.state <> 'APPROVED' then 'NOT_ADMITTED'
+                                 when not exists (select 1 from driver_admission_city ac
+                                                  where ac.driver_id = ws.driver_id and ac.city_id = o.city_id)
+                                      then 'CITY_NOT_ADMITTED'
                                  when not (o.vehicle_class = any(v.class_approvals)) then 'CLASS'
                                  when o.payment_method = 'TERMINAL' and not d.has_payment_terminal then 'PAYMENT'
                                  when exists (select 1 from driver_restriction r
@@ -436,6 +477,7 @@ class OrderCore {
                         join work_session ws on ws.city_id = o.city_id and ws.state = 'OPEN'
                         join driver d on d.id = ws.driver_id
                         join vehicle v on v.id = ws.vehicle_id
+                        join city ct on ct.id = o.city_id
                         left join driver_capacity c on c.driver_id = ws.driver_id
                         where o.id = :orderId
                         order by distance_m nulls last, ws.driver_id
@@ -444,10 +486,19 @@ class OrderCore {
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("radius", radius)
+                .param("accuracy", presence.eligibilityAccuracyMeters())
+                .param("returnZone", returnZone(orderId))
                 .param("limit", limit)
                 .query((rs, i) -> new Considered(rs.getObject("driver_id", UUID.class),
                         (Integer) rs.getObject("distance_m"), rs.getString("reason")))
                 .list();
+    }
+
+    /** The return zone of the order's city, in metres (REQ-DS-07, issue #141). */
+    private int returnZone(UUID orderId) {
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                .query(UUID.class).single();
+        return cityOperations.of(cityId).returnZoneMeters();
     }
 
     static Actor system() {

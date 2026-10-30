@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * The driver's balance with the service (ADR 0010, journal DRIVER_PAYABLE): its history, top-ups by staff and
@@ -41,9 +42,25 @@ public interface DriverBalances {
                     OffsetDateTime at) {
     }
 
-    Statement mine(Actor driver, int limit);
+    /** The balances and the movements, newest first (time, then transaction id), after {@code after}. */
+    Statement mine(Actor driver, PageCursor after, int limit);
 
-    Statement of(Actor staff, UUID driverId, int limit);
+    default Statement mine(Actor driver, int limit) {
+        return mine(driver, null, limit);
+    }
+
+    Statement of(Actor staff, UUID driverId, PageCursor after, int limit);
+
+    default Statement of(Actor staff, UUID driverId, int limit) {
+        return of(staff, driverId, null, limit);
+    }
+
+    String MOVEMENTS = "driver-balance";
+
+    /** Movements are read page by page (REQ-API-09). */
+    static PageCursor position(Entry entry) {
+        return PageCursor.of(MOVEMENTS, entry.at(), entry.id());
+    }
 
     Statement topUp(Actor staff, UUID commandId, UUID driverId, String currency, long amountMinor, TopUpKind kind,
                     String reference, String reason);

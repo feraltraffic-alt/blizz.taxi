@@ -20,6 +20,7 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 
 @Service
 class JdbcClientDeletionReview implements ClientDeletionReview {
@@ -47,7 +48,7 @@ class JdbcClientDeletionReview implements ClientDeletionReview {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Request> pending(Actor actor, OffsetDateTime after, int limit) {
+    public List<Request> pending(Actor actor, PageCursor after, int limit) {
         staff.require(actor, DELETE_PERMISSION);
         return deletions.pending(after, limit).stream()
                 .map(p -> new Request(p.clientId(), p.previousState(), p.requestedAt(), blockers(p.clientId())))

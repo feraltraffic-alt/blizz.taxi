@@ -327,6 +327,13 @@ paths:
                           oneOf:
                             - $ref: "./common.yaml#/components/schemas/Timestamp"
                             - type: "null"
+                        last_heartbeat_at:
+                          description: >-
+                            Server time of the driver's last heartbeat, with or without a position (REQ-DS-03,
+                            issue #141): how long the driver has been out of touch.
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Timestamp"
+                            - type: "null"
                         order_id:
                           description: The order the driver is on.
                           oneOf:
@@ -1237,14 +1244,8 @@ paths:
           required: false
           schema:
             $ref: "./common.yaml#/components/schemas/Uuid"
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
       responses:
         "200":
           description: OK

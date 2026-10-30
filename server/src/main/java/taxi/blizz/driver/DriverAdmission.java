@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Driver admission (section 6, transitions of section 12.2 for the admission axis).
@@ -19,10 +20,16 @@ public interface DriverAdmission {
     DriverProfile profile(UUID driverId);
 
     /** Admission facts other modules need to decide whether a driver may work (section 12.1). */
-    record AdmissionSnapshot(ReviewStatus reviewStatus, java.util.Map<UUID, List<String>> approvedVehicleClasses) {
+    record AdmissionSnapshot(ReviewStatus reviewStatus, java.util.Map<UUID, List<String>> approvedVehicleClasses,
+                             java.util.Set<UUID> cities) {
 
         public boolean admitted() {
             return reviewStatus == ReviewStatus.APPROVED;
+        }
+
+        /** Admitted to work in the city (REQ-DSP-01, REQ-DS-06, issue #141). */
+        public boolean admittedIn(UUID cityId) {
+            return cities.contains(cityId);
         }
 
         public boolean vehicleApproved(UUID vehicleId) {
@@ -71,6 +78,15 @@ public interface DriverAdmission {
     DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason,
                           UUID riskFlagId);
 
+    /**
+     * Replaces the cities the driver is admitted in (REQ-DSP-01, issue #141), with a reason; audited and published as
+     * DriverAdmissionCitiesChanged. Needs {@link #REVIEW_PERMISSION} for every city added or removed; a city that
+     * does not exist is VALIDATION_FAILED. A driver online in a removed city keeps the shift and the current trip but
+     * gets no new order there.
+     */
+    DriverProfile setAdmissionCities(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
+                                     java.util.Set<UUID> cityIds, String reason);
+
     /** SUSPENDED → APPROVED with a reason, when the cause of the suspension is gone. */
     DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason);
 
@@ -88,8 +104,14 @@ public interface DriverAdmission {
                       long version) {
     }
 
-    /** Drivers in {@code status} (IN_REVIEW: the queue), oldest first, after {@code after}; at most 100. */
-    List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, java.time.OffsetDateTime after, int limit);
+    /** Drivers in {@code status} (IN_REVIEW: the queue), oldest first (since, then id), after {@code after}. */
+    List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, PageCursor after, int limit);
+
+    String REVIEW_QUEUE = "driver-review";
+
+    static PageCursor position(ReviewItem item) {
+        return PageCursor.of(REVIEW_QUEUE, item.since(), item.driverId());
+    }
 
     /** Full profile with the history of review decisions, for the reviewer. */
     record ReviewEvent(ReviewStatus from, ReviewStatus to, String actorType, UUID actorId, String reason,
