@@ -12,3 +12,5 @@ Build and utility scripts. CI pipelines only call these, so every build step can
 | `sandbox/` | The sandbox scenarios; `scenario=all` in the Sandbox workflow runs them all |
 | `audit/` | Audits of the code against the contracts |
 | `wait-for-work.sh` | For contributors: waits for issues and comments with their label |
+| `new-migration.sh` | `new-migration.sh <lead\|codex\|claude2> "<what>"`: an empty migration named by the rule in AGENTS.md, sorted after every migration on `origin/main` |
+| `../deploy/backup.sh`, `../deploy/restore.sh` | Back up the database into one file; restore it into an empty database. The runbook: `docs/runbooks/restore-from-backup.md` |

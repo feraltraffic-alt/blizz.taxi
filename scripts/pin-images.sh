@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 # Testcontainers configuration (a name with a tag, `postgis/postgis:18-3.6…`).
 references() {
     grep -HnoE '^FROM [^ ]+' server/Dockerfile | sed -E 's/:FROM /:/'
-    grep -HnoE '^[[:space:]]+image: [^ ]+' deploy/dev/compose.yaml deploy/sandbox/compose.yaml \
+    grep -HnoE '^[[:space:]]+image: [^ ]+' deploy/dev/compose.yaml deploy/sandbox/compose.yaml .github/workflows/*.yml \
         | sed -E 's/:[[:space:]]+image: /:/'
     grep -HnoE '"[a-z0-9./-]+/[a-z0-9._-]+:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?"' \
         server/src/test/java/taxi/blizz/TestcontainersConfiguration.java | sed -E 's/:"/:/; s/"$//'
