@@ -59,7 +59,7 @@ fi
 ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$QUOTE\",
   \"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,\"pickup_label\":\"вул. Дмитрівська\",\"dropoff\":$DROPOFF,
   \"dropoff_label\":\"Нивки\",\"payment_method\":\"CARD\",\"wallet_minor\":$WALLET}" | jq -r .id)
-expect 201
+expect 202
 if [[ "$PAYMENT" == CARD ]]; then
     wait_for "$RIDER" "/api/rider/v1/orders/$ORDER" .payment_state AUTHORIZED
 else

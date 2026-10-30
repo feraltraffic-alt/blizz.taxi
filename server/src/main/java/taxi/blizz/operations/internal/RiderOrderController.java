@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.geo.GeoPoint;
 import taxi.blizz.identity.AccessClaims;
@@ -75,13 +75,20 @@ class RiderOrderController {
                 size, Orders::position);
     }
 
+    /**
+     * A card order waits for the bank's hold before the search (ADR 0008): it is accepted, not done, so the answer is
+     * 202 with where to follow it, the order itself (REQ-API-11). Every other order is created at once: 201.
+     */
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    OrderView create(AccessClaims claims, @Valid @RequestBody CreateRequest body) {
-        return orders.create(claims.actor(), body.commandId(), new CreateOrder(claims.actor().id(),
+    ResponseEntity<OrderView> create(AccessClaims claims, @Valid @RequestBody CreateRequest body) {
+        OrderView order = orders.create(claims.actor(), body.commandId(), new CreateOrder(claims.actor().id(),
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
                 body.paymentMethod(), body.quoteId(), body.channel(), null, recipient(body.recipient()),
                 body.pickupAt(), false, body.walletMinor()));
+        if (order.paymentMethod() == PaymentMethod.CARD) {
+            return ResponseEntity.accepted().location(URI.create("/api/rider/v1/orders/" + order.id())).body(order);
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(order);
     }
 
     private static CallerContact recipient(Recipient recipient) {
