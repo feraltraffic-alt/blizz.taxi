@@ -28,13 +28,20 @@ public final class FakeClamd {
         /** An answer that is neither OK nor FOUND. */
         ERROR,
         /** Closes the connection after reading the command, without an answer. */
-        DROP
+        DROP,
+        /** Accepts and then neither reads nor answers: the client's write blocks once the socket buffers are full. */
+        HANG,
+        /** Starts the answer ({@code stream: O}) and closes the connection without the rest. */
+        CUT,
+        /** clamd's own answer to a stream over its {@code StreamMaxLength}. */
+        SIZE_LIMIT
     }
 
     private final int port;
     private volatile ServerSocket server;
     private volatile Mode mode = Mode.NORMAL;
     private final AtomicInteger scans = new AtomicInteger();
+    private final AtomicInteger lastChunks = new AtomicInteger();
 
     private FakeClamd(int port) {
         this.port = port;
@@ -57,6 +64,11 @@ public final class FakeClamd {
 
     public void mode(Mode value) {
         mode = value;
+    }
+
+    /** How many non-empty chunks the last answered stream came in. */
+    public int lastChunks() {
+        return lastChunks.get();
     }
 
     /** Streams answered so far (OK, FOUND or ERROR). */
@@ -102,10 +114,19 @@ public final class FakeClamd {
 
     private void serve(ServerSocket socket) {
         while (!socket.isClosed()) {
-            try (Socket client = socket.accept()) {
-                answer(client);
+            try {
+                Socket client = socket.accept();
+                Thread connection = new Thread(() -> {
+                    try (client) {
+                        answer(client);
+                    } catch (IOException gone) {
+                        // the client went away
+                    }
+                }, "fake-clamd-connection");
+                connection.setDaemon(true);
+                connection.start();
             } catch (IOException closed) {
-                // stopped, or the client went away
+                // stopped
             }
         }
     }
@@ -121,17 +142,35 @@ public final class FakeClamd {
         if (mode == Mode.DROP) {
             return;
         }
+        if (mode == Mode.HANG) {
+            try {
+                Thread.sleep(30_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return;
+        }
         ByteArrayOutputStream body = new ByteArrayOutputStream();
+        int chunks = 0;
         while (true) {
             int length = in.readInt();
             if (length == 0) {
                 break;
             }
             body.write(in.readNBytes(length));
+            chunks++;
         }
+        lastChunks.set(chunks);
         scans.incrementAndGet();
+        if (mode == Mode.CUT) {
+            out.write("stream: O".getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            return;
+        }
         String reply;
-        if (mode == Mode.ERROR) {
+        if (mode == Mode.SIZE_LIMIT) {
+            reply = "INSTREAM size limit exceeded. ERROR";
+        } else if (mode == Mode.ERROR) {
             reply = "stream: Can't allocate memory ERROR";
         } else if (body.toString(StandardCharsets.ISO_8859_1).contains(EICAR)) {
             reply = "stream: Eicar-Test-Signature FOUND";
@@ -149,5 +188,24 @@ public final class FakeClamd {
             command.append((char) b);
         }
         return command.toString();
+    }
+
+    /** A JPEG whose image data carries {@code payload}: it passes the type and structure checks. */
+    public static byte[] jpegCarrying(String payload) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(new byte[] {(byte) 0xFF, (byte) 0xD8});
+        segment(out, 0xE0, "JFIF\0\1\1\0\0\1\0\1\0\0");
+        segment(out, 0xDB, "quantization-table-bytes");
+        segment(out, 0xDA, "\0\1\2\3\4\5");
+        out.writeBytes(payload.getBytes(StandardCharsets.ISO_8859_1));
+        out.writeBytes(new byte[] {0x11, 0x22, (byte) 0xFF, (byte) 0xD9});
+        return out.toByteArray();
+    }
+
+    private static void segment(ByteArrayOutputStream out, int marker, String payload) {
+        byte[] data = payload.getBytes(StandardCharsets.ISO_8859_1);
+        int length = data.length + 2;
+        out.writeBytes(new byte[] {(byte) 0xFF, (byte) marker, (byte) (length >> 8), (byte) length});
+        out.writeBytes(data);
     }
 }

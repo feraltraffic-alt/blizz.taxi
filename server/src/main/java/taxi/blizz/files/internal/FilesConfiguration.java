@@ -23,7 +23,8 @@ class FilesConfiguration {
         FilesProperties.Clamav clamav = properties.clamav();
         if (clamav.address() != null && !clamav.address().isBlank()) {
             log.info("Uploads are scanned by ClamAV at {}", clamav.address());
-            return new ClamAvScanner(clamav.address(), clamav.connectTimeout(), clamav.readTimeout());
+            return new ClamAvScanner(clamav.address(), clamav.connectTimeout(), clamav.readTimeout(),
+                    clamav.totalTimeout());
         }
         if (environment.acceptsProfiles(Profiles.of("dev", "sandbox"))) {
             log.info("Uploads are scanned by the FAKE antivirus (EICAR test string only): dev or sandbox profile");

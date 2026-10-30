@@ -29,10 +29,13 @@ public record FilesProperties(
     /**
      * @param address        {@code host:port} of clamd; installation configuration (environment), not editable by staff
      * @param connectTimeout how long to wait for the connection
-     * @param readTimeout    how long to wait for the verdict of one file
+     * @param readTimeout    how long to wait for each read of the answer
+     * @param totalTimeout   the hard limit of one scan, sending included: the connection is closed when it passes, so
+     *                       a clamd that stops reading never holds an upload or a rescan longer (well under the
+     *                       rescan lease)
      */
     public record Clamav(String address, @DefaultValue("PT3S") Duration connectTimeout,
-                         @DefaultValue("PT60S") Duration readTimeout) {
+                         @DefaultValue("PT60S") Duration readTimeout, @DefaultValue("PT90S") Duration totalTimeout) {
     }
 
     /**

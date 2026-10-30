@@ -149,10 +149,7 @@ class JdbcFileService implements FileService {
             }
             if (malware.isPresent()) {
                 log.warn("File {} rejected by {}: {}", fileId, antivirus.engine(), malware.get());
-                StoredFile rejected = reject(fileId, staged, MALWARE);
-                jdbc.sql("update file_object set scan_engine = :engine where id = :id")
-                        .param("engine", engine()).param("id", fileId).update();
-                return rejected;
+                return reject(fileId, staged, MALWARE, engine());
             }
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
@@ -233,11 +230,17 @@ class JdbcFileService implements FileService {
     }
 
     private StoredFile reject(UUID fileId, Path staged, String reason) {
+        return reject(fileId, staged, reason, null);
+    }
+
+    /** {@code engine}: the engines that found it, when an antivirus did; null for a structural refusal. */
+    private StoredFile reject(UUID fileId, Path staged, String reason, String engine) {
         deleteQuietly(staged);
         jdbc.sql("""
                         update file_object set state = 'REJECTED', reject_reason = :reason, scanned_at = :now,
-                                               version = version + 1
+                                               scan_engine = coalesce(:engine, scan_engine), version = version + 1
                         where id = :id and state = 'QUARANTINE'""")
+                .param("engine", engine)
                 .param("reason", reason)
                 .param("now", now())
                 .param("id", fileId)

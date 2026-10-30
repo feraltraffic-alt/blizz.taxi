@@ -279,8 +279,9 @@ paths:
         The raw body with the declared Content-Type. The server checks the real type by content,
         the size, removes photo metadata and scans the file. The result is SAFE or REJECTED with a
         reason; a rejected file is deleted and needs a new session. QUARANTINE when the antivirus could not
-        answer: the file is kept and scanned again until it is SAFE or REJECTED (issue #105); it cannot be
-        attached meanwhile, so try attaching it later.
+        answer: the file is kept and scanned again until it is SAFE or REJECTED (issue #105), and cannot be
+        attached meanwhile. A 409 on attaching it means it is still in quarantine or was rejected by that later
+        scan; when it is still refused after a day, upload the document again.
       tags: [Files]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

@@ -25,7 +25,7 @@ import taxi.blizz.platform.SubjectType;
  * {@link FakeClamd}: SAFE only when the structural check and the scanner pass; a scanner that cannot answer keeps
  * the file in QUARANTINE and the rescan job tries again until it can, never SAFE by default.
  */
-@SpringBootTest(properties = "blizz.files.rescan.interval=PT0.2S")
+@SpringBootTest(properties = {"blizz.files.rescan.interval=PT0.2S", "blizz.files.clamav.total-timeout=PT2S"})
 @Import(TestcontainersConfiguration.class)
 class ContentScannerTests {
 
@@ -53,25 +53,6 @@ class ContentScannerTests {
     void scannerUp() throws Exception {
         clamd.mode(FakeClamd.Mode.NORMAL);
         clamd.restart();
-    }
-
-    /** A JPEG whose image data carries {@code payload}: it passes the type and structure checks. */
-    static byte[] jpegCarrying(String payload) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        out.writeBytes(new byte[] {(byte) 0xFF, (byte) 0xD8});
-        segment(out, 0xE0, "JFIF\0\1\1\0\0\1\0\1\0\0");
-        segment(out, 0xDB, "quantization-table-bytes");
-        segment(out, 0xDA, "\0\1\2\3\4\5");
-        out.writeBytes(payload.getBytes(StandardCharsets.ISO_8859_1));
-        out.writeBytes(new byte[] {0x11, 0x22, (byte) 0xFF, (byte) 0xD9});
-        return out.toByteArray();
-    }
-
-    private static void segment(ByteArrayOutputStream out, int marker, String payload) {
-        byte[] data = payload.getBytes(StandardCharsets.ISO_8859_1);
-        int length = data.length + 2;
-        out.writeBytes(new byte[] {(byte) 0xFF, (byte) marker, (byte) (length >> 8), (byte) length});
-        out.writeBytes(data);
     }
 
     private StoredFile upload(String type, byte[] body) {
@@ -109,14 +90,14 @@ class ContentScannerTests {
     @Test
     void eicarInsideAValidJpegIsRejectedByTheScannerAndACleanJpegIsSafe() {
         int before = clamd.scans();
-        StoredFile infected = upload("image/jpeg", jpegCarrying(FakeClamd.EICAR));
+        StoredFile infected = upload("image/jpeg", FakeClamd.jpegCarrying(FakeClamd.EICAR));
         assertThat(infected.state()).isEqualTo(FileState.REJECTED);
         assertThat(infected.rejectReason()).isEqualTo("The file did not pass the malware check");
         assertThat(clamd.scans()).as("the scanner was asked").isEqualTo(before + 1);
         assertThat(jdbc.sql("select storage_key from file_object where id = :id").param("id", infected.fileId())
                 .query((rs, i) -> java.util.Optional.ofNullable(rs.getString(1))).single()).isEmpty();
 
-        StoredFile clean = upload("image/jpeg", jpegCarrying("plain image data"));
+        StoredFile clean = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
         assertThat(clean.state()).isEqualTo(FileState.SAFE);
         assertThat(clamd.scans()).isEqualTo(before + 2);
         assertThat(jdbc.sql("select scan_engine from file_object where id = :id").param("id", clean.fileId())
@@ -138,8 +119,8 @@ class ContentScannerTests {
     @Test
     void whileTheScannerIsDownNothingBecomesSafeAndItHealsWhenItIsBack() throws Exception {
         clamd.stop();
-        StoredFile clean = upload("image/jpeg", jpegCarrying("plain image data"));
-        StoredFile infected = upload("image/jpeg", jpegCarrying(FakeClamd.EICAR));
+        StoredFile clean = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
+        StoredFile infected = upload("image/jpeg", FakeClamd.jpegCarrying(FakeClamd.EICAR));
         assertThat(clean.state()).isEqualTo(FileState.QUARANTINE);
         assertThat(infected.state()).isEqualTo(FileState.QUARANTINE);
 
@@ -169,11 +150,11 @@ class ContentScannerTests {
     @Test
     void anAnswerThatIsNeitherOkNorFoundOrADroppedConnectionIsNotClean() throws Exception {
         clamd.mode(FakeClamd.Mode.ERROR);
-        StoredFile errored = upload("image/jpeg", jpegCarrying("plain image data"));
+        StoredFile errored = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
         assertThat(errored.state()).isEqualTo(FileState.QUARANTINE);
 
         clamd.mode(FakeClamd.Mode.DROP);
-        StoredFile dropped = upload("image/jpeg", jpegCarrying("plain image data"));
+        StoredFile dropped = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
         assertThat(dropped.state()).isEqualTo(FileState.QUARANTINE);
 
         clamd.mode(FakeClamd.Mode.NORMAL);
@@ -181,6 +162,74 @@ class ContentScannerTests {
         dueNow(dropped.fileId());
         waitFor(() -> "SAFE".equals(state(errored.fileId())) && "SAFE".equals(state(dropped.fileId())),
                 "both files to be SAFE once the scanner answers");
+    }
+
+    // ------------------------------------------------------------ review of #131
+
+    /** A JPEG of about {@code kib} KiB whose image data carries {@code payload} after the first {@code offset} bytes. */
+    static byte[] largeJpeg(int kib, int offset, String payload) {
+        StringBuilder data = new StringBuilder(kib * 1024);
+        java.util.Random random = new java.util.Random(kib);
+        while (data.length() < kib * 1024) {
+            if (data.length() == offset && !payload.isEmpty()) {
+                data.append(payload);
+            }
+            data.append((char) ('a' + random.nextInt(26)));
+        }
+        return FakeClamd.jpegCarrying(data.toString());
+    }
+
+    @Test
+    void aFileOfSeveralChunksIsScannedWhole() {
+        StoredFile infected = upload("image/jpeg", largeJpeg(200, 100 * 1024, FakeClamd.EICAR));
+        assertThat(infected.state()).isEqualTo(FileState.REJECTED);
+        assertThat(clamd.lastChunks()).as("64 KiB chunks").isGreaterThanOrEqualTo(4);
+        StoredFile clean = upload("image/jpeg", largeJpeg(200, 0, ""));
+        assertThat(clean.state()).isEqualTo(FileState.SAFE);
+        assertThat(clamd.lastChunks()).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    void anAnswerCutShortOrTheSizeLimitErrorIsNotAVerdict() throws Exception {
+        clamd.mode(FakeClamd.Mode.CUT);
+        StoredFile cut = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
+        assertThat(cut.state()).isEqualTo(FileState.QUARANTINE);
+        clamd.mode(FakeClamd.Mode.SIZE_LIMIT);
+        StoredFile limit = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
+        assertThat(limit.state()).isEqualTo(FileState.QUARANTINE);
+
+        clamd.mode(FakeClamd.Mode.NORMAL);
+        dueNow(cut.fileId());
+        dueNow(limit.fileId());
+        waitFor(() -> "SAFE".equals(state(cut.fileId())) && "SAFE".equals(state(limit.fileId())),
+                "both files to be SAFE once the scanner answers");
+    }
+
+    @Test
+    void aClamdThatStopsReadingCannotHoldAnUploadOrARescanPastTheDeadline() throws Exception {
+        clamd.mode(FakeClamd.Mode.HANG);
+        byte[] large = largeJpeg(9 * 1024, 0, "");   // more than the socket buffers hold
+        long started = System.nanoTime();
+        StoredFile file = upload("image/jpeg", large);
+        long seconds = (System.nanoTime() - started) / 1_000_000_000;
+        assertThat(file.state()).isEqualTo(FileState.QUARANTINE);
+        assertThat(seconds).as("the upload ends at the 2 s deadline, not after TCP gives up").isLessThan(10);
+
+        // A rescan round against the hanging daemon ends too: the attempt is counted and the file waits again.
+        int attempts = attempts(file.fileId());
+        dueNow(file.fileId());
+        waitFor(() -> attempts(file.fileId()) > attempts
+                        && jdbc.sql("select next_scan_at > now() + interval '20 seconds' from file_object where id = :id")
+                        .param("id", file.fileId()).query(Boolean.class).single()
+                        && jdbc.sql("select next_scan_at < now() + interval '5 minutes' from file_object where id = :id")
+                        .param("id", file.fileId()).query(Boolean.class).single(),
+                "the rescan to end with a back-off, not hold its 10-minute lease");
+        assertThat(state(file.fileId())).isEqualTo("QUARANTINE");
+
+        clamd.mode(FakeClamd.Mode.NORMAL);
+        clamd.restart();
+        dueNow(file.fileId());
+        waitFor(() -> "SAFE".equals(state(file.fileId())), "SAFE once the daemon answers");
     }
 
     private void assertCannotBeAttached(UUID fileId) {

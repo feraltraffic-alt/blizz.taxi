@@ -105,13 +105,18 @@ class QuarantineRescan {
             }
             log.warn("File {} rejected by {} on attempt {}: {}", due.fileId(), antivirus.engine(), due.attempts(),
                     malware.get());
-            storage.delete(due.key());
-            jdbc.sql("""
+            // The state first: only the worker that moved the file out of QUARANTINE deletes its bytes, so an overrun
+            // lease never deletes the bytes of a file another worker has just made SAFE.
+            int rejected = jdbc.sql("""
                             update file_object
                             set state = 'REJECTED', reject_reason = :reason, scanned_at = :now, storage_key = null,
-                                next_scan_at = null, version = version + 1
+                                next_scan_at = null, scan_engine = :engine, version = version + 1
                             where id = :id and state = 'QUARANTINE'""")
-                    .param("reason", JdbcFileService.MALWARE).param("now", now).param("id", due.fileId()).update();
+                    .param("reason", JdbcFileService.MALWARE).param("now", now).param("engine", files.engine())
+                    .param("id", due.fileId()).update();
+            if (rejected == 1) {
+                storage.delete(due.key());
+            }
             return true;
         } catch (ContentScanner.Unavailable | IOException | FileStorage.TooLargeException e) {
             Duration wait = wait(due.attempts());
