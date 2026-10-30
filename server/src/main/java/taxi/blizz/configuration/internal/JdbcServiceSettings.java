@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -43,7 +44,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Tips(24),
             new Orders(3),
             new CashNotReceived(true, 100),
-            new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false));
+            new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false),
+            new StaffTopUps(Map.of()));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -194,8 +196,16 @@ class JdbcServiceSettings implements ServiceSettings {
                 validatePlatform(versions.riderIos(), "rider_ios"),
                 validatePlatform(versions.driverAndroid(), "driver_android"),
                 validatePlatform(versions.driverIos(), "driver_ios"), versions.requireVersionHeader());
+        StaffTopUps topUps = s.staffTopUps() == null ? DEFAULTS.staffTopUps() : s.staffTopUps();
+        topUps.dailyMaxPerStaffMinor().forEach((currency, max) -> {
+            if (currency == null || !CURRENCY.matcher(currency).matches() || max == null || max < 1
+                    || max > MAX_DAILY_TOP_UP_MINOR) {
+                throw invalid("Staff top-ups: daily_max_per_staff_minor maps a currency code (e.g. UAH) to 1.."
+                        + MAX_DAILY_TOP_UP_MINOR + " minor units");
+            }
+        });
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions);
+                orders, cash, versions, topUps);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -212,6 +222,10 @@ class JdbcServiceSettings implements ServiceSettings {
         }
         return v;
     }
+
+    private static final Pattern CURRENCY = Pattern.compile("^[A-Z]{3}$");
+    /** The most a daily limit may be set to, in minor units (as in the contract). */
+    static final long MAX_DAILY_TOP_UP_MINOR = 1_000_000_000_000L;
 
     private static final Pattern VERSION = Pattern.compile("^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}$");
 
@@ -243,7 +257,9 @@ class JdbcServiceSettings implements ServiceSettings {
         Orders orders = s.orders() == null ? DEFAULTS.orders() : s.orders();
         CashNotReceived cash = s.cashNotReceived() == null ? DEFAULTS.cashNotReceived() : s.cashNotReceived();
         AppVersions versions = s.appVersions() == null ? DEFAULTS.appVersions() : s.appVersions();
-        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions);
+        StaffTopUps topUps = s.staffTopUps() == null ? DEFAULTS.staffTopUps() : s.staffTopUps();
+        return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
+                topUps);
     }
 
     private static String color(String value, boolean required) {

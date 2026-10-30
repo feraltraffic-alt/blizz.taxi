@@ -89,6 +89,23 @@ public interface ServiceSettings {
         }
     }
 
+    /**
+     * What one staff member may top up in 24 hours, per currency, driver balances and rider wallets together (threat
+     * model C3, owner decision 30.10.2026). A currency not listed has no daily limit.
+     */
+    record StaffTopUps(java.util.Map<String, Long> dailyMaxPerStaffMinor) {
+        public StaffTopUps {
+            dailyMaxPerStaffMinor = dailyMaxPerStaffMinor == null ? java.util.Map.of()
+                    : java.util.Map.copyOf(dailyMaxPerStaffMinor);
+        }
+
+        /** The limit for the currency, or empty when it has none. */
+        public java.util.OptionalLong dailyMax(String currency) {
+            Long max = dailyMaxPerStaffMinor.get(currency);
+            return max == null ? java.util.OptionalLong.empty() : java.util.OptionalLong.of(max);
+        }
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -99,33 +116,40 @@ public interface ServiceSettings {
     }
 
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
-                    Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions) {
+                    Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                    StaffTopUps staffTopUps) {
+        /** Source compatibility for callers written before the staff top-up limit. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, null);
+        }
+
         /** Source compatibility for callers written before app versions became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived) {
-            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, null);
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, null, null);
         }
 
         /** Source compatibility for callers written before ratings became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders) {
-            this(brand, languages, calls, preorders, null, null, null, null, null);
+            this(brand, languages, calls, preorders, null, null, null, null, null, null);
         }
 
         /** Source compatibility for callers written before tips became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings) {
-            this(brand, languages, calls, preorders, ratings, null, null, null, null);
+            this(brand, languages, calls, preorders, ratings, null, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the order limit became configurable. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings,
                         Tips tips) {
-            this(brand, languages, calls, preorders, ratings, tips, null, null, null);
+            this(brand, languages, calls, preorders, ratings, tips, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the cash dispute setting. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings,
                         Tips tips, Orders orders) {
-            this(brand, languages, calls, preorders, ratings, tips, orders, null, null);
+            this(brand, languages, calls, preorders, ratings, tips, orders, null, null, null);
         }
     }
 

@@ -116,6 +116,8 @@ components:
         sends codes to (Poland and Ukraine by default); nothing is sent and no challenge is stored.
         CHARGEBACK_NOT_ALLOWED (422): a chargeback larger than what is left of the order's card payment (its
         captures, charges and tips, less earlier chargebacks not won back), or on an order not paid by card.
+        TOP_UP_DAILY_LIMIT (422): a staff top-up of a driver balance or a rider wallet would take the staff member
+        over the service's staff_top_ups limit for the currency in the last 24 hours; nothing is credited.
         ACCEPTANCE_REQUIRED (403): a rider's new order or a driver going online while a legal text in force that must
         be accepted is not (REQ-PRV-08); GET /api/{rider|driver}/v1/legal tells which.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
@@ -148,6 +150,7 @@ components:
         - PICKUP_TOO_FAR
         - PHONE_COUNTRY_NOT_SERVED
         - CHARGEBACK_NOT_ALLOWED
+        - TOP_UP_DAILY_LIMIT
         - RATE_LIMITED
         - UNAUTHENTICATED
         - ACCESS_DENIED
