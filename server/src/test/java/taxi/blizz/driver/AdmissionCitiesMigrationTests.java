@@ -19,8 +19,9 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * The back-fill of admission cities (issue #141, migration V20261030_1444_5): rows are written at the Flyway version
- * before it, then the rest of the migrations run. An APPROVED driver gets every city of their sessions; an APPROVED
- * driver without a session and a driver not approved get none. Its own database, so the other tests are untouched.
+ * before it, then the rest of the migrations run. Every driver gets every city of their sessions, whatever the review
+ * status (review of #156: a suspended driver approved again must not lose the line); a driver who never opened a
+ * session gets none. Its own database, so the other tests are untouched.
  */
 @SpringBootTest(properties = {"spring.flyway.target=20261030.1154.5", "blizz.retention.enabled=false"})
 @Import(AdmissionCitiesMigrationTests.Database.class)
@@ -40,7 +41,7 @@ class AdmissionCitiesMigrationTests {
     @Autowired DataSource dataSource;
 
     @Test
-    void approvedDriversKeepTheCitiesTheyWorkedInAndNobodyElseGetsOne() {
+    void everyDriverKeepsTheCitiesTheyWorkedInAndOnlyDriversWithoutSessionsGetNone() {
         assertThat(jdbc.sql("select to_regclass('driver_admission_city') is null").query(Boolean.class).single())
                 .as("written before the migration").isTrue();
         UUID kyiv = city("migration-kyiv", 160);
@@ -57,14 +58,16 @@ class AdmissionCitiesMigrationTests {
         session(suspended, kyiv);
         UUID inReview = driver("IN_REVIEW");
         session(inReview, lviv);
+        UUID suspendedNoSession = driver("SUSPENDED");
 
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
 
         assertThat(cities(both)).containsExactlyInAnyOrder(kyiv, lviv);
         assertThat(cities(oneCity)).containsExactly(odesa);
         assertThat(cities(noSession)).as("no session: staff must set a city").isEmpty();
-        assertThat(cities(suspended)).as("not approved now").isEmpty();
-        assertThat(cities(inReview)).isEmpty();
+        assertThat(cities(suspended)).as("suspended now, keeps Kyiv for when approved again").containsExactly(kyiv);
+        assertThat(cities(inReview)).containsExactly(lviv);
+        assertThat(cities(suspendedNoSession)).as("suspended, never drove").isEmpty();
         assertThat(jdbc.sql("select count(*) from driver_admission_city where granted_by is not null")
                 .query(Integer.class).single()).as("set by the migration, not a person").isZero();
     }

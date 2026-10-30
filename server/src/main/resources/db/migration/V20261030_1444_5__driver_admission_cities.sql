@@ -10,15 +10,14 @@ create table driver_admission_city (
 );
 create index driver_admission_city_city_idx on driver_admission_city (city_id, driver_id);
 
--- Back-fill rule (agreed in issue #141): every driver who is APPROVED now is admitted in each city they have ever
--- opened a work session in, so nobody who drives today loses the line at the deploy. An APPROVED driver without any
--- session gets no city and cannot go online until staff set one (listed in the PR). granted_by stays null: set by
--- this migration, not by a person. Reads `work_session` (operations) once, as ADR 0004 lists for this migration.
+-- Back-fill rule (agreed in issue #141, review of #156): every driver, whatever the review status, is admitted in each
+-- city they have ever opened a work session in. The status does not gate this: SUSPENDED, EXPIRED and IN_REVIEW
+-- drivers are refused by their status anyway, and keep their cities for when they are approved again. A driver who
+-- never opened a session gets no city and cannot go online until staff set one (listed in the PR). granted_by stays
+-- null: set by this migration, not by a person. Reads `work_session` (operations) once, as ADR 0004 lists.
 insert into driver_admission_city (driver_id, city_id, granted_by, granted_at)
 select distinct ws.driver_id, ws.city_id, null::uuid, now()
-from work_session ws
-join driver d on d.id = ws.driver_id
-where d.review_status = 'APPROVED';
+from work_session ws;
 
 -- How far outside its polygon a driver may be and still get the city's new orders (REQ-DS-07). 0: not at all.
 -- Never ends or changes a current trip. Owned by `geo` with the other city operations.
