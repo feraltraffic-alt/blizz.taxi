@@ -91,7 +91,8 @@ class AccessIsolationTests {
     @Autowired taxi.blizz.geo.CityOperations cityOperations;
     @Autowired taxi.blizz.geo.GeoConfiguration geography;
     @Autowired taxi.blizz.identity.EmergencyAccess emergency;
-    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean taxi.blizz.backoffice.SupportCases supportCases;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    taxi.blizz.backoffice.SupportCases supportCases;
     @Autowired ServiceSettings settings;
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
@@ -103,7 +104,8 @@ class AccessIsolationTests {
     String strangerDriver;
     UUID foreignCity;
 
-    @BeforeEach void setUp() {
+    @BeforeEach
+    void setUp() {
         List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
@@ -126,7 +128,8 @@ class AccessIsolationTests {
     static Stream<IsolationContract.Operation> contractOperations() {
         var selected = new ArrayList<>(IsolationContract.operations("rider.v1.yaml"));
         selected.addAll(IsolationContract.operations("driver.v1.yaml"));
-        assertThat(selected.size()).as("contract-selected operations; additions require usable fixtures").isGreaterThanOrEqualTo(48);
+        assertThat(selected.size()).as("contract-selected operations; additions require usable fixtures")
+                .isGreaterThanOrEqualTo(48);
         validatePolicyExceptions(selected, POLICY_EXCEPTIONS);
         System.out.println("ISOLATION SELECTED " + selected.size() + " " + selected);
         System.out.println("ISOLATION POLICY EXCEPTIONS " + POLICY_EXCEPTIONS);
@@ -182,7 +185,10 @@ class AccessIsolationTests {
         String table = reservation ? "preorder_reservation" : "assignment";
         var before = poolState(orderId, table);
         assertThat(before.get("holders")).as(operation + " starts unassigned").isEqualTo(List.of());
+        var beforeStranger = sideEffects();
         var foreign = perform(request(operation, path, payload), fixture.stranger());
+        assertThat(sideEffects()).as(operation + " stranger must not write outbox/audit/command receipts")
+                .isEqualTo(beforeStranger);
         assertThat(foreign.getResponse().getStatus()).as(operation + " foreign-city eligibility").isEqualTo(409);
         assertThat(problemCode(foreign)).as(operation + " foreign-city eligibility code")
                 .isEqualTo("DRIVER_NOT_ELIGIBLE");
@@ -215,10 +221,15 @@ class AccessIsolationTests {
 
     private void verify(IsolationContract.Operation operation, IsolationFixture fixture) throws Exception {
         String path = operation.path();
-        for (var entry : fixture.ids().entrySet()) path = path.replace("{" + entry.getKey() + "}", entry.getValue().toString());
+        for (var entry : fixture.ids().entrySet()) {
+            path = path.replace("{" + entry.getKey() + "}", entry.getValue().toString());
+        }
         assertThat(path).as(operation + " every path parameter has a fixture").doesNotContain("{");
         String payload = json.writeValueAsString(operation.body(fixture.values()));
+        var beforeStranger = sideEffects();
         var stranger = perform(request(operation, path, payload), fixture.stranger());
+        assertThat(sideEffects()).as(operation + " stranger must not write outbox/audit/command receipts")
+                .isEqualTo(beforeStranger);
         var owner = perform(request(operation, path, payload), fixture.owner());
         List<String> problems = new ArrayList<>();
         int foreignStatus = stranger.getResponse().getStatus();
@@ -239,13 +250,23 @@ class AccessIsolationTests {
         assertThat(problems).as(String.join(" | ", problems)).isEmpty();
     }
 
+    private Map<String, Object> sideEffects() {
+        // staff_activity deliberately records every staff request and is not a business side effect.
+        return jdbc.sql("""
+                select (select count(*) from outbox) as outbox,
+                       (select count(*) from audit_log) as audit_log,
+                       (select count(*) from command_receipt) as command_receipt
+                """).query().singleRow();
+    }
+
     @ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(value = taxi.blizz.platform.ErrorCode.class,
             names = {"VALIDATION_FAILED", "STATE_CONFLICT", "PICKUP_TOO_FAR", "INTERNAL_ERROR"})
     void eachForbiddenStrangerStatusFailsTheActualHttpProbe(taxi.blizz.platform.ErrorCode code) throws Exception {
         var operation = IsolationContract.operation("rider.v1.yaml", "get", "/api/rider/v1/support/cases/{case_id}");
         var fixture = fixture(operation);
-        Actor actor = auth.verifyAccess(fixture.stranger(), taxi.blizz.identity.ApiAudience.RIDER).orElseThrow().actor();
+        Actor actor = auth.verifyAccess(fixture.stranger(), taxi.blizz.identity.ApiAudience.RIDER)
+                .orElseThrow().actor();
         org.mockito.Mockito.doThrow(new taxi.blizz.platform.DomainException(code, "Deliberate status control"))
                 .when(supportCases).mineOne(actor, fixture.ids().get("case_id"));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> verify(operation, fixture))
@@ -259,10 +280,12 @@ class AccessIsolationTests {
         var operation = IsolationContract.operation("rider.v1.yaml", "get", "/api/rider/v1/support/cases/{case_id}");
         var fixture = fixture(operation);
         Actor actor = auth.verifyAccess(fixture.owner(), taxi.blizz.identity.ApiAudience.RIDER).orElseThrow().actor();
-        org.mockito.Mockito.doThrow(new taxi.blizz.platform.DomainException(taxi.blizz.platform.ErrorCode.INTERNAL_ERROR,
-                "Deliberate owner failure control")).when(supportCases).mineOne(actor, fixture.ids().get("case_id"));
+        org.mockito.Mockito.doThrow(new taxi.blizz.platform.DomainException(
+                taxi.blizz.platform.ErrorCode.INTERNAL_ERROR, "Deliberate owner failure control"))
+                .when(supportCases).mineOne(actor, fixture.ids().get("case_id"));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> verify(operation, fixture))
-                .isInstanceOf(AssertionError.class).hasMessageContaining(operation.toString()).hasMessageContaining("owner 500");
+                .isInstanceOf(AssertionError.class).hasMessageContaining(operation.toString())
+                .hasMessageContaining("owner 500");
         System.out.println("ISOLATION STATUS CONTROL rejected owner=500 " + operation);
     }
 
@@ -276,7 +299,8 @@ class AccessIsolationTests {
         verify(read, staffFixture(ids, Map.of(), owner, otherCity));
         verify(read, staffFixture(ids, Map.of(), owner, noPermission));
         var create = IsolationContract.operation("admin.v1.yaml", "post", "/api/admin/v1/cities/{city_id}/zones");
-        Map<String, Object> data = Map.of("type", "AIRPORT", "polygon", square(), "priority", 10, "reason", "Isolation scope probe");
+        Map<String, Object> data = Map.of("type", "AIRPORT", "polygon", square(), "priority", 10,
+                "reason", "Isolation scope probe");
         verify(create, staffFixture(ids, data, owner, otherCity));
         verify(create, staffFixture(ids, data, owner, noPermission));
         Map<String, Object> zone = postJson("/api/admin/v1/cities/" + city + "/zones", staffToken(owner),
@@ -285,10 +309,14 @@ class AccessIsolationTests {
         UUID zoneId = UUID.fromString(zone.get("id").toString());
         try {
             verify(publish, staffFixture(Map.of("zone_id", zoneId),
-                    Map.of("expected_version", zone.get("version"), "reason", "Isolation publish probe"), owner, otherCity));
+                    Map.of("expected_version", zone.get("version"), "reason", "Isolation publish probe"),
+                    owner, otherCity));
         } finally {
-            if (jdbc.sql("select state from zone where id=:id").param("id", zoneId).query(String.class).single().equals("PUBLISHED")) {
-                long version = jdbc.sql("select version from zone where id=:id").param("id", zoneId).query(Long.class).single();
+            String state = jdbc.sql("select state from zone where id=:id")
+                    .param("id", zoneId).query(String.class).single();
+            if (state.equals("PUBLISHED")) {
+                long version = jdbc.sql("select version from zone where id=:id")
+                        .param("id", zoneId).query(Long.class).single();
                 geography.archiveZone(new taxi.blizz.geo.GeoConfiguration.Change(UUID.randomUUID(), owner, zoneId,
                         version, "Isolation zone cleanup"));
             }
@@ -302,13 +330,16 @@ class AccessIsolationTests {
         verify(read, staffFixture(Map.of("city_id", city), Map.of(), owner, otherCity));
         var before = perform(get("/api/admin/v1/cities/" + city + "/operations"), staffToken(owner));
         long version = json.readTree(before.getResponse().getContentAsString()).path("version").asLong();
-        var pause = IsolationContract.operation("admin.v1.yaml", "post", "/api/admin/v1/cities/{city_id}/operations/pause");
+        var pause = IsolationContract.operation("admin.v1.yaml", "post",
+                "/api/admin/v1/cities/{city_id}/operations/pause");
         try {
             verify(pause, staffFixture(Map.of("city_id", city), Map.of("expected_version", version,
                     "reason", "Isolation pause probe"), owner, otherCity));
         } finally {
             var current = cityOperations.get(owner, city);
-            if (current.ordersPaused()) cityOperations.resume(owner, UUID.randomUUID(), city, current.version(), "Isolation pause cleanup");
+            if (current.ordersPaused()) {
+                cityOperations.resume(owner, UUID.randomUUID(), city, current.version(), "Isolation pause cleanup");
+            }
         }
     }
 
@@ -328,7 +359,8 @@ class AccessIsolationTests {
                 java.util.Set.of(city), java.time.Duration.ofMinutes(30), "Isolation emergency access control");
         String temporary = staffToken(missing);
         String path = read.path().replace("{case_id}", ids.get("case_id").toString());
-        assertThat(perform(get(path), temporary).getResponse().getStatus()).as("active grant reaches reader").isEqualTo(200);
+        assertThat(perform(get(path), temporary).getResponse().getStatus())
+                .as("active grant reaches reader").isEqualTo(200);
         emergency.revoke(boss, UUID.randomUUID(), grant.id(), "Isolation emergency access revoked");
         verify(read, new IsolationFixture(ids, Map.of(), staffToken(owner), temporary, null));
     }
@@ -336,10 +368,12 @@ class AccessIsolationTests {
     @org.junit.jupiter.api.Test
     void merchantIdRequiresPermissionEvenWithAValidSharedReauthenticationPassword() throws Exception {
         Actor owner = staff("integrations.manage"), stranger = staff();
-        setPassword(owner);setPassword(stranger);
+        setPassword(owner);
+        setPassword(stranger);
         UUID merchant = jdbc.sql("select merchant_id from payment_merchant_city where city_id=:city")
                 .param("city", city).query(UUID.class).single();
-        var change = IsolationContract.operation("admin.v1.yaml", "post", "/api/admin/v1/payment-merchants/{merchant_id}/change");
+        var change = IsolationContract.operation("admin.v1.yaml", "post",
+                "/api/admin/v1/payment-merchants/{merchant_id}/change");
         verify(change, staffFixture(Map.of("merchant_id", merchant), Map.of("password", STAFF_PASSWORD,
                 "domain", "scope.blizz.invalid", "reason", "Isolation merchant permission control"), owner, stranger));
     }
@@ -347,8 +381,9 @@ class AccessIsolationTests {
     private static final String STAFF_PASSWORD = "Isolation-Admin-Test-2026";
 
     private void setPassword(Actor actor) {
+        String hash = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4).encode(STAFF_PASSWORD);
         jdbc.sql("update staff_user set password_hash=:hash where id=:id")
-                .param("hash", new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4).encode(STAFF_PASSWORD))
+                .param("hash", hash)
                 .param("id", actor.id()).update();
     }
 
@@ -364,7 +399,8 @@ class AccessIsolationTests {
                 "isolation-staff").accessToken();
     }
 
-    private IsolationFixture staffFixture(Map<String, UUID> ids, Map<String, Object> values, Actor owner, Actor stranger) {
+    private IsolationFixture staffFixture(Map<String, UUID> ids, Map<String, Object> values,
+                                          Actor owner, Actor stranger) {
         return new IsolationFixture(ids, values, staffToken(owner), staffToken(stranger), null);
     }
 
@@ -382,7 +418,8 @@ class AccessIsolationTests {
 
     private DriverSession driverSession(GeoPoint pickup) {
         TestRides.Driver driver = rides.driverNear(pickup);
-        IssuedSession issued = auth.open(new VerifiedSubject(driver.actor(), "ACTIVE", false), "isolation-bound-device");
+        IssuedSession issued = auth.open(new VerifiedSubject(driver.actor(), "ACTIVE", false),
+                "isolation-bound-device");
         sessions.handover(driver.actor(), UUID.randomUUID(), issued.sessionId(),
                 sessions.availability(driver.actor().id()).sessionVersion());
         return new DriverSession(new TestRides.Driver(driver.actor(), issued.sessionId(), driver.vehicle()), issued);
@@ -399,10 +436,13 @@ class AccessIsolationTests {
         String conflict = null;
         if (path.contains("/work-sessions/")) {
             ownerDriver = driverSession(PICKUP);
-            if (path.endsWith("/resume")) sessions.pause(ownerDriver.driver().actor(), UUID.randomUUID(),
-                    ownerDriver.driver().device(), sessions.availability(ownerDriver.driver().actor().id()).sessionVersion());
+            if (path.endsWith("/resume")) {
+                sessions.pause(ownerDriver.driver().actor(), UUID.randomUUID(), ownerDriver.driver().device(),
+                        sessions.availability(ownerDriver.driver().actor().id()).sessionVersion());
+            }
             var shift = sessions.availability(ownerDriver.driver().actor().id());
-            ids.put("id", shift.sessionId());values.put("expected_version", shift.sessionVersion());
+            ids.put("id", shift.sessionId());
+            values.put("expected_version", shift.sessionVersion());
         } else if (path.contains("/preorders/")) {
             Instant pickupAt = Instant.now().plus(3, ChronoUnit.HOURS);
             UUID quote = new TestQuotes(jdbc, quotes).quote(rider, city, "STANDARD", PICKUP, DROPOFF, pickupAt).id();
@@ -413,8 +453,10 @@ class AccessIsolationTests {
             if (!path.endsWith("/reserve")) {
                 var reservation = preorders.reserve(ownerDriver.driver().actor(), UUID.randomUUID(), order.id());
                 ids.put("reservation_id", reservation.id());
-                if (path.endsWith("/confirm")) jdbc.sql("update ride_order set pickup_at=now()+interval '25 minutes' where id=:id")
-                        .param("id", order.id()).update();
+                if (path.endsWith("/confirm")) {
+                    jdbc.sql("update ride_order set pickup_at=now()+interval '25 minutes' where id=:id")
+                            .param("id", order.id()).update();
+                }
             }
             values.put("reason_code", "CANNOT_REACH");
         } else if (path.contains("/offers/") || path.endsWith("/claim")) {
@@ -438,66 +480,100 @@ class AccessIsolationTests {
                 ride = rides.assigned(city, ownerDriver.driver(), PICKUP, DROPOFF);
                 rides.moveTo(ownerDriver.driver(), TestRides.north(PICKUP, 30));
                 if (path.endsWith("/start") || path.endsWith("/no-show")) {
-                    trips.arrive(ownerDriver.driver().actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), null);
-                    if (path.endsWith("/no-show")) jdbc.sql("update trip set arrived_at=arrived_at-interval '6 minutes' where id=:id")
-                            .param("id", ride.trip().id()).update();
+                    trips.arrive(ownerDriver.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                            ride.trip().version(), null);
+                    if (path.endsWith("/no-show")) {
+                        jdbc.sql("update trip set arrived_at=arrived_at-interval '6 minutes' where id=:id")
+                                .param("id", ride.trip().id()).update();
+                    }
                 }
             } else {
                 ride = rides.started(city, ownerDriver.driver(), PICKUP, DROPOFF);
-                if (!tripCommand) rides.complete(ride, true);
+                if (!tripCommand) {
+                    rides.complete(ride, true);
+                }
             }
-            rider = ride.payer();riderToken = token(rider);
-            ids.put("order_id", ride.order().id());ids.put("trip_id", ride.trip().id());
+            rider = ride.payer();
+            riderToken = token(rider);
+            ids.put("order_id", ride.order().id());
+            ids.put("trip_id", ride.trip().id());
             values.put("expected_version", jdbc.sql("select version from trip where id=:id")
                     .param("id", ride.trip().id()).query(Long.class).single());
-            values.put("reason_code", "CANNOT_REACH");values.put("cash_received", true);
+            values.put("reason_code", "CANNOT_REACH");
+            values.put("cash_received", true);
             if (path.endsWith("/cancel") && !driverApi || path.endsWith("/switch-to-cash")) {
                 OrderView pending = rides.order(rider, city, PICKUP, DROPOFF);
-                ids.put("order_id", pending.id());values.put("expected_version", pending.version());
+                ids.put("order_id", pending.id());
+                values.put("expected_version", pending.version());
                 values.put("reason_code", "CHANGED_MIND");
-                if (path.endsWith("/switch-to-cash")) conflict = "The fixture is a CASH order; only CARD can switch to cash";
+                if (path.endsWith("/switch-to-cash")) {
+                    conflict = "The fixture is a CASH order; only CARD can switch to cash";
+                }
             }
-            if (path.endsWith("/call")) conflict = "The fixture's fulfilled trip is no longer callable";
+            if (path.endsWith("/call")) {
+                conflict = "The fixture's fulfilled trip is no longer callable";
+            }
         }
         Actor owner = driverApi ? ownerDriver.driver().actor() : rider;
         String ownerToken = driverApi ? ownerDriver.device().accessToken() : riderToken;
         String strangerToken = driverApi ? strangerDriver : strangerRider;
-        if (path.contains("/uploads/")) ids.put("file_id", files.openUpload(owner, UUID.randomUUID(),
-                driverApi ? FilePurpose.DRIVER_DOCUMENT : FilePurpose.SUPPORT_ATTACHMENT, "image/png", PNG.length).fileId());
-        else if (path.contains("/files/")) ids.put("file_id", safeFile(owner, FilePurpose.DRIVER_DOCUMENT));
+        if (path.contains("/uploads/")) {
+            ids.put("file_id", files.openUpload(owner, UUID.randomUUID(),
+                    driverApi ? FilePurpose.DRIVER_DOCUMENT : FilePurpose.SUPPORT_ATTACHMENT,
+                    "image/png", PNG.length).fileId());
+        } else if (path.contains("/files/")) {
+            ids.put("file_id", safeFile(owner, FilePurpose.DRIVER_DOCUMENT));
+        }
         if (path.contains("/support/")) {
             UUID attachment = safeFile(owner, FilePurpose.SUPPORT_ATTACHMENT);
             var creation = new LinkedHashMap<String, Object>();
-            creation.put("command_id", UUID.randomUUID());creation.put("category", driverApi ? "APP_PROBLEM" : "LOST_ITEM");
-            creation.put("subject", "Isolation fixture");creation.put("message", "Isolation attachment");
+            creation.put("command_id", UUID.randomUUID());
+            creation.put("category", driverApi ? "APP_PROBLEM" : "LOST_ITEM");
+            creation.put("subject", "Isolation fixture");
+            creation.put("message", "Isolation attachment");
             creation.put("attachment_ids", List.of(attachment));
-            if (!driverApi) creation.put("order_id", ids.get("order_id"));
+            if (!driverApi) {
+                creation.put("order_id", ids.get("order_id"));
+            }
             String root = driverApi ? "/api/driver/v1" : "/api/rider/v1";
-            ids.put("case_id", id(postJson(root + "/support/cases", ownerToken, creation), "id"));ids.put("file_id", attachment);
+            ids.put("case_id", id(postJson(root + "/support/cases", ownerToken, creation), "id"));
+            ids.put("file_id", attachment);
         }
-        if (path.contains("/push-devices/")) ids.put("device_id", id(postJson(driverApi ? "/api/driver/v1/push-devices" : "/api/rider/v1/push-devices",
-                ownerToken, Map.of("command_id", UUID.randomUUID(), "platform", "ANDROID", "token", "isolation-" + UUID.randomUUID())), "id"));
-        if (path.contains("/card-bindings/")) ids.put("binding_id", id(postJson("/api/rider/v1/card-bindings", ownerToken,
-                Map.of("command_id", UUID.randomUUID(), "city_id", city)), "id"));
+        if (path.contains("/push-devices/")) {
+            String root = driverApi ? "/api/driver/v1" : "/api/rider/v1";
+            ids.put("device_id", id(postJson(root + "/push-devices", ownerToken,
+                    Map.of("command_id", UUID.randomUUID(), "platform", "ANDROID",
+                            "token", "isolation-" + UUID.randomUUID())), "id"));
+        }
+        if (path.contains("/card-bindings/")) {
+            ids.put("binding_id", id(postJson("/api/rider/v1/card-bindings", ownerToken,
+                    Map.of("command_id", UUID.randomUUID(), "city_id", city)), "id"));
+        }
         if (path.contains("/cards/")) {
             UUID card = UUID.randomUUID();
             jdbc.sql("""
                 insert into payment_card(id,client_id,merchant_id,token,masked_pan,card_type,state,created_at)
                 select :id,:client,merchant_id,:token,'41****1111','Visa','ACTIVE',now()
                 from payment_merchant_city where city_id=:city
-                """).param("id", card).param("client", owner.id()).param("token", "isolation-" + card).param("city", city).update();
+                """).param("id", card).param("client", owner.id())
+                    .param("token", "isolation-" + card).param("city", city).update();
             ids.put("card_id", card);
         }
-        if (path.contains("card-top-ups/")) ids.put("top_up_id", topUps.start(owner, UUID.randomUUID(), city, 10_000).id());
+        if (path.contains("card-top-ups/")) {
+            ids.put("top_up_id", topUps.start(owner, UUID.randomUUID(), city, 10_000).id());
+        }
         if (path.contains("/data-exports/")) {
             UUID export = UUID.randomUUID();
             jdbc.sql("""
                 insert into personal_data_export(id,client_id,state,content,size_bytes,created_at,ready_at,expires_at)
                 values(:id,:client,'READY','{}'::bytea,2,now(),now(),now()+interval '7 days')
-                """).param("id", export).param("client", owner.id()).update();ids.put("export_id", export);
+                """).param("id", export).param("client", owner.id()).update();
+            ids.put("export_id", export);
         }
-        if (path.endsWith("/rating") && operation.method().equals("get")) postJson(path.replace("{order_id}", ids.get("order_id").toString()),
-                ownerToken, Map.of("command_id", UUID.randomUUID(), "score", 5));
+        if (path.endsWith("/rating") && operation.method().equals("get")) {
+            postJson(path.replace("{order_id}", ids.get("order_id").toString()), ownerToken,
+                    Map.of("command_id", UUID.randomUUID(), "score", 5));
+        }
         return new IsolationFixture(ids, values, ownerToken, strangerToken, conflict);
     }
 
@@ -514,7 +590,9 @@ class AccessIsolationTests {
     }
 
     private String problemCode(MvcResult result) throws Exception {
-        if (result.getResponse().getStatus() >= 200 && result.getResponse().getStatus() < 300) return "success";
+        if (result.getResponse().getStatus() >= 200 && result.getResponse().getStatus() < 300) {
+            return "success";
+        }
         return json.readTree(result.getResponse().getContentAsString()).path("code").asText("MISSING_CODE");
     }
 

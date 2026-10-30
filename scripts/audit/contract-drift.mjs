@@ -207,7 +207,8 @@ for (const {f,s} of testSources) {
         || !s.includes('@MethodSource("contractOperations")')
         || !s.includes('verify(operation, fixture(operation))')
         || !s.includes('perform(request(operation, path, payload), fixture.stranger())')) {
-      unresolvedCoverage.push({source:f,reason:'Unrecognized isolation selector or stranger HTTP invocation; not classified as covered'});
+      unresolvedCoverage.push({source:f,
+        reason:'Unrecognized isolation selector or stranger HTTP invocation; not classified as covered'});
       continue;
     }
     entries=[...s.matchAll(/\bIsolationContract\.operations\("([^"/]+\.yaml)"\)/g)];
