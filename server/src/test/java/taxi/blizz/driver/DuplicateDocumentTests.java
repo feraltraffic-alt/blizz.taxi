@@ -154,6 +154,11 @@ class DuplicateDocumentTests {
         UUID secondDocument = document(second, licence);
         List<Map<String, Object>> flags = duplicateFlags(second.id());
         assertThat(flags).hasSize(1);
+        // Issue #135, E5: found although both files are stored encrypted (the hash is of the plain bytes).
+        assertThat(jdbc.sql("""
+                        select count(*) from driver_document d join file_object f on f.id = d.file_id
+                        where d.id in (:a, :b) and f.encryption = 'AES256GCM-STREAM-1'""")
+                .param("a", firstDocument).param("b", secondDocument).query(Integer.class).single()).isEqualTo(2);
         assertThat((String) flags.getFirst().get("evidence")).contains(first.id().toString())
                 .contains(firstDocument.toString()).contains(secondDocument.toString());
 
