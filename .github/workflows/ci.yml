@@ -60,6 +60,9 @@ jobs:
           path: ~/.cache/trivy
           key: trivy-${{ github.run_id }}
           restore-keys: trivy-
+      - name: Images pinned by digest
+        shell: bash
+        run: scripts/pin-images.sh --check
       - name: Repository
         shell: bash
         run: scripts/security-scan.sh | tee repo.txt
