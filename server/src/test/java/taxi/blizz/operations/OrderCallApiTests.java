@@ -139,7 +139,7 @@ class OrderCallApiTests {
 
             OrderView phoneOrder = phoneOrder(admin);
             OfferView phoneOffer = dispatch.offers(driver.actor()).getFirst();
-            dispatch.accept(driver.actor(), UUID.randomUUID(), phoneOffer.id());
+            dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), phoneOffer.id());
             TripView phoneTrip = trips.current(driver.actor()).orElseThrow();
             Map<String, Object> phoneTarget = body(getAuth(
                     "/api/driver/v1/trips/" + phoneTrip.id() + "/call", token(driver.actor())));

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blizz.taxi/contracts/events/order-card-payment-settled.v1.schema.json",
+  "title": "CardPaymentSettled v1 payload",
+  "x-aggregate": "Order",
+  "description": "The order's history event when operations records the card payment after a trip (aggregate Order, version = order version): payment state PAID, or PARTIALLY_PAID when paid_minor is less than due_minor. The payment's event of the same type is card-payment-settled.v1; finance posts only that one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "paid_minor",
+    "due_minor"
+  ],
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "paid_minor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "due_minor": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "examples": [
+    {
+      "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f",
+      "paid_minor": 15400,
+      "due_minor": 15400
+    }
+  ]
+}
