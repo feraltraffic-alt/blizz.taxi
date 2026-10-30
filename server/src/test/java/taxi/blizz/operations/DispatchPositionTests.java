@@ -292,6 +292,32 @@ class DispatchPositionTests {
     }
 
     @Test
+    void aRefusalHealsOnceTheTimeToDriveThereHasPassed() throws Exception {
+        Actor driver = driver();
+        IssuedSession phone = signIn(driver, "phone");
+        open(phone, driver, HOME);
+
+        // A wrong first fix (a cell tower) must not hold the driver STALE until the 30-minute age-out: refused fixes
+        // do not move the baseline, so the same far point is plausible once 50 km at 250 km/h (12 min) have passed.
+        assertThat(heartbeat(phone, driver, FAR, OffsetDateTime.now())).containsEntry("accepted", false);
+        assertThat(flags(driver)).isEqualTo(1);
+
+        baselineAged(driver, 11 * 60);
+        assertThat(heartbeat(phone, driver, FAR, OffsetDateTime.now())).containsEntry("accepted", false)
+                .containsEntry("geolocation", "STALE");
+        assertThat(flags(driver)).as("no second flag in the hour").isEqualTo(1);
+
+        baselineAged(driver, 2 * 60);
+        assertThat(heartbeat(phone, driver, FAR, OffsetDateTime.now())).containsEntry("accepted", true)
+                .containsEntry("geolocation", "FRESH");
+        assertNear(dispatchPosition(driver), FAR);
+        assertThat(jdbc.sql("select location_refused_at from work_session where driver_id = :d and state = 'OPEN'")
+                .param("d", driver.id()).query((rs, i) -> java.util.Optional.ofNullable(rs.getObject(1)))
+                .single()).isEmpty();
+        assertThat(flags(driver)).isEqualTo(1);
+    }
+
+    @Test
     void aBaselineOlderThanThirtyMinutesIsNotUsed() throws Exception {
         Actor driver = driver();
         IssuedSession phone = signIn(driver, "phone");
