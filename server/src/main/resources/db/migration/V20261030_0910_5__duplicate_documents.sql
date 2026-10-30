@@ -13,3 +13,6 @@ alter table driver_risk_flag add constraint driver_risk_flag_kind_check
 alter table driver_risk_flag alter column city_id drop not null;
 alter table driver_risk_flag add constraint driver_risk_flag_city_check
     check (city_id is not null or kind = 'DUPLICATE_DOCUMENT');
+
+-- files: the quarantine gauge reads only the files waiting for their checks.
+create index file_object_quarantine_idx on file_object (created_at) where state = 'QUARANTINE';

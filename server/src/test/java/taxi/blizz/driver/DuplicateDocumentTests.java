@@ -53,6 +53,7 @@ class DuplicateDocumentTests {
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
     @Autowired taxi.blizz.operations.DriverRiskFlags riskFlags;
 
     MockMvc mvc;
@@ -224,6 +225,26 @@ class DuplicateDocumentTests {
                 .param("permissions", new String[]{taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION})
                 .param("all", allCities).param("scope", cities).update();
         return new Actor(SubjectType.STAFF, id);
+    }
+
+    /** Lead's decision on #131: the age of the oldest QUARANTINE file is a gauge, alerted over an hour. */
+    @Test
+    void theOldestFileInQuarantineIsMeasured() {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
+                                                 declared_size_bytes, state, upload_expires_at, created_at)
+                        values (:id, 'DRIVER', :owner, 'DRIVER_DOCUMENT', 'image/jpeg', 10, 'QUARANTINE', now(),
+                                now() - interval '2 hours')""")
+                .param("id", id).param("owner", UUID.randomUUID()).update();
+        try {
+            context.getBeansOfType(taxi.blizz.platform.DatabaseGauges.class).values()
+                    .forEach(taxi.blizz.platform.DatabaseGauges::refresh);
+            assertThat(meters.get("blizz.files.quarantine.oldest.seconds").gauge().value())
+                    .isGreaterThanOrEqualTo(7200);
+        } finally {
+            jdbc.sql("update file_object set state = 'REJECTED' where id = :id").param("id", id).update();
+        }
     }
 
     // ------------------------------------------------------------ E6

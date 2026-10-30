@@ -38,6 +38,14 @@ groups:
           summary: "Events could not be delivered"
           runbook: docs/runbooks/outbox.md
 
+      - alert: FileQuarantineStuck
+        expr: max(blizz_files_quarantine_oldest_seconds) > 3600
+        for: 5m
+        labels: {severity: warning, owner: backend-oncall}
+        annotations:
+          summary: "An uploaded file has waited more than an hour for its antivirus verdict"
+          runbook: docs/runbooks/providers.md
+
       - alert: PaymentOutcomeUnknown
         expr: max(blizz_payments_unknown_oldest_seconds) > 300
         for: 1m
