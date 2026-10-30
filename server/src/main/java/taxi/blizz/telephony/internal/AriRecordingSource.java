@@ -39,11 +39,14 @@ class AriRecordingSource implements RecordingSource {
         if (!NAME.matcher(channelId).matches()) {
             return Optional.empty();
         }
-        Path file = Files.createTempFile("call-recording-", ".wav");
+        Path file = downloaded(channelId);
+        Files.createDirectories(file.getParent());
+        Files.deleteIfExists(file);
+        Files.createFile(file,java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
         boolean keep = false;
         try {
             HttpResponse<Path> response = send(request(channelId, "/file").GET()
-                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file));
+                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file, java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING));
             if (response.statusCode() == 404) {
                 return Optional.empty();
             }
@@ -69,6 +72,13 @@ class AriRecordingSource implements RecordingSource {
         if (response.statusCode() != 204 && response.statusCode() != 404) {
             throw new IOException("Asterisk answered " + response.statusCode());
         }
+        Files.deleteIfExists(downloaded(channelId));
+    }
+
+    /** Stable across worker instances: retention can remove a download left by a crashed fetch. */
+    private static Path downloaded(String channelId) {
+        String name=java.util.UUID.nameUUIDFromBytes(channelId.getBytes(StandardCharsets.UTF_8)).toString()+".wav";
+        return Path.of(System.getProperty("java.io.tmpdir"),"blizz-call-recording-downloads",name);
     }
 
     private HttpRequest.Builder request(String channelId, String suffix) throws IOException {

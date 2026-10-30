@@ -66,14 +66,17 @@ class RetentionVolumeTests {
             """.formatted(ID,AGE)).update();
         for(String state:List.of("SAFE","QUARANTINE"))jdbc.sql("""
             insert into file_object(id,owner_type,owner_id,purpose,declared_content_type,declared_size_bytes,state,
-              upload_expires_at,created_at,uploaded_at)
-            select md5(:prefix||g)::uuid,'DRIVER',%s,'DRIVER_DOCUMENT','image/png',1,:state,%s,%s,%s
+              upload_expires_at,created_at,uploaded_at,staging_key,storage_key)
+            select md5(:prefix||g)::uuid,'DRIVER',%s,'DRIVER_DOCUMENT','image/png',1,:state,%s,%s,%s,
+              'driver_document/volume/'||md5(:prefix||g),
+              case when :state='SAFE' then 'driver_document/volume/'||md5(:prefix||g) end
             from generate_series(1,200000) g
             """.formatted(ID,AGE,AGE,AGE)).param("prefix",state).param("state",state).update();
         jdbc.sql("""
             insert into file_object(id,owner_type,purpose,declared_content_type,declared_size_bytes,state,encryption,
-              upload_expires_at,created_at,uploaded_at)
-            select md5('recording-'||g)::uuid,'SYSTEM','CALL_RECORDING','audio/wav',1,'SAFE','AES256GCM-STREAM-1',%s,%s,%s
+              upload_expires_at,created_at,uploaded_at,storage_key)
+            select md5('recording-'||g)::uuid,'SYSTEM','CALL_RECORDING','audio/wav',1,'SAFE','AES256GCM-STREAM-1',%s,%s,%s,
+              'call_recording/volume/'||md5('recording-'||g)
             from generate_series(1,200000) g
             """.formatted(AGE,AGE,AGE)).update();
         jdbc.sql("""

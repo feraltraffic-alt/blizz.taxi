@@ -56,6 +56,7 @@ class RetentionAcceptanceTests {
     @Autowired JdbcClient jdbc;
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean FileStorage storage;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean FileScanner scanner;
     @Autowired WebApplicationContext context;
     @Autowired SessionService auth;
     @Autowired JsonMapper json;
@@ -526,6 +527,55 @@ class RetentionAcceptanceTests {
         p.put("call_recordings",30);policy(p);run("call_recordings",now);
         assertThat(jdbc.sql("select count(*) from file_object where id in (:a,:b)").param("a",rejected.fileId()).param("b",unlinked.fileId()).query(Long.class).single()).isZero();
         assertThat(Files.exists(root.resolve(key))).isFalse();
+    }
+
+    @Test void quarantineCleanupRemovesTheActualPausedScannersTemporaryBytesBeforeItsRow() throws Exception {
+        Actor owner=new Actor(SubjectType.DRIVER,UUID.randomUUID());
+        byte[] png=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var files=context.getBean(taxi.blizz.files.FileService.class);
+        var upload=files.openUpload(owner,UUID.randomUUID(),taxi.blizz.files.FilePurpose.DRIVER_DOCUMENT,"image/png",png.length);
+        Map<String,Object> p=days(0);p.put("quarantined_files",1);policy(p);
+        var scanning=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        var actualPath=new java.util.concurrent.atomic.AtomicReference<Path>();
+        org.mockito.Mockito.doAnswer(invocation->{
+            actualPath.set(invocation.getArgument(0,Path.class));scanning.countDown();
+            if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Scanner not released");
+            return java.util.Optional.empty();
+        }).when(scanner).scan(org.mockito.ArgumentMatchers.any(Path.class),org.mockito.ArgumentMatchers.anyString());
+        try(var executor=java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var uploading=executor.submit(()->files.upload(owner,upload.fileId(),"image/png",png.length,new java.io.ByteArrayInputStream(png)));
+            try {
+                assertThat(scanning.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();assertThat(Files.exists(actualPath.get())).isTrue();
+                assertThat(Files.getPosixFilePermissions(actualPath.get())).containsExactlyInAnyOrder(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+                run("quarantined_files",OffsetDateTime.now().plusDays(400));
+                assertThat(Files.exists(actualPath.get())).as("real temporary bytes removed before the upload row").isFalse();
+                assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",upload.fileId()).query(Long.class).single()).isZero();
+            } finally {release.countDown();}
+            assertThat(uploading.get(10,java.util.concurrent.TimeUnit.SECONDS).state()).isNotEqualTo(taxi.blizz.files.FileState.SAFE);
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings={"QUARANTINE","SAFE"})
+    void legacyBytesWithNoKnownKeyAreReportedAndNeverSilentlyDropped(String state) throws Exception {
+        UUID id=UUID.randomUUID();OffsetDateTime now=OffsetDateTime.now();
+        jdbc.sql("""
+            insert into file_object(id,owner_type,owner_id,purpose,declared_content_type,declared_size_bytes,state,
+              upload_expires_at,created_at,quarantine_at)
+            values(:id,'DRIVER',:id,'DRIVER_DOCUMENT','image/png',1,:state,:at,:at,:at)
+            """).param("id",id).param("state",state).param("at",now.minusDays(400)).update();
+        String kind=state.equals("QUARANTINE")?"quarantined_files":"upload_sessions";
+        Map<String,Object> p=days(0);p.put(kind,1);policy(p);
+        var metrics=context.getBean(io.micrometer.core.instrument.MeterRegistry.class);
+        double before=metrics.find("blizz.retention.failures").tag("kind",kind).counters().stream().mapToDouble(c->c.count()).sum();
+        try {
+            run(kind,now);run(kind,now);
+            assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",id).query(Long.class).single()).isEqualTo(1);
+            assertThat(metrics.find("blizz.retention.failures").tag("kind",kind).counter().count()).isEqualTo(before+2);
+        } finally {
+            // This synthetic unknown row has no bytes; do not add failures to another test's counter delta.
+            jdbc.sql("delete from file_object where id=:id").param("id",id).update();
+        }
     }
 
 }

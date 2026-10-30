@@ -66,6 +66,10 @@ class RecordingRetentionTests {
             server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
             server.createContext("/ari/recordings/stored/",exchange->{
                 try {
+                    if(exchange.getRequestMethod().equals("GET")) {
+                        byte[] wav=WavFiles.tone(1);exchange.sendResponseHeaders(200,wav.length);
+                        exchange.getResponseBody().write(wav);return;
+                    }
                     assertThat(exchange.getRequestMethod()).isEqualTo("DELETE");
                     assertThat(jdbc.sql("select count(*) from pg_stat_activity where datname=current_database() and state='idle in transaction'")
                         .query(Long.class).single()).as("no DB transaction held across ARI").isZero();
@@ -77,15 +81,18 @@ class RecordingRetentionTests {
                 finally{exchange.close();}
             });server.start();
         }
-        CallRecordingRetention work() {
+        AriRecordingSource source() {
             Map<String,String> values=Map.of(Integrations.OTP_ASTERISK_ARI_URL,"http://127.0.0.1:"+server.getAddress().getPort(),
                 Integrations.OTP_ASTERISK_ARI_USER,"retention-test",Integrations.OTP_ASTERISK_ARI_PASSWORD,"test-only");
             Integrations integrations=org.mockito.Mockito.mock(Integrations.class);
             org.mockito.Mockito.when(integrations.value(org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(invocation->Optional.ofNullable(values.get(invocation.getArgument(0,String.class))));
+            return new AriRecordingSource(integrations);
+        }
+        CallRecordingRetention work() {
             TelephonyProperties live=new TelephonyProperties("LIVE","https://example.invalid",Duration.ofSeconds(30),false,
                 Duration.ofHours(4),false,false,Duration.ofHours(1),1000000,"PJSIP/{extension}","blizz-outgoing",List.of());
-            return new CallRecordingRetention(jdbc,files,live,new AriRecordingSource(integrations),fake,transactions);
+            return new CallRecordingRetention(jdbc,files,live,source(),fake,transactions);
         }
         @Override public void close(){server.stop(0);assertThat(problem.get()).isNull();}
     }
@@ -130,6 +137,21 @@ class RecordingRetentionTests {
         var source=new AriRecordingSource(org.mockito.Mockito.mock(Integrations.class));
         org.assertj.core.api.Assertions.assertThatThrownBy(()->source.discard("unsupported/name"))
             .isInstanceOf(java.io.IOException.class).hasMessage("Unsupported stored recording name");
+    }
+
+    @Test void cleanupAlsoRemovesTheDownloadedAsteriskTemporaryCopy() throws Exception {
+        OffsetDateTime now=OffsetDateTime.now();UUID id=recording("NONE",null,now.minusDays(400));
+        try(Ari ari=new Ari()) {
+            Path downloaded=ari.source().fetch(id.toString()).orElseThrow();
+            try {
+                assertThat(Files.exists(downloaded)).isTrue();
+                assertThat(Files.getPosixFilePermissions(downloaded)).containsExactlyInAnyOrder(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+                assertThat(ari.work().run(now.minusDays(30),now,1000).deleted()).isEqualTo(1);
+                assertThat(Files.exists(downloaded)).as("downloaded source bytes removed before recording metadata").isFalse();
+                assertThat(count(id)).isZero();
+            } finally {Files.deleteIfExists(downloaded);}
+        }
     }
 
 }

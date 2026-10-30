@@ -36,12 +36,25 @@ class LocalFileStorage implements FileStorage {
         Files.createDirectories(recordingsRoot);
     }
 
+    private Path staged(String key) {
+        resolve(key); // Validate before deriving any private path.
+        return staging.resolve(java.util.UUID.nameUUIDFromBytes(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)) + ".bin");
+    }
+
     @Override
-    public Path stage(InputStream body, long maxBytes) throws IOException, TooLargeException {
-        Path target = Files.createTempFile(staging, "upload-", ".bin");
+    public Path reserve(String key) throws IOException {
+        Path raw=Files.createFile(staged(key),java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
+        try {Files.createFile(raw.resolveSibling(raw.getFileName()+".sealed"),java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));}
+        catch(IOException ex){Files.deleteIfExists(raw);throw ex;}
+        return raw;
+    }
+
+    @Override
+    public Path stage(InputStream body, long maxBytes, String key) throws IOException, TooLargeException {
+        Path target = staged(key);
         long written = 0;
         byte[] buffer = new byte[64 * 1024];
-        try (OutputStream out = Files.newOutputStream(target)) {
+        try (OutputStream out = Files.newOutputStream(target, java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
             int read;
             while ((read = body.read(buffer)) != -1) {
                 written += read;
@@ -77,7 +90,16 @@ class LocalFileStorage implements FileStorage {
     }
 
     @Override
+    public void clearStage(String key) throws IOException {
+        Path raw=staged(key),finalPath=resolve(key);
+        Files.deleteIfExists(raw);
+        Files.deleteIfExists(raw.resolveSibling(raw.getFileName()+".sealed"));
+        Files.deleteIfExists(finalPath.resolveSibling(finalPath.getFileName()+".partial"));
+    }
+
+    @Override
     public void delete(String key) throws IOException {
+        clearStage(key);
         Files.deleteIfExists(resolve(key));
     }
 

@@ -108,7 +108,7 @@ class JdbcFileService implements FileService {
                 });
     }
 
-    private record Claimed(FilePurpose purpose, String declaredType, long declaredSize) {
+    private record Claimed(FilePurpose purpose, String declaredType, long declaredSize, String key) {
     }
 
     @Override
@@ -117,7 +117,7 @@ class JdbcFileService implements FileService {
         Path staged = null;
         try {
             try {
-                staged = storage.stage(body, claimed.declaredSize());
+                staged = storage.stage(body, claimed.declaredSize(), claimed.key());
             } catch (FileStorage.TooLargeException e) {
                 return reject(fileId, null, "The file is larger than declared");
             }
@@ -136,8 +136,8 @@ class JdbcFileService implements FileService {
             }
             long size = Files.size(staged);
             byte[] hash = sha256(staged);
-            String key = claimed.purpose().name().toLowerCase(Locale.ROOT) + "/" + MONTH.format(now()) + "/" + fileId;
-            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash);
+            String key = claimed.key();
+            StoredFile result = completeUpload(fileId, staged, key, detected.get(), size, hash, null);
             staged = null;
             return result;
         } catch (IOException e) {
@@ -145,11 +145,12 @@ class JdbcFileService implements FileService {
             return reject(fileId, staged, "The upload could not be completed");
         } finally {
             deleteQuietly(staged);
+            clearStageQuietly(claimed.key());
         }
     }
 
     /** The body and scanner have finished; serialize only the bounded local move/finalization with cleanup. */
-    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash)
+    private StoredFile completeUpload(UUID fileId, Path staged, String key, String type, long size, byte[] hash, String encryptionScheme)
             throws IOException {
         try {
             return tx.execute(status -> {
@@ -161,10 +162,13 @@ class JdbcFileService implements FileService {
                 OffsetDateTime now = now();
                 jdbc.sql("""
                         update file_object set state='SAFE',detected_content_type=:type,size_bytes=:size,sha256=:hash,
-                            storage_key=:key,uploaded_at=:now,scanned_at=:now,scan_engine=:engine,version=version+1
+                            storage_key=:key,uploaded_at=:now,scanned_at=:now,scan_engine=:engine,encryption=:encryption,
+                            declared_size_bytes=case when owner_type='SYSTEM' then greatest(:size,1) else declared_size_bytes end,
+                            version=version+1
                         where id=:id
                         """).param("type",type).param("size",size).param("hash",hash).param("key",key)
-                        .param("now",now).param("engine",scanner.engine()).param("id",fileId).update();
+                        .param("now",now).param("engine",encryptionScheme==null?scanner.engine():"content-type")
+                        .param("encryption",encryptionScheme).param("id",fileId).update();
                 return new StoredFile(fileId,FileState.SAFE,type,size,null);
             });
         } catch (UncheckedIOException ex) { throw ex.getCause(); }
@@ -198,10 +202,11 @@ class JdbcFileService implements FileService {
         if (contentLength > row.size()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The file is larger than declared");
         }
-        jdbc.sql("update file_object set state = 'QUARANTINE', quarantine_at=:now, version = version + 1 where id = :id")
-                .param("now", now()).param("id", fileId)
-                .update();
-        return new Claimed(FilePurpose.valueOf(row.purpose()), row.type(), row.size());
+        String key=row.purpose().toLowerCase(Locale.ROOT)+"/"+MONTH.format(now())+"/"+fileId;
+        reserveStage(key);
+        jdbc.sql("update file_object set state='QUARANTINE',quarantine_at=:now,staging_key=:key,version=version+1 where id=:id")
+                .param("now",now()).param("key",key).param("id",fileId).update();
+        return new Claimed(FilePurpose.valueOf(row.purpose()),row.type(),row.size(),key);
     }
 
     private StoredFile reject(UUID fileId, Path staged, String reason) {
@@ -226,62 +231,48 @@ class JdbcFileService implements FileService {
                 "No master key (SECRETS_MASTER_KEY): a call recording cannot be stored encrypted"));
         String type = normalize(contentType);
         UUID fileId = UUID.randomUUID();
-        Path staged = null;
-        Path sealed = null;
+        String key=purpose.name().toLowerCase(Locale.ROOT)+"/"+MONTH.format(now())+"/"+fileId;
+        tx.executeWithoutResult(status->{
+            OffsetDateTime at=now();
+            jdbc.sql("""
+                insert into file_object(id,owner_type,purpose,declared_content_type,declared_size_bytes,state,
+                  staging_key,upload_expires_at,created_at,quarantine_at)
+                values(:id,'SYSTEM',:purpose,:type,:size,'QUARANTINE',:key,:now,:now,:now)
+                """).param("id",fileId).param("purpose",purpose.name()).param("type",type.isEmpty()?"-":type)
+                .param("size",Math.max(maxBytes,1)).param("key",key).param("now",at).update();
+            reserveStage(key);
+        });
+        Path staged=null,sealed=null;
         try {
-            try {
-                staged = storage.stage(body, maxBytes);
-            } catch (FileStorage.TooLargeException e) {
-                return systemRejected(fileId, purpose, type, "The file is larger than allowed");
-            }
-            Optional<String> detected = ContentSniffer.detect(staged);
-            if (detected.isEmpty() || !detected.get().equals(type)) {
-                return systemRejected(fileId, purpose, type, "The content does not match the declared type");
-            }
-            long size = Files.size(staged);
-            byte[] hash = sha256(staged);
-            String key = purpose.name().toLowerCase(Locale.ROOT) + "/" + MONTH.format(now()) + "/" + fileId;
-            sealed = Files.createTempFile(staged.getParent(), "sealed-", ".bin");
-            cipher.encrypt(staged, sealed, key);
-            storage.store(sealed, key);
-            sealed = null;
-            OffsetDateTime now = now();
-            try {
-                jdbc.sql("""
-                                insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
-                                                         declared_size_bytes, detected_content_type, size_bytes,
-                                                         sha256, storage_key, state, scan_engine, encryption,
-                                                         upload_expires_at, created_at, uploaded_at, scanned_at)
-                                values (:id, 'SYSTEM', null, :purpose, :type, :declared, :type, :size, :hash, :key,
-                                        'SAFE', 'content-type', :encryption, :now, :now, :now, :now)""")
-                        .param("id", fileId).param("purpose", purpose.name()).param("type", type)
-                        .param("declared", Math.max(size, 1)).param("size", size).param("hash", hash)
-                        .param("key", key).param("encryption", FileCipher.SCHEME).param("now", now).update();
-            } catch (RuntimeException e) {
-                storage.delete(key);
-                throw e;
-            }
-            return new StoredFile(fileId, FileState.SAFE, type, size, null);
-        } catch (IOException e) {
-            throw new UncheckedIOException(new IOException("A " + purpose + " file could not be stored", e));
-        } finally {
-            deleteQuietly(staged);
-            deleteQuietly(sealed);
-        }
+            try {staged=storage.stage(body,maxBytes,key);}
+            catch(FileStorage.TooLargeException ex){return systemRejected(fileId,"The file is larger than allowed");}
+            Optional<String> detected=ContentSniffer.detect(staged);
+            if(detected.isEmpty()||!detected.get().equals(type))return systemRejected(fileId,"The content does not match the declared type");
+            long size=Files.size(staged);byte[] hash=sha256(staged);
+            sealed=staged.resolveSibling(staged.getFileName()+".sealed");
+            cipher.encryptReserved(staged,sealed,key);
+            return completeUpload(fileId,sealed,key,type,size,hash,FileCipher.SCHEME);
+        } catch(IOException ex){throw new UncheckedIOException(new IOException("A "+purpose+" file could not be stored",ex));}
+        finally {deleteQuietly(staged);deleteQuietly(sealed);clearStageQuietly(key);}
     }
 
-    /** A system file that failed a check: recorded REJECTED without bytes, so the reason can be looked up. */
-    private StoredFile systemRejected(UUID fileId, FilePurpose purpose, String type, String reason) {
-        OffsetDateTime now = now();
+    private void reserveStage(String key) {
+        try {storage.reserve(key);}
+        catch(IOException ex){throw new UncheckedIOException(ex);}
+    }
+
+    private void clearStageQuietly(String key) {
+        try {storage.clearStage(key);}
+        catch(IOException|RuntimeException ex){log.warn("Could not clear reserved file stage ({})",ex.getClass().getSimpleName());}
+    }
+
+    /** The reserved staging key remains available to retention even when immediate cleanup fails. */
+    private StoredFile systemRejected(UUID fileId,String reason) {
         jdbc.sql("""
-                        insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
-                                                 declared_size_bytes, state, reject_reason, scan_engine,
-                                                 upload_expires_at, created_at, scanned_at)
-                        values (:id, 'SYSTEM', null, :purpose, :type, 1, 'REJECTED', :reason, 'content-type',
-                                :now, :now, :now)""")
-                .param("id", fileId).param("purpose", purpose.name()).param("type", type.isEmpty() ? "-" : type)
-                .param("reason", reason).param("now", now).update();
-        return new StoredFile(fileId, FileState.REJECTED, null, 0, reason);
+            update file_object set state='REJECTED',reject_reason=:reason,scan_engine='content-type',scanned_at=:now,
+              declared_size_bytes=1,version=version+1 where id=:id and state='QUARANTINE' and retention_claim is null
+            """).param("reason",reason).param("now",now()).param("id",fileId).update();
+        return new StoredFile(fileId,FileState.REJECTED,null,0,reason);
     }
 
     @Override

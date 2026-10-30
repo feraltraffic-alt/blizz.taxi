@@ -47,7 +47,7 @@ class FileRetirement {
     String selection(String kind,int limit) {
         return "select id from file_object where "+eligibility(kind)+" and "+AVAILABLE+" order by "+age(kind)+",id limit "+RetentionWork.limit(limit);
     }
-    private record Claimed(UUID id,String key,UUID claim){}
+    private record Claimed(UUID id,String key,String stagingKey,String state,UUID claim){}
     private record Attempt(boolean gone,int deleted,int failures){}
     RetentionWork.Result run(String kind,OffsetDateTime cutoff,OffsetDateTime now,int limit) {
         RetentionWork.Result total=new RetentionWork.Result(0,0,0);
@@ -63,8 +63,8 @@ class FileRetirement {
     }
     private Attempt retire(UUID id,String eligibility,Map<String,Object> params,OffsetDateTime now) {
         Claimed claimed=tx.execute(status->{
-            var row=jdbc.sql("select id,storage_key from file_object where id=:id and "+eligibility+" and "+AVAILABLE+" for update skip locked")
-                .params(params).param("id",id).query((rs,i)->new Claimed(rs.getObject(1,UUID.class),rs.getString(2),UUID.randomUUID())).optional();
+            var row=jdbc.sql("select id,storage_key,staging_key,state from file_object where id=:id and "+eligibility+" and "+AVAILABLE+" for update skip locked")
+                .params(params).param("id",id).query((rs,i)->new Claimed(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),UUID.randomUUID())).optional();
             if(row.isEmpty())return null;
             Claimed item=row.get();
             jdbc.sql("update file_object set retention_claim=:claim,retention_until=:until where id=:id")
@@ -76,7 +76,12 @@ class FileRetirement {
             return new Attempt(!exists,0,0);
         }
         try {
-            if(claimed.key()!=null)storage.delete(claimed.key());
+            if(claimed.key()==null&&claimed.stagingKey()==null&&("QUARANTINE".equals(claimed.state())||"SAFE".equals(claimed.state()))) {
+                log.warn("Cannot classify legacy file bytes for file {}; metadata retained for repair",id);
+                throw new IOException("Legacy file has no known storage key");
+            }
+            if(claimed.stagingKey()!=null)storage.delete(claimed.stagingKey());
+            if(claimed.key()!=null&&!claimed.key().equals(claimed.stagingKey()))storage.delete(claimed.key());
             int deleted=tx.execute(status->jdbc.sql("delete from file_object where id=:id and retention_claim=:claim")
                 .param("id",id).param("claim",claimed.claim()).update());
             return new Attempt(deleted==1,deleted,0);
