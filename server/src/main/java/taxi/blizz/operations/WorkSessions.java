@@ -32,7 +32,10 @@ public interface WorkSessions {
     /**
      * Keeps the connection alive and optionally moves the current position. Safe to repeat: a point
      * with a sequence not newer than the stored one is ignored (REQ-GEO-02). A heartbeat without a
-     * location restores the connection but not location freshness (REQ-DS-04, T-15).
+     * location restores the connection but not location freshness (REQ-DS-04, T-15). A point that implies a
+     * movement faster than {@code blizz.risk.impossible-speed-kph} from the driver's last accepted position (any
+     * device or shift of the last 30 minutes) is not stored: the location is STALE until a plausible one, an
+     * IMPOSSIBLE_MOVEMENT flag is raised, and the answer has {@code accepted} false (issue #102).
      */
     DriverAvailability heartbeat(Actor driver, UUID deviceSessionId, LocationFix location);
 

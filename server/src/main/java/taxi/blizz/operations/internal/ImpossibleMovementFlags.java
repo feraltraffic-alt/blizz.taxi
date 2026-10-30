@@ -18,7 +18,8 @@ import taxi.blizz.platform.OutboxMessage;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The first automatic risk source (REQ-DS-08, issue #71): {@code DriverPositionJumped} from location becomes an
+ * The first automatic risk source (REQ-DS-08, issue #71): {@code DriverPositionJumped} from location, and a heartbeat
+ * refused as an impossible movement (issue #102, {@link #raise}), becomes an
  * IMPOSSIBLE_MOVEMENT flag when the speed is above {@code blizz.risk.impossible-speed-kph} over more than
  * {@code min-distance-m}, in the driver's work session at that moment — at most one flag per work session and hour.
  * A jump outside any work session is not a case. Nothing happens to the trip or the driver.
@@ -63,7 +64,7 @@ class ImpossibleMovementFlags implements OutboxHandler {
     @Override
     public void handle(OutboxMessage message) {
         Jumped jump = json.readValue(message.payload(), Jumped.class);
-        if (jump.speedKph() <= properties.impossibleSpeedKph() || jump.distanceM() <= properties.minDistanceMeters()) {
+        if (!impossible(jump.distanceM(), jump.speedKph())) {
             return; // fast, but possible — a highway
         }
         Optional<Shift> shift = jdbc.sql("""
@@ -81,15 +82,33 @@ class ImpossibleMovementFlags implements OutboxHandler {
             log.info("A position jump of driver {} outside a work session is not flagged", jump.driverId());
             return;
         }
-        OffsetDateTime hour = jump.recordedAt().withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.HOURS);
+        raise(jump.driverId(), shift.get().id(), shift.get().cityId(), jump.distanceM(), jump.seconds(),
+                jump.speedKph(), jump.recordedAt(), Map.of("track_point_id", jump.trackPointId().toString()));
+    }
+
+    /** Above the speed over more than the distance: a short GPS glitch or a highway is not a case. */
+    boolean impossible(int distanceM, int speedKph) {
+        return speedKph > properties.impossibleSpeedKph() && distanceM > properties.minDistanceMeters();
+    }
+
+    /**
+     * The flag for a movement in a shift, from the track or from the heartbeat (issue #102): at most one per shift and
+     * hour whatever reported it. {@code source} names what reported it — ids only, never the coordinates.
+     */
+    void raise(UUID driverId, UUID shiftId, UUID cityId, int distanceM, double seconds, int speedKph,
+               OffsetDateTime at, Map<String, Object> source) {
+        if (!impossible(distanceM, speedKph)) {
+            return;
+        }
+        OffsetDateTime hour = at.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.HOURS);
         Map<String, Object> evidence = new LinkedHashMap<>();
-        evidence.put("work_session_id", shift.get().id().toString());
-        evidence.put("track_point_id", jump.trackPointId().toString());
-        evidence.put("distance_m", jump.distanceM());
-        evidence.put("seconds", jump.seconds());
-        evidence.put("speed_kph", jump.speedKph());
-        evidence.put("recorded_at", jump.recordedAt().withOffsetSameInstant(ZoneOffset.UTC).toString());
-        flags.raiseAutomatic(jump.driverId(), shift.get().cityId(), DriverRiskFlags.Kind.IMPOSSIBLE_MOVEMENT, evidence,
-                "IMPOSSIBLE_MOVEMENT:" + shift.get().id() + ":" + hour, jump.recordedAt());
+        evidence.put("work_session_id", shiftId.toString());
+        evidence.putAll(source);
+        evidence.put("distance_m", distanceM);
+        evidence.put("seconds", seconds);
+        evidence.put("speed_kph", speedKph);
+        evidence.put("recorded_at", at.withOffsetSameInstant(ZoneOffset.UTC).toString());
+        flags.raiseAutomatic(driverId, cityId, DriverRiskFlags.Kind.IMPOSSIBLE_MOVEMENT, evidence,
+                "IMPOSSIBLE_MOVEMENT:" + shiftId + ":" + hour, at);
     }
 }
