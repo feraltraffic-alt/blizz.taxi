@@ -22,15 +22,16 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 
 ## Work in flight
 
-| Item | Who | State |
-|---|---|---|
-| #118 retention settings (Q-19 decided) | Codex | #130 reviewed 30.10: two MAJOR (consumer receipts deleted for FAILED events; a failed deletion keeps the claim and hides the recording/file) and minors. Lead decided: legacy unclassified temp rows are kept and backed off, no recovery policy |
-| #124 isolation sweep must reach the access check | Codex | After #118 |
-| #102 dispatch abuse | Second Claude | #128 (part 2) merged. #127 (part 1) approved; author merges `main` and renames the migration after `V20261030_0751_5` |
-| #105 document uploads | Second Claude | #131 (part 1) reviewed: BLOCKER (`stream` matches inside `endstream`, normal PDFs with an object stream refused), MAJOR (ObjStm check bypassable; no total clamd deadline). Lead decided: empty ClamAV address stays "off"; part 2 adds a gauge for the oldest QUARANTINE file |
-| #129 one schema per aggregate (last item of #112) | Lead | Approved by the owner, CI green after merging `main`; merge blocked by the session's permission check |
-| #132 no default profile (threat model O1) | Lead | CI green, sandbox running |
-| #133 staff top-up daily limit (threat model C3, owner: a service setting) | Lead | CI green, sandbox running; the owner still has to set the amount |
+Audit of 30.10.2026: `docs/status/2026-10-30-server-audit.md` (what is left on the server and in which issue).
+
+| Who | Queue (in order) |
+|---|---|
+| Codex | #130 (retention, approved; resolving the conflict with `main`) → #124 → #136 web foundation → #140 payments → #142 admin orders → #144 privacy |
+| Second Claude | #135 documents encrypted at rest (E6 after #130) → #137 rider app → #141 driver states → #143 operator and driver |
+| Lead | merges in migration order, reviews, #139 API conventions → #145 operations → #146 pilot proofs |
+
+Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
+Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
 
 ### Reminders (no work now)
 
