@@ -3,15 +3,21 @@ package taxi.blizz.telephony.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.TestcontainersConfiguration;
 import taxi.blizz.identity.OtpAudience;
 import taxi.blizz.identity.OtpService;
+import taxi.blizz.identity.internal.OtpProperties;
 import taxi.blizz.platform.RateLimitedException;
 
 /**
@@ -59,5 +65,19 @@ class OtpRangeBudgetTests {
         otp.requestChallenge(OtpAudience.CLIENT, neighbour, null, null);
         assertThat(challenges(neighbour)).isOne();
         assertThat(fake.last(neighbour)).isPresent();
+    }
+
+    @Test
+    void aBudgetBelowOneStopsTheStartWithTheSettingsName() {
+        String secret = "a-test-secret-of-at-least-32-bytes-0123";
+        for (String wrong : List.of("0", "-1")) {
+            Binder binder = new Binder(new MapConfigurationPropertySource(Map.of(
+                    "blizz.otp.secret", secret, "blizz.otp.max-per-range-per-hour", wrong)));
+            assertThatThrownBy(() -> binder.bind("blizz.otp", Bindable.of(OtpProperties.class)))
+                    .as("'%s'", wrong).rootCause().hasMessageContaining("blizz.otp.max-per-range-per-hour");
+        }
+        OtpProperties defaults = new Binder(new MapConfigurationPropertySource(Map.of("blizz.otp.secret", secret)))
+                .bind("blizz.otp", Bindable.of(OtpProperties.class)).get();
+        assertThat(defaults.maxPerRangePerHour()).isEqualTo(500).isLessThan(defaults.maxGlobalPerHour());
     }
 }
