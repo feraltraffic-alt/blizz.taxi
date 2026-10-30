@@ -22,6 +22,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.pricing.FinalFares;
 
 /**
@@ -72,10 +73,10 @@ class JdbcTrips implements Trips {
 
     @Override
     @Transactional(readOnly = true)
-    public List<HistoryItem> history(Actor driver, OffsetDateTime before, int limit) {
+    public List<HistoryItem> history(Actor driver, PageCursor after, int limit) {
         requireDriver(driver);
-        int size = Math.max(1, Math.min(limit, 50));
-        String cursor = before == null ? "" : " and t.created_at < :before";
+        int size = Math.max(1, Math.min(limit, PageCursor.MAX_FETCH));
+        String cursor = after == null ? "" : " and t.created_at < :afterAt";
         JdbcClient.StatementSpec query = jdbc.sql("""
                         select t.id, t.order_id, o.short_number, t.created_at, o.pickup_label, o.dropoff_label,
                                o.final_price_minor, o.currency, o.payment_method, t.phase
@@ -85,8 +86,8 @@ class JdbcTrips implements Trips {
                         where a.driver_id = :driver and t.phase in ('COMPLETED', 'ABORTED')
                         """ + cursor + " order by t.created_at desc, t.id desc limit :limit")
                 .param("driver", driver.id()).param("limit", size);
-        if (before != null) {
-            query = query.param("before", before);
+        if (after != null) {
+            query = query.param("afterAt", after.time(0));
         }
         return query.query((rs, i) -> new HistoryItem(rs.getObject("id", UUID.class),
                         rs.getObject("order_id", UUID.class), rs.getLong("short_number"),

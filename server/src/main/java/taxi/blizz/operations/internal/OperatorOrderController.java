@@ -36,6 +36,8 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.pricing.QuoteService;
 import taxi.blizz.pricing.VehicleClasses;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Operator workstation HTTP slice (S-08). */
 @RestController
@@ -157,20 +159,21 @@ class OperatorOrderController {
         return view(order);
     }
 
+    /** {@code before} is the deprecated cursor of the first version: kept until the panel uses {@code cursor}. */
     @GetMapping("/orders")
-    List<OperatorOrderView> list(AccessClaims claims, @RequestParam(name = "city_id") UUID cityId,
+    Page<OperatorOrderView> list(AccessClaims claims, @RequestParam(name = "city_id") UUID cityId,
                                  @RequestParam(defaultValue = "active") String status,
+                                 @RequestParam(required = false) String cursor,
                                  @RequestParam(required = false)
                                  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime before,
-                                 @RequestParam(defaultValue = "50") int limit) {
+                                 @RequestParam(required = false) Integer limit) {
         if (!"active".equals(status) && !"all".equals(status)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "status must be active or all");
         }
-        if (limit < 1 || limit > 100) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "limit must be between 1 and 100");
-        }
-        return orders.inCity(claims.actor(), cityId, "active".equals(status), before, limit).stream()
-                .map(this::view).toList();
+        int size = PageCursor.limit(limit);
+        PageCursor after = PageCursor.read(Orders.CITY_ORDERS, cursor, before);
+        return Page.of(orders.inCity(claims.actor(), cityId, "active".equals(status), after, size + 1), size,
+                Orders::position).map(this::view);
     }
 
     @GetMapping("/orders/{orderId}")

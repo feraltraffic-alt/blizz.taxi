@@ -29,6 +29,8 @@ import taxi.blizz.operations.Orders;
 import taxi.blizz.operations.PaymentMethod;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * The rider's orders — packages/contracts/openapi/rider.v1.yaml. An order is created from a quote
@@ -63,11 +65,14 @@ class RiderOrderController {
     record CurrentOrders(List<OrderView> orders) {
     }
 
+    /** {@code before} is the deprecated cursor of the first version: kept until the apps use {@code cursor}. */
     @GetMapping
-    List<Orders.HistoryItem> history(AccessClaims claims,
+    Page<Orders.HistoryItem> history(AccessClaims claims, @RequestParam(required = false) String cursor,
                                      @RequestParam(required = false) OffsetDateTime before,
-                                     @RequestParam(defaultValue = "20") int limit) {
-        return orders.history(claims.actor(), before, limit);
+                                     @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        return Page.of(orders.history(claims.actor(), PageCursor.read(Orders.RIDER_ORDERS, cursor, before), size + 1),
+                size, Orders::position);
     }
 
     @PostMapping
