@@ -51,7 +51,7 @@ class QuarantineRescan {
         this.clock = clock;
     }
 
-    private record Due(UUID fileId, String key, int attempts) {
+    private record Due(UUID fileId, String key, String encryption, int attempts) {
     }
 
     /** Scans the files that are due, at most {@value #PER_RUN}; returns how many got a verdict. */
@@ -78,9 +78,10 @@ class QuarantineRescan {
                                     where state = 'QUARANTINE' and next_scan_at <= :now
                                     order by next_scan_at, id
                                     limit 1 for update skip locked)
-                        returning id, storage_key, scan_attempts""")
+                        returning id, storage_key, encryption, scan_attempts""")
                 .param("now", now).param("lease", now.plus(LEASE))
-                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getInt(3)))
+                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
+                        rs.getInt(4)))
                 .optional());
     }
 
@@ -88,7 +89,8 @@ class QuarantineRescan {
     private boolean rescan(Due due) {
         Path copy = null;
         try {
-            try (InputStream in = storage.open(due.key())) {
+            // A document is stored encrypted: the copy that is scanned is the decrypted one (issue #135).
+            try (InputStream in = files.openStored(due.key(), due.encryption())) {
                 copy = storage.stage(in, properties.maxBytes());
             }
             Optional<String> malware = antivirus.scan(copy);

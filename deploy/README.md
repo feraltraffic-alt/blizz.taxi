@@ -9,7 +9,7 @@ A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profil
 | Variable | Rule |
 |---|---|
 | `OTP_SECRET`, `ACCESS_TOKEN_SECRET` | set, at least 32 characters, not a value from this repository |
-| `SECRETS_MASTER_KEY` | set (`openssl rand -base64 32`), not the dev or sandbox key; keep it with the database backups |
+| `SECRETS_MASTER_KEY` | set (`openssl rand -base64 32`), not the dev or sandbox key; keep it with the backups of the database **and** of the files directory |
 | `DB_PASSWORD` | set |
 | `INSTANCE_ID` | set once for the instance and never changed (REQ-TEN-02); not the dev or sandbox id |
 | `PUBLIC_BASE_URL` | the instance's public `https://` address |
@@ -44,6 +44,13 @@ The panel stores keys encrypted with the instance's master key, which only the e
 Keep the master key with the database backups but not in them: a restored database without it has unreadable
 keys (they are entered again), and a stolen dump without it reveals none. Without a master key the panel cannot
 store keys.
+
+The same key encrypts the files of driver documents (passports, licences, vehicle papers) and call recordings below
+the files directory (issue #135). Keep it with the **files** backups too, again not inside them: a restored files
+directory without the key is unreadable, and a stolen copy of it shows no one's documents. Documents stored in the
+clear before #135 are re-encrypted in the background after the upgrade; the gauge `blizz_files_documents_plain`
+falls to 0 when that is done, and `blizz_files_documents_encryption_failing` counts files that could not be read
+(see the server log, "could not be encrypted"). Without a master key no driver document can be uploaded.
 
 ## Addresses typed in the admin panel
 

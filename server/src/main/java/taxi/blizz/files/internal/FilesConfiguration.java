@@ -34,6 +34,26 @@ class FilesConfiguration {
         return ContentScanner.OFF;
     }
 
+    /** Re-encrypts the driver documents stored in the clear before issue #135; safe on several instances. */
+    @Configuration(proxyBeanMethods = false)
+    @EnableScheduling
+    @ConditionalOnProperty(prefix = "blizz.files.document-encryption", name = "enabled", havingValue = "true",
+            matchIfMissing = true)
+    static class DocumentEncryptionSweep {
+
+        private final DocumentEncryption documents;
+
+        DocumentEncryptionSweep(DocumentEncryption documents) {
+            this.documents = documents;
+        }
+
+        @Scheduled(fixedDelayString = "${blizz.files.document-encryption.interval:PT30S}",
+                initialDelayString = "${blizz.files.document-encryption.interval:PT30S}")
+        void run() {
+            documents.encryptDue();
+        }
+    }
+
     /** Scans again the files kept in quarantine while the antivirus could not answer; safe on several instances. */
     @Configuration(proxyBeanMethods = false)
     @EnableScheduling
