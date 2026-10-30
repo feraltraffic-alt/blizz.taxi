@@ -13,7 +13,10 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 
-/** Blocking a driver account and stopping the driver's new work in one transaction (issue #141). */
+/**
+ * Blocking a driver account and stopping the driver's new work in one transaction (issue #141). The limited session
+ * of a blocked driver is enforced by identity at the API door ({@code DriverLimitedSession}).
+ */
 @Service
 class JdbcDriverBlocks implements DriverBlocks {
 
@@ -21,9 +24,11 @@ class JdbcDriverBlocks implements DriverBlocks {
     private final StaffAccess staff;
     private final DriverAccounts accounts;
     private final DriverAdmission admission;
+    private final JdbcWorkSessions sessions;
 
     JdbcDriverBlocks(IdempotentCommands commands, StaffAccess staff, DriverAccounts accounts,
-                     DriverAdmission admission) {
+                     DriverAdmission admission, JdbcWorkSessions sessions) {
+        this.sessions = sessions;
         this.commands = commands;
         this.staff = staff;
         this.accounts = accounts;
@@ -40,7 +45,11 @@ class JdbcDriverBlocks implements DriverBlocks {
         requireReason(reason);
         return commands.execute(new CommandKey(staffMember, "driver.block", commandId),
                 new Change(driverId, expectedVersion, reason), DriverProfile.class, () -> {
+                    // The order of the open offer first, then the driver row, then the capacity: the order of every
+                    // accept and pause, so a block racing them waits instead of deadlocking.
+                    java.util.Optional<UUID> offeredOrder = sessions.lockOfferedOrder(driverId);
                     accounts.block(staffMember, driverId, expectedVersion, reason);
+                    sessions.stopNewWork(new Actor(taxi.blizz.platform.SubjectType.DRIVER, driverId), offeredOrder);
                     return admission.profile(driverId);
                 });
     }

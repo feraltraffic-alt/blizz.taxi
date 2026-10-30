@@ -144,6 +144,58 @@ class DriverBlockTests {
         assertThat(dispatch.offers(next.actor())).extracting(OfferView::orderId).containsExactly(order.id());
     }
 
+    @Test
+    void aBlockAndAnAcceptAtOnceHaveExactlyOneWinner() throws Exception {
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        Actor reviewer = staff(DriverAdmission.REVIEW_PERMISSION);
+        int accepted = 0;
+        int blockedFirst = 0;
+        try {
+            for (int round = 0; round < 20; round++) {
+                TestRides.Driver driver = rides.driverNear(PICKUP);
+                OrderView order = rides.order(rides.client(), city, PICKUP, DROPOFF);
+                OfferView offer = dispatch.offers(driver.actor()).getFirst();
+                long version = admission.profile(driver.actor().id()).version();
+                long delay = (round % 4) * 10L;
+                java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+                java.util.concurrent.Future<AssignmentView> accept = pool.submit(() -> {
+                    start.await();
+                    return dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer.id());
+                });
+                java.util.concurrent.Future<DriverProfile> block = pool.submit(() -> {
+                    start.await();
+                    Thread.sleep(delay);
+                    return blocks.block(reviewer, UUID.randomUUID(), driver.actor().id(), version, "Race");
+                });
+                start.countDown();
+                assertThat(block.get().accountState()).as("round %d", round).isEqualTo("BLOCKED");
+                DriverAvailability after = sessions.availability(driver.actor().id());
+                try {
+                    accept.get();
+                    accepted++;
+                    assertThat(after.occupancy()).as("round %d: the trip goes on", round).isEqualTo("TO_PICKUP");
+                    assertThat(after.intent()).as("round %d", round).isEqualTo("PAUSE_AFTER_CURRENT");
+                } catch (java.util.concurrent.ExecutionException e) {
+                    blockedFirst++;
+                    assertThat(e.getCause()).as("round %d: a domain answer, never a 500", round)
+                            .isInstanceOf(DomainException.class);
+                    assertThat(((DomainException) e.getCause()).code()).as("round %d", round)
+                            .isIn(ErrorCode.OFFER_REVOKED, ErrorCode.DRIVER_NOT_ELIGIBLE);
+                    assertThat(after.occupancy()).as("round %d", round).isEqualTo("FREE");
+                    assertThat(jdbc.sql("""
+                                    select count(*) from assignment
+                                    where order_id = :o and state in ('RESERVED', 'COMMITTED')""")
+                            .param("o", order.id()).query(Integer.class).single()).as("round %d", round).isZero();
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(accepted + blockedFirst).isEqualTo(20);
+        assertThat(accepted).as("the accept won some rounds").isPositive();
+        assertThat(blockedFirst).as("the block won some rounds").isPositive();
+    }
+
     // ------------------------------------------------------------ the limited session (HTTP)
 
     @Test
