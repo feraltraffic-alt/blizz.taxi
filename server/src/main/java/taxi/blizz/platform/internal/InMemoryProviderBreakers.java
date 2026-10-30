@@ -141,6 +141,16 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
     }
 
     @Override
+    public boolean mayRetry(Provider provider) {
+        return true;
+    }
+
+    @Override
+    public java.time.Duration timeout(Provider provider) {
+        return properties.timeout(provider);
+    }
+
+    @Override
     public void bindTo(MeterRegistry registry) {
         for (Provider p : Provider.values()) {
             Gauge.builder("blizz.provider.breaker.state", this, b -> b.state(p).ordinal())
