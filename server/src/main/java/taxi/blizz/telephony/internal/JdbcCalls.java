@@ -30,6 +30,7 @@ import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import taxi.blizz.platform.Outbox;
 import taxi.blizz.platform.OutboxEvent;
+import taxi.blizz.platform.PageCursor;
 import taxi.blizz.telephony.Calls;
 
 /**
@@ -252,7 +253,7 @@ class JdbcCalls implements Calls {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Call> recent(Actor actor, State state, UUID orderId, int limit) {
+    public List<Call> recent(Actor actor, State state, UUID orderId, PageCursor after, int limit) {
         StaffAccess.Scope answer = staff.scope(actor, ANSWER_PERMISSION);
         StaffAccess.Scope listen = staff.scope(actor, LISTEN_PERMISSION);
         boolean all = answer.allCities() || listen.allCities();
@@ -266,9 +267,13 @@ class JdbcCalls implements Calls {
                         + (state == null ? "" : " and c.state = :state")
                         + (orderId == null ? "" : " and (c.order_id = :order or exists (select 1 from call_order o"
                                 + " where o.call_id = c.id and o.order_id = :order))")
-                        + " order by c.started_at desc, c.id limit :limit")
+                        + (after == null ? "" : " and (c.started_at, c.id) < (:afterAt, :afterId)")
+                        + " order by c.started_at desc, c.id desc limit :limit")
                 .param("all", all).param("cities", cities.toArray(UUID[]::new))
-                .param("limit", Math.max(1, Math.min(limit, 100)));
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
+        if (after != null) {
+            query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
+        }
         if (state != null) {
             query = query.param("state", state.name());
         }

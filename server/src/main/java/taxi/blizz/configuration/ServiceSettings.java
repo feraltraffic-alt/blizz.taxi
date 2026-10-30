@@ -3,6 +3,7 @@ package taxi.blizz.configuration;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * Settings of the service (REQ-TEN-06, REQ-TEN-07): the brand the apps show, the languages and how "Call"
@@ -161,6 +162,16 @@ public interface ServiceSettings {
 
     Version change(Actor staff, UUID commandId, long expectedVersion, Settings settings, String reason);
 
-    /** Newest first. */
-    List<Version> history(Actor staff, int limit);
+    /** Newest version first, after {@code after} (REQ-API-09). */
+    List<Version> history(Actor staff, PageCursor after, int limit);
+
+    default List<Version> history(Actor staff, int limit) {
+        return history(staff, null, limit);
+    }
+
+    String HISTORY = "settings-history";
+
+    static PageCursor position(Version version) {
+        return PageCursor.of(HISTORY, version.version());
+    }
 }

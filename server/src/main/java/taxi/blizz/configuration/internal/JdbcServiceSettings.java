@@ -22,6 +22,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.PageCursor;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
@@ -115,12 +116,14 @@ class JdbcServiceSettings implements ServiceSettings {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Version> history(Actor actor, int limit) {
+    public List<Version> history(Actor actor, PageCursor after, int limit) {
         staff.require(actor, MANAGE_PERMISSION);
         return jdbc.sql("""
                         select version, settings::text, changed_by, reason, changed_at
-                        from service_settings order by version desc limit :limit""")
-                .param("limit", Math.max(1, Math.min(limit, 100)))
+                        from service_settings where version < :afterVersion
+                        order by version desc limit :limit""")
+                .param("afterVersion", after == null ? Long.MAX_VALUE : after.number(0))
+                .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
                 .list();

@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taxi.blizz.finance.CashDisputes;
 import taxi.blizz.identity.AccessClaims;
+import taxi.blizz.platform.Page;
+import taxi.blizz.platform.PageCursor;
 
 /** Cash disputes in the admin panel (owner decision 28.10.2026) — admin.v1.yaml. */
 @RestController
@@ -25,7 +27,8 @@ class CashDisputeController {
         this.disputes = disputes;
     }
 
-    record DisputeList(List<CashDisputes.Dispute> disputes) {
+    /** A page of disputes (REQ-API-09); {@code page} is new and optional for older clients. */
+    record DisputeList(List<CashDisputes.Dispute> disputes, Page.Info page) {
     }
 
     record Decide(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
@@ -33,8 +36,12 @@ class CashDisputeController {
     }
 
     @GetMapping("/api/admin/v1/cash-disputes")
-    DisputeList open(AccessClaims claims, @RequestParam(defaultValue = "50") int limit) {
-        return new DisputeList(disputes.open(claims.actor(), limit));
+    DisputeList open(AccessClaims claims, @RequestParam(required = false) String cursor,
+                     @RequestParam(required = false) Integer limit) {
+        int size = PageCursor.limit(limit);
+        Page<CashDisputes.Dispute> page = Page.of(disputes.open(claims.actor(),
+                PageCursor.decode(CashDisputes.OPEN, cursor), size + 1), size, CashDisputes::position);
+        return new DisputeList(page.items(), page.page());
     }
 
     @GetMapping("/api/admin/v1/orders/{orderId}/cash-dispute")

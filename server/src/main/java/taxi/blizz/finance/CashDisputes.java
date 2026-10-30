@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
+import taxi.blizz.platform.PageCursor;
 
 /**
  * A trip the driver reports as not paid in cash or at the driver's terminal (owner decision 28.10.2026). The rider owes
@@ -38,8 +39,18 @@ public interface CashDisputes {
 
     Dispute get(Actor staff, UUID orderId);
 
-    /** Undecided ones, the soonest deadline first. */
-    List<Dispute> open(Actor staff, int limit);
+    /** Undecided ones, the soonest deadline first (decide_by, then order id), after {@code after} (REQ-API-09). */
+    List<Dispute> open(Actor staff, PageCursor after, int limit);
+
+    default List<Dispute> open(Actor staff, int limit) {
+        return open(staff, null, limit);
+    }
+
+    String OPEN = "cash-disputes";
+
+    static PageCursor position(Dispute dispute) {
+        return PageCursor.of(OPEN, dispute.decideBy(), dispute.orderId());
+    }
 
     Dispute decide(Actor staff, UUID commandId, UUID orderId, long expectedVersion, Decision decision, String reason);
 }
