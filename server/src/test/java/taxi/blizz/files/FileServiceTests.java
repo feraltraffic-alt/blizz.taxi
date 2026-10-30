@@ -148,6 +148,33 @@ class FileServiceTests {
         assertThat(upload(id, "application/pdf", pdf).state()).isEqualTo(FileState.REJECTED);
     }
 
+    /** Issue #105, E3, through the whole upload: an escaped name and an object stream that cannot be read. */
+    @Test
+    void pdfWithAnEscapedActionNameOrAnUnreadableObjectStreamIsRejectedAndAPlainOneIsSafe() {
+        byte[] escaped = "%PDF-1.7\n1 0 obj << /Open#41ction << /S /J#61vaScript /JS (app.alert(1)) >> >> endobj\n%%EOF"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(upload(open("application/pdf", escaped.length), "application/pdf", escaped).state())
+                .isEqualTo(FileState.REJECTED);
+        byte[] objStm = "%PDF-1.7\n2 0 obj\n<< /Type /ObjStm /Filter /FlateDecode >>\nstream\nnot deflate\nendstream\nendobj\n%%EOF"
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(upload(open("application/pdf", objStm.length), "application/pdf", objStm).state())
+                .isEqualTo(FileState.REJECTED);
+        byte[] plain = "%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF".getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(upload(open("application/pdf", plain.length), "application/pdf", plain).state())
+                .isEqualTo(FileState.SAFE);
+    }
+
+    /** Issue #105: in dev and the sandbox a FAKE antivirus finds the EICAR test string. */
+    @Test
+    void theDevScannerRejectsTheEicarTestFile() {
+        byte[] pdf = ("%PDF-1.7\n% " + FakeClamd.EICAR + "\n%%EOF").getBytes(StandardCharsets.ISO_8859_1);
+        StoredFile stored = upload(open("application/pdf", pdf.length), "application/pdf", pdf);
+        assertThat(stored.state()).isEqualTo(FileState.REJECTED);
+        assertThat(stored.rejectReason()).isEqualTo("The file did not pass the malware check");
+        assertThat(jdbc.sql("select scan_engine from file_object where id = :id").param("id", stored.fileId())
+                .query(String.class).single()).isEqualTo("structural+fake");
+    }
+
     @Test
     void bodyLargerThanDeclaredIsRejected() {
         UUID id = open("image/png", 8);

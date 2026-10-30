@@ -164,6 +164,13 @@ class CardHoldTests {
         assertThat(declined.statusReason()).isEqualTo("PAYMENT_DECLINED");
         assertThat(declined.paymentState()).isEqualTo("PAYMENT_DECLINED");
         assertThat(intentState(order.id())).isEqualTo("DECLINED");
+        assertThat(jdbc.sql("""
+                        select distinct aggregate_type from outbox
+                        where (aggregate_id = :order or payload ->> 'order_id' = :orderText)
+                          and event_type = 'CardHoldDeclined'""")
+                .param("order", order.id()).param("orderText", order.id().toString()).query(String.class).list())
+                .containsExactlyInAnyOrder("PaymentIntent", "Order");
+        taxi.blizz.EventContracts.assertOrderEventsConform(jdbc, order.id(), "CardHoldDeclined");
 
         Actor noCard = rides.client();
         assertThatThrownBy(() -> cardOrder(noCard, null)).isInstanceOf(DomainException.class)
