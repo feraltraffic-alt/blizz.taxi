@@ -46,7 +46,24 @@ public record OrderView(
         /** Who is coming: the current assignment's driver and car; null without one (REQ-RID-05, issue #143). */
         DriverCard driver,
         /** Why the driver changed before the start, in the rider's terms; null if never (REQ-RID-05). */
-        DriverChange driverChange) {
+        DriverChange driverChange,
+        /** The note for the driver and where exactly to come (REQ-DRV-07, issue #143). */
+        String comment,
+        String entrance) {
+
+    /** Source compatibility for snapshots built before the comment and the entrance existed. */
+    public OrderView(UUID id, long shortNumber, String status, String statusReason, long version, String channel,
+                     UUID payerClientId, UUID cityId, String vehicleClass, GeoPoint pickup, String pickupLabel,
+                     GeoPoint dropoff, String dropoffLabel, PaymentMethod paymentMethod, String paymentState,
+                     Long priceMinor, Long finalPriceMinor, String currency, String searchPhase,
+                     AssignmentView assignment, OffsetDateTime createdAt, Cancellation cancellation,
+                     OffsetDateTime pickupAt, boolean preorder, UUID relatedOrderId, long walletMinor,
+                     long discountMinor, PickupEta pickupEta, DriverCard driver, DriverChange driverChange) {
+        this(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId, vehicleClass, pickup,
+                pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor, finalPriceMinor, currency,
+                searchPhase, assignment, createdAt, cancellation, pickupAt, preorder, relatedOrderId, walletMinor,
+                discountMinor, pickupEta, driver, driverChange, null, null);
+    }
 
     /** No phone: calls go through the order. {@code photoUrl} is null until driver photos exist (REQ-DRV-01). */
     public record DriverCard(String name, String make, String model, String color, String registrationNumber,
@@ -90,7 +107,7 @@ public record OrderView(
         return new OrderView(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId,
                 vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor,
                 finalPriceMinor, currency, searchPhase, assignment, createdAt, cancellation, pickupAt, preorder,
-                relatedOrderId, walletMinor, discountMinor, eta, driver, driverChange);
+                relatedOrderId, walletMinor, discountMinor, eta, driver, driverChange, comment, entrance);
     }
 
     /**

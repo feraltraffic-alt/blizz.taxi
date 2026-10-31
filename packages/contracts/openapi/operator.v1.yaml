@@ -601,6 +601,45 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/manual-offers:
+    post:
+      operationId: makeManualOffer
+      summary: Offer the order to a chosen driver
+      description: >-
+        REQ-OPS-04, REQ-DSP-10 (issue #143). Requires orders.offer for the order city; audited. The order must be
+        SEARCHING without an open offer (one personal offer per order; 409 otherwise, nothing is revoked). The driver
+        must be a candidate as for an automatic offer — admitted in the city, open accepting shift, fresh and accurate
+        position within the widest search radius, the class, the payment, free — else 409 DRIVER_NOT_ELIGIBLE (busy:
+        DRIVER_BUSY). The offer is the same as an automatic one: it lasts the personal offer time, never past the
+        search's total deadline, and the driver accepts it through the same accept. The answer is the order.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualOffer"
+      responses:
+        "200":
+          description: The order with the offer open.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/operator/v1/orders/{order_id}/interrupt:
     post:
       operationId: interruptTrip
@@ -1502,11 +1541,35 @@ components:
           type: string
           pattern: "^\\+[1-9][0-9]{7,14}$"
 
+    ManualOffer:
+      type: object
+      additionalProperties: false
+      required: [command_id, driver_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
     CreatePhoneOrder:
       type: object
       additionalProperties: false
       required: [command_id, quote_id, vehicle_class, pickup, dropoff, payment_method, caller]
       properties:
+        comment:
+          description: >-
+            For the driver (REQ-DRV-07, issue #143): what to know at the pickup, up to 500 characters. Shown in the
+            offer and the trip.
+          type: [string, "null"]
+          maxLength: 500
+        entrance:
+          description: Where exactly to come, e.g. "entrance 3, from the yard", up to 100 characters.
+          type: [string, "null"]
+          maxLength: 100
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         quote_id:

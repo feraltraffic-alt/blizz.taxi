@@ -29,6 +29,23 @@ class JdbcFinalFares implements FinalFares {
         this.clock = clock;
     }
 
+    /** The one rule of the split; {@link #finalizeFare} and {@link #split} both use it. */
+    static long commission(long amountMinor, BigDecimal rate) {
+        return BigDecimal.valueOf(amountMinor).multiply(rate).setScale(0, RoundingMode.HALF_UP).longValueExact();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Split split(UUID quoteId, long amountMinor) {
+        BigDecimal rate = jdbc.sql("select snapshot::text from quote where id = :id")
+                .param("id", quoteId)
+                .query((rs, i) -> json.readValue(rs.getString(1), Quote.class).terms().commissionRate())
+                .optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Quote not found"));
+        long commission = commission(amountMinor, rate);
+        return new Split(commission, amountMinor - commission);
+    }
+
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public FinalFare finalizeFare(Facts facts) {
@@ -47,7 +64,7 @@ class JdbcFinalFares implements FinalFares {
         WaitingCharge.Result waiting = WaitingCharge.of(quote.terms(), facts.waitedSeconds());
         long amount = Math.addExact(quote.amountMinor(), waiting.amountMinor());
         BigDecimal rate = quote.terms().commissionRate();
-        long commission = BigDecimal.valueOf(amount).multiply(rate).setScale(0, RoundingMode.HALF_UP).longValueExact();
+        long commission = commission(amount, rate);
         Breakdown breakdown = new Breakdown(quote.amountMinor(), facts.waitedSeconds(), waiting.freeSeconds(),
                 waiting.chargedSeconds(), waiting.amountMinor());
         String policy = WaitingCharge.configured(quote.terms()) ? POLICY_AGREED_PLUS_WAITING : POLICY_AGREED_PRICE;

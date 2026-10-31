@@ -55,7 +55,8 @@ class RiderOrderController {
                          @NotNull GeoPoint pickup, @Size(max = 300) String pickupLabel,
                          @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                          @NotNull PaymentMethod paymentMethod, OrderChannel channel, java.time.Instant pickupAt,
-                         @Min(0) Long walletMinor, @Valid Recipient recipient) {
+                         @Min(0) Long walletMinor, @Valid Recipient recipient, @Size(max = 500) String comment,
+                         @Size(max = 100) String entrance) {
     }
 
     /** The person the taxi is for, when it is not the rider (ADR 0012 Q-03); the rider still pays. */
@@ -84,7 +85,7 @@ class RiderOrderController {
         OrderView order = orders.create(claims.actor(), body.commandId(), new CreateOrder(claims.actor().id(),
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
                 body.paymentMethod(), body.quoteId(), body.channel(), null, recipient(body.recipient()),
-                body.pickupAt(), false, body.walletMinor()));
+                body.pickupAt(), false, body.walletMinor(), body.comment(), body.entrance()));
         if (order.paymentMethod() == PaymentMethod.CARD) {
             return ResponseEntity.accepted().location(URI.create("/api/rider/v1/orders/" + order.id())).body(order);
         }

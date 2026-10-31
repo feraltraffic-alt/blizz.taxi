@@ -31,7 +31,18 @@ public record CreateOrder(
         CallerContact caller,
         Instant pickupAt,
         boolean terminalFallbackToCash,
-        Long walletMinor) {
+        Long walletMinor,
+        /** For the driver: a note (up to 500 characters) and where exactly to come (up to 100); issue #143. */
+        String comment,
+        String entrance) {
+
+    public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
+                       String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,
+                       String sourceRef, CallerContact caller, Instant pickupAt, boolean terminalFallbackToCash,
+                       Long walletMinor) {
+        this(payerClientId, vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, quoteId,
+                channel, sourceRef, caller, pickupAt, terminalFallbackToCash, walletMinor, null, null);
+    }
 
     public CreateOrder(UUID payerClientId, String vehicleClass, GeoPoint pickup, String pickupLabel, GeoPoint dropoff,
                        String dropoffLabel, PaymentMethod paymentMethod, UUID quoteId, OrderChannel channel,

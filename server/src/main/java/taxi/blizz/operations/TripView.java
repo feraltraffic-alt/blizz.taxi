@@ -32,7 +32,10 @@ public record TripView(
          * ends; the phone only when calls are DIRECT (otherwise calls go through the service's numbers). Null when
          * the order has no such contact.
          */
-        Recipient recipient) {
+        Recipient recipient,
+        /** The rider's or operator's note and where exactly to come (REQ-DRV-07, issue #143). */
+        String comment,
+        String entrance) {
 
     public record Recipient(String name, String phone) {
     }

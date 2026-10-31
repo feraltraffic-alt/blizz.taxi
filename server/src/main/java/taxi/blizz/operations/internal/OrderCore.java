@@ -309,12 +309,14 @@ class OrderCore {
     private OrderView withAssignment(OrderView o, Optional<AssignmentView> assignment) {
         AssignmentView current = "SEARCHING".equals(o.status()) ? null : assignment.orElse(null);
         boolean stands = current != null && Set.of("RESERVED", "COMMITTED", "COMPLETED").contains(current.state());
+        String[] note = jdbc.sql("select comment, entrance from ride_order where id = :id").param("id", o.id())
+                .query((rs, i) -> new String[] {rs.getString("comment"), rs.getString("entrance")}).single();
         return new OrderView(o.id(), o.shortNumber(), o.status(), o.statusReason(), o.version(), o.channel(),
                 o.payerClientId(), o.cityId(), o.vehicleClass(), o.pickup(), o.pickupLabel(), o.dropoff(),
                 o.dropoffLabel(), o.paymentMethod(), o.paymentState(), o.priceMinor(), o.finalPriceMinor(), o.currency(),
                 o.searchPhase(), current, o.createdAt(), o.cancellation(), o.pickupAt(), o.preorder(),
                 o.relatedOrderId(), o.walletMinor(), o.discountMinor(), null,
-                stands ? driverCard(current) : null, driverChange(o.id()));
+                stands ? driverCard(current) : null, driverChange(o.id()), note[0], note[1]);
     }
 
     /** Reads {@code driver} and {@code vehicle} as ADR 0004 allows for operations. No phone. */
@@ -413,6 +415,11 @@ class OrderCore {
      * The final check repeats under locks when the offer is made.
      */
     List<Candidate> candidates(UUID orderId, int radius, Integer limit, boolean includeOffered) {
+        return candidates(orderId, radius, limit, includeOffered, null);
+    }
+
+    /** The same, only {@code onlyDriver} when given: whether that one driver may get the order (issue #143). */
+    List<Candidate> candidates(UUID orderId, int radius, Integer limit, boolean includeOffered, UUID onlyDriver) {
         OffsetDateTime now = now();
         return jdbc.sql("""
                         select ws.driver_id, ws.vehicle_id,
@@ -424,6 +431,7 @@ class OrderCore {
                         join city ct on ct.id = o.city_id
                         left join driver_capacity c on c.driver_id = ws.driver_id
                         where o.id = :orderId
+                          and (cast(:onlyDriver as uuid) is null or ws.driver_id = cast(:onlyDriver as uuid))
                           and exists (select 1 from driver_admission_city ac
                                       where ac.driver_id = ws.driver_id and ac.city_id = o.city_id)
                           and ST_DWithin(ct.polygon::geography, ws.last_location::geography, :returnZone)
@@ -452,6 +460,7 @@ class OrderCore {
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("includeOffered", includeOffered)
+                .param("onlyDriver", onlyDriver)
                 .param("accuracy", presence.eligibilityAccuracyMeters())
                 .param("returnZone", returnZone(orderId))
                 .param("radius", radius)
