@@ -67,7 +67,9 @@ class M1RegistryContractTests {
      * Registry commands without a {@code command_id}, and why: each is idempotent by its own key or is a sign-in step.
      * An entry that no longer matches a registry command fails the test, so the list cannot go stale.
      */
-    private static final Map<String, String> WITHOUT_COMMAND_ID = Map.of();
+    private static final Map<String, String> WITHOUT_COMMAND_ID = Map.of(
+            "POST /api/admin/v1/integrations/{group}/check",
+            "A connection check on demand: no body, nothing changes, a repeat only checks again");
 
     @Autowired WebApplicationContext context;
     @Autowired SessionService sessions;
