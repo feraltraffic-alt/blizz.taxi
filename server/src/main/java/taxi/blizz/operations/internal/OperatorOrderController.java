@@ -53,10 +53,13 @@ class OperatorOrderController {
     private final JdbcClient jdbc;
     private final taxi.blizz.operations.Preorders preorders;
     private final taxi.blizz.operations.DispatchJournal journal;
+    private final taxi.blizz.operations.DestinationChanges destinations;
 
     OperatorOrderController(Orders orders, OrderChat chat, CityResolver cities, VehicleClasses classes,
                             QuoteService quotes, StaffAccess staff, JdbcClient jdbc,
-                            taxi.blizz.operations.Preorders preorders, taxi.blizz.operations.DispatchJournal journal) {
+                            taxi.blizz.operations.Preorders preorders, taxi.blizz.operations.DispatchJournal journal,
+                            taxi.blizz.operations.DestinationChanges destinations) {
+        this.destinations = destinations;
         this.preorders = preorders;
         this.journal = journal;
         this.orders = orders;
@@ -197,6 +200,27 @@ class OperatorOrderController {
                                    @Valid @RequestBody SwitchToCashRequest body) {
         return view(orders.switchToCash(claims.actor(), body.commandId(), orderId, body.expectedVersion(),
                 body.reason()));
+    }
+
+    record DestinationRequest(@NotNull UUID commandId,
+                              @NotNull @jakarta.validation.constraints.Min(0) Long expectedVersion,
+                              @NotNull @Valid GeoPoint dropoff, @NotBlank @Size(max = 300) String dropoffLabel,
+                              @NotBlank @Size(max = 500) String reason) {
+    }
+
+    record DestinationChangedView(OperatorOrderView order, long previousPriceMinor, long priceMinor, String currency,
+                                  Long holdMinor, boolean aboveHold) {
+    }
+
+    /** REQ-RID-06: support changes where a trip in progress ends, with a new price on the order's own tariff. */
+    @PostMapping("/orders/{orderId}/destination")
+    DestinationChangedView changeDestination(AccessClaims claims, @PathVariable UUID orderId,
+                                             @Valid @RequestBody DestinationRequest body) {
+        taxi.blizz.operations.DestinationChanges.Changed changed = destinations.change(claims.actor(),
+                body.commandId(), orderId, body.expectedVersion(), new taxi.blizz.operations.DestinationChanges.Change(
+                        body.dropoff(), body.dropoffLabel(), body.reason()));
+        return new DestinationChangedView(view(changed.order()), changed.previousPriceMinor(), changed.priceMinor(),
+                changed.currency(), changed.holdMinor(), changed.aboveHold());
     }
 
     @PostMapping("/orders/{orderId}/cancel")

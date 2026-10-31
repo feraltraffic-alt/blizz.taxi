@@ -151,6 +151,12 @@ class JdbcQuoteService implements QuoteService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public Quote requote(UUID commandId, UUID quoteId, taxi.blizz.geo.GeoPoint dropOff, Actor actor) {
+        throw new UnsupportedOperationException("issue #142, part C2");
+    }
+
+    @Override
     @Transactional
     public Quote consume(UUID quoteId, Actor payer, String fingerprint, UUID orderId) {
         payer(payer);

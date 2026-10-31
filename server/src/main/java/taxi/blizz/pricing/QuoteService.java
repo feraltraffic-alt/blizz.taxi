@@ -16,6 +16,15 @@ public interface QuoteService {
     Quote create(UUID commandId, Request request);
 
     /**
+     * Call without an active transaction. A new price for an order's trip to another destination (REQ-RID-06, issue
+     * #142): the same city, class, pickup, payer and pickup time as the quote {@code quoteId}, its tariff terms (the
+     * order's tariff version, never the tariff in force now) and a new route to {@code dropOff}. The new quote is
+     * stored already consumed, carries no promotions (the order keeps the discount it has) and is keyed by
+     * {@code (actor, commandId)}, so a repeat returns it. NOT_FOUND for an unknown quote.
+     */
+    Quote requote(UUID commandId, UUID quoteId, GeoPoint dropOff, Actor actor);
+
+    /**
      * Joins the order command's transaction. A duplicate direct consumption is rejected;
      * IdempotentCommands around order creation will replay the original order instead. The order {@code orderId}
      * claims the "every N-th trip" promotions the quote counted on (QUOTE_EXPIRED if another order has one).
