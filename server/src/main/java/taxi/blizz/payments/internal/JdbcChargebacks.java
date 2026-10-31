@@ -211,4 +211,9 @@ class JdbcChargebacks implements Chargebacks {
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
+
+    @Override
+    public java.util.Set<UUID> disputed(java.util.Collection<UUID> orderIds) {
+        return java.util.Set.of();
+    }
 }

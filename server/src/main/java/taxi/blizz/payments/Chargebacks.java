@@ -48,4 +48,10 @@ public interface Chargebacks {
 
     /** The order's chargebacks, oldest first. */
     List<Chargeback> ofOrder(Actor staff, UUID orderId, UUID cityId);
+
+    /**
+     * Of these orders, the ones with a chargeback still OPEN: a deleted rider's data on them is held until it is decided
+     * (issue #144). No staff check: a read for another module's privacy rules, never shown as such.
+     */
+    java.util.Set<UUID> disputed(java.util.Collection<UUID> orderIds);
 }

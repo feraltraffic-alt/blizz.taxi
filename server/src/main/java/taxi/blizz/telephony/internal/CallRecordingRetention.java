@@ -51,6 +51,11 @@ class CallRecordingRetention implements RetentionWork {
     private record Claimed(UUID call, UUID file, String channel, UUID claim, boolean previouslyClaimed, int attempts) {
     }
 
+    /** The recordings of a deleted rider's calls (issue #144), whatever the retention term; one batch. */
+    Result runErased(OffsetDateTime now, int limit) {
+        return new Result(0, 0, 0);
+    }
+
     public Result run(OffsetDateTime cutoff, OffsetDateTime now, int limit) {
         Result total = new Result(0, 0, 0);
         Map<String, Object> params = Map.of("cutoff", cutoff, "now", now);

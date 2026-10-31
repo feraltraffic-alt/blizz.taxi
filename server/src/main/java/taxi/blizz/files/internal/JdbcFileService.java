@@ -20,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.files.FileContent;
 import taxi.blizz.files.FilePurpose;
@@ -377,6 +379,11 @@ class JdbcFileService implements FileService {
                 """).param("now",now()).param("id",fileId).param("purpose",purpose.name())
                 .param("owner",owner.type().name()).param("ownerId",owner.id()).update();
         if(updated!=1)throw new DomainException(ErrorCode.STATE_CONFLICT,"The file is not available for attachment");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requestErasure(java.util.Collection<UUID> fileIds) {
     }
 
     @Override
