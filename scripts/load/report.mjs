@@ -74,7 +74,7 @@ row('Outbox events failed', series('blizz_outbox_failed'));
 row('Drivers online (server gauge)', series('blizz_drivers_online'));
 row('Orders searching', series('blizz_orders_searching'));
 row('Assignments active', series('blizz_assignments_active'));
-row('Orders created (cumulative)', series('blizz_orders_created_total'));
+row('Orders created (cumulative)', series('blizz_orders_total')); // blizz.orders.created: Prometheus drops "_created"
 row('Orders unfulfilled (cumulative)', series('blizz_orders_unfulfilled_total'));
 row('Offers by outcome (cumulative, all outcomes)', series('blizz_offers_total'));
 const timer = (name) => {
