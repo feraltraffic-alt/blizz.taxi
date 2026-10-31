@@ -381,6 +381,24 @@ class AddressBookTests {
         assertThat(addressesInCity()).isEqualTo(4);
     }
 
+    @Test
+    void restoringAHiddenAddressOverAnotherOfTheSameHouseIsADuplicateUnlessDistinct() {
+        Address first = create(house("Хрещатик", "2", POINT));
+        Address hidden = addresses.hide(change(first));
+        Address second = create(house("Хрещатик", "2", north(5)));
+
+        rejectDuplicate(() -> addresses.restore(change(hidden)), second.id());
+        assertThat(addresses.getForStaff(manager, first.id()).visibility()).isEqualTo(Visibility.HIDDEN);
+
+        Address restored = addresses.restore(new Change(UUID.randomUUID(), manager, hidden.id(), hidden.version(),
+                "The courtyard entrance of the same house", true));
+        assertThat(restored.visibility()).isEqualTo(Visibility.ACTIVE);
+        assertThat(jdbc.sql("""
+                        select after::text from audit_log
+                        where action = 'address.distinct' and resource_id = :id""")
+                .param("id", first.id().toString()).query(String.class).single()).contains(second.id().toString());
+    }
+
     enum Operation {
         CREATE, UPDATE, ALIAS, HIDE, RESTORE
     }
