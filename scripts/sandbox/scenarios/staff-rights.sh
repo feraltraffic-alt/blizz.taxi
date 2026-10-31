@@ -6,7 +6,7 @@ source "$(dirname "$0")/../lib.sh"
 
 ADMIN=$(admin_token)
 CITY=$(api GET /api/config/v1/bootstrap | jq -r '.cities[0].id'); expect 200
-LOGIN="sandbox-rights-$(printf '%06d' $(( (RANDOM * 32768 + RANDOM) % 1000000 )))"
+LOGIN="sandbox-rights-$(random_digits 6)"
 profile() {  # profile PERMISSIONS LAST_NAME
     echo "{\"first_name\":\"Olena\",\"last_name\":\"$2\",\"contacts\":{\"email\":\"$LOGIN@example.invalid\"},
       \"role\":\"OPERATOR\",\"permissions\":$1,\"all_cities\":false,\"city_ids\":[\"$CITY\"]}"

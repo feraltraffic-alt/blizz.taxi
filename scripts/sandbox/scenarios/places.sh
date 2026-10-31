@@ -3,7 +3,7 @@
 # the sandbox); the operator gets the caller's history; a point on the map gives an address.
 source "$(dirname "$0")/../lib.sh"
 
-RIDER_PHONE="+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38063$(random_digits 7)"
 
 say "A new rider searches: no history yet, the provider answers"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")

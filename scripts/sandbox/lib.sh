@@ -15,6 +15,16 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-Sandbox-Admin-2026-ok}"
 STATUS=""
 
 uuid() { cat /proc/sys/kernel/random/uuid; }
+# random_digits N — N random digits for a test phone. Never ending in 0000: the sandbox's fake SMS sender refuses
+# those numbers on purpose (a failed delivery to test), and a scenario that drew one lost its sign-in code.
+random_digits() {
+    local value
+    while :; do
+        value=$(printf "%0${1}d" $(( (RANDOM * 32768 + RANDOM) % (10 ** $1) )))
+        [[ "$value" == *0000 ]] || break
+    done
+    echo "$value"
+}
 now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 in_minutes() { date -u -d "+$1 minutes" +%Y-%m-%dT%H:%M:%SZ; }
 

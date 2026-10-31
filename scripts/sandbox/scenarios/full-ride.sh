@@ -21,7 +21,7 @@ wait_push() {
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234     # Майдан Незалежності
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890   # Залізничний вокзал
 DRIVER_PHONE="+380500000001"; DRIVER_VEHICLE="5a000000-0000-4000-8000-000000000501"
-RIDER_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38067$(random_digits 7)"
 
 say "Start-up data for the apps"
 api GET /api/config/v1/bootstrap >/dev/null; expect 200

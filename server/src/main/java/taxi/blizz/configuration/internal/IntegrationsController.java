@@ -47,6 +47,11 @@ class IntegrationsController {
                 body.reason()));
     }
 
+    @GetMapping("/api/admin/v1/integrations/health")
+    Integrations.Health health(AccessClaims claims) {
+        return integrations.health(claims.actor());
+    }
+
     @PostMapping("/api/admin/v1/integrations/{group}/check")
     Integrations.Check check(AccessClaims claims, @PathVariable String group) {
         return integrations.check(claims.actor(), group);

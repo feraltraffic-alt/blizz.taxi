@@ -37,7 +37,7 @@ api POST /api/admin/v1/feature-flags/no-such-flag/change "$ADMIN" "{\"command_id
 expect 404
 
 say "A rider's new card order is refused; cash still works"
-RIDER=$(sign_in CLIENT "+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))")
+RIDER=$(sign_in CLIENT "+38063$(random_digits 7)")
 QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
   \"pickup\":$PICKUP,\"dropoff\":$DROPOFF}" | jq -r .id)
 expect 201

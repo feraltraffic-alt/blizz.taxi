@@ -8,7 +8,7 @@ set -euo pipefail
 : "${PG_RUN:?PG_RUN must run a PostgreSQL client command}"
 : "${ERASURE_JOURNAL_DIR:?the journal directory of the running server}"
 
-RIDER_PHONE="+38068$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38068$(random_digits 7)"
 say "A rider exists when the backup is taken"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")
 CLIENT_ID=$(api GET /api/rider/v1/me "$RIDER" | jq -r .subject_id); expect 200

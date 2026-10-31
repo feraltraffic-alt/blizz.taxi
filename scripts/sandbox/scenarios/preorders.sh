@@ -5,7 +5,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":52.2297,"lon":21.0122}'    # Warszawa, Pałac Kultury
 DROPOFF='{"lat":52.1672,"lon":20.9679}'   # Lotnisko Chopina
-RIDER_PHONE="+48600$(printf '%06d' $(( (RANDOM * 32768 + RANDOM) % 1000000 )))"
+RIDER_PHONE="+48600$(random_digits 6)"
 PICKUP_AT=$(in_minutes 180)
 
 say "The admin switches pre-orders to reservations"

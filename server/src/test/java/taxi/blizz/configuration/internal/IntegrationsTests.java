@@ -200,4 +200,19 @@ class IntegrationsTests {
         assertThat(JdbcIntegrations.hint("abcdefghijklmnop")).isEqualTo("…mnop");
         assertThat(JdbcIntegrations.hint("short")).isEqualTo("…");
     }
+
+    /** Issue #176, part C (registry 22.2 "GET /integration-health"): read-only, integrations.manage. */
+    @Test
+    void theHealthOfEveryProviderIsReadWithThePermissionOnly() {
+        Integrations.Health health = integrations.health(admin);
+
+        assertThat(health.instance()).isNotBlank();
+        assertThat(health.checkedAt()).isNotNull();
+        assertThat(health.providers()).extracting(taxi.blizz.platform.ProviderBreakers.Health::provider)
+                .containsExactly(taxi.blizz.platform.ProviderBreakers.Provider.values());
+        assertCode(() -> integrations.health(staff("orders.view")), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> integrations.health(new Actor(taxi.blizz.platform.SubjectType.CLIENT,
+                java.util.UUID.randomUUID())), ErrorCode.ACCESS_DENIED);
+    }
+
 }

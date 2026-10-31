@@ -42,6 +42,24 @@ public interface ProviderBreakers {
     State state(Provider provider);
 
     /**
+     * How a provider is doing on this instance: the breaker's state and, since start, the last successful and the
+     * last failed call; {@code lastFailureKind} is the exception's simple class name or {@link #FAILED_RESULT}, never
+     * a message (issue #176).
+     */
+    record Health(Provider provider, State state, java.time.Instant lastSuccessAt, java.time.Instant lastFailureAt,
+                  String lastFailureKind) {
+    }
+
+    /** A failure the caller marked from the result (e.g. HTTP 5xx), not an exception. */
+    String FAILED_RESULT = "FAILED_RESULT";
+
+    /** Every provider, in the enum's order. */
+    default java.util.List<Health> health() {
+        return java.util.Arrays.stream(Provider.values())
+                .map(p -> new Health(p, state(p), null, null, null)).toList();
+    }
+
+    /**
      * Whether a retry of an earlier failed call may go to the provider now (REQ-ENG-07): retries spend a budget that
      * the provider's calls refill, so they never pile onto a provider that is struggling. A caller refused here
      * tries later, as if the provider had not answered. A first attempt never asks.

@@ -5,7 +5,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":50.4547,"lon":30.5238}'    # Хрещатик
 DROPOFF='{"lat":50.4016,"lon":30.6520}'   # Позняки
-RIDER_PHONE="+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38063$(random_digits 7)"
 
 order() { # RIDER_TOKEN → order id
     local quote

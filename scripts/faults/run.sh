@@ -25,7 +25,7 @@ PICKUP='{"lat":50.4501,"lon":30.5234}'; DROPOFF='{"lat":50.4405,"lon":30.4890}'
 export PGAPPNAME=blizz-faults # the database case cuts the server's connections, not its own
 
 sql() { psql -X -At -v ON_ERROR_STOP=1 -c "$1"; }
-phone() { echo "+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"; }
+phone() { echo "+38067$(random_digits 7)"; }
 
 # start_server [CRASH_AT] — starts the server and waits until it is ready.
 start_server() {

@@ -82,6 +82,9 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
         State state = State.CLOSED;
         int failures;
         Instant openedAt;
+        Instant lastSuccessAt;
+        Instant lastFailureAt;
+        String lastFailureKind;
 
         Breaker(Provider provider) {
             this.provider = provider;
@@ -107,13 +110,17 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
         }
 
         synchronized void success() {
+            lastSuccessAt = clock.instant();
             failures = 0;
             if (state != State.CLOSED) {
                 move(State.CLOSED);
             }
         }
 
-        synchronized void failure() {
+        /** {@code kind}: the exception's simple class name or {@link #FAILED_RESULT}; never a message. */
+        synchronized void failure(String kind) {
+            lastFailureAt = clock.instant();
+            lastFailureKind = kind;
             if (state == State.HALF_OPEN) {
                 openedAt = clock.instant();
                 move(State.OPEN);
@@ -143,6 +150,10 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
         synchronized State state() {
             return state;
         }
+
+        synchronized Health health() {
+            return new Health(provider, state, lastSuccessAt, lastFailureAt, lastFailureKind);
+        }
     }
 
     @Override
@@ -168,11 +179,11 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
                 breaker.abandoned();
                 return onError.apply(e);
             } catch (Exception e) {
-                breaker.failure();
+                breaker.failure(e.getClass().getSimpleName());
                 return onError.apply(e);
             }
             if (failed.test(result)) {
-                breaker.failure();
+                breaker.failure(FAILED_RESULT);
             } else {
                 breaker.success();
             }
@@ -185,6 +196,11 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
     @Override
     public State state(Provider provider) {
         return breakers.get(provider).state();
+    }
+
+    @Override
+    public java.util.List<Health> health() {
+        return java.util.Arrays.stream(Provider.values()).map(p -> breakers.get(p).health()).toList();
     }
 
     @Override

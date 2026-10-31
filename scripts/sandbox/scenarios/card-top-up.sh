@@ -4,7 +4,7 @@
 source "$(dirname "$0")/../lib.sh"
 
 KYIV=5a000000-0000-4000-8000-000000000001
-RIDER_PHONE="+38073$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38073$(random_digits 7)"
 
 # wait_for TOKEN PATH JQ_EXPR VALUE — polls up to 20 s until the field has the value.
 wait_for() {

@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP_LAT=52.2297; PICKUP_LON=21.0122   # Pałac Kultury i Nauki
 DROPOFF_LAT=52.1672; DROPOFF_LON=20.9679  # Lotnisko Chopina
-RIDER_PHONE="+48600$(printf '%06d' $(( (RANDOM * 32768 + RANDOM) % 1000000 )))"
+RIDER_PHONE="+48600$(random_digits 6)"
 ORDER=""
 
 # Whatever happens, no order stays searching and nobody stays online for the next scenarios.

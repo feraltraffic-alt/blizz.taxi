@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234     # Київ
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890
-RIDER_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38067$(random_digits 7)"
 WORDS="Соняшник$(printf '%05d' $(( RANDOM % 100000 )))"
 
 DRIVER=""
