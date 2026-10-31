@@ -160,6 +160,8 @@ class StaffSignInTests {
                 new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(),
                         List.of("orders.view", "orders.reassign"), base.allCities(), base.cityIds()),
                 new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(), base.permissions(),
+                        base.allCities(), List.of(cityA, cityB)),
+                new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(), base.permissions(),
                         true, List.of()))) {
             assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), changed,
                     "One right", null), ErrorCode.ACCESS_DENIED);
@@ -175,7 +177,7 @@ class StaffSignInTests {
         assertThat(directory.get(superAdmin, member.id())).as("nothing changed").isEqualTo(member);
         assertThat(failedSignIns(superAdmin)).as("both counted like failed sign-ins").isEqualTo(2);
         assertThat(denied("staff.update.denied", member.id().toString()))
-                .as("audited although refused").isEqualTo(5);
+                .as("audited although refused").isEqualTo(6);
 
         StaffMember promoted = directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
                 "Promote", SUPER_PASSWORD);
@@ -305,7 +307,7 @@ class StaffSignInTests {
         String login = uniqueLogin("olena");
         MvcResult created = postJson("/api/admin/v1/staff", rootToken, Map.of("command_id", UUID.randomUUID(),
                 "login", login, "initial_password", "first-password-123", "reason", "New operator",
-                "profile", Map.of("first_name", "Olena", "last_name", "Shevchenko",
+                "password", SUPER_PASSWORD, "profile", Map.of("first_name", "Olena", "last_name", "Shevchenko",
                         "contacts", Map.of("phone", "+48 512 345 678", "telegram", "olena_ops"),
                         "role", "OPERATOR", "permissions", List.of("orders.create", "orders.view"),
                         "all_cities", false, "city_ids", List.of(cityA))));
