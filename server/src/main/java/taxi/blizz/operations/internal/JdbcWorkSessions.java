@@ -271,7 +271,6 @@ class JdbcWorkSessions implements WorkSessions {
         lockCapacity(driver.id());
         Session session = currentSession(driver.id())
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No open session"));
-        requireControl(session, deviceSessionId);
         OffsetDateTime now = now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         boolean future = location != null && location.recordedAt().isAfter(now.plus(presence.futureTolerance()));
         // Only a newer sequence moves the current position (REQ-GEO-02); an older one is ignored, not refused.
