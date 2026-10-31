@@ -148,9 +148,8 @@ rows:
   - row: "Admin | POST /cities; PATCH /cities/{id}; POST /cities/{id}/publish"
     operations:
       - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/cities}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/cities/{city_id}/update"}
       - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/cities/{city_id}/publish"}
-    missing:
-      - {what: "PATCH /cities/{id}", reason: "A city draft cannot be edited; its boundary is set only when the draft is created.", ref: "#176"}
   - row: "Admin | POST /tariffs; POST /tariffs/{id}/publish"
     missing:
       - {what: "POST /tariffs", reason: "The tariffs admin API is deferred by the owner.", ref: "#30"}
