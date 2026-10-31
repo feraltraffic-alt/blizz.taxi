@@ -33,7 +33,11 @@ class JdbcRateLimits implements RateLimits {
 
     @Override
     public void acquire(String bucket, Actor subject) {
-        if (subject == null || (subject.type() != SubjectType.CLIENT && subject.type() != SubjectType.DRIVER)) {
+        // Riders and drivers; staff only for the customer lookup (issue #176), never for phone orders.
+        boolean counted = subject != null && (subject.type() == SubjectType.CLIENT
+                || subject.type() == SubjectType.DRIVER
+                || (subject.type() == SubjectType.STAFF && CUSTOMER_LOOKUP.equals(bucket)));
+        if (!counted) {
             return;
         }
         RateLimitProperties.Limit limit = properties.of(bucket);
