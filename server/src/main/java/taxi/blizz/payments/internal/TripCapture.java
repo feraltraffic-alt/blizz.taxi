@@ -10,7 +10,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * A card trip is completed (TripCompleted, REQ-PAY-04/05): the hold is taken up to the final fare, the rest of the
  * hold is left to lapse, and anything above the hold is charged to the saved card afterwards. The provider is called
- * by the worker, not here.
+ * by the worker, not here. A trip whose capture a facts correction holds (issue #142) is captured on
+ * TripCaptureReleased instead, with the order's fare at that time.
  */
 @Component
 class TripCapture implements OutboxHandler {
@@ -25,7 +26,7 @@ class TripCapture implements OutboxHandler {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record TripCompleted(UUID orderId, String paymentMethod, Long amountMinor, Long walletMinor, Long discountMinor,
-                         String currency) {
+                         String currency, Boolean captureHeld) {
     }
 
     @Override
@@ -35,7 +36,8 @@ class TripCapture implements OutboxHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return "TripCompleted".equals(eventType);
+        // TripCaptureReleased: the review of a facts correction that held the capture closed (issue #142).
+        return "TripCompleted".equals(eventType) || "TripCaptureReleased".equals(eventType);
     }
 
     @Override
@@ -43,6 +45,9 @@ class TripCapture implements OutboxHandler {
         TripCompleted trip = json.readValue(message.payload(), TripCompleted.class);
         if (!"CARD".equals(trip.paymentMethod()) || trip.amountMinor() == null) {
             return;
+        }
+        if ("TripCompleted".equals(message.type()) && Boolean.TRUE.equals(trip.captureHeld())) {
+            return; // waits for TripCaptureReleased, with the fare as corrected meanwhile
         }
         // The promotions' discount and the rider's bonuses paid their part (ADR 0009); the card pays the rest.
         long wallet = trip.walletMinor() == null ? 0 : trip.walletMinor();

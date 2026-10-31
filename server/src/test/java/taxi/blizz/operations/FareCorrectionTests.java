@@ -210,6 +210,7 @@ class FareCorrectionTests {
         assertThat(entry.reason()).isEqualTo("Detour by the driver");
         assertThat(entry.details()).containsEntry("refund_obligation_minor", 1_500)
                 .containsEntry("refund_state", "WAITING_FOR_REFUND_FLOW");
+        taxi.blizz.EventContracts.assertOrderEventsConform(jdbc, paid, "FareCorrected");
 
         // Unpaid: the lower fare only reduces the rider's open debt on the order.
         UUID unpaid = fulfilled(false).order().id();

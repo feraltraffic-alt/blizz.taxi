@@ -47,3 +47,29 @@ tests:
             exp_annotations:
               summary: "An uploaded file has waited more than an hour for its antivirus verdict"
               runbook: docs/runbooks/providers.md
+
+  # A held capture whose card hold expires in 30 hours, an hour later in 24.5, then in under 24: the alert fires five
+  # minutes after it is under 24 hours, not before; with nothing held a zero expiry does not fire (review of #169).
+  - interval: 1m
+    input_series:
+      - series: 'blizz_trips_held_captures'
+        values: '1x400 0x60'
+      - series: 'blizz_trips_held_capture_expiry_seconds'
+        values: '108000-60x400 0x60'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HeldCaptureNearHoldExpiry
+        exp_alerts: []
+      - eval_time: 363m
+        alertname: HeldCaptureNearHoldExpiry
+        exp_alerts: []
+      - eval_time: 370m
+        alertname: HeldCaptureNearHoldExpiry
+        exp_alerts:
+          - exp_labels: {severity: warning, owner: payments-oncall}
+            exp_annotations:
+              summary: "A card trip's capture waits for a facts review and its card hold expires within 24 hours"
+              runbook: docs/runbooks/payment-unknown.md
+      - eval_time: 440m
+        alertname: HeldCaptureNearHoldExpiry
+        exp_alerts: []

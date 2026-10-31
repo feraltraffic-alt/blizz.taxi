@@ -1934,6 +1934,120 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/orders/{order_id}/trip-facts:
+    get:
+      operationId: getAdminTripFacts
+      summary: The trip's times as recorded and as corrected
+      description: >-
+        The trip's recorded times next to their corrections, each with its reason, author and review (REQ-CAN-07,
+        issue #142). capture_held is true while a card trip's capture waits for the review of a correction made before
+        the trip completed. Needs orders.view in the order's city.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripFacts"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/orders/{order_id}/trip-corrections:
+    post:
+      operationId: correctAdminTripFacts
+      summary: Correct the trip's facts after the start
+      description: >-
+        A command (REQ-CAN-07, issue #142): the start pressed by mistake, or the right start or completion time. Each
+        is an append-only correcting record with the reason and the author; the trip's own times are never changed,
+        and no money moves (a fare correction does that). The trip is marked for review; a correction made before a
+        card trip completes holds its capture until the review. Needs trips.correct in the order's city.
+        expected_version is the trip's version (409 VERSION_CONFLICT with current_version otherwise). A trip not yet
+        started, or nothing to correct → 409 STATE_CONFLICT; a time in the future, before the arrival, or a completion
+        before the start → 400. Audited and in the order's history.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripCorrectionCommand"
+      responses:
+        "200":
+          description: Corrected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripFacts"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/orders/{order_id}/trip-corrections/review:
+    post:
+      operationId: reviewAdminTripCorrections
+      summary: Close the review of the trip's corrections
+      description: >-
+        A command (issue #142): the open corrections are reviewed, with the reason. A card capture they held starts now
+        with the order's current final fare (after any fare correction). Nothing open → 409 STATE_CONFLICT. Needs
+        trips.correct in the order's city; audited and in the order's history.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripReviewCommand"
+      responses:
+        "200":
+          description: Reviewed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripFacts"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/orders/{order_id}/cash-dispute:
     get:
       operationId: getCashDispute
@@ -5294,6 +5408,128 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    TripCorrectionCommand:
+      description: At least one of started_by_mistake, started_at and completed_at; started_by_mistake excludes started_at.
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: The trip's current version.
+          type: integer
+          format: int64
+          minimum: 0
+        started_by_mistake:
+          type: boolean
+        started_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        completed_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    TripReviewCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    TripCorrection:
+      type: object
+      additionalProperties: false
+      required: [id, kind, recorded_value, corrected_value, reason, author_id, created_at, holds_capture, reviewed_at,
+                 reviewed_by, released_by_deadline_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [START_VOID, STARTED_AT, COMPLETED_AT]
+        recorded_value:
+          description: The trip's own time when the correction was made.
+          type: [string, "null"]
+          format: date-time
+        corrected_value:
+          description: The right time; null for START_VOID.
+          type: [string, "null"]
+          format: date-time
+        reason:
+          type: string
+        author_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        holds_capture:
+          type: boolean
+        reviewed_at:
+          type: [string, "null"]
+          format: date-time
+        reviewed_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        released_by_deadline_at:
+          description: >-
+            When the capture this correction held was started without a review because the card hold was about to
+            expire (blizz.trips.held-capture-margin before it). The correction still waits for its review; any
+            difference found then is a fare correction.
+          type: [string, "null"]
+          format: date-time
+
+    TripFacts:
+      type: object
+      additionalProperties: false
+      required: [order_id, trip_id, version, phase, arrived_at, started_at, completed_at, corrected_started_at,
+                 corrected_completed_at, start_void, needs_review, capture_held, corrections]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        trip_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        version:
+          type: integer
+          format: int64
+        phase:
+          type: string
+        arrived_at:
+          type: [string, "null"]
+          format: date-time
+        started_at:
+          description: As recorded by the driver's app.
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        corrected_started_at:
+          description: The latest correction of the start time; null when none.
+          type: [string, "null"]
+          format: date-time
+        corrected_completed_at:
+          type: [string, "null"]
+          format: date-time
+        start_void:
+          description: The start was corrected as pressed by mistake.
+          type: boolean
+        needs_review:
+          type: boolean
+        capture_held:
+          type: boolean
+        corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripCorrection"
+
     FareCorrectionCommand:
       type: object
       additionalProperties: false

@@ -60,4 +60,10 @@ public interface CardPayments {
     List<StandingHold> standingHoldsOlderThan(OffsetDateTime changedBefore);
 
     Optional<Intent> intent(UUID orderId);
+
+    /**
+     * When the order's card hold lapses at the provider: the hold's own {@code hold_until}, else the successful
+     * authorization plus the provider's hold timeout. Empty unless the hold is in place (AUTHORIZED).
+     */
+    Optional<OffsetDateTime> holdExpiresAt(UUID orderId);
 }
