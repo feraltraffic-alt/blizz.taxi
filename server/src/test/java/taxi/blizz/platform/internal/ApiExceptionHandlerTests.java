@@ -95,7 +95,7 @@ class ApiExceptionHandlerTests {
 
     @Test
     void aLostDatabaseConnectionIsATemporaryUnavailabilityNotAnInternalError() throws Exception {
-        for (String kind : new String[] {"resource", "rollback", "sql-state"}) {
+        for (String kind : new String[] {"resource", "rollback", "sql-state", "jpa-rollback"}) {
             MvcResult result = mvc.perform(get("/__errors/database").param("kind", kind)).andReturn();
             Map<String, Object> body = check(result, 503, ErrorCode.TEMPORARILY_UNAVAILABLE);
             assertThat(body).as(kind).containsEntry("retryable", true).containsEntry("retry_after_seconds", 2);
@@ -294,6 +294,9 @@ class ApiExceptionHandlerTests {
                             new org.springframework.dao.DataAccessResourceFailureException("lost", io));
                     throw failed;
                 }
+                case "jpa-rollback" -> throw new org.springframework.orm.jpa.JpaSystemException(
+                        new org.hibernate.TransactionException("Unable to rollback against JDBC Connection",
+                                new java.sql.SQLException("Connection is closed")));
                 case "sql-state" -> throw new org.springframework.jdbc.UncategorizedSQLException("query", "select 1",
                         new java.sql.SQLException("terminating connection due to administrator command", "57P01"));
                 default -> throw new org.springframework.jdbc.BadSqlGrammarException("query", "selec 1",

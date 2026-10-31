@@ -70,8 +70,9 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /**
      * Whether the request failed because the connection to the database broke (fault tests, issue #146): its
      * transaction was rolled back, so it is safe to send again. A cut connection surfaces as Spring's resource failure,
-     * as a failed commit or rollback wrapping one, or as a bare JDBC error of SQL state class 08 (connection exception)
-     * or 57P (the server shut the session down).
+     * as a failed commit or rollback wrapping one, as a bare JDBC error of SQL state class 08 (connection exception)
+     * or 57P (the server shut the session down), or as a rollback that failed on a closed connection: nothing of such
+     * a transaction was committed.
      */
     static boolean databaseLost(Throwable exception) {
         for (Throwable t = exception; t != null; t = t.getCause() == t ? null : t.getCause()) {
@@ -87,6 +88,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             }
             if (t instanceof java.sql.SQLException sql && sql.getSQLState() != null
                     && (sql.getSQLState().startsWith("08") || sql.getSQLState().startsWith("57P"))) {
+                return true;
+            }
+            if (t instanceof org.hibernate.TransactionException rollback && rollback.getMessage() != null
+                    && rollback.getMessage().startsWith("Unable to rollback")) {
                 return true;
             }
         }
