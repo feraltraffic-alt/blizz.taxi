@@ -1017,6 +1017,50 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+  /api/admin/v1/cities/{city_id}/update:
+    post:
+      operationId: updateCityDraft
+      summary: Change a city draft
+      description: >-
+        Registry row "Admin | PATCH /cities/{id}" (issue #176): the name, currency, timezone, boundary and priority
+        of a city that is still a DRAFT. A published or archived city is 409 STATE_CONFLICT: its boundary changes
+        through a new draft or a separate flow, never here. The boundary must be an SRID 4326 MultiPolygon, valid (no
+        self-intersection) and not empty, as on create: otherwise 400 VALIDATION_FAILED. A boundary that intersects a
+        published city of the same priority is 409 STATE_CONFLICT, the rule publish applies. Versioned
+        (expected_version; a stale one is 409 VERSION_CONFLICT with current_version), idempotent by command_id
+        (the same key with another body is 409 IDEMPOTENCY_CONFLICT) and audited as city.update with before and
+        after. Needs geo.manage for the city.
+      tags: [Geography]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCity"
+      responses:
+        "200":
+          description: The draft as it is now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoRevision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/cities/{city_id}/publish:
     post:
       operationId: publishCity
@@ -6752,6 +6796,32 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         code:
           type: string
+        name:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timezone:
+          type: string
+        polygon:
+          $ref: "#/components/schemas/GeoJsonPolygon"
+        priority:
+          description: Higher wins where cities overlap.
+          type: integer
+        reason:
+          type: string
+
+    UpdateCity:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, name, currency, timezone, polygon, priority, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
         name:
           type: string
         currency:
