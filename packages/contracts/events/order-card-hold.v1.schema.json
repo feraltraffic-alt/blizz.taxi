@@ -3,7 +3,7 @@
   "$id": "https://blizz.taxi/contracts/events/order-card-hold.v1.schema.json",
   "title": "CardHoldAuthorized / CardHoldDeclined v1 payload",
   "x-aggregate": "Order",
-  "description": "The order's history event when operations applies the payment's card-hold decision (aggregate Order, version = order version). The payment's event of the same type is card-hold.v1. CardHoldAuthorized: the search starts (or the pre-order is scheduled); CardHoldDeclined: the order is UNFULFILLED with PAYMENT_DECLINED.",
+  "description": "The order's history event when operations applies the payment's card-hold decision (aggregate Order, version = order version). The payment's event of the same type is card-hold.v1. CardHoldAuthorized: the search starts (or the pre-order is scheduled); CardHoldDeclined: the order is UNFULFILLED with PAYMENT_DECLINED, or with PAYMENT_TIMEOUT when the bank did not answer before the hold deadline (REQ-PAY-02; the hold is then released, a late success voided).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
       "format": "uuid"
     },
     "reason": {
-      "description": "CardHoldDeclined only: the bank's reason, or Declined.",
+      "description": "CardHoldDeclined only: the bank's reason, Declined, or PAYMENT_TIMEOUT for the hold deadline.",
       "type": "string"
     }
   },
@@ -26,6 +26,10 @@
     {
       "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f",
       "reason": "Declined"
+    },
+    {
+      "order_id": "8a1f0c3e-2b4d-4c5e-9f60-1a2b3c4d5e6f",
+      "reason": "PAYMENT_TIMEOUT"
     }
   ]
 }
