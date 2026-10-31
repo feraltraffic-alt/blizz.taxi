@@ -150,6 +150,10 @@ class StaffSignInTests {
     @Test
     void aRightsChangeWithoutThePasswordOrWithAWrongOneIsRefusedCountedAndAudited() {
         StaffMember member = operator(uniqueLogin("rights"), "rights-password-123", "orders.view");
+        StaffMember cityless = directory.create(superAdmin, UUID.randomUUID(), uniqueLogin("cityless"),
+                "cityless-password-123", new Profile("Taras", "Bondar", new Contacts(null, "taras@example.invalid",
+                        null), Role.OPERATOR, List.of("orders.view"), false, List.of()), "No cities yet",
+                SUPER_PASSWORD);
         Profile more = new Profile("Olena", "Shevchenko", new Contacts(null, "olena@example.invalid", "@olena_ops"),
                 Role.ADMIN, List.of("orders.view", "fares.correct"), false, List.of(cityA, cityB));
         // Each of role, permissions and cities alone is a rights change.
@@ -166,8 +170,13 @@ class StaffSignInTests {
             assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), changed,
                     "One right", null), ErrorCode.ACCESS_DENIED);
         }
-        // Five failures in a row lock the account, as at sign-in; start the count again for what follows.
-        jdbc.sql("update staff_user set failed_sign_ins = 0 where id = :id").param("id", superAdmin.id()).update();
+        // All cities alone: a member with no cities given every city.
+        assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), cityless.id(), cityless.version(),
+                new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(), base.permissions(), true,
+                        List.of()), "Every city", null), ErrorCode.ACCESS_DENIED);
+        // Five failures in a row lock the account, as at sign-in; start again for what follows.
+        jdbc.sql("update staff_user set failed_sign_ins = 0, locked_until = null where id = :id")
+                .param("id", superAdmin.id()).update();
 
         assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
                 "Promote", null), ErrorCode.ACCESS_DENIED);
@@ -178,6 +187,7 @@ class StaffSignInTests {
         assertThat(failedSignIns(superAdmin)).as("both counted like failed sign-ins").isEqualTo(2);
         assertThat(denied("staff.update.denied", member.id().toString()))
                 .as("audited although refused").isEqualTo(6);
+        assertThat(denied("staff.update.denied", cityless.id().toString())).isOne();
 
         StaffMember promoted = directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
                 "Promote", SUPER_PASSWORD);
