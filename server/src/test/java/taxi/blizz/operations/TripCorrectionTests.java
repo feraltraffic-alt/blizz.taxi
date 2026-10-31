@@ -170,13 +170,20 @@ class TripCorrectionTests {
         offline(driver);
         deliverEvents();
         UUID order = ride.order().id();
+        // A ride of 20 minutes, half an hour ago.
+        jdbc.sql("""
+                        update trip set arrived_at = now() - interval '30 minutes',
+                                        started_at = now() - interval '25 minutes',
+                                        completed_at = now() - interval '5 minutes'
+                        where id = :id""")
+                .param("id", done.id()).update();
         Map<String, Object> recorded = tripRow(done.id());
         long postings = jdbc.sql("select count(*) from journal_transaction where basis_id = :o").param("o", order)
                 .query(Long.class).single();
         Actor staff = reviewer();
-        OffsetDateTime started = ((OffsetDateTime) recorded.get("started_at")).minusMinutes(3)
+        OffsetDateTime started = ((OffsetDateTime) recorded.get("started_at")).plusMinutes(1)
                 .truncatedTo(ChronoUnit.SECONDS);
-        OffsetDateTime completed = ((OffsetDateTime) recorded.get("completed_at")).minusMinutes(1)
+        OffsetDateTime completed = ((OffsetDateTime) recorded.get("completed_at")).minusMinutes(2)
                 .truncatedTo(ChronoUnit.SECONDS);
 
         UUID command = UUID.randomUUID();
@@ -192,7 +199,8 @@ class TripCorrectionTests {
                 .containsExactlyInAnyOrder("STARTED_AT", "COMPLETED_AT");
         assertThat(facts.corrections()).allSatisfy(c -> assertThat(c.authorId()).isEqualTo(staff.id()));
         Map<String, Object> after = tripRow(done.id());
-        assertThat(after.get("started_at")).as("the trip's own times never change").isEqualTo(recorded.get("started_at"));
+        assertThat(after.get("started_at")).as("the trip's own times never change")
+                .isEqualTo(recorded.get("started_at"));
         assertThat(after.get("completed_at")).isEqualTo(recorded.get("completed_at"));
         assertThat(jdbc.sql("select count(*) from journal_transaction where basis_id = :o").param("o", order)
                 .query(Long.class).single()).as("no money moves").isEqualTo(postings);
@@ -237,6 +245,14 @@ class TripCorrectionTests {
         assertThat(intent(order)).containsEntry("state", "CAPTURE_PENDING")
                 .containsEntry("capture_minor", amount - 1_000);
         assertThat(orders.timeline(staff, order).getLast().details()).containsEntry("capture_released", true);
+        taxi.blizz.EventContracts.assertOrderEventsConform(jdbc, order, "TripFactsCorrected", "TripCompleted",
+                "FareCorrected", "TripCorrectionsReviewed", "TripCaptureReleased");
+        // The fake provider's capture is left to nobody: other test classes' payment workers would take it.
+        jdbc.sql("""
+                        update payment_operation set state = 'CANCELLED'
+                        where intent_id in (select id from payment_intent where order_id = :o)
+                          and state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')""")
+                .param("o", order).update();
     }
 
     @Test

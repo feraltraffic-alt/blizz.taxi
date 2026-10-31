@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/trip-corrections-reviewed.v1.schema.json",
+  "title": "TripCorrectionsReviewed v1 payload",
+  "description": "Published by operations when staff close the review of a trip's facts corrections (issue #142). Aggregate Order. capture_released: a card capture they held starts (TripCaptureReleased follows).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "trip_id", "capture_released"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "trip_id": { "type": "string", "format": "uuid" },
+    "capture_released": { "type": "boolean" }
+  },
+  "examples": [
+    { "order_id": "5f1e9a2c-4b7d-4c3e-8a19-2d6b7e0f1a34", "trip_id": "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f", "capture_released": true }
+  ]
+}

@@ -101,7 +101,13 @@ class JdbcFareCorrections implements FareCorrections {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Only a fulfilled order's fare is corrected; this one is " + order.status());
                     }
-                    if (PAYMENT_IN_PROGRESS.contains(order.paymentState())) {
+                    // A capture held by a trip-facts correction waits for its review and then takes the fare as
+                    // corrected here (issue #142, part C1): not a payment in progress.
+                    boolean held = jdbc.sql("""
+                                    select exists (select 1 from trip_correction
+                                                   where order_id = :id and holds_capture and reviewed_at is null)""")
+                            .param("id", orderId).query(Boolean.class).single();
+                    if (PAYMENT_IN_PROGRESS.contains(order.paymentState()) && !held) {
                         throw new DomainException(ErrorCode.PAYMENT_PENDING,
                                 "The order's payment is still in progress");
                     }

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/fare-corrected.v1.schema.json",
+  "title": "FareCorrected v1 payload",
+  "description": "Published by operations when staff correct a fulfilled order's final fare (REQ-ADM-03, REQ-PRC-10, issue #142). Aggregate Order. The journal posting was made in the same transaction (FareDeltas); this event is the order's history and a signal. refund_obligation_minor is what this correction left the service owing the rider (REFUNDS_PAYABLE), waiting for the refund flow (#140).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "version", "previous_amount_minor", "amount_minor", "delta_minor", "refund_obligation_minor", "refund_state"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer", "minimum": 2 },
+    "previous_amount_minor": { "type": "integer", "minimum": 0 },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "delta_minor": { "type": "integer" },
+    "refund_obligation_minor": { "type": "integer", "minimum": 0 },
+    "refund_state": { "type": "string", "enum": ["NONE", "WAITING_FOR_REFUND_FLOW"] }
+  },
+  "examples": [
+    { "order_id": "5f1e9a2c-4b7d-4c3e-8a19-2d6b7e0f1a34", "version": 2, "previous_amount_minor": 18500, "amount_minor": 17000, "delta_minor": -1500, "refund_obligation_minor": 1500, "refund_state": "WAITING_FOR_REFUND_FLOW" }
+  ]
+}

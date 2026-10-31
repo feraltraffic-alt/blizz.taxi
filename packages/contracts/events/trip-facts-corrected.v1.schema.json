@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/trip-facts-corrected.v1.schema.json",
+  "title": "TripFactsCorrected v1 payload",
+  "description": "Published by operations when staff correct a trip's facts after the start (REQ-CAN-07, issue #142). Aggregate Order. The trip's own times are unchanged; the corrections are records beside them. holds_capture: made before a card trip completed, its capture waits for the review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "trip_id", "corrections", "holds_capture"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "trip_id": { "type": "string", "format": "uuid" },
+    "holds_capture": { "type": "boolean" },
+    "corrections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "recorded_value", "corrected_value"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["START_VOID", "STARTED_AT", "COMPLETED_AT"] },
+          "recorded_value": { "type": ["string", "null"], "format": "date-time" },
+          "corrected_value": { "type": ["string", "null"], "format": "date-time" }
+        }
+      }
+    }
+  },
+  "examples": [
+    { "order_id": "5f1e9a2c-4b7d-4c3e-8a19-2d6b7e0f1a34", "trip_id": "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f", "holds_capture": false, "corrections": [ { "kind": "COMPLETED_AT", "recorded_value": "2026-10-31T10:30:00Z", "corrected_value": "2026-10-31T10:28:00Z" } ] }
+  ]
+}

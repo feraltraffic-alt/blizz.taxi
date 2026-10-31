@@ -324,14 +324,19 @@ class JdbcTrips implements Trips {
                             .param("now", now)
                             .param("id", trip.assignmentId())
                             .update();
+                    boolean captureHeld = payment == PaymentMethod.CARD && jdbc.sql("""
+                                    select exists (select 1 from trip_correction
+                                                   where trip_id = :trip and holds_capture and reviewed_at is null)""")
+                            .param("trip", tripId).query(Boolean.class).single();
                     if (collectedByDriver) {
                         String prefix = payment == PaymentMethod.CASH ? "CASH" : "TERMINAL";
                         jdbc.sql("update ride_order set payment_state = :state where id = :id")
                                 .param("state", prefix + (Boolean.TRUE.equals(cashReceived) ? "_REPORTED" : "_NOT_RECEIVED"))
                                 .param("id", trip.orderId())
                                 .update();
-                    } else if (payment == PaymentMethod.CARD) {
-                        // The driver is free now; the bank takes the money afterwards (REQ-PAY-04).
+                    } else if (payment == PaymentMethod.CARD && !captureHeld) {
+                        // The driver is free now; the bank takes the money afterwards (REQ-PAY-04). A facts
+                        // correction waiting for review holds it: the review releases it (issue #142).
                         jdbc.sql("update ride_order set payment_state = 'CAPTURE_PENDING' where id = :id")
                                 .param("id", trip.orderId()).update();
                     }
@@ -363,6 +368,9 @@ class JdbcTrips implements Trips {
                     // Any reason: an arrival or start with an exception earlier, or the completion time now.
                     payload.put("needs_review", jdbc.sql("select needs_review from trip where id = :id")
                             .param("id", tripId).query(Boolean.class).single());
+                    if (captureHeld) {
+                        payload.put("capture_held", true);
+                    }
                     payload.put("driver_id", driver.id().toString());
                     payload.put("payer_client_id", facts.payerClientId() == null ? null : facts.payerClientId().toString());
                     payload.put("final_fare_id", fare.id().toString());
