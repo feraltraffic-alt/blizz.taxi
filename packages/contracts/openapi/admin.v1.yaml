@@ -6785,7 +6785,18 @@ components:
           $ref: "#/components/schemas/AddressData"
         house:
           type: object
-          description: Parsed house number, suffix and building.
+          description: Parsed house number, suffix and building (empty strings when the address has none).
+          required: [number, suffix, building]
+          properties:
+            number:
+              type: string
+              examples: ["2/26"]
+            suffix:
+              type: string
+              examples: ["а"]
+            building:
+              type: string
+              examples: ["1"]
         source:
           type: string
         visibility:
