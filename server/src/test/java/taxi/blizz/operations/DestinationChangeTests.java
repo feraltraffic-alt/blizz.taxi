@@ -80,10 +80,12 @@ class DestinationChangeTests {
 
     /**
      * The fake provider's captures are left to nobody, even when a test fails halfway: another class's payment worker
-     * would take them and use up that class's scripted answers.
+     * would take them and use up that class's scripted answers. Events still in the outbox are delivered first, or a
+     * capture they ask for would come after the clean-up.
      */
     @org.junit.jupiter.api.AfterEach
     void cancelLeftoverCaptures() {
+        deliverEvents();
         jdbc.sql("""
                         update payment_operation set state = 'CANCELLED'
                         where intent_id in (select id from payment_intent where city_id = :c)
