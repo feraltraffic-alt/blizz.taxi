@@ -271,8 +271,18 @@ case_database() {
 }
 
 : > "$BANK"
+# drain — waits until the outbox has delivered everything, so the next case's armed server meets only its own events.
+drain() {
+    for _ in $(seq 1 90); do
+        [[ "$(sql "select count(*) from outbox where state = 'PENDING'")" == 0 ]] && return 0
+        sleep 1
+    done
+    note "**The outbox did not drain: $(sql "select count(*) from outbox where state = 'PENDING'") pending.**"; exit 1
+}
+
 for c in $CASES; do
     "case_$c"
+    drain
     stop_server
     echo "✅ $c" >> results.txt
 done
