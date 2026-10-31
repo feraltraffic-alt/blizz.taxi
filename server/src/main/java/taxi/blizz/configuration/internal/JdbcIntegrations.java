@@ -53,6 +53,7 @@ class JdbcIntegrations implements Integrations {
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
     private final StaffAccess staff;
+    private final taxi.blizz.platform.ProviderBreakers breakers;
     private final StaffSignIn signIn;
     private final AuditLog audit;
     private final ObjectProvider<IntegrationCheck> checks;
@@ -70,7 +71,9 @@ class JdbcIntegrations implements Integrations {
 
     JdbcIntegrations(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, StaffSignIn signIn,
                      AuditLog audit, ObjectProvider<IntegrationCheck> checks, JsonMapper json, Clock clock,
-                     SecretsProperties properties, OutboundAddresses addresses) {
+                     SecretsProperties properties, OutboundAddresses addresses,
+                     taxi.blizz.platform.ProviderBreakers breakers) {
+        this.breakers = breakers;
         this.addresses = addresses;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -415,8 +418,14 @@ class JdbcIntegrations implements Integrations {
     }
 
     @Override
-    public Health health(Actor staff) {
-        throw new UnsupportedOperationException("issue #176, part C");
+    public Health health(Actor actor) {
+        staff.require(actor, MANAGE_PERMISSION);
+        return new Health(INSTANCE, clock.instant(), breakers.health());
     }
+
+    /** The answering server: the container's host name, else the JVM's name (pid@host). */
+    private static final String INSTANCE = java.util.Optional.ofNullable(System.getenv("HOSTNAME"))
+            .filter(h -> !h.isBlank())
+            .orElseGet(() -> java.lang.management.ManagementFactory.getRuntimeMXBean().getName());
 
 }
