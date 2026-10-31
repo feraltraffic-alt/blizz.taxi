@@ -201,7 +201,7 @@ class M1RegistryContractTests {
             }
         }
         assertThat(served).as("handler mappings found").hasSizeGreaterThan(100);
-        assertThat(unserved).as("contract operations the server has no handler for").isEmpty();
+        assertThat(unserved).as("contract operations the server has no handler for: " + unserved).isEmpty();
     }
 
     // ------------------------------------------------------------------ scope
