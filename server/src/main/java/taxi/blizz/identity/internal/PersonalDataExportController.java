@@ -22,7 +22,10 @@ import taxi.blizz.identity.AccessClaims;
 import taxi.blizz.identity.ChallengeIssued;
 import taxi.blizz.identity.PersonalDataExports;
 
-/** A rider's copy of their personal data — rider.v1.yaml and admin.v1.yaml (REQ-PRV-07, issue #68). */
+/**
+ * A rider's or driver's copy of their personal data — rider.v1.yaml, driver.v1.yaml and admin.v1.yaml (REQ-PRV-07,
+ * issues #68 and #144).
+ */
 @RestController
 class PersonalDataExportController {
 
@@ -42,30 +45,30 @@ class PersonalDataExportController {
     record ExportList(List<PersonalDataExports.Export> exports) {
     }
 
-    @PostMapping("/api/rider/v1/me/data-exports/challenge")
+    @PostMapping({"/api/rider/v1/me/data-exports/challenge", "/api/driver/v1/me/data-exports/challenge"})
     @ResponseStatus(HttpStatus.CREATED)
     CodeResponse code(AccessClaims claims, HttpServletRequest request) {
         ChallengeIssued issued = exports.requestCode(claims.actor(), null, request.getRemoteAddr());
         return new CodeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt());
     }
 
-    @PostMapping("/api/rider/v1/me/data-exports")
+    @PostMapping({"/api/rider/v1/me/data-exports", "/api/driver/v1/me/data-exports"})
     ResponseEntity<PersonalDataExports.Export> request(AccessClaims claims, @Valid @RequestBody RequestExport body) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(exports.request(claims.actor(), body.commandId(),
                 body.challengeId(), body.otpCode()));
     }
 
-    @GetMapping("/api/rider/v1/me/data-exports")
+    @GetMapping({"/api/rider/v1/me/data-exports", "/api/driver/v1/me/data-exports"})
     ExportList mine(AccessClaims claims) {
         return new ExportList(exports.mine(claims.actor()));
     }
 
-    @GetMapping("/api/rider/v1/me/data-exports/{exportId}")
+    @GetMapping({"/api/rider/v1/me/data-exports/{exportId}", "/api/driver/v1/me/data-exports/{exportId}"})
     PersonalDataExports.Export get(AccessClaims claims, @PathVariable UUID exportId) {
         return exports.get(claims.actor(), exportId);
     }
 
-    @GetMapping("/api/rider/v1/me/data-exports/{exportId}/file")
+    @GetMapping({"/api/rider/v1/me/data-exports/{exportId}/file", "/api/driver/v1/me/data-exports/{exportId}/file"})
     ResponseEntity<byte[]> file(AccessClaims claims, @PathVariable UUID exportId) {
         PersonalDataExports.File file = exports.download(claims.actor(), exportId);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
