@@ -181,16 +181,17 @@ class AdminOrderSearchTests {
         // 23:50 UTC on the 19th is 05:20 on the 20th in Kolkata; 19:00 UTC on the 20th is 00:30 on the 21st.
         OffsetDateTime[] created = {OffsetDateTime.parse("2026-10-19T23:50:00Z"),
                 OffsetDateTime.parse("2026-10-20T10:00:00Z"), OffsetDateTime.parse("2026-10-20T19:00:00Z")};
-        String[] statuses = {"FULFILLED", "CANCELLED", "FULFILLED"};
+        // Statuses that tell the two days apart: in UTC the 20th would be CANCELLED and UNFULFILLED.
+        String[] statuses = {"FULFILLED", "CANCELLED", "UNFULFILLED"};
         for (int i = 0; i < created.length; i++) {
             OrderView order = rides.order(rider, cityA, PICKUP_A, DROPOFF_A);
             orders.cancel(rider, UUID.randomUUID(), order.id(), orders.get(order.id()).version(), "CHANGED_MIND");
-            if ("FULFILLED".equals(statuses[i])) {
+            if (!"CANCELLED".equals(statuses[i])) {
                 jdbc.sql("""
-                                update ride_order set status = 'FULFILLED', cancelled_by = null,
+                                update ride_order set status = :status, cancelled_by = null,
                                                       cancel_reason_code = null, cancel_reason_labels = null
                                 where id = :id""")
-                        .param("id", order.id()).update();
+                        .param("status", statuses[i]).param("id", order.id()).update();
             }
             jdbc.sql("update ride_order set created_at = :at where id = :id").param("at", created[i])
                     .param("id", order.id()).update();

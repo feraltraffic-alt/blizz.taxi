@@ -769,8 +769,12 @@ class JdbcOrders implements Orders {
                         select status, count(*) from ride_order
                         where city_id = :city and created_at >= :from and created_at < :to
                         group by status order by status""")
-                .param("city", cityId).param("from", date.atStartOfDay(id).toOffsetDateTime())
-                .param("to", date.plusDays(1).atStartOfDay(id).toOffsetDateTime())
+                // As UTC instants: an offset other than UTC would be dropped on the way to the database.
+                .param("city", cityId)
+                .param("from", date.atStartOfDay(id).toOffsetDateTime()
+                        .withOffsetSameInstant(java.time.ZoneOffset.UTC))
+                .param("to", date.plusDays(1).atStartOfDay(id).toOffsetDateTime()
+                        .withOffsetSameInstant(java.time.ZoneOffset.UTC))
                 .query((rs, i) -> new StatusCount(rs.getString(1), rs.getInt(2))).list();
         return new Overview(cityId, date, zone, counts.stream().mapToInt(StatusCount::count).sum(), counts);
     }
