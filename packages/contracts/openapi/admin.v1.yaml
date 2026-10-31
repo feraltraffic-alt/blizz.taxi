@@ -1407,7 +1407,11 @@ paths:
     post:
       operationId: createOwnAddress
       summary: Add an own address
-      description: House number parsed structurally (2 ≠ 26); entrances are separate records.
+      description: >-
+        House number parsed structurally (2 ≠ 26); entrances are separate records. A duplicate (REQ-GEO-14, issue #142) is 409 STATE_CONFLICT with duplicate_of, the existing
+        address: the same provider reference (never allowed), or an active address of the same city with the same
+        normalized street, house number, suffix and building whose pickup point is within 25 m. distinct: true with
+        the reason saves it anyway (25 m alone does not prove the same entrance) and is kept in the history.
       tags: [Geography]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1465,7 +1469,11 @@ paths:
     post:
       operationId: updateOwnAddress
       summary: Change an own address
-      description: Versioned; history and audit.
+      description: >-
+        Versioned; history and audit. A duplicate (REQ-GEO-14, issue #142) is 409 STATE_CONFLICT with duplicate_of, the existing
+        address: the same provider reference (never allowed), or an active address of the same city with the same
+        normalized street, house number, suffix and building whose pickup point is within 25 m. distinct: true with
+        the reason saves it anyway (25 m alone does not prove the same entrance) and is kept in the history.
       tags: [Geography]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -6817,6 +6825,12 @@ components:
           $ref: "#/components/schemas/AddressData"
         reason:
           type: string
+        distinct:
+          description: >-
+            Save although an address of the same house lies within 25 m (REQ-GEO-14): another entrance or a pickup
+            point that only looks the same. Never overrides a provider reference that is already linked.
+          type: boolean
+          default: false
 
     UpdateAddress:
       type: object
@@ -6833,6 +6847,12 @@ components:
           $ref: "#/components/schemas/AddressData"
         reason:
           type: string
+        distinct:
+          description: >-
+            Save although an address of the same house lies within 25 m (REQ-GEO-14): another entrance or a pickup
+            point that only looks the same. Never overrides a provider reference that is already linked.
+          type: boolean
+          default: false
 
     AddAlias:
       type: object
