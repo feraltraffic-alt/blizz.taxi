@@ -83,6 +83,19 @@ class HeldCaptureDeadlineTests {
         deliverEvents();
     }
 
+    /**
+     * The fake provider's captures are left to nobody, even when a test fails halfway: another class's payment worker
+     * would take them and use up that class's scripted answers.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void cancelLeftoverCaptures() {
+        jdbc.sql("""
+                        update payment_operation set state = 'CANCELLED'
+                        where intent_id in (select id from payment_intent where city_id = :c)
+                          and state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')""")
+                .param("c", city).update();
+    }
+
     // ------------------------------------------------------------ fixtures
 
     private void deliverEvents() {

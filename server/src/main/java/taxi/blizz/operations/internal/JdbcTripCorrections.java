@@ -167,7 +167,7 @@ class JdbcTripCorrections implements TripCorrections {
                             .param("trip", trip.id()).update();
                     jdbc.sql("update trip set version = version + 1 where id = :id").param("id", trip.id()).update();
                     boolean released = open.contains(Boolean.TRUE) && trip.completedAt() != null
-                            && releaseCapture(orderId);
+                            && releaseCapture(orderId, "REVIEW");
                     core.recordEvent(orderId, core.touch(orderId), "TripCorrectionsReviewed", actor, why,
                             Map.of("trip_id", trip.id().toString(), "capture_released", released));
                     audit.record(new AuditEntry(actor, "trip.review", "ride_order", orderId.toString(), why, null,
@@ -177,10 +177,37 @@ class JdbcTripCorrections implements TripCorrections {
     }
 
     /**
-     * The capture the completion skipped starts now with the order's current final fare, less the bonuses and the
-     * discount as at completion. Only for a card order whose payment still waits (AUTHORIZED).
+     * Within the caller's transaction: the card hold of the order expires soon, so the capture its open corrections
+     * hold starts without the review (review of #169). The corrections are marked, stay open and keep the trip
+     * {@code needs_review}; a difference found at the review is a fare correction. False when nothing is held any more.
      */
-    private boolean releaseCapture(UUID orderId) {
+    boolean releaseByDeadline(UUID orderId) {
+        core.lockOrder(orderId);
+        boolean held = jdbc.sql("""
+                        select exists (select 1 from trip_correction
+                                       where order_id = :order and holds_capture and reviewed_at is null
+                                         and released_by_deadline_at is null)""")
+                .param("order", orderId).query(Boolean.class).single();
+        if (!held || !releaseCapture(orderId, "DEADLINE")) {
+            return false;
+        }
+        jdbc.sql("""
+                        update trip_correction set released_by_deadline_at = :now
+                        where order_id = :order and holds_capture and reviewed_at is null
+                          and released_by_deadline_at is null""")
+                .param("now", now()).param("order", orderId).update();
+        audit.record(new AuditEntry(Actor.system(), "trip.capture_release_by_deadline", "ride_order",
+                orderId.toString(), "The card hold expires soon; the review is still due", null,
+                Map.of("capture_released", true)));
+        return true;
+    }
+
+    /**
+     * The capture the completion skipped starts now with the order's current final fare, less the bonuses and the
+     * discount as at completion. Only for a card order whose payment still waits (AUTHORIZED). {@code releasedBy}:
+     * REVIEW or DEADLINE.
+     */
+    private boolean releaseCapture(UUID orderId, String releasedBy) {
         record Order(String method, String paymentState, UUID fareId, Long amount, long wallet, long discount,
                      String currency) {
         }
@@ -209,6 +236,7 @@ class JdbcTripCorrections implements TripCorrections {
         payload.put("wallet_minor", Math.min(o.wallet(), o.amount() - discount));
         payload.put("discount_minor", discount);
         payload.put("currency", o.currency().strip());
+        payload.put("released_by", releasedBy);
         outbox.publish(new OutboxEvent("TripCaptureReleased", 1, "Order", orderId, version, payload));
         return true;
     }
@@ -252,7 +280,7 @@ class JdbcTripCorrections implements TripCorrections {
                 case "COMPLETED_AT" -> end = c.correctedValue();
                 default -> startVoid = true;
             }
-            held |= c.holdsCapture() && c.reviewedAt() == null;
+            held |= c.holdsCapture() && c.reviewedAt() == null && c.releasedByDeadlineAt() == null;
         }
         return new Facts(orderId, trip.id(), trip.version(), trip.phase(), trip.arrivedAt(), trip.startedAt(),
                 trip.completedAt(), start, end, startVoid, trip.needsReview(), held, list);

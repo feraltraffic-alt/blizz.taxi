@@ -54,6 +54,14 @@ groups:
           summary: "A card operation's outcome has been unknown for more than 5 minutes"
           runbook: docs/runbooks/payment-unknown.md
 
+      - alert: HeldCaptureNearHoldExpiry
+        expr: max(blizz_trips_held_captures) > 0 and min(blizz_trips_held_capture_expiry_seconds) < 86400
+        for: 5m
+        labels: {severity: warning, owner: payments-oncall}
+        annotations:
+          summary: "A card trip's capture waits for a facts review and its card hold expires within 24 hours"
+          runbook: docs/runbooks/payment-unknown.md
+
       - alert: LedgerUnbalanced
         expr: max(blizz_ledger_unbalanced) > 0
         for: 1m

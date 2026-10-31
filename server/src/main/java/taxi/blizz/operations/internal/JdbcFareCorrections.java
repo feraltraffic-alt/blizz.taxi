@@ -105,7 +105,8 @@ class JdbcFareCorrections implements FareCorrections {
                     // corrected here (issue #142, part C1): not a payment in progress.
                     boolean held = jdbc.sql("""
                                     select exists (select 1 from trip_correction
-                                                   where order_id = :id and holds_capture and reviewed_at is null)""")
+                                                   where order_id = :id and holds_capture and reviewed_at is null
+                                                     and released_by_deadline_at is null)""")
                             .param("id", orderId).query(Boolean.class).single();
                     if (PAYMENT_IN_PROGRESS.contains(order.paymentState()) && !held) {
                         throw new DomainException(ErrorCode.PAYMENT_PENDING,

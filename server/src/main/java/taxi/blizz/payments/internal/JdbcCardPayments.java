@@ -49,8 +49,12 @@ class JdbcCardPayments implements CardPayments {
     private final Clock clock;
     private final PaymentWorker worker;
 
+    private final PaymentsProperties properties;
+
     JdbcCardPayments(JdbcClient jdbc, Merchants merchants, Outbox outbox, Clock clock, @Lazy PaymentWorker worker,
-                     @Value("${blizz.payments.invariants.hold-lookback:P30D}") Duration holdLookback) {
+                     @Value("${blizz.payments.invariants.hold-lookback:P30D}") Duration holdLookback,
+                     PaymentsProperties properties) {
+        this.properties = properties;
         this.jdbc = jdbc;
         this.merchants = merchants;
         this.outbox = outbox;
@@ -440,7 +444,14 @@ class JdbcCardPayments implements CardPayments {
 
     @Override
     public Optional<OffsetDateTime> holdExpiresAt(UUID orderId) {
-        throw new UnsupportedOperationException("issue #142, review of #169");
+        // The hold the worker asked for: its own hold_until, else the provider's timeout from the authorization.
+        return jdbc.sql("""
+                        select coalesce(i.hold_until, a.updated_at + make_interval(secs => :timeout))
+                        from payment_intent i
+                        join payment_operation a on a.intent_id = i.id and a.type = 'AUTH' and a.state = 'SUCCEEDED'
+                        where i.order_id = :order and i.state = 'AUTHORIZED'""")
+                .param("order", orderId).param("timeout", properties.holdTimeoutSeconds())
+                .query(OffsetDateTime.class).optional();
     }
 
 }
