@@ -33,6 +33,7 @@ class StaffPermissionCatalogTests {
                 ServiceSettings.MANAGE_PERMISSION, taxi.blizz.configuration.RetentionSettings.MANAGE_PERMISSION, SupportCases.MANAGE_PERMISSION, Integrations.MANAGE_PERMISSION,
                 RiderWallets.MANAGE_PERMISSION, RiderPromotions.MANAGE_PERMISSION, OperatorBonuses.MANAGE_PERMISSION,
                 ClientDeletionReview.DELETE_PERMISSION, taxi.blizz.identity.ClientAccounts.MANAGE_PERMISSION,
+                taxi.blizz.operations.FareCorrections.CORRECT_PERMISSION,
                 taxi.blizz.backoffice.DriverDeletionReview.DELETE_PERMISSION,
                 Calls.ANSWER_PERMISSION, Calls.LISTEN_PERMISSION,
                 Calls.SUPERVISE_PERMISSION, taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION,
