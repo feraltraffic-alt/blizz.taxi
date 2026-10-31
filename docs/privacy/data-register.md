@@ -89,6 +89,10 @@ Common to all rows:
   stays with the trips it served — basis **owner**. Review events and risk flags keep staff's reasons — **owner**.
 - **Legal hold:** a trip, offer or reservation, a debt to the service, or a cash dispute not decided blocks the
   deletion itself (each with its code). An investigation — **owner**.
+- **Copy of the data** (#144, REQ-PRV-07): the driver asks with a code and downloads one JSON file within 7 days:
+  profile, documents (type, number, validity, decision; never the files), vehicles, shifts, trips (times, city,
+  class, prices, payment method; nothing of the rider), balance movements and sign-in sessions. Open to a blocked
+  driver and to one whose deletion is pending; dropped at once on the driver's deletion.
 - **Owner:** **owner** (driver operations).
 
 ### 3. Sign-in codes and code deliveries
@@ -328,7 +332,7 @@ Common to all rows:
 | Exact points of a deleted rider's orders and quotes | 6 | 2, closed |
 | An open chargeback does not hold deletion | 1, 6, 13 | 2, closed |
 | Drivers cannot be deleted | 2 | 3, closed |
-| Drivers cannot export their data | 2 | 4 |
+| Drivers cannot export their data | 2 | 4, closed |
 
 The first register said expired data export files are not deleted; they are (`content` is set to null at expiry).
 

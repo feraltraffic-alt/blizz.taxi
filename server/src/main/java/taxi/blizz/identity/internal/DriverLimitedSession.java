@@ -10,7 +10,8 @@ import java.util.regex.Pattern;
  * finish the current trip, keep the shift's connection and end it, report positions, reach support and keep push
  * devices, and rate the passenger of the finished trip. Anything else answers 403 ACCOUNT_BLOCKED, so no new work starts: no shift, resume, offer, claim,
  * pre-order, profile, document, vehicle, legal acceptance, phone change, top-up or transfer. A driver whose deletion
- * request is pending has the same session (issue #144), and both may ask for the deletion or withdraw it.
+ * request is pending has the same session (issue #144), and both may ask for the deletion or withdraw it, or ask for
+ * a copy of their own data.
  */
 final class DriverLimitedSession {
 
@@ -30,7 +31,9 @@ final class DriverLimitedSession {
             path("/api/driver/v1/push-devices"),
             path("/api/driver/v1/push-devices/" + SEGMENT + "/remove"),
             // Asking to delete the account, or withdrawing the request (issue #144).
-            path("/api/driver/v1/me/deletion-request(/challenge|/cancel)?"));
+            path("/api/driver/v1/me/deletion-request(/challenge|/cancel)?"),
+            // A copy of the driver's own data (issue #144, REQ-PRV-07).
+            path("/api/driver/v1/me/data-exports(/challenge)?"));
 
     /** Reads of new work: denied even as GET. The driver's own reservations stay readable. */
     private static final List<Pattern> NEW_WORK = List.of(

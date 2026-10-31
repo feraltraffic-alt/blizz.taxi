@@ -564,10 +564,11 @@ class AccessIsolationTests {
         }
         if (path.contains("/data-exports/")) {
             UUID export = UUID.randomUUID();
+            String subject = driverApi ? "driver_id" : "client_id";
             jdbc.sql("""
-                insert into personal_data_export(id,client_id,state,content,size_bytes,created_at,ready_at,expires_at)
-                values(:id,:client,'READY','{}'::bytea,2,now(),now(),now()+interval '7 days')
-                """).param("id", export).param("client", owner.id()).update();
+                insert into personal_data_export(id,%s,state,content,size_bytes,created_at,ready_at,expires_at)
+                values(:id,:owner,'READY','{}'::bytea,2,now(),now(),now()+interval '7 days')
+                """.formatted(subject)).param("id", export).param("owner", owner.id()).update();
             ids.put("export_id", export);
         }
         if (path.endsWith("/rating") && operation.method().equals("get")) {

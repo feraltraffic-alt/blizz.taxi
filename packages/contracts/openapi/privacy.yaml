@@ -247,7 +247,7 @@ components:
           format: date-time
 
     DataExportCodeChallenge:
-      description: A code of purpose DATA_EXPORT was sent to the rider's current phone.
+      description: A code of purpose DATA_EXPORT was sent to the rider's or driver's current phone.
       type: object
       additionalProperties: false
       required: [challenge_id, expires_at, resend_available_at]
@@ -261,7 +261,7 @@ components:
 
     DataExportCommand:
       description: >-
-        The rider confirms the request with the code of the challenge. A sign-in or deletion code is refused
+        The rider or driver confirms with the code of the challenge. A sign-in or deletion code is refused
         (OTP_INVALID); a wrong code counts as an attempt.
       type: object
       additionalProperties: false
@@ -277,7 +277,7 @@ components:
 
     DataExport:
       description: >-
-        A copy of the rider's personal data (REQ-PRV-07). PENDING → RUNNING → READY (downloadable until expires_at)
+        A copy of the rider's or driver's personal data (REQ-PRV-07). PENDING → RUNNING → READY (downloadable until expires_at)
         or FAILED; READY → EXPIRED, the file is dropped.
       type: object
       additionalProperties: false
