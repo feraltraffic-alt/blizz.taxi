@@ -20,6 +20,7 @@ import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
+import taxi.blizz.platform.DuplicateException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
 import tools.jackson.databind.json.JsonMapper;
@@ -62,6 +63,7 @@ class JdbcAddressBook implements AddressBook {
             UUID id = UUID.randomUUID();
             Data d = c.data();
             HouseNumber house = HouseNumber.parse(d.houseRaw(), d.building());
+            UUID near = requireNotDuplicate(null, d, house, c.distinct());
             dataParams(jdbc.sql("""
                     insert into address(id, city_id, type, label, language, street, street_normalized, house_raw,
                         house_number, house_suffix, building_raw, building_normalized, house_normalized,
@@ -73,6 +75,7 @@ class JdbcAddressBook implements AddressBook {
             override(id, d.override());
             Address after = get(id, false).orElseThrow();
             changed(c.actor(), "address.create", c.reason(), null, after);
+            distinct(c.actor(), c.reason(), after, near);
             return after;
         });
     }
@@ -85,6 +88,7 @@ class JdbcAddressBook implements AddressBook {
             Address before = locked(c.id(), c.expectedVersion());
             validate(c.data());
             Data d = c.data();
+            UUID near = requireNotDuplicate(c.id(), d, HouseNumber.parse(d.houseRaw(), d.building()), c.distinct());
             dataParams(jdbc.sql("""
                     update address set city_id = :city, type = :type, label = :label, language = :language,
                         street = :street, street_normalized = :streetNormalized, house_raw = :houseRaw,
@@ -97,6 +101,7 @@ class JdbcAddressBook implements AddressBook {
             override(c.id(), d.override());
             Address after = get(c.id(), false).orElseThrow();
             changed(c.actor(), "address.update", c.reason(), before, after);
+            distinct(c.actor(), c.reason(), after, near);
             return after;
         });
     }
@@ -296,6 +301,57 @@ class JdbcAddressBook implements AddressBook {
         if (d.override() != null) {
             text(d.override().provider());
             text(d.override().objectId());
+        }
+    }
+
+    /**
+     * REQ-GEO-14, under the override lock so two writers cannot both miss each other: the provider reference linked
+     * to another address is always a duplicate; an active HOUSE of the same city with the same normalized street,
+     * number, suffix and building within {@link #DUPLICATE_METRES} is one unless {@code distinct}. Entrances and places
+     * are pickup points the house alone does not identify. Returns the near house that {@code distinct} let through.
+     */
+    private UUID requireNotDuplicate(UUID self, Data d, HouseNumber house, boolean distinct) {
+        if (d.override() != null) {
+            Optional<UUID> linked = jdbc.sql("""
+                            select own_address_id from address_override
+                            where provider = :provider and object_id = :object
+                              and (cast(:self as uuid) is null or own_address_id <> :self)""")
+                    .param("provider", d.override().provider()).param("object", d.override().objectId())
+                    .param("self", self).query(UUID.class).optional();
+            if (linked.isPresent()) {
+                throw new DuplicateException(linked.get(), "The provider reference is linked to another address");
+            }
+        }
+        if (d.kind() != Kind.HOUSE || house.number().isEmpty()) {
+            return null;
+        }
+        Optional<UUID> near = jdbc.sql("""
+                        select id from address
+                        where city_id = :city and type = 'HOUSE' and visibility = 'ACTIVE'
+                          and (cast(:self as uuid) is null or id <> :self)
+                          and street_normalized = :street and house_number = :number and house_suffix = :suffix
+                          and building_normalized = :building
+                          and ST_DWithin(pickup_point::geography,
+                                         ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :metres)
+                        order by ST_Distance(pickup_point::geography,
+                                             ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography), id
+                        limit 1""")
+                .param("city", d.cityId()).param("self", self).param("street", AddressText.normalize(d.street()))
+                .param("number", house.number()).param("suffix", house.suffix()).param("building", house.building())
+                .param("lon", d.pickup().lon()).param("lat", d.pickup().lat()).param("metres", DUPLICATE_METRES)
+                .query(UUID.class).optional();
+        if (near.isPresent() && !distinct) {
+            throw new DuplicateException(near.get(), "The same house has an address within " + (int) DUPLICATE_METRES
+                    + " m; save it as distinct with a reason if it is another pickup point");
+        }
+        return near.orElse(null);
+    }
+
+    /** A near house saved anyway: the audit says which one and why. */
+    private void distinct(Actor actor, String reason, Address after, UUID near) {
+        if (near != null) {
+            audit.record(new AuditEntry(actor, "address.distinct", "address", after.id().toString(), reason, null,
+                    java.util.Map.of("duplicate_of", near.toString(), "reason", reason)));
         }
     }
 
