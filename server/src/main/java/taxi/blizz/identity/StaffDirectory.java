@@ -37,12 +37,21 @@ public interface StaffDirectory {
                        long version) {
     }
 
-    /** The new member must change the initial password at the first sign-in. */
+    /**
+     * The new member must change the initial password at the first sign-in. {@code password}: the acting super
+     * admin's own, for the new account's rights (REQ-ADM-10); missing or wrong is ACCESS_DENIED, counted like a failed
+     * sign-in and audited as {@code staff.create.denied}.
+     */
     StaffMember create(Actor superAdmin, UUID commandId, String login, String initialPassword, Profile profile,
-                       String reason);
+                       String reason, String password);
 
+    /**
+     * {@code password}: the acting super admin's own, needed when the role, the permissions or the cities change
+     * (REQ-ADM-10); missing or wrong is then ACCESS_DENIED, counted like a failed sign-in and audited as
+     * {@code staff.update.denied}. Names and contacts alone need none.
+     */
     StaffMember update(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, Profile profile,
-                       String reason);
+                       String reason, String password);
 
     /** Signs the member out everywhere. */
     StaffMember suspend(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, String reason);

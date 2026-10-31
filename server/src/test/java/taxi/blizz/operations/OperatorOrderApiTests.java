@@ -220,7 +220,7 @@ class OperatorOrderApiTests {
         String login = unique("operator");
         StaffDirectory.StaffMember member = directory.create(root, UUID.randomUUID(), login, INITIAL_PASSWORD,
                 new Profile("Olena", "Operator", new Contacts(null, login + "@example.invalid", null),
-                        Role.OPERATOR, permissions, false, List.of(cityId)), "Operator API test");
+                        Role.OPERATOR, permissions, false, List.of(cityId)), "Operator API test", ROOT_PASSWORD);
         String firstToken = staffSignIn(login, INITIAL_PASSWORD, "OPERATOR");
         assertThat(postJson("/api/operator/v1/me/password", firstToken, Map.of(
                 "current_password", INITIAL_PASSWORD, "new_password", FINAL_PASSWORD)).getResponse().getStatus())
