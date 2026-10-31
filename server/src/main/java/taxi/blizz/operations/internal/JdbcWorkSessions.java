@@ -265,45 +265,35 @@ class JdbcWorkSessions implements WorkSessions {
     @Override
     @Transactional
     public DriverAvailability heartbeat(Actor driver, UUID deviceSessionId, LocationFix location) {
+        // The busiest command of the server, 250 a second at L1 (issue #178): it reads the session once under the
+        // capacity lock, writes it once, and answers from what it wrote instead of reading it all again.
         requireDriver(driver);
         lockCapacity(driver.id());
         Session session = currentSession(driver.id())
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No open session"));
         requireControl(session, deviceSessionId);
-        OffsetDateTime now = now();
-        jdbc.sql("update work_session set last_heartbeat_at = :now where id = :id")
-                .param("now", now)
-                .param("id", session.id())
-                .update();
-        if (location == null) {
-            return availability(driver.id()).withAccepted(true);
-        }
-        if (location.recordedAt().isAfter(now.plus(presence.futureTolerance()))) {
-            return availability(driver.id()).withAccepted(false);
-        }
+        OffsetDateTime now = now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        boolean future = location != null && location.recordedAt().isAfter(now.plus(presence.futureTolerance()));
         // Only a newer sequence moves the current position (REQ-GEO-02); an older one is ignored, not refused.
-        boolean older = jdbc.sql("""
-                        select coalesce(last_location_sequence >= :sequence, false) from work_session where id = :id""")
-                .param("sequence", location.sequence())
-                .param("id", session.id())
-                .query(Boolean.class)
-                .single();
-        if (older) {
-            return availability(driver.id()).withAccepted(true);
+        boolean older = location != null && session.lastLocationSequence() != null
+                && session.lastLocationSequence() >= location.sequence();
+        if (location == null || future || older) {
+            jdbc.sql("update work_session set last_heartbeat_at = :now where id = :id")
+                    .param("now", now).param("id", session.id()).update();
+            return availability(driver.id(), session.heartbeat(now)).withAccepted(!future);
         }
         Optional<Movement> jump = implausible(driver.id(), location.point(), now);
         if (jump.isPresent()) {
             // Not the dispatch position: the old point stays, STALE until a plausible fix (issue #102).
-            jdbc.sql("update work_session set location_refused_at = :now where id = :id")
-                    .param("now", now)
-                    .param("id", session.id())
-                    .update();
+            jdbc.sql("update work_session set last_heartbeat_at = :now, location_refused_at = :now where id = :id")
+                    .param("now", now).param("id", session.id()).update();
             flag(driver.id(), session.id(), session.cityId(), jump.get(), now);
-            return availability(driver.id()).withAccepted(false);
+            return availability(driver.id(), session.heartbeat(now).refused(now)).withAccepted(false);
         }
         jdbc.sql("""
                         update work_session
-                        set last_location = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), last_location_at = :now,
+                        set last_heartbeat_at = :now,
+                            last_location = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), last_location_at = :now,
                             last_location_accuracy = :accuracy, last_location_sequence = :sequence,
                             location_refused_at = null
                         where id = :id""")
@@ -315,7 +305,7 @@ class JdbcWorkSessions implements WorkSessions {
                 .param("id", session.id())
                 .update();
         acceptedPosition(driver.id(), location.point(), now);
-        return availability(driver.id()).withAccepted(true);
+        return availability(driver.id(), session.heartbeat(now).located(now, location)).withAccepted(true);
     }
 
     // ---------------------------------------------------------------- open offers (AC-11, issue #141)
@@ -457,11 +447,19 @@ class JdbcWorkSessions implements WorkSessions {
     @Override
     @Transactional(readOnly = true)
     public DriverAvailability availability(UUID driverId) {
+        return availability(driverId, currentSession(driverId));
+    }
+
+    /** {@code current}: the session as the caller has just read or written it, under the capacity lock. */
+    private DriverAvailability availability(UUID driverId, Session current) {
+        return availability(driverId, Optional.of(current));
+    }
+
+    private DriverAvailability availability(UUID driverId, Optional<Session> current) {
         Actor driver = new Actor(SubjectType.DRIVER, driverId);
         String accountState = accounts.accountState(driver)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Driver not found"));
         DriverAdmission.AdmissionSnapshot admitted = admission.admissionOf(driverId);
-        Optional<Session> current = currentSession(driverId);
         String occupancy = jdbc.sql("select occupancy from driver_capacity where driver_id = :id")
                 .param("id", driverId)
                 .query(String.class)
@@ -560,13 +558,32 @@ class JdbcWorkSessions implements WorkSessions {
 
     private record Session(UUID id, UUID driverId, UUID vehicleId, UUID cityId, UUID deviceSessionId, String state,
                            String intent, OffsetDateTime lastHeartbeatAt, OffsetDateTime lastLocationAt,
-                           Float lastLocationAccuracy, OffsetDateTime locationRefusedAt, long version) {
+                           Float lastLocationAccuracy, OffsetDateTime locationRefusedAt, long version,
+                           Long lastLocationSequence) {
+
+        /** As a heartbeat at {@code at} leaves it (heartbeats do not change the version). */
+        Session heartbeat(OffsetDateTime at) {
+            return new Session(id, driverId, vehicleId, cityId, deviceSessionId, state, intent, at, lastLocationAt,
+                    lastLocationAccuracy, locationRefusedAt, version, lastLocationSequence);
+        }
+
+        Session refused(OffsetDateTime at) {
+            return new Session(id, driverId, vehicleId, cityId, deviceSessionId, state, intent, lastHeartbeatAt,
+                    lastLocationAt, lastLocationAccuracy, at, version, lastLocationSequence);
+        }
+
+        Session located(OffsetDateTime at, LocationFix fix) {
+            return new Session(id, driverId, vehicleId, cityId, deviceSessionId, state, intent, lastHeartbeatAt, at,
+                    fix.accuracyMeters() == null ? null : fix.accuracyMeters().floatValue(), null, version,
+                    fix.sequence());
+        }
     }
 
     private Optional<Session> currentSession(UUID driverId) {
         return jdbc.sql("""
                         select id, driver_id, vehicle_id, city_id, device_session_id, state, intent, last_heartbeat_at,
-                               last_location_at, last_location_accuracy, location_refused_at, version
+                               last_location_at, last_location_accuracy, location_refused_at, version,
+                               last_location_sequence
                         from work_session where driver_id = :id and state in ('OPEN', 'CLOSING')""")
                 .param("id", driverId)
                 .query((rs, i) -> new Session(rs.getObject("id", UUID.class), rs.getObject("driver_id", UUID.class),
@@ -575,7 +592,8 @@ class JdbcWorkSessions implements WorkSessions {
                         rs.getObject("last_heartbeat_at", OffsetDateTime.class),
                         rs.getObject("last_location_at", OffsetDateTime.class),
                         (Float) rs.getObject("last_location_accuracy"),
-                        rs.getObject("location_refused_at", OffsetDateTime.class), rs.getLong("version")))
+                        rs.getObject("location_refused_at", OffsetDateTime.class), rs.getLong("version"),
+                        (Long) rs.getObject("last_location_sequence")))
                 .optional();
     }
 
@@ -597,6 +615,11 @@ class JdbcWorkSessions implements WorkSessions {
 
     /** Creates the capacity row on first use and locks it: the per-driver serialization point. */
     private void lockCapacity(UUID driverId) {
+        // Almost always the row is there: one statement locks it (issue #178); the first use creates it.
+        if (jdbc.sql("select driver_id from driver_capacity where driver_id = :id for update")
+                .param("id", driverId).query(UUID.class).optional().isPresent()) {
+            return;
+        }
         jdbc.sql("""
                         insert into driver_capacity (driver_id, updated_at) values (:id, :now)
                         on conflict (driver_id) do nothing""")
