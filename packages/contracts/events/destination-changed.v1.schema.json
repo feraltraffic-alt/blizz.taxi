@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/destination-changed.v1.schema.json",
+  "title": "DestinationChanged v1 payload",
+  "description": "Support changed where a trip in progress ends (REQ-RID-06, issue #142). The new price is a new quote with the terms of the order's own tariff version; the addresses are on the order and in the quotes, not here. above_hold: the order is paid by card and the part left for the card is above the hold.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "trip_id",
+    "driver_id",
+    "previous_quote_id",
+    "quote_id",
+    "previous_price_minor",
+    "price_minor",
+    "currency",
+    "distance_m",
+    "payment_method",
+    "hold_minor",
+    "above_hold"
+  ],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "trip_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "previous_quote_id": {"type": "string", "format": "uuid"},
+    "quote_id": {"type": "string", "format": "uuid"},
+    "previous_price_minor": {"type": "integer", "minimum": 0},
+    "price_minor": {"type": "integer", "minimum": 0},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "distance_m": {"type": "integer", "minimum": 0},
+    "payment_method": {"enum": ["CASH", "CARD", "SERVICE", "TERMINAL"]},
+    "hold_minor": {"type": ["integer", "null"], "minimum": 0},
+    "above_hold": {"type": "boolean"}
+  },
+  "examples": [{
+    "order_id": "b83b8fa8-1f4c-40df-8a42-bf1f92a8187f",
+    "trip_id": "2d2f2de6-c0cd-4c4e-aae3-2acc67557ba3",
+    "driver_id": "7e1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a55",
+    "previous_quote_id": "5b0f5d55-3f0e-4a59-9a1b-0f3b0b1f8a11",
+    "quote_id": "0c7b6e8e-6a35-4b5e-8f0d-3b8f1a2c9d22",
+    "previous_price_minor": 12000,
+    "price_minor": 18500,
+    "currency": "UAH",
+    "distance_m": 9400,
+    "payment_method": "CARD",
+    "hold_minor": 12000,
+    "above_hold": true
+  }]
+}

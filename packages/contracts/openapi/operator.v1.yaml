@@ -536,6 +536,55 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/destination:
+    post:
+      operationId: operatorChangeDestination
+      summary: Change the destination of a trip in progress
+      description: >-
+        REQ-RID-06 (M1 agreed procedure, issue #142): support changes where a started trip ends. Only an order
+        IN_SERVICE with its trip in progress; otherwise 409 STATE_CONFLICT. The new price is a new quote from the same
+        pickup to the new destination with the terms of the order's own tariff version, never the tariff in force now;
+        the order's discount stays as it was, bonuses pay at most what they did. The quote is stored as the order's
+        quote, so the fare at completion comes from it. When the order is paid by card and the part left for the card
+        is above the hold, the response says so (above_hold) and the order gets a payment problem case: at completion
+        the hold is taken and the rest is charged to the card once; what fails stays the rider's debt (never a second
+        hold). The rider and the driver are told. A wrong expected_version → 409 with current_version; a repeated
+        command_id replays the first result. No road route and straight-line quotes off → 503 PROVIDER_UNAVAILABLE.
+        Needs orders.reassign in the order's city; the reason is audited and shown in the order's history.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorChangeDestination"
+      responses:
+        "200":
+          description: The order with the new destination and price.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorDestinationChanged"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "503":
+          $ref: "./common.yaml#/components/responses/ServiceUnavailable"
+
   /api/operator/v1/orders/{order_id}/cancel:
     post:
       operationId: cancelOperatorOrder
@@ -1719,6 +1768,56 @@ components:
           minLength: 1
           maxLength: 500
 
+    OperatorChangeDestination:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, dropoff, dropoff_label, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        dropoff:
+          $ref: "./common.yaml#/components/schemas/GeoPoint"
+        dropoff_label:
+          description: What the driver and the rider see as the new destination.
+          type: string
+          minLength: 1
+          maxLength: 300
+        reason:
+          description: Who asked for the change and how; audited.
+          type: string
+          minLength: 1
+          maxLength: 500
+    OperatorDestinationChanged:
+      type: object
+      additionalProperties: false
+      required: [order, previous_price_minor, price_minor, currency, above_hold]
+      properties:
+        order:
+          $ref: "#/components/schemas/OperatorOrder"
+        previous_price_minor:
+          description: The agreed price before the change.
+          type: integer
+          format: int64
+          minimum: 0
+        price_minor:
+          description: The new agreed price (the full price, before the discount and bonuses).
+          type: integer
+          format: int64
+          minimum: 0
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        hold_minor:
+          description: The card hold, when the order is paid by card and has one.
+          type: [integer, "null"]
+          format: int64
+        above_hold:
+          description: The part left for the card is above the hold; the order has a payment problem case.
+          type: boolean
     OperatorSwitchToCash:
       type: object
       additionalProperties: false
