@@ -199,4 +199,9 @@ class JdbcCashDisputes implements CashDisputes {
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
+
+    @Override
+    public int openOf(UUID driverId) {
+        return 0;
+    }
 }
