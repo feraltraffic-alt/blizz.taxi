@@ -14,6 +14,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.identity.ChallengeIssued;
 import taxi.blizz.identity.ClientDeletions;
+import taxi.blizz.identity.ClientErasing;
 import taxi.blizz.identity.OtpPurpose;
 import taxi.blizz.identity.OtpService;
 import taxi.blizz.identity.SessionService;
@@ -36,16 +37,18 @@ class JdbcClientDeletions implements ClientDeletions {
     private final OtpService otp;
     private final IdempotentCommands commands;
     private final AuditLog audit;
+    private final List<ClientErasing> erasing;
     private final Clock clock;
 
     JdbcClientDeletions(JdbcClient jdbc, SessionService sessions, Outbox outbox, OtpService otp,
-                        IdempotentCommands commands, AuditLog audit, Clock clock) {
+                        IdempotentCommands commands, AuditLog audit, List<ClientErasing> erasing, Clock clock) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.outbox = outbox;
         this.otp = otp;
         this.commands = commands;
         this.audit = audit;
+        this.erasing = List.copyOf(erasing);
         this.clock = clock;
     }
 
@@ -169,15 +172,29 @@ class JdbcClientDeletions implements ClientDeletions {
         return true;
     }
 
-    /** Personal data off, sessions revoked, the other modules told (ClientAnonymized). */
+    /**
+     * Personal data off, sessions revoked, the other modules told (ClientAnonymized). What is known only by the phone
+     * goes first, in this transaction: the sign-in codes here, the rest through {@link ClientErasing} (issue #144).
+     */
     private void erase(UUID clientId) {
+        Actor client = new Actor(SubjectType.CLIENT, clientId);
+        String phone = jdbc.sql("select phone_normalized from client where id = :id").param("id", clientId)
+                .query(String.class).optional().orElse(null);
+        if (phone != null) {
+            erasing.forEach(module -> module.erasing(clientId, phone));
+            jdbc.sql("delete from otp_challenge where audience = 'CLIENT' and phone_normalized = :phone")
+                    .param("phone", phone).update();
+        }
+        jdbc.sql("update device_session set device_ref = null where subject_type = 'CLIENT' and subject_id = :id")
+                .param("id", clientId).update();
+        commands.forget(client);
         long version = jdbc.sql("""
                         update client set account_state = 'ANONYMIZED', phone_normalized = null,
                                           phone_verified_at = null, name = null, language = null,
                                           deletion_previous_state = null, updated_at = :now, version = version + 1
                         where id = :id returning version""")
                 .param("now", now()).param("id", clientId).query(Long.class).single();
-        sessions.revokeAll(new Actor(SubjectType.CLIENT, clientId), "ACCOUNT_ANONYMIZED");
+        sessions.revokeAll(client, "ACCOUNT_ANONYMIZED");
         // Copies of the personal data go with the account (REQ-PRV-07).
         jdbc.sql("delete from personal_data_export where client_id = :id").param("id", clientId).update();
         outbox.publish(new OutboxEvent("ClientAnonymized", 1, "Client", clientId, version,

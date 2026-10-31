@@ -21,6 +21,7 @@ import taxi.blizz.platform.RetentionWork;
 class FileRetirement {
     private static final Logger log = LoggerFactory.getLogger(FileRetirement.class);
     private static final String AVAILABLE = "(retention_until is null or retention_until<=:now)";
+    private static final String ERASED = "erase_requested_at is not null";
     private final JdbcClient jdbc;
     private final FileStorage storage;
     private final TransactionTemplate tx;
@@ -69,6 +70,19 @@ class FileRetirement {
         RetentionWork.Result total = new RetentionWork.Result(0, 0, 0);
         for (UUID id : jdbc.sql(selection(kind, limit)).params(Map.of("cutoff", cutoff, "now", now)).query(UUID.class).list()) {
             Attempt attempt = retire(id, eligibility(kind), Map.of("cutoff", cutoff, "now", now), now);
+            total = total.plus(new RetentionWork.Result(attempt.deleted(), attempt.failures(), 1));
+        }
+        return total;
+    }
+
+    /** Files their owner asked to erase (issue #144), whatever the retention terms; one batch. */
+    RetentionWork.Result erased(OffsetDateTime now, int limit) {
+        RetentionWork.Result total = new RetentionWork.Result(0, 0, 0);
+        Map<String, Object> params = Map.of("now", now);
+        for (UUID id : jdbc.sql("select id from file_object where " + ERASED + " and " + AVAILABLE
+                        + " order by erase_requested_at,id limit " + RetentionWork.limit(limit))
+                .params(params).query(UUID.class).list()) {
+            Attempt attempt = retire(id, ERASED, params, now);
             total = total.plus(new RetentionWork.Result(attempt.deleted(), attempt.failures(), 1));
         }
         return total;

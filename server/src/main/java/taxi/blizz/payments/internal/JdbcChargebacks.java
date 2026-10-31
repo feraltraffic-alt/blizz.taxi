@@ -211,4 +211,15 @@ class JdbcChargebacks implements Chargebacks {
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Set<UUID> disputed(java.util.Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.sql("""
+                        select distinct order_id from payment_chargeback where order_id in (:ids) and state = 'OPEN'""")
+                .param("ids", java.util.List.copyOf(orderIds)).query(UUID.class).list());
+    }
 }

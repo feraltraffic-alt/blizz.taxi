@@ -239,4 +239,25 @@ class RecordingRetentionTests {
         }
     }
 
+    /** A deleted rider's recording (issue #144): it goes although the policy keeps recordings for ever. */
+    @Test void anErasedCallersRecordingGoesWhateverTheTermAndOthersStay() throws Exception {
+        keepRecordingsForever();
+        OffsetDateTime now=OffsetDateTime.now();
+        var stored=files.storeSystemFile(FilePurpose.CALL_RECORDING,"audio/wav",
+            new java.io.ByteArrayInputStream(WavFiles.tone(1)),1000000);
+        UUID erased=recording("STORED",stored.fileId(),now.minusMinutes(5));
+        UUID pending=recording("PENDING",null,now.minusMinutes(5));
+        UUID kept=recording("NONE",null,now.minusMinutes(5));
+        jdbc.sql("update call_recording set erase_requested_at=now() where call_id in (:ids)")
+            .param("ids",List.of(erased,pending)).update();
+        try(Ari ari=new Ari()) {
+            var result=ari.work().runErased(now.plusSeconds(1),1000);
+            assertThat(result.deleted()).isEqualTo(2);
+            assertThat(count(erased)).isZero();assertThat(count(pending)).isZero();assertThat(count(kept)).isEqualTo(1);
+            assertThat(jdbc.sql("select count(*) from file_object where id=:id").param("id",stored.fileId())
+                .query(Long.class).single()).as("the stored file goes with it").isZero();
+            assertThat(ari.calls).as("each copy on Asterisk is discarded").hasValue(2);
+            assertThat(ari.work().runErased(now.plusSeconds(2),1000).deleted()).as("a repeat").isZero();
+        }
+    }
 }

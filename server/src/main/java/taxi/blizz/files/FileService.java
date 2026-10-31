@@ -29,6 +29,13 @@ public interface FileService {
     /** Removes a system recording's bytes before its metadata. No open transaction; retry-safe if already absent. */
     RecordingDeletion deleteRecording(UUID fileId);
 
+    /**
+     * The owning record asked for these files to go: a deleted rider's support attachments (issue #144). In the
+     * caller's transaction (MANDATORY); the erasure sweep deletes the bytes, then the rows. Unknown ids are ignored, a
+     * repeat changes nothing.
+     */
+    void requestErasure(java.util.Collection<UUID> fileIds);
+
     /** A remaining fenced file may have lost bytes and must keep its owning recording fenced too. */
     record RecordingDeletion(boolean gone, boolean fenced) {
     }

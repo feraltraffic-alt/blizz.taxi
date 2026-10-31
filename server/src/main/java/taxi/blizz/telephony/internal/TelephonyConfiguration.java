@@ -6,7 +6,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -60,7 +62,10 @@ class TelephonyConfiguration {
         }
     }
 
-    /** Brings the recordings of finished calls from Asterisk (issue #60); safe on several instances. */
+    /**
+     * Brings the recordings of finished calls from Asterisk (issue #60) and deletes those of deleted riders (issue
+     * #144); safe on several instances.
+     */
     @Configuration(proxyBeanMethods = false)
     @EnableScheduling
     @ConditionalOnProperty(prefix = "blizz.telephony", name = "recording-sweep-enabled", havingValue = "true",
@@ -68,14 +73,19 @@ class TelephonyConfiguration {
     static class RecordingSweep {
 
         private final CallRecordings recordings;
+        private final CallRecordingRetention retention;
+        private final Clock clock;
 
-        RecordingSweep(CallRecordings recordings) {
+        RecordingSweep(CallRecordings recordings, CallRecordingRetention retention, Clock clock) {
             this.recordings = recordings;
+            this.retention = retention;
+            this.clock = clock;
         }
 
         @Scheduled(fixedDelayString = "PT10S", initialDelayString = "PT10S")
         void run() {
             recordings.fetchDue();
+            retention.runErased(OffsetDateTime.now(clock), 100);
         }
     }
 }

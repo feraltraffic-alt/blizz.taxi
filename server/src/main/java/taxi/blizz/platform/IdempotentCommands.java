@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.function.Supplier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -83,6 +84,18 @@ public class IdempotentCommands {
                 .param("commandId", key.commandId())
                 .update();
         return result;
+    }
+
+    /**
+     * Deletes the receipts of {@code subject}'s commands (issue #144): their outcomes repeat what the subject wrote,
+     * and a deleted account sends no repeats. In the caller's transaction.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int forget(Actor subject) {
+        String prefix = subject.type() + ":" + subject.id() + ":";
+        return jdbc.sql("delete from command_receipt where scope like :prefix escape '\\'")
+                .param("prefix", prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+                .update();
     }
 
     private static byte[] sha256(String value) {
