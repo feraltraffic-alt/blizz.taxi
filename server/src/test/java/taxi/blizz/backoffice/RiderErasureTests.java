@@ -108,7 +108,7 @@ class RiderErasureTests {
             N feature_flag: key reason
             N file_object: declared_content_type detected_content_type encryption owner_type plain_key_pending_delete
             N file_object: purpose reject_reason scan_engine sha256 staging_key state storage_key
-            N final_fare: breakdown currency policy
+            N final_fare: breakdown currency policy reason
             N integration_value: hint name plain_value secret_value
             N invariant_report: check_id object_type
             N journal_line: account
