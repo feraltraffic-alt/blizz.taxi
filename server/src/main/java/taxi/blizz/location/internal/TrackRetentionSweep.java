@@ -1,6 +1,7 @@
 package taxi.blizz.location.internal;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -89,18 +90,26 @@ class TrackRetentionSweep {
     Result offTripBatch() {
         return tx.execute(status -> {
             OffsetDateTime before = now().minus(properties.offTrip());
-            List<Point> points = jdbc.sql("""
-                            select id, driver_id, recorded_at from track_point
+            record Raw(UUID id, UUID driverId, UUID session, OffsetDateTime recordedAt) {
+            }
+            List<Raw> raw = jdbc.sql("""
+                            select id, driver_id, device_session_id, recorded_at from track_point
                             where order_id is null and received_at < :before
                             order by received_at limit :limit
                             for update skip locked""")
                     .param("before", before).param("limit", properties.batch())
-                    .query((rs, i) -> new Point(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                            rs.getObject(3, OffsetDateTime.class), null))
+                    .query((rs, i) -> new Raw(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                            rs.getObject(3, UUID.class), rs.getObject(4, OffsetDateTime.class)))
                     .list();
-            if (points.isEmpty()) {
+            if (raw.isEmpty()) {
                 return new Result(0, 0, 0);
             }
+            // Trips are in server time. A phone's clock off by days is corrected by its device session's offset:
+            // the smallest delay between recording and receipt, near zero for a correct clock even when some batches
+            // were kept offline (issue #186).
+            java.util.Map<UUID, Duration> offsets = clockOffsets(raw.stream().map(Raw::session).distinct().toList());
+            List<Point> points = raw.stream().map(r -> new Point(r.id(), r.driverId(),
+                    r.recordedAt().plus(offsets.getOrDefault(r.session(), Duration.ZERO)), null)).toList();
             Set<UUID> drivers = new HashSet<>();
             OffsetDateTime from = points.getFirst().recordedAt();
             OffsetDateTime to = from;
@@ -133,6 +142,25 @@ class TrackRetentionSweep {
             }
             return new Result(tagged, 0, delete(delete));
         });
+    }
+
+    /** Per device session, how far its clock is off when that is beyond the tolerance; absent otherwise. */
+    private java.util.Map<UUID, Duration> clockOffsets(List<UUID> sessions) {
+        java.util.Map<UUID, Duration> offsets = new java.util.HashMap<>();
+        jdbc.sql("""
+                        select device_session_id, extract(epoch from min(received_at - recorded_at))
+                        from track_point where device_session_id = any(cast(:sessions as uuid[]))
+                        group by device_session_id""")
+                .param("sessions", sessions.toArray(UUID[]::new))
+                .query((rs, i) -> {
+                    Duration offset = Duration.ofMillis(Math.round(rs.getDouble(2) * 1000));
+                    if (offset.abs().compareTo(properties.clockTolerance()) > 0) {
+                        offsets.put(rs.getObject(1, UUID.class), offset);
+                    }
+                    return null;
+                })
+                .list();
+        return offsets;
     }
 
     /** Step 2, one batch in one transaction. */

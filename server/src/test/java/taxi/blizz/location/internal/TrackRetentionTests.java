@@ -259,7 +259,7 @@ class TrackRetentionTests {
             due.add(point(driver, now().minusDays(2).minusMinutes(i)));
         }
         TrackRetentionProperties small = new TrackRetentionProperties(Duration.ofHours(24), Duration.ofDays(90), 7,
-                false);
+                false, Duration.ofMinutes(2));
         TrackRetentionSweep first = new TrackRetentionSweep(jdbc, tx, sources, small, clock);
         TrackRetentionSweep second = new TrackRetentionSweep(jdbc, tx, sources, small, clock);
         ExecutorService pool = Executors.newFixedThreadPool(2);
