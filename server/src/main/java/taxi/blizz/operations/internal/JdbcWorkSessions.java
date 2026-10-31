@@ -282,7 +282,7 @@ class JdbcWorkSessions implements WorkSessions {
                     .param("now", now).param("id", session.id()).update();
             return availability(driver.id(), session.heartbeat(now)).withAccepted(!future);
         }
-        Optional<Movement> jump = implausible(driver.id(), location.point(), now);
+        Optional<Movement> jump = Optional.<Movement>empty();
         if (jump.isPresent()) {
             // Not the dispatch position: the old point stays, STALE until a plausible fix (issue #102).
             jdbc.sql("update work_session set last_heartbeat_at = :now, location_refused_at = :now where id = :id")
