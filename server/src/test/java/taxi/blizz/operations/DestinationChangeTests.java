@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,6 +59,7 @@ class DestinationChangeTests {
     @Autowired FinalFares fares;
     @Autowired OutboxRelay relay;
     @Autowired JdbcClient jdbc;
+    @Autowired javax.sql.DataSource dataSource;
 
     TestRides rides;
     UUID city;
@@ -350,18 +350,32 @@ class DestinationChangeTests {
         UUID order = ride.order().id();
         Actor staff = support();
         long version = row(order).version();
-        CountDownLatch go = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         List<Future<DestinationChanges.Changed>> results = new ArrayList<>();
-        try {
+        // The order is held elsewhere until both commands wait for it, so both have read whatever they read before
+        // either goes on: without the lock both would see the same version and both would win.
+        try (java.sql.Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("select id from ride_order where id = ? for update")) {
+                lock.setObject(1, order);
+                lock.executeQuery();
+            }
             for (GeoPoint point : List.of(FAR, NEAR)) {
-                Callable<DestinationChanges.Changed> change = () -> {
-                    go.await();
-                    return destinations.change(staff, UUID.randomUUID(), order, version, to(point, "Somewhere"));
-                };
+                Callable<DestinationChanges.Changed> change = () ->
+                        destinations.change(staff, UUID.randomUUID(), order, version, to(point, "Somewhere"));
                 results.add(pool.submit(change));
             }
-            go.countDown();
+            long deadline = System.nanoTime() + java.time.Duration.ofSeconds(20).toNanos();
+            while (jdbc.sql("""
+                            select count(*) from pg_stat_activity
+                            where wait_event_type = 'Lock' and query ilike '%ride_order%'""")
+                    .query(Long.class).single() < 2) {
+                assertThat(System.nanoTime()).as("both commands wait for the order").isLessThan(deadline);
+                Thread.sleep(20);
+            }
+            holder.commit();
+        }
+        try {
             int won = 0;
             int conflicts = 0;
             for (Future<DestinationChanges.Changed> result : results) {
