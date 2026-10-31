@@ -47,7 +47,7 @@ jobs:
       PGPASSWORD: blizz-sandbox
       PGDATABASE: blizz
       PGAPPNAME: blizz-load
-      MINUTES: ${{ inputs.minutes || '5' }} # TEMP: short runs while the harness is built
+      MINUTES: ${{ inputs.minutes || '2' }} # TEMP: short runs while the harness is built
       DRIVERS: ${{ inputs.drivers || '1000' }}
       RIDERS: ${{ inputs.riders || '1000' }}
       K6_VERSION: v0.57.0
@@ -98,7 +98,13 @@ jobs:
             echo "Machine: one GitHub-hosted runner ($(nproc) vCPU, $(free -g | awk '/Mem/ {print $2}') GB) holds the server,"
             echo "PostgreSQL and k6 together; the numbers describe this runner, not the pilot's servers."
             echo
-            node scripts/load/report.mjs
+            node scripts/load/report.mjs || echo "(no report: see k6's output below)"
+            echo
+            echo "## k6 output (last 60 lines)"
+            echo
+            echo '```'
+            grep -v '^\s*$' k6.log | tail -n 60
+            echo '```'
           } > transcript.md
           cat transcript.md >> "$GITHUB_STEP_SUMMARY"
           echo "✅ load-l1 (see transcript.md; L1 records, it does not gate)" > results.txt
