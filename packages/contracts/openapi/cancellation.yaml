@@ -179,7 +179,8 @@ components:
         One change of the order. A cancellation (type OrderCancelled or PassengerNoShow) has cancelled_by,
         reason_code and reason_labels in details, so the panel can show "Operator Anna cancelled the order:
         passenger asked". A driver giving the order back (AssignmentWithdrawn) has reason_code and reason_labels
-        when given through a reason from the list.
+        when given through a reason from the list. A fare correction (FareCorrected, issue #142) has version,
+        previous_amount_minor, amount_minor, delta_minor, refund_obligation_minor and refund_state in details.
       type: object
       additionalProperties: false
       required: [sequence, type, occurred_at, actor, reason, details, correlation_id]

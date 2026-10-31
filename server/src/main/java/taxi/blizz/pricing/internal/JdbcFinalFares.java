@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.pricing.FinalFares;
@@ -94,19 +95,86 @@ class JdbcFinalFares implements FinalFares {
 
     @Override
     public Optional<FinalFare> ofOrder(UUID orderId) {
-        return stored(orderId);
+        return stored(orderId, true);
     }
 
     private Optional<FinalFare> stored(UUID orderId) {
+        return stored(orderId, false);
+    }
+
+    /** Version 1, the trip's own; or with {@code latest} the current one after corrections (issue #142). */
+    private Optional<FinalFare> stored(UUID orderId, boolean latest) {
         return jdbc.sql("""
                         select id, order_id, version, quote_id, policy, amount_minor, currency, commission_rate,
                                commission_minor, driver_share_minor, breakdown::text
-                        from final_fare where order_id = :order and version = 1""")
+                        from final_fare where order_id = :order"""
+                        + (latest ? " order by version desc limit 1" : " and version = 1"))
                 .param("order", orderId)
                 .query((rs, i) -> new FinalFare(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getInt(3), rs.getObject(4, UUID.class), rs.getString(5), rs.getLong(6), rs.getString(7),
                         rs.getBigDecimal(8), rs.getLong(9), rs.getLong(10),
                         json.readValue(rs.getString(11), Breakdown.class)))
                 .optional();
+    }
+
+    private static final String VERSION_COLUMNS = """
+            select id, version, amount_minor, commission_minor, driver_share_minor, created_at, corrects_id, reason,
+                   created_by
+            from final_fare""";
+
+    private static Version version(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new Version(rs.getObject(1, UUID.class), rs.getInt(2), rs.getLong(3), rs.getLong(4), rs.getLong(5),
+                rs.getObject(6, java.time.OffsetDateTime.class), rs.getObject(7, UUID.class), rs.getString(8),
+                rs.getObject(9, UUID.class));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<Version> versions(UUID orderId) {
+        return jdbc.sql(VERSION_COLUMNS + " where order_id = :order order by version")
+                .param("order", orderId).query((rs, i) -> version(rs)).list();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Version correct(UUID orderId, int expectedVersion, long amountMinor, String reason, UUID authorId) {
+        record Latest(UUID id, int version, UUID quoteId, String policy, long amountMinor, String currency,
+                      BigDecimal rate, String breakdown) {
+        }
+        // The latest version, locked: a second correction of the same version waits here and then sees the new one.
+        Latest latest = jdbc.sql("""
+                        select id, version, quote_id, policy, amount_minor, currency, commission_rate, breakdown::text
+                        from final_fare where order_id = :order order by version desc limit 1 for update""")
+                .param("order", orderId)
+                .query((rs, i) -> new Latest(rs.getObject(1, UUID.class), rs.getInt(2), rs.getObject(3, UUID.class),
+                        rs.getString(4), rs.getLong(5), rs.getString(6), rs.getBigDecimal(7), rs.getString(8)))
+                .optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The order has no final fare"));
+        if (latest.version() != expectedVersion) {
+            throw ConflictException.version(latest.version(), "The final fare is at version " + latest.version());
+        }
+        if (latest.amountMinor() == amountMinor) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT, "The final fare already is " + amountMinor);
+        }
+        long commission = commission(amountMinor, latest.rate());
+        UUID id = UUID.randomUUID();
+        try {
+            jdbc.sql("""
+                            insert into final_fare (id, order_id, version, quote_id, policy, amount_minor, currency,
+                                                    commission_rate, commission_minor, driver_share_minor, breakdown,
+                                                    created_at, corrects_id, reason, created_by)
+                            values (:id, :order, :version, :quote, :policy, :amount, :currency, :rate, :commission,
+                                    :share, cast(:breakdown as jsonb), :now, :corrects, :reason, :author)""")
+                    .param("id", id).param("order", orderId).param("version", latest.version() + 1)
+                    .param("quote", latest.quoteId()).param("policy", latest.policy()).param("amount", amountMinor)
+                    .param("currency", latest.currency()).param("rate", latest.rate()).param("commission", commission)
+                    .param("share", amountMinor - commission).param("breakdown", latest.breakdown())
+                    .param("now", clock.instant().atOffset(ZoneOffset.UTC)).param("corrects", latest.id())
+                    .param("reason", reason).param("author", authorId).update();
+        } catch (org.springframework.dao.DuplicateKeyException race) {
+            // Only without the lock above: another correction took this version first.
+            throw ConflictException.version(latest.version() + 1, "The final fare was corrected meanwhile");
+        }
+        return jdbc.sql(VERSION_COLUMNS + " where id = :id").param("id", id).query((rs, i) -> version(rs)).single();
     }
 }
