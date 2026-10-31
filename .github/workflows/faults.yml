@@ -89,8 +89,20 @@ jobs:
           if [ "$BREAK" = none ]; then
             exit $code
           fi
-          # A negative control passes only when its own case failed.
-          if [ "$code" != 0 ] && ! grep -q "✅ $BREAK" results.txt 2>/dev/null; then
+          # A negative control passes only when its own case failed and every case before it passed.
+          others_passed=true
+          for c in $CASES; do
+            [ "$c" = "$BREAK" ] && break
+            grep -q "✅ $c" results.txt 2>/dev/null || others_passed=false
+          done
+          # ... and for the reason the broken guard should cause, not for another.
+          case "$BREAK" in
+            payment) reason="The tip was charged 2 times" ;;
+            outbox) reason="The live message went out 2 times" ;;
+            dispatch) reason="The retry was not answered with the first result" ;;
+          esac
+          if [ "$code" != 0 ] && $others_passed && ! grep -q "✅ $BREAK" results.txt 2>/dev/null \
+              && grep -q "$reason" transcript.md; then
             echo "❌ $BREAK (expected: the broken guard was caught)" >> results.txt
             echo "::notice title=Negative control $BREAK::the broken guard was caught"
           else

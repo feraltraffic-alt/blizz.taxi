@@ -209,6 +209,7 @@ case_dispatch() {
     wait_crash
     start_server
     answer=$(api POST "/api/driver/v1/offers/$offer/accept" "$driver" "{\"command_id\":\"$command\"}")
+    STATUS=$(cat /tmp/sandbox-status) # api ran in a subshell
     note "The retry with the same command: HTTP $STATUS."
     [[ "$STATUS" == 200 ]] || { note "**The retry was not answered with the first result.**"; exit 1; }
     assignments=$(sql "select count(*) from assignment where order_id = '$order'")
