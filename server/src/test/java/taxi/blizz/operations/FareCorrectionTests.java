@@ -135,7 +135,9 @@ class FareCorrectionTests {
     }
 
     private long postings(UUID order) {
-        return jdbc.sql("select count(*) from journal_transaction where basis_id = :o and basis_type = 'FARE_CORRECTION'")
+        return jdbc.sql("""
+                        select count(*) from journal_transaction
+                        where basis_id = :o and basis_type = 'FARE_CORRECTION'""")
                 .param("o", order).query(Long.class).single();
     }
 
@@ -284,6 +286,28 @@ class FareCorrectionTests {
                 PASSWORD), ErrorCode.STATE_CONFLICT);
         assertThat(fares.versions(order)).hasSize(1);
         assertThat(postings(order)).isZero();
+
+        // A final fare on an order not FULFILLED (e.g. reopened by support) is not corrected.
+        jdbc.sql("update ride_order set status = 'IN_SERVICE' where id = :id").param("id", order).update();
+        assertCode(() -> corrections.correct(staff, UUID.randomUUID(), order, 1, amount + 1, "Not fulfilled",
+                PASSWORD), ErrorCode.STATE_CONFLICT);
+        jdbc.sql("update ride_order set status = 'FULFILLED' where id = :id").param("id", order).update();
+
+        // A card payment still being captured: its amount could still move.
+        jdbc.sql("update ride_order set payment_state = 'CAPTURE_PENDING' where id = :id").param("id", order).update();
+        assertCode(() -> corrections.correct(staff, UUID.randomUUID(), order, 1, amount + 1, "Capturing", PASSWORD),
+                ErrorCode.PAYMENT_PENDING);
+        jdbc.sql("update ride_order set payment_state = 'CASH_REPORTED' where id = :id").param("id", order).update();
+
+        // Completed, but the fare not in the journal yet (its event not delivered): the open debt is unknown.
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        TestRides.Ride fresh = rides.started(city, driver, PICKUP, DROPOFF);
+        rides.complete(fresh, true);
+        UUID unposted = fresh.order().id();
+        assertCode(() -> corrections.correct(staff, UUID.randomUUID(), unposted, 1, latest(unposted).amountMinor() + 1,
+                "Too early", PASSWORD), ErrorCode.STATE_CONFLICT);
+        assertThat(fares.versions(unposted)).as("rolled back with the refusal").hasSize(1);
+        deliverEvents();
     }
 
     @Test

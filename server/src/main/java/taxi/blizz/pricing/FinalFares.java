@@ -61,7 +61,10 @@ public interface FinalFares {
      */
     FinalFare finalizeFare(Facts facts);
 
-    /** The order's final fare when it has one, e.g. for a chargeback's evidence (REQ-PAY-23). */
+    /**
+     * The order's current final fare when it has one — the latest version after corrections (issue #142) — e.g. for a
+     * chargeback's evidence (REQ-PAY-23).
+     */
     java.util.Optional<FinalFare> ofOrder(UUID orderId);
 
     /**
