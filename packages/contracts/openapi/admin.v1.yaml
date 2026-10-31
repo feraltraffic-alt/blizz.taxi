@@ -6038,13 +6038,15 @@ components:
     CityOperations:
       type: object
       additionalProperties: false
-      required: [city_id, working_hours, payment_methods, return_zone_meters, orders_paused, pause_reason, paused_at,
-                 version]
+      required: [city_id, working_hours, payment_methods, return_zone_meters, dropoff_outside_city, orders_paused,
+                 pause_reason, paused_at, version]
       properties:
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         return_zone_meters:
           $ref: "#/components/schemas/ReturnZoneMeters"
+        dropoff_outside_city:
+          $ref: "#/components/schemas/DropoffOutsideCity"
         working_hours:
           description: Empty — open around the clock.
           type: array
@@ -6077,6 +6079,23 @@ components:
       minimum: 0
       maximum: 50000
 
+    DropoffOutsideCity:
+      description: >-
+        REQ-TEN-05 (issue #142): whether a ride from this city may end outside its polygon, checked at the quote and
+        when support changes the destination of a trip in progress. allowed false — no drop-off outside the city;
+        max_distance_km — the farthest a drop-off may be from the city's polygon, straight-line; null — no limit. A
+        refusal is 422 DROPOFF_OUTSIDE_CITY. Default: allowed, no limit.
+      type: object
+      additionalProperties: false
+      required: [allowed, max_distance_km]
+      properties:
+        allowed:
+          type: boolean
+        max_distance_km:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+
     ChangeCityOperations:
       type: object
       additionalProperties: false
@@ -6087,6 +6106,9 @@ components:
         return_zone_meters:
           description: Left out — unchanged.
           $ref: "#/components/schemas/ReturnZoneMeters"
+        dropoff_outside_city:
+          description: Left out — unchanged.
+          $ref: "#/components/schemas/DropoffOutsideCity"
         expected_version:
           type: integer
           format: int64

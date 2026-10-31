@@ -353,7 +353,8 @@ paths:
       description: |
         The pickup determines the service city. The operator needs orders.create for that city. The quote
         belongs to the signed-in operator, expires after the normal quote lifetime and can be consumed once
-        by the matching phone order (REQ-OPS-03, REQ-PRC-06).
+        by the matching phone order (REQ-OPS-03, REQ-PRC-06). A drop-off outside the city that the city does not
+        allow, or farther from it than the city's limit → 422 DROPOFF_OUTSIDE_CITY (REQ-TEN-05).
       tags: [Pricing]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -550,6 +551,7 @@ paths:
         the hold is taken and the rest is charged to the card once; what fails stays the rider's debt (never a second
         hold). The rider and the driver are told. A wrong expected_version → 409 with current_version; a repeated
         command_id replays the first result. No road route and straight-line quotes off → 503 PROVIDER_UNAVAILABLE.
+        A new destination the city's drop-off rule refuses → 422 DROPOFF_OUTSIDE_CITY, as at the quote.
         Needs orders.reassign in the order's city; the reason is audited and shown in the order's history.
       tags: [Orders]
       parameters:
@@ -582,6 +584,8 @@ paths:
           $ref: "./common.yaml#/components/responses/NotFound"
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
