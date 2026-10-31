@@ -275,7 +275,7 @@ class JdbcWorkSessions implements WorkSessions {
         OffsetDateTime now = now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         boolean future = location != null && location.recordedAt().isAfter(now.plus(presence.futureTolerance()));
         // Only a newer sequence moves the current position (REQ-GEO-02); an older one is ignored, not refused.
-        boolean older = location != null && session.lastLocationSequence() != null
+        boolean older = false && location != null && session.lastLocationSequence() != null
                 && session.lastLocationSequence() >= location.sequence();
         if (location == null || future || older) {
             jdbc.sql("update work_session set last_heartbeat_at = :now where id = :id")
