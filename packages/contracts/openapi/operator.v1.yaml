@@ -795,6 +795,48 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/operator/v1/customers/lookup:
+    get:
+      operationId: lookupOperatorCustomer
+      summary: Find one rider by their exact phone
+      description: >-
+        Registry row "Operator | GET /customers/lookup" (issue #176): a targeted search with audit, never an export
+        of the base. phone must be a full international number exactly as E.164, of a served country with as many
+        digits as its numbers have: a prefix, a partial number, spaces, dashes, a name or a missing "+" is 400
+        VALIDATION_FAILED and finds nobody. The answer is the one rider with that number, or 404 (also for an
+        anonymized or deleted account). Their latest orders (at most 10) are only those in the staff member's cities
+        for orders.create; orders elsewhere are left out, not refused. Needs orders.create. Every lookup, found or
+        not, is audited as customer.lookup with the phone only as a keyed hash, never in clear. Budget per staff
+        member: blizz.rate-limits.buckets.customer-lookup (default 60 per hour); over it 429 RATE_LIMITED with
+        Retry-After.
+      tags: [Customers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^\\+[1-9][0-9]{7,14}$"
+            examples: ["+380501234567"]
+      responses:
+        "200":
+          description: The rider and their latest orders in the staff member's cities.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerLookup"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
   /api/operator/v1/cancel-reasons:
     get:
       operationId: listOperatorCancelReasons
@@ -1559,6 +1601,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Forbidden"
 
 tags:
+  - name: Customers
+    description: A targeted, audited lookup of one rider by their exact phone (registry 22.2, issue #176)
   - name: Calls
     description: Calls of the call centre — card-pop, the call log, recordings, click-to-call, operator status (REQ-OPS-01/08/09)
   - name: Support
@@ -1822,6 +1866,44 @@ components:
         above_hold:
           description: The part left for the card is above the hold; the order has a payment problem case.
           type: boolean
+    CustomerLookup:
+      type: object
+      additionalProperties: false
+      required: [client_id, name, account_state, orders]
+      properties:
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        name:
+          type: [string, "null"]
+        account_state:
+          type: string
+          examples: [ACTIVE, BLOCKED]
+        orders:
+          description: Newest first, at most 10, only in the staff member's cities for orders.create.
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/CustomerLookupOrder"
+    CustomerLookupOrder:
+      type: object
+      additionalProperties: false
+      required: [id, short_number, status, city_id, pickup_label, dropoff_label, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        short_number:
+          type: integer
+          format: int64
+        status:
+          type: string
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        pickup_label:
+          type: string
+        dropoff_label:
+          type: string
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
     OperatorSwitchToCash:
       type: object
       additionalProperties: false
