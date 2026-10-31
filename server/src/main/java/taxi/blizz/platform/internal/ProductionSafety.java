@@ -99,6 +99,9 @@ final class ProductionSafety {
         if (base.isBlank() || !base.toLowerCase(Locale.ROOT).startsWith("https://") || isLocal(base)) {
             problems.add("blizz.payments.public-base-url must be the instance's public https address");
         }
+        if (!get(env, "blizz.faults.crash-at").isBlank()) {
+            problems.add("blizz.faults.crash-at is set (fault tests only)");
+        }
         String journal = get(env, "blizz.privacy.erasure-journal-dir");
         String tmp = System.getProperty("java.io.tmpdir", "/tmp");
         if (journal.isBlank() || journal.startsWith(tmp) || journal.startsWith("/tmp")) {

@@ -66,7 +66,8 @@ class ProductionSafetyTests {
                         "blizz.payments.secrets.main is a sandbox value"),
                 Map.entry("blizz.payments.public-base-url=http://taxi.example.pl", "public-base-url"),
                 Map.entry("blizz.payments.public-base-url=https://localhost:8080", "public-base-url"),
-                Map.entry("blizz.privacy.erasure-journal-dir=/tmp/blizz-erasure-journal", "erasure-journal-dir"));
+                Map.entry("blizz.privacy.erasure-journal-dir=/tmp/blizz-erasure-journal", "erasure-journal-dir"),
+                Map.entry("blizz.faults.crash-at=outbox.after-first-handler", "blizz.faults.crash-at is set"));
         MockEnvironment unresolved = fit();
         unresolved.setProperty("blizz.otp.secret", "${NO_SUCH_VARIABLE_IN_THIS_TEST}");
         assertThat(ProductionSafety.problems(unresolved)).as("a missing environment variable")
