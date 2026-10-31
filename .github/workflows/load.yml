@@ -16,6 +16,9 @@ on:
       riders:
         description: "Riders with an open WebSocket (L1: drivers + riders = 2000 sockets)"
         default: "1000"
+      server_args:
+        description: "Extra server arguments for an experiment, e.g. --spring.datasource.hikari.maximum-pool-size=40"
+        default: ""
 
 permissions:
   contents: write
@@ -49,6 +52,7 @@ jobs:
       DRIVERS: ${{ inputs.drivers || '1000' }}
       RIDERS: ${{ inputs.riders || '1000' }}
       K6_VERSION: v0.57.0
+      SERVER_ARGS: ${{ inputs.server_args || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -68,7 +72,9 @@ jobs:
         run: cd server && ./mvnw -B -q -ntp -DskipTests package
       - name: Start the server (profile sandbox)
         run: |
-          nohup java -jar server/target/server-*[0-9T].jar --spring.profiles.active=sandbox > server.log 2>&1 &
+          # shellcheck disable=SC2086 # the extra arguments are words
+          nohup java -jar server/target/server-*[0-9T].jar --spring.profiles.active=sandbox $SERVER_ARGS \
+              > server.log 2>&1 &
           echo $! > server.pid
           for i in $(seq 1 120); do curl -fsS http://localhost:8080/readyz >/dev/null 2>&1 && exit 0; sleep 1; done
           tail -100 server.log; exit 1
@@ -95,6 +101,7 @@ jobs:
             echo "$DRIVERS + $RIDERS WebSockets, 2 orders a second for $MINUTES minutes with a one-minute burst at 10 a second."
             echo "Machine: one GitHub-hosted runner ($(nproc) vCPU, $(free -g | awk '/Mem/ {print $2}') GB) holds the server,"
             echo "PostgreSQL and k6 together; the numbers describe this runner, not the pilot's servers."
+            echo "Server arguments: ${SERVER_ARGS:-none}; commit ${GITHUB_SHA::7}."
             echo
             node scripts/load/report.mjs || echo "(no report: see k6's output below)"
             echo
