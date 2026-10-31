@@ -38,15 +38,21 @@ class AdminCityOperationsController {
                      @NotNull @Pattern(regexp = HHMM) String to) {
     }
 
+    record DropoffView(@NotNull Boolean allowed,
+                       @Min(1) @jakarta.validation.constraints.Max(CityOperations.MAX_DROPOFF_DISTANCE_KM)
+                       Integer maxDistanceKm) {
+    }
+
     record OperationsView(UUID cityId, List<HoursView> workingHours, Set<String> paymentMethods, int returnZoneMeters,
-                          boolean ordersPaused, String pauseReason, OffsetDateTime pausedAt, long version) {
+                          DropoffView dropoffOutsideCity, boolean ordersPaused, String pauseReason,
+                          OffsetDateTime pausedAt, long version) {
     }
 
     record Change(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                   @NotNull @Size(max = JdbcCityOperations.MAX_INTERVALS) List<@Valid HoursView> workingHours,
                   @NotNull @Size(min = 1) Set<String> paymentMethods,
                   @Min(0) @jakarta.validation.constraints.Max(CityOperations.MAX_RETURN_ZONE_METERS)
-                  Integer returnZoneMeters, @NotBlank String reason) {
+                  Integer returnZoneMeters, @Valid DropoffView dropoffOutsideCity, @NotBlank String reason) {
     }
 
     record PauseChange(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String reason) {
@@ -63,7 +69,10 @@ class AdminCityOperationsController {
                 .map(h -> new CityOperations.Hours(h.daysOfWeek(), LocalTime.parse(h.from()), LocalTime.parse(h.to())))
                 .toList();
         return view(operations.change(claims.actor(), body.commandId(), cityId, body.expectedVersion(),
-                new CityOperations.Settings(hours, body.paymentMethods(), body.returnZoneMeters()), body.reason()));
+                new CityOperations.Settings(hours, body.paymentMethods(), body.returnZoneMeters(),
+                        body.dropoffOutsideCity() == null ? null : new CityOperations.DropoffOutside(
+                                body.dropoffOutsideCity().allowed(), body.dropoffOutsideCity().maxDistanceKm())),
+                body.reason()));
     }
 
     @PostMapping("/pause")
@@ -83,6 +92,8 @@ class AdminCityOperationsController {
 
     private static OperationsView view(CityOperations.State s) {
         return new OperationsView(s.cityId(), hours(s.workingHours()), new TreeSet<>(s.paymentMethods()),
-                s.returnZoneMeters(), s.ordersPaused(), s.pauseReason(), s.pausedAt(), s.version());
+                s.returnZoneMeters(), new DropoffView(s.dropoffOutsideCity().allowed(),
+                        s.dropoffOutsideCity().maxDistanceKm()), s.ordersPaused(), s.pauseReason(), s.pausedAt(),
+                s.version());
     }
 }

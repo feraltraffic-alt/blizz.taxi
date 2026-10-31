@@ -167,4 +167,31 @@ class ZonePricingTests {
                     .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED);
         }
     }
+
+    /** Issue #142 (review of #170): a pre-order's new destination keeps the pre-order surcharge it was priced with. */
+    @Test
+    void aRequoteOfAPreorderKeepsItsSurcharge() {
+        UUID classId = tariffs.createVehicleClass(new TariffService.VehicleClassDraft(UUID.randomUUID(), manager, 0,
+                cityId, "STANDARD", "Standard", "test")).id();
+        Terms terms = new Terms(2000, new BigDecimal("1000"), new BigDecimal("100"), 5000, 3, new BigDecimal("100"),
+                0, new BigDecimal("0.15"), 60, TariffService.WaitingRounding.UP, 3000, new BigDecimal("1500"), List.of(),
+                new TariffService.PreorderSurcharge(SurchargeMode.FIXED, 3000, null));
+        TariffService.Revision draft = tariffs.createDraft(new TariffService.Draft(UUID.randomUUID(), manager, 0, cityId,
+                classId, "UAH", Instant.now().minusSeconds(60), null, terms, "test"));
+        tariffs.publish(new TariffService.Change(UUID.randomUUID(), manager, draft.id(), draft.version(), "go"));
+        java.util.function.Function<Instant, QuoteService.Quote> at = when -> quotes.create(UUID.randomUUID(),
+                new QuoteService.Request(cityId, classId, CITY_A, CITY_B, payer, when));
+        QuoteService.Quote later = at.apply(Instant.now().plus(java.time.Duration.ofHours(2)));
+        QuoteService.Quote soon = at.apply(Instant.now().plus(java.time.Duration.ofMinutes(30)));
+
+        QuoteService.Quote laterMoved = quotes.requote(UUID.randomUUID(), later.id(), SUBURB, payer);
+        QuoteService.Quote soonMoved = quotes.requote(UUID.randomUUID(), soon.id(), SUBURB, payer);
+
+        assertThat(laterMoved.breakdown().preorder()).isTrue();
+        assertThat(soonMoved.breakdown().preorder()).isFalse();
+        assertThat(laterMoved.amountMinor()).isEqualTo(soonMoved.amountMinor() + 3000);
+        assertThat(laterMoved.request().pickupAt()).isEqualTo(later.request().pickupAt());
+        assertThat(laterMoved.tariffVersionId()).isEqualTo(later.tariffVersionId());
+    }
+
 }

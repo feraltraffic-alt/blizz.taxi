@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# How a city takes orders (REQ-TEN-03/06): staff pause new orders in Warsaw and the rider is refused, then lift the
+# How a city takes orders (REQ-TEN-03/05/06): staff pause new orders in Warsaw and the rider is refused, then lift the
 # pause; the city offers only cards and a cash order is refused; working hours that do not include now refuse an
-# order for now. The apps see all of it in the bootstrap. The city is put back as it was, even when a step fails.
+# order for now; no rides out of town, or none beyond 50 km, refuse a quote to Łódź. The apps see the pause in the
+# bootstrap. The city is put back as it was, even when a step fails.
 source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":52.2297,"lon":21.0122}'    # Warszawa, Pałac Kultury
 DROPOFF='{"lat":52.2319,"lon":21.0067}'   # Warszawa Centralna
+LODZ='{"lat":51.7592,"lon":19.4560}'      # Łódź, about 120 km away
 RIDER_PHONE="+48600$(printf '%06d' $(( (RANDOM * 32768 + RANDOM) % 1000000 )))"
 
 say "Staff open Warsaw's operations (version 0 until the first change: around the clock, every method)"
@@ -23,9 +25,11 @@ restore() {
         version=$(api POST "$OPS/resume" "$ADMIN" \
           "{\"command_id\":\"$(uuid)\",\"expected_version\":$version,\"reason\":\"Sandbox clean-up\"}" | jq -r .version)
     fi
-    if [[ "$(jq -c '[.working_hours, (.payment_methods | sort)]' <<<"$state")" != '[[],["CARD","CASH","TERMINAL"]]' ]]; then
+    if [[ "$(jq -c '[.working_hours, (.payment_methods | sort), .dropoff_outside_city]' <<<"$state")" \
+          != '[[],["CARD","CASH","TERMINAL"],{"allowed":true,"max_distance_km":null}]' ]]; then
         api POST "$OPS" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$version,\"working_hours\":[],
-          \"payment_methods\":[\"CASH\",\"CARD\",\"TERMINAL\"],\"reason\":\"Sandbox clean-up\"}" >/dev/null
+          \"payment_methods\":[\"CASH\",\"CARD\",\"TERMINAL\"],
+          \"dropoff_outside_city\":{\"allowed\":true,\"max_distance_km\":null},\"reason\":\"Sandbox clean-up\"}" >/dev/null
     fi
 }
 trap restore EXIT
@@ -82,7 +86,29 @@ expect 200
 order; expect 422
 jq -e '.code == "CITY_CLOSED"' /tmp/sandbox-order.json >/dev/null
 
+say "No rides out of town: a quote to Łódź is refused, one inside Warsaw is not"
+quote_to() {
+    api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
+      \"pickup\":$PICKUP,\"dropoff\":$1}" >/tmp/sandbox-quote.json
+}
+api GET "$OPS" "$ADMIN" | jq -e '.dropoff_outside_city == {"allowed": true, "max_distance_km": null}' >/dev/null
+api POST "$OPS" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$(version),\"working_hours\":[],
+  \"payment_methods\":[\"CASH\",\"CARD\",\"TERMINAL\"],\"dropoff_outside_city\":{\"allowed\":false,
+  \"max_distance_km\":null},\"reason\":\"No rides out of town\"}" | jq -e '.dropoff_outside_city.allowed == false' >/dev/null
+expect 200
+quote_to "$LODZ"; expect 422
+jq -e '.code == "DROPOFF_OUTSIDE_CITY"' /tmp/sandbox-quote.json >/dev/null
+quote_to "$DROPOFF"; expect 201
+
+say "Rides out of town up to 50 km: Łódź is still too far"
+api POST "$OPS" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":$(version),\"working_hours\":[],
+  \"payment_methods\":[\"CASH\",\"CARD\",\"TERMINAL\"],\"dropoff_outside_city\":{\"allowed\":true,
+  \"max_distance_km\":50},\"reason\":\"Suburbs only\"}" >/dev/null
+expect 200
+quote_to "$LODZ"; expect 422
+jq -e '.code == "DROPOFF_OUTSIDE_CITY"' /tmp/sandbox-quote.json >/dev/null
+
 say "A stale version is refused"
 api POST "$OPS/pause" "$ADMIN" "{\"command_id\":\"$(uuid)\",\"expected_version\":0,\"reason\":\"stale\"}" >/dev/null
 expect 409
-note "Done: paused and resumed, a method not offered and closed hours refused orders; Warsaw is restored on exit."
+note "Done: paused and resumed, a method not offered and closed hours refused orders, a drop-off out of town refused quotes; Warsaw is restored on exit."

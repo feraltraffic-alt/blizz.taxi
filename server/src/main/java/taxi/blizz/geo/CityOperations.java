@@ -32,18 +32,36 @@ public interface CityOperations {
     }
 
     /**
-     * {@code returnZoneMeters}: how far outside its polygon a driver may be and still get the city's new orders
-     * (REQ-DS-07, issue #141); null — unchanged.
+     * Whether a ride from the city may end outside its polygon (REQ-TEN-05, issue #142): {@code maxDistanceKm} the
+     * farthest straight-line distance from the polygon, null — no limit.
      */
-    record Settings(List<Hours> workingHours, Set<String> paymentMethods, Integer returnZoneMeters) {
+    record DropoffOutside(boolean allowed, Integer maxDistanceKm) {
+    }
+
+    /** The default: a drop-off anywhere. */
+    DropoffOutside DROPOFF_ANYWHERE = new DropoffOutside(true, null);
+
+    /** The farthest limit a city may set, in kilometres. */
+    int MAX_DROPOFF_DISTANCE_KM = 1000;
+
+    /**
+     * {@code returnZoneMeters}: how far outside its polygon a driver may be and still get the city's new orders
+     * (REQ-DS-07, issue #141); {@code dropoffOutsideCity}: see {@link DropoffOutside}; null — unchanged.
+     */
+    record Settings(List<Hours> workingHours, Set<String> paymentMethods, Integer returnZoneMeters,
+                    DropoffOutside dropoffOutsideCity) {
         public Settings {
             workingHours = workingHours == null ? List.of() : List.copyOf(workingHours);
             paymentMethods = paymentMethods == null ? Set.of()
                     : java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(paymentMethods));
         }
 
+        public Settings(List<Hours> workingHours, Set<String> paymentMethods, Integer returnZoneMeters) {
+            this(workingHours, paymentMethods, returnZoneMeters, null);
+        }
+
         public Settings(List<Hours> workingHours, Set<String> paymentMethods) {
-            this(workingHours, paymentMethods, null);
+            this(workingHours, paymentMethods, null, null);
         }
     }
 
@@ -51,7 +69,8 @@ public interface CityOperations {
     int MAX_RETURN_ZONE_METERS = 50_000;
 
     record State(UUID cityId, List<Hours> workingHours, Set<String> paymentMethods, int returnZoneMeters,
-                 boolean ordersPaused, String pauseReason, OffsetDateTime pausedAt, long version) {
+                 DropoffOutside dropoffOutsideCity, boolean ordersPaused, String pauseReason, OffsetDateTime pausedAt,
+                 long version) {
     }
 
     State get(Actor staff, UUID cityId);
@@ -74,4 +93,10 @@ public interface CityOperations {
      * a method the city does not offer.
      */
     void requireAccepting(City city, OffsetDateTime at, String paymentMethod);
+
+    /**
+     * Refuses a ride from {@code cityId} ending at {@code dropoff} with {@code DROPOFF_OUTSIDE_CITY} when the drop-off
+     * is outside the city's polygon and the city does not allow it, or is farther from the polygon than its limit.
+     */
+    void requireDropoff(UUID cityId, GeoPoint dropoff);
 }

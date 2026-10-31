@@ -266,7 +266,8 @@ paths:
       description: |
         The server computes the price from the tariff in force (REQ-PRC-05); the quote belongs to the
         rider, lives 5 minutes and serves one order (REQ-PRC-06). Pickup outside every city → 422
-        OUTSIDE_SERVICE_AREA; no tariff in force → 404.
+        OUTSIDE_SERVICE_AREA; no tariff in force → 404. A drop-off outside the pickup city that the city does not
+        allow, or farther from it than the city's limit → 422 DROPOFF_OUTSIDE_CITY (REQ-TEN-05).
       tags: [Pricing]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

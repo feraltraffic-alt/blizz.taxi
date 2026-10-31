@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -84,6 +85,7 @@ class JdbcTripCorrections implements TripCorrections {
         }
         return commands.execute(new CommandKey(actor, "trip.correct", commandId),
                 new CorrectRequest(orderId, expectedVersion, asked, why), Facts.class, () -> {
+                    core.lockOrder(orderId);
                     Trip trip = trip(orderId, true);
                     if (trip.startedAt() == null) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT, "The trip has not started");
@@ -150,6 +152,8 @@ class JdbcTripCorrections implements TripCorrections {
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "trip.review", commandId), new ReviewRequest(orderId, why),
                 Facts.class, () -> {
+                    // The order first, as the deadline job and the trip commands take it (review of #169).
+                    core.lockOrder(orderId);
                     Trip trip = trip(orderId, true);
                     List<Boolean> open = jdbc.sql("""
                                     select holds_capture from trip_correction
@@ -223,11 +227,16 @@ class JdbcTripCorrections implements TripCorrections {
             return false;
         }
         long discount = Math.min(o.discount(), o.amount());
-        long version = jdbc.sql("""
+        // Only from AUTHORIZED: whoever released it already has published the event.
+        Optional<Long> released = jdbc.sql("""
                         update ride_order set payment_state = 'CAPTURE_PENDING', updated_at = :now,
                                               version = version + 1
-                        where id = :id returning version""")
-                .param("now", now()).param("id", orderId).query(Long.class).single();
+                        where id = :id and payment_state = 'AUTHORIZED' returning version""")
+                .param("now", now()).param("id", orderId).query(Long.class).optional();
+        if (released.isEmpty()) {
+            return false;
+        }
+        long version = released.get();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("order_id", orderId.toString());
         payload.put("payment_method", "CARD");

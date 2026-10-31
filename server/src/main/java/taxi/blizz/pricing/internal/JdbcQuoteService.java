@@ -45,12 +45,15 @@ class JdbcQuoteService implements QuoteService {
     private final GeoZones zones;
     private final ServiceSettings settings;
     private final taxi.blizz.promotions.RiderPromotions promotions;
+    private final taxi.blizz.geo.CityOperations cityOperations;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
                      taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits,
                      ObjectProvider<MeterRegistry> meters,
-                     @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes) {
+                     @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes,
+                     taxi.blizz.geo.CityOperations cityOperations) {
+        this.cityOperations = cityOperations;
         this.rateLimits = rateLimits;
         this.meters = meters;
         this.straightLineQuotes = straightLineQuotes;
@@ -74,6 +77,8 @@ class JdbcQuoteService implements QuoteService {
                 || request.pickup() == null || request.dropOff() == null) {
             throw error(ErrorCode.VALIDATION_FAILED, "Incomplete quote request");
         }
+        // The pickup city's rule for rides that end outside it (REQ-TEN-05).
+        cityOperations.requireDropoff(request.cityId(), request.dropOff());
         RouteEstimator estimator = estimators.getIfAvailable();
         if (estimator == null) {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
@@ -164,6 +169,7 @@ class JdbcQuoteService implements QuoteService {
                 .orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Quote not found"));
         Request request = new Request(original.request().cityId(), original.request().classId(),
                 original.request().pickup(), dropOff, original.request().payer(), original.request().pickupAt());
+        cityOperations.requireDropoff(request.cityId(), dropOff);
         // Like every quote: the route is asked for outside any transaction, before the idempotent insert.
         RouteEstimator estimator = estimators.getIfAvailable();
         if (estimator == null) {
