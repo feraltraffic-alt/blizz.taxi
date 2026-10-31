@@ -32,6 +32,11 @@ class IntegrationsStub implements Integrations {
     }
 
     @Override
+    public Health health(Actor staff) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Check check(Actor staff, String group) {
         throw new UnsupportedOperationException();
     }
