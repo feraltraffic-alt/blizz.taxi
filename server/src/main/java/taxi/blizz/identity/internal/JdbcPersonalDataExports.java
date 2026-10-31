@@ -32,6 +32,7 @@ import taxi.blizz.platform.CommandKey;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.DriverPersonalData;
 import taxi.blizz.platform.PersonalData;
 import taxi.blizz.platform.SubjectType;
 import tools.jackson.databind.json.JsonMapper;
@@ -53,26 +54,31 @@ class JdbcPersonalDataExports implements PersonalDataExports {
     private final StaffAccess staff;
     private final AuditLog audit;
     private final List<PersonalData> parts;
+    private final List<DriverPersonalData> driverParts;
     private final JsonMapper json;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final Duration keep;
 
     JdbcPersonalDataExports(JdbcClient jdbc, OtpService otp, IdempotentCommands commands, StaffAccess staff,
-                            AuditLog audit, List<PersonalData> parts, JsonMapper json, TransactionTemplate tx,
-                            Clock clock, @Value("${blizz.privacy.data-export-keep:P7D}") Duration keep) {
+                            AuditLog audit, List<PersonalData> parts, List<DriverPersonalData> driverParts,
+                            JsonMapper json, TransactionTemplate tx, Clock clock,
+                            @Value("${blizz.privacy.data-export-keep:P7D}") Duration keep) {
         this.jdbc = jdbc;
         this.otp = otp;
         this.commands = commands;
         this.staff = staff;
         this.audit = audit;
         this.parts = parts.stream().sorted(Comparator.comparing(PersonalData::section)).toList();
+        this.driverParts = driverParts.stream().sorted(Comparator.comparing(DriverPersonalData::section)).toList();
         this.json = json;
         this.tx = tx;
         this.clock = clock;
         this.keep = keep;
         long distinct = this.parts.stream().map(PersonalData::section).distinct().count();
-        if (distinct != this.parts.size()) {
+        if (distinct != this.parts.size()
+                || this.driverParts.stream().map(DriverPersonalData::section).distinct().count()
+                        != this.driverParts.size()) {
             throw new IllegalStateException("Two modules give the same personal data section");
         }
     }
@@ -83,7 +89,7 @@ class JdbcPersonalDataExports implements PersonalDataExports {
 
     @Override
     public ChallengeIssued requestCode(Actor rider, String deviceRef, String clientIp) {
-        requireRider(rider);
+        requireSubject(rider);
         return otp.requestConfirmation(rider, OtpPurpose.DATA_EXPORT, deviceRef, clientIp);
     }
 
@@ -92,7 +98,7 @@ class JdbcPersonalDataExports implements PersonalDataExports {
 
     @Override
     public Export request(Actor rider, UUID commandId, UUID challengeId, String otpCode) {
-        requireRider(rider);
+        requireSubject(rider);
         if (challengeId == null || otpCode == null || otpCode.isBlank()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The challenge and the code are required");
         }
@@ -100,17 +106,21 @@ class JdbcPersonalDataExports implements PersonalDataExports {
                 new RequestCommand(challengeId, otpCode.strip()), Export.class, () -> {
                     // Checked in its own transaction: a wrong code counts as an attempt even though this fails.
                     otp.confirm(rider, challengeId, otpCode, OtpPurpose.DATA_EXPORT);
-                    String state = jdbc.sql("select account_state from client where id = :id for update")
+                    boolean driver = rider.type() == SubjectType.DRIVER;
+                    String state = jdbc.sql("select account_state from " + (driver ? "driver" : "client")
+                                    + " where id = :id for update")
                             .param("id", rider.id()).query(String.class).optional().orElse("ANONYMIZED");
-                    if (!"ACTIVE".equals(state) && !"DELETION_PENDING".equals(state)) {
+                    // A blocked driver keeps a limited session and may ask for a copy too (issue #144).
+                    if (!"ACTIVE".equals(state) && !"DELETION_PENDING".equals(state)
+                            && !(driver && "BLOCKED".equals(state))) {
                         throw new DomainException(ErrorCode.ACCOUNT_NOT_ACTIVE,
                                 "A copy of the data cannot be asked for in the state " + state);
                     }
                     OffsetDateTime now = now();
                     Optional<OffsetDateTime> last = jdbc.sql("""
                                     select created_at from personal_data_export
-                                    where client_id = :id and state <> 'FAILED'
-                                    order by created_at desc limit 1""")
+                                    where %s = :id and state <> 'FAILED'
+                                    order by created_at desc limit 1""".formatted(column(rider)))
                             .param("id", rider.id()).query(OffsetDateTime.class).optional();
                     if (last.isPresent() && last.get().isAfter(now.minus(ONE_A_DAY))) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
@@ -118,35 +128,35 @@ class JdbcPersonalDataExports implements PersonalDataExports {
                     }
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
-                                    insert into personal_data_export (id, client_id, state, created_at)
-                                    values (:id, :client, 'PENDING', :now)""")
+                                    insert into personal_data_export (id, %s, state, created_at)
+                                    values (:id, :client, 'PENDING', :now)""".formatted(column(rider)))
                             .param("id", id).param("client", rider.id()).param("now", now).update();
                     audit.record(new AuditEntry(rider, "personal_data_export.request", "personal_data_export",
                             id.toString(), "The rider asked for a copy of their personal data", null,
-                            Map.of("client_id", rider.id().toString())));
-                    return find(id, rider.id()).orElseThrow();
+                            Map.of(column(rider), rider.id().toString())));
+                    return find(id, rider).orElseThrow();
                 });
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Export> mine(Actor rider) {
-        requireRider(rider);
-        return list(rider.id());
+        requireSubject(rider);
+        return list(rider);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Export get(Actor rider, UUID exportId) {
-        requireRider(rider);
-        return find(exportId, rider.id()).orElseThrow(JdbcPersonalDataExports::notFound);
+        requireSubject(rider);
+        return find(exportId, rider).orElseThrow(JdbcPersonalDataExports::notFound);
     }
 
     @Override
     @Transactional
     public File download(Actor rider, UUID exportId) {
-        requireRider(rider);
-        Export export = find(exportId, rider.id()).orElseThrow(JdbcPersonalDataExports::notFound);
+        requireSubject(rider);
+        Export export = find(exportId, rider).orElseThrow(JdbcPersonalDataExports::notFound);
         if (!"READY".equals(export.state()) || !export.expiresAt().isAfter(now())) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "The copy is "
                     + ("READY".equals(export.state()) ? "EXPIRED" : export.state()) + ", there is no file to download");
@@ -154,7 +164,7 @@ class JdbcPersonalDataExports implements PersonalDataExports {
         byte[] content = jdbc.sql("select content from personal_data_export where id = :id").param("id", exportId)
                 .query(byte[].class).single();
         audit.record(new AuditEntry(rider, "personal_data_export.download", "personal_data_export",
-                exportId.toString(), null, null, Map.of("client_id", rider.id().toString())));
+                exportId.toString(), null, null, Map.of(column(rider), rider.id().toString())));
         return new File("blizz-personal-data-" + export.createdAt().toLocalDate() + ".json", content);
     }
 
@@ -162,12 +172,12 @@ class JdbcPersonalDataExports implements PersonalDataExports {
     @Transactional(readOnly = true)
     public List<Export> ofClient(Actor actor, UUID clientId) {
         staff.require(actor, ClientAccounts.MANAGE_PERMISSION);
-        return list(clientId);
+        return list(new Actor(SubjectType.CLIENT, clientId));
     }
 
     // ---------------------------------------------------------------- the worker
 
-    private record Job(UUID id, UUID clientId) {
+    private record Job(UUID id, UUID clientId, UUID driverId) {
     }
 
     @Override
@@ -199,11 +209,12 @@ class JdbcPersonalDataExports implements PersonalDataExports {
                 .param("error", "Stopped after " + MAX_ATTEMPTS + " attempts").param("stuck", now.minus(STUCK))
                 .param("max", MAX_ATTEMPTS).update();
         Optional<Job> job = jdbc.sql("""
-                        select id, client_id from personal_data_export
+                        select id, client_id, driver_id from personal_data_export
                         where state = 'PENDING' or (state = 'RUNNING' and started_at < :stuck)
                         order by created_at limit 1 for update skip locked""")
                 .param("stuck", now.minus(STUCK))
-                .query((rs, i) -> new Job(rs.getObject("id", UUID.class), rs.getObject("client_id", UUID.class)))
+                .query((rs, i) -> new Job(rs.getObject("id", UUID.class), rs.getObject("client_id", UUID.class),
+                        rs.getObject("driver_id", UUID.class)))
                 .optional();
         job.ifPresent(j -> jdbc.sql("""
                         update personal_data_export set state = 'RUNNING', attempts = attempts + 1, started_at = :now
@@ -214,7 +225,8 @@ class JdbcPersonalDataExports implements PersonalDataExports {
     private void build(Job job) {
         byte[] content;
         try {
-            content = json.writeValueAsBytes(collect(job.clientId()));
+            content = json.writeValueAsBytes(job.driverId() != null ? collectDriver(job.driverId())
+                    : collect(job.clientId()));
         } catch (RuntimeException e) {
             // Left RUNNING: taken again after STUCK, up to MAX_ATTEMPTS. The data itself is never logged.
             log.warn("Personal data export {} failed ({}), will retry", job.id(), e.getClass().getSimpleName());
@@ -250,6 +262,24 @@ class JdbcPersonalDataExports implements PersonalDataExports {
         return file;
     }
 
+    /** A driver's file (issue #144): the modules' {@link DriverPersonalData} parts, in a fixed order. */
+    Map<String, Object> collectDriver(UUID driverId) {
+        String phone = jdbc.sql("select phone_normalized from driver where id = :id and account_state <> 'ANONYMIZED'")
+                .param("id", driverId).query(String.class).optional()
+                .orElseThrow(() -> new IllegalStateException("The account is gone"));
+        DriverPersonalData.Subject subject = new DriverPersonalData.Subject(driverId, phone);
+        Map<String, Object> sections = new LinkedHashMap<>();
+        for (DriverPersonalData part : driverParts) {
+            sections.put(part.section(), part.of(subject));
+        }
+        Map<String, Object> file = new LinkedHashMap<>();
+        file.put("format", FORMAT);
+        file.put("generated_at", now().toString());
+        file.put("driver_id", driverId.toString());
+        file.put("sections", sections);
+        return file;
+    }
+
     @Override
     @Transactional
     public int expire() {
@@ -261,14 +291,19 @@ class JdbcPersonalDataExports implements PersonalDataExports {
 
     // ---------------------------------------------------------------- helpers
 
-    private List<Export> list(UUID clientId) {
-        return jdbc.sql(SELECT + "where client_id = :client order by created_at desc, id limit 20")
-                .param("client", clientId).query((rs, i) -> export(rs)).list();
+    /** The row's column of the subject: {@code client_id} for a rider, {@code driver_id} for a driver. */
+    private static String column(Actor subject) {
+        return subject.type() == SubjectType.DRIVER ? "driver_id" : "client_id";
     }
 
-    private Optional<Export> find(UUID id, UUID clientId) {
-        return jdbc.sql(SELECT + "where id = :id and client_id = :client").param("id", id).param("client", clientId)
-                .query((rs, i) -> export(rs)).optional();
+    private List<Export> list(Actor subject) {
+        return jdbc.sql(SELECT + "where " + column(subject) + " = :subject order by created_at desc, id limit 20")
+                .param("subject", subject.id()).query((rs, i) -> export(rs)).list();
+    }
+
+    private Optional<Export> find(UUID id, Actor subject) {
+        return jdbc.sql(SELECT + "where id = :id and " + column(subject) + " = :subject").param("id", id)
+                .param("subject", subject.id()).query((rs, i) -> export(rs)).optional();
     }
 
     private static Export export(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -277,9 +312,9 @@ class JdbcPersonalDataExports implements PersonalDataExports {
                 rs.getObject("expires_at", OffsetDateTime.class), (Long) rs.getObject("size_bytes"));
     }
 
-    private static void requireRider(Actor actor) {
-        if (actor == null || actor.type() != SubjectType.CLIENT) {
-            throw new DomainException(ErrorCode.ACCESS_DENIED, "Riders only");
+    private static void requireSubject(Actor actor) {
+        if (actor == null || (actor.type() != SubjectType.CLIENT && actor.type() != SubjectType.DRIVER)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Riders and drivers only");
         }
     }
 

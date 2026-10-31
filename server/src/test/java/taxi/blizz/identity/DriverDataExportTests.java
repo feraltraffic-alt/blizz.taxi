@@ -178,18 +178,25 @@ class DriverDataExportTests {
 
     @Test
     void onceADayAndOpenToABlockedDriver() {
-        TestRides.Driver driver = rides.driverNear(PICKUP);
-        Actor me = driver.actor();
-        jdbc.sql("update driver set account_state = 'BLOCKED' where id = :id").param("id", me.id()).update();
+        Actor recent = blockedDriverWithAnExport("1 hour");
+        UUID challenge = exports.requestCode(recent, null, null).challengeId();
+        assertCode(() -> exports.request(recent, UUID.randomUUID(), challenge, code(recent)),
+                ErrorCode.STATE_CONFLICT);
+
+        Actor yesterday = blockedDriverWithAnExport("25 hours");
+        assertThat(exports.request(yesterday, UUID.randomUUID(), exports.requestCode(yesterday, null, null)
+                .challengeId(), code(yesterday)).state()).as("a blocked driver may ask, once a day")
+                .isEqualTo("PENDING");
+    }
+
+    /** A blocked driver whose last copy was asked for {@code ago}. */
+    private Actor blockedDriverWithAnExport(String ago) {
+        Actor driver = rides.driverNear(PICKUP).actor();
+        jdbc.sql("update driver set account_state = 'BLOCKED' where id = :id").param("id", driver.id()).update();
         jdbc.sql("""
                         insert into personal_data_export (id, driver_id, state, created_at)
-                        values (:id, :driver, 'PENDING', now() - interval '1 hour')""")
-                .param("id", UUID.randomUUID()).param("driver", me.id()).update();
-        UUID challenge = exports.requestCode(me, null, null).challengeId();
-        assertCode(() -> exports.request(me, UUID.randomUUID(), challenge, code(me)), ErrorCode.STATE_CONFLICT);
-        jdbc.sql("update personal_data_export set created_at = now() - interval '25 hours' where driver_id = :d")
-                .param("d", me.id()).update();
-        assertThat(exports.request(me, UUID.randomUUID(), challenge, code(me)).state())
-                .as("a blocked driver may ask, once a day").isEqualTo("PENDING");
+                        values (:id, :driver, 'EXPIRED', now() - cast(:ago as interval))""")
+                .param("id", UUID.randomUUID()).param("driver", driver.id()).param("ago", ago).update();
+        return driver;
     }
 }

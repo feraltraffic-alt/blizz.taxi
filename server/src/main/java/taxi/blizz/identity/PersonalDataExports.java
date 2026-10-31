@@ -6,9 +6,10 @@ import java.util.UUID;
 import taxi.blizz.platform.Actor;
 
 /**
- * A rider's copy of their personal data (REQ-PRV-07, issue #68). The rider asks with a one-time code to the account's
- * phone (purpose DATA_EXPORT), so a stolen session alone does not get the data; a background job collects every
- * module's {@link taxi.blizz.platform.PersonalData} part into one JSON file; only the rider downloads it, within
+ * A rider's — and since issue #144 a driver's — copy of their personal data (REQ-PRV-07, issue #68). The person
+ * asks with a one-time code to the account's phone (purpose DATA_EXPORT), so a stolen session alone does not get the
+ * data; a background job collects every module's {@link taxi.blizz.platform.PersonalData} part (for a driver
+ * {@link taxi.blizz.platform.DriverPersonalData}) into one JSON file; only that person downloads it, within
  * {@code blizz.privacy.data-export-keep} (7 days), then it is dropped. One export at a time and at most one a day.
  * Requests and downloads are audited. Support sees that an export was asked for, never its content.
  */
