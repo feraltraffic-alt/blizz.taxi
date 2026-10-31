@@ -595,7 +595,10 @@ class JdbcOrders implements Orders {
     }
 
     @Override
-    public OrderView revokeAssignment(Actor staffActor, UUID commandId, UUID orderId, long expectedVersion, String reason) {
+    public OrderView revokeAssignment(Actor staffActor, UUID commandId, UUID orderId, long expectedVersion,
+                                      String reasonCode, String comment) {
+        // Skeleton of issue #143: the code is not checked against the catalog yet.
+        String reason = comment != null && !comment.isBlank() ? comment : reasonCode;
         if (staffActor.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can take a driver off an order");
         }

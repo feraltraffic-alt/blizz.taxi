@@ -124,7 +124,7 @@ class OrderCallApiTests {
 
             TestRides.Ride withdrawn = rides.assigned(city, driver, PICKUP, DROPOFF);
             trips.withdraw(driver.actor(), UUID.randomUUID(), withdrawn.trip().id(), withdrawn.trip().version(),
-                    "Cannot continue");
+                    "VEHICLE_PROBLEM", "Cannot continue");
             assertStatus("/api/driver/v1/trips/" + withdrawn.trip().id() + "/call", token(driver.actor()), 404);
             assertStatus("/api/rider/v1/orders/" + withdrawn.order().id() + "/call", token(withdrawn.payer()), 409);
             orders.cancel(withdrawn.payer(), UUID.randomUUID(), withdrawn.order().id(),

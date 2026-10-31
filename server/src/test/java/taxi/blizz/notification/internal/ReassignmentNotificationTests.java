@@ -94,7 +94,7 @@ class ReassignmentNotificationTests {
 
         // Before any push leaves: staff take the first driver off, the second takes the order.
         orders.revokeAssignment(staff(), UUID.randomUUID(), order.id(), orders.get(order.id()).version(),
-                "Driver does not answer");
+                "DRIVER_NOT_RESPONDING", "Driver does not answer");
         UUID secondAssignment = accept(second, order).id();
         deliver();
         assertThat(states(rider, "rider.driver-assigned")).as("both queued before sending").hasSize(2);
@@ -148,7 +148,7 @@ class ReassignmentNotificationTests {
                 new CallerContact("Олена", phone), null, false));
         UUID firstAssignment = accept(first, order).id();
         orders.revokeAssignment(operator, UUID.randomUUID(), order.id(), orders.get(order.id()).version(),
-                "Driver does not answer");
+                "DRIVER_NOT_RESPONDING", "Driver does not answer");
         UUID secondAssignment = accept(second, order).id();
         deliver();
 
@@ -177,7 +177,8 @@ class ReassignmentNotificationTests {
         assertThat(assigned.driver().photoUrl()).isNull();
         assertThat(assigned.driverChange()).isNull();
 
-        orders.revokeAssignment(staff(), UUID.randomUUID(), order.id(), assigned.version(), "Driver does not answer");
+        orders.revokeAssignment(staff(), UUID.randomUUID(), order.id(), assigned.version(),
+                "DRIVER_NOT_RESPONDING", "Driver does not answer");
         OrderView searching = orders.get(order.id());
         assertThat(searching.assignment()).as("the revoked assignment is hidden").isNull();
         assertThat(searching.driver()).isNull();
@@ -189,7 +190,7 @@ class ReassignmentNotificationTests {
         assertThat(again.driver()).isNotNull();
 
         var trip = trips.current(second.actor()).orElseThrow();
-        trips.withdraw(second.actor(), UUID.randomUUID(), trip.id(), trip.version(), "Flat tyre");
+        trips.withdraw(second.actor(), UUID.randomUUID(), trip.id(), trip.version(), "VEHICLE_PROBLEM", "Flat tyre");
         OrderView withdrawn = orders.get(order.id());
         assertThat(withdrawn.assignment()).isNull();
         assertThat(withdrawn.driverChange().reasonCode()).isEqualTo("DRIVER_CANCELLED");

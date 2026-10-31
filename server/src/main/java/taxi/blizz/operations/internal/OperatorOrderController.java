@@ -98,8 +98,9 @@ class OperatorOrderController {
                          @NotBlank @Size(max = 100) String reasonCode) {
     }
 
-    record RevokeRequest(@NotNull UUID commandId, @NotNull Long expectedVersion,
-                         @NotBlank @Size(max = 500) String reason) {
+    /** {@code reason}: the free text of the first version, read as the comment (issue #143). */
+    record RevokeRequest(@NotNull UUID commandId, @NotNull Long expectedVersion, String reasonCode,
+                         @Size(max = 500) String comment, @Size(max = 500) String reason) {
     }
 
     record CallerView(String name, String phone) {
@@ -243,7 +244,7 @@ class OperatorOrderController {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "expected_version must not be negative");
         }
         return view(orders.revokeAssignment(claims.actor(), body.commandId(), orderId,
-                body.expectedVersion(), body.reason()));
+                body.expectedVersion(), body.reasonCode(), body.comment() != null ? body.comment() : body.reason()));
     }
 
     /** Who did what with the order: "Operator Anna cancelled the order: passenger asked". */

@@ -169,8 +169,11 @@ class JdbcTrips implements Trips {
     }
 
     @Override
-    public TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reason) {
+    public TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reasonCode,
+                             String comment) {
         requireDriver(driver);
+        // Skeleton of issue #143: the code is not checked against the catalog yet.
+        String reason = comment != null && !comment.isBlank() ? comment : reasonCode;
         String why = blankToNull(reason);
         if (why == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
@@ -471,7 +474,7 @@ class JdbcTrips implements Trips {
                         rs.getLong("wallet_minor"), rs.getLong("discount_minor"),
                         recipient(rs.getString("contact_name"), rs.getString("contact_phone"),
                                 rs.getObject("completed_at", OffsetDateTime.class)), rs.getString("comment"),
-                        rs.getString("entrance")))
+                        rs.getString("entrance"), java.util.List.of()))
                 .single();
     }
 

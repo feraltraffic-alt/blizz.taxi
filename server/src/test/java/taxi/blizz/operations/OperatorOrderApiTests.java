@@ -184,7 +184,8 @@ class OperatorOrderApiTests {
                 .getResponse().getStatus()).isEqualTo(403);
         assertNoReceipt(deniedRevoke);
         MvcResult revoked = postJson("/api/operator/v1/orders/" + revokeOrder + "/revoke-assignment", full.token(), Map.of(
-                "command_id", UUID.randomUUID(), "expected_version", revokeVersion, "reason", "Operator reassignment"));
+                "command_id", UUID.randomUUID(), "expected_version", revokeVersion,
+                "reason_code", "DRIVER_NOT_RESPONDING", "reason", "Operator reassignment"));
         assertThat(revoked.getResponse().getStatus()).isEqualTo(200);
         assertThat(jdbc.sql("select state from assignment where order_id = :id order by created_at desc limit 1")
                 .param("id", revokeOrder).query(String.class).single()).isEqualTo("REVOKED");

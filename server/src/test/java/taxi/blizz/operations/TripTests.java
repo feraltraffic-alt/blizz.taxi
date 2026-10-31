@@ -388,10 +388,10 @@ class TripTests {
         Ride ride = assigned(PaymentMethod.CASH);
         Driver other = driverAt(north(1500));
 
-        assertCode(() -> trips.withdraw(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
-                " "), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> trips.withdraw(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                ride.trip().version(), " ", null), ErrorCode.VALIDATION_FAILED);
         TripView withdrawn = trips.withdraw(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
-                ride.trip().version(), "Flat tyre");
+                ride.trip().version(), "VEHICLE_PROBLEM", "Flat tyre");
 
         assertThat(withdrawn.phase()).isEqualTo("ABORTED");
         OrderView order = orders.get(ride.order().id());
@@ -420,7 +420,7 @@ class TripTests {
         TripView started = trips.start(ride.driver().actor(), UUID.randomUUID(), waiting.id(), waiting.version(), null);
 
         assertCode(() -> trips.withdraw(ride.driver().actor(), UUID.randomUUID(), started.id(), started.version(),
-                "Changed my mind"), ErrorCode.STATE_CONFLICT);
+                "VEHICLE_PROBLEM", "Changed my mind"), ErrorCode.STATE_CONFLICT);
         assertThat(occupancy(ride.driver())).isEqualTo("ON_TRIP");
     }
 
@@ -432,12 +432,14 @@ class TripTests {
         Actor with = staff(Orders.REASSIGN_PERMISSION);
 
         assertCode(() -> orders.revokeAssignment(without, UUID.randomUUID(), ride.order().id(), version,
-                "Driver does not answer"), ErrorCode.ACCESS_DENIED);
-        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), version, ""),
+                "DRIVER_NOT_RESPONDING", "Driver does not answer"), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), version, "", null),
                 ErrorCode.VALIDATION_FAILED);
         UUID command = UUID.randomUUID();
-        OrderView revoked = orders.revokeAssignment(with, command, ride.order().id(), version, "Driver does not answer");
-        OrderView repeat = orders.revokeAssignment(with, command, ride.order().id(), version, "Driver does not answer");
+        OrderView revoked = orders.revokeAssignment(with, command, ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "Driver does not answer");
+        OrderView repeat = orders.revokeAssignment(with, command, ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "Driver does not answer");
 
         assertThat(repeat).isEqualTo(revoked);
         assertThat(revoked.status()).isEqualTo("SEARCHING");
@@ -445,7 +447,7 @@ class TripTests {
                 .param("id", ride.order().id()).query(String.class).single()).isEqualTo("REVOKED");
         assertThat(occupancy(ride.driver())).isEqualTo("FREE");
         assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), revoked.version(),
-                "again"), ErrorCode.STATE_CONFLICT);
+                "DRIVER_NOT_RESPONDING", "again"), ErrorCode.STATE_CONFLICT);
     }
 
     // ------------------------------------------------------------ the passenger did not come out (REQ-CAN-06, T-20)

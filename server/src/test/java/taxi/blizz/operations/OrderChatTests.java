@@ -125,7 +125,8 @@ class OrderChatTests {
         say(first.actor(), ride, "OK");
         Driver second = rides.driverNear(PICKUP);
 
-        trips.withdraw(first.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), "Flat tyre");
+        trips.withdraw(first.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
+                "VEHICLE_PROBLEM", "Flat tyre");
         // Audit 29.10.2026: until a new driver comes, what the rider writes goes to nobody, not to the one who left.
         assertCode(() -> say(ride.payer(), ride, "Entrance 2, code 4321"), ErrorCode.STATE_CONFLICT);
         OfferView offer = dispatch.offers(second.actor()).getFirst();
@@ -178,7 +179,8 @@ class OrderChatTests {
 
         Driver leaving = rides.driverNear(PICKUP);
         Ride ride = rides.assigned(cityId, leaving, PICKUP, DROPOFF);
-        trips.withdraw(leaving.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), "Flat tyre");
+        trips.withdraw(leaving.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(),
+                "VEHICLE_PROBLEM", "Flat tyre");
         orders.cancel(ride.payer(), UUID.randomUUID(), ride.order().id(), orders.get(ride.order().id()).version(),
                 "CHANGED_MIND");
         assertCode(() -> say(leaving.actor(), ride, "sorry"), ErrorCode.NOT_FOUND);

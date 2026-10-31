@@ -84,7 +84,7 @@ class OrderHistoryApiTests {
 
         Assigned withdrawn = assign(payer, driver, PICKUP, DROPOFF);
         TripView aborted = trips.withdraw(driver.actor(), UUID.randomUUID(), withdrawn.trip().id(),
-                withdrawn.trip().version(), "Cannot continue");
+                withdrawn.trip().version(), "VEHICLE_PROBLEM", "Cannot continue");
         assertThat(aborted.phase()).isEqualTo("ABORTED");
         orders.cancel(payer, UUID.randomUUID(), withdrawn.order().id(), orders.get(withdrawn.order().id()).version(),
                 "CHANGED_MIND");
