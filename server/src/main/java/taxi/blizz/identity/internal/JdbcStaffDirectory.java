@@ -66,7 +66,7 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember create(Actor superAdmin, UUID commandId, String login, String initialPassword, Profile profile,
-                              String reason) {
+                              String reason, String password) {
         requireSuperAdmin(superAdmin);
         String cleanLogin = login(login);
         Profile clean = profile(profile);
@@ -110,7 +110,7 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember update(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, Profile profile,
-                              String reason) {
+                              String reason, String password) {
         requireSuperAdmin(superAdmin);
         Profile clean = profile(profile);
         reason(reason);

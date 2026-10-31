@@ -105,7 +105,7 @@ class StaffSignInTests {
 
     private StaffMember operator(String login, String password, String... permissions) {
         return directory.create(superAdmin, UUID.randomUUID(), login, password, operatorProfile(permissions),
-                "New operator");
+                "New operator", SUPER_PASSWORD);
     }
 
     private static void assertCode(ThrowingCallable call, ErrorCode code) {
@@ -144,7 +144,7 @@ class StaffSignInTests {
                 "contacts", Map.of("email", "updated@example.invalid"), "role", "OPERATOR",
                 "permissions", List.of("orders.view"), "all_cities", false, "city_ids", List.of(cityA));
         Map<String, Object> update = Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(),
-                "profile", profile, "reason", "HTTP audit");
+                "profile", profile, "reason", "HTTP audit", "password", SUPER_PASSWORD);
         assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/update", ordinary, update)
                 .getResponse().getStatus()).isEqualTo(403);
         MvcResult updated = postJson("/api/admin/v1/staff/" + member.id() + "/update", root, update);
@@ -152,7 +152,8 @@ class StaffSignInTests {
         assertThat(directory.get(superAdmin, member.id()).profile().lastName()).isEqualTo("Updated");
         assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/update", root,
                 Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(), "profile", profile,
-                        "reason", "Stale version")).getResponse().getStatus()).isEqualTo(409);
+                        "reason", "Stale version", "password", SUPER_PASSWORD)).getResponse().getStatus())
+                .isEqualTo(409);
 
         long version = directory.get(superAdmin, member.id()).version();
         Map<String, Object> suspend = Map.of("command_id", UUID.randomUUID(), "expected_version", version,
@@ -322,27 +323,28 @@ class StaffSignInTests {
         String login = uniqueLogin("rules");
         StaffMember admin = directory.create(superAdmin, UUID.randomUUID(), login, "admin-password-123",
                 new Profile("Ivan", "Koval", new Contacts("+380501234567", null, null), Role.ADMIN,
-                        List.of("pricing.manage"), true, List.of()), "New admin");
+                        List.of("pricing.manage"), true, List.of()), "New admin", SUPER_PASSWORD);
         Actor adminActor = new Actor(SubjectType.STAFF, admin.id());
         assertThat(admin.profile().allCities()).isTrue();
 
         assertCode(() -> directory.create(adminActor, UUID.randomUUID(), uniqueLogin("x"), "some-password-123",
-                operatorProfile(), "x"), ErrorCode.ACCESS_DENIED);
+                operatorProfile(), "x", SUPER_PASSWORD), ErrorCode.ACCESS_DENIED);
         assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), login, "some-password-123",
-                operatorProfile(), "x"), ErrorCode.STATE_CONFLICT);
+                operatorProfile(), "x", SUPER_PASSWORD), ErrorCode.STATE_CONFLICT);
         assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), uniqueLogin("x"), "short",
-                operatorProfile(), "x"), ErrorCode.VALIDATION_FAILED);
+                operatorProfile(), "x", SUPER_PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), uniqueLogin("x"), "some-password-123",
-                operatorProfile("orders.everything"), "x"), ErrorCode.VALIDATION_FAILED);
+                operatorProfile("orders.everything"), "x", SUPER_PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), uniqueLogin("x"), "some-password-123",
                 new Profile("No", "Contact", new Contacts(null, null, null), Role.OPERATOR, List.of(), false,
-                        List.of()), "x"), ErrorCode.VALIDATION_FAILED);
+                        List.of()), "x", SUPER_PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), admin.id(), admin.version() + 1,
-                operatorProfile(), "x"), ErrorCode.VERSION_CONFLICT);
+                operatorProfile(), "x", SUPER_PASSWORD), ErrorCode.VERSION_CONFLICT);
 
         StaffMember promoted = directory.update(superAdmin, UUID.randomUUID(), admin.id(), admin.version(),
                 new Profile("Ivan", "Koval", new Contacts("+380501234567", null, null), Role.SUPER_ADMIN,
-                        List.of("pricing.manage"), false, List.of()), "Promoted");
+                        List.of("pricing.manage"), false, List.of()), "Promoted",
+                SUPER_PASSWORD);
         assertThat(promoted.profile().permissions()).as("a super admin has everything, no ticks").isEmpty();
         assertThat(promoted.profile().allCities()).isTrue();
         assertThat(jdbc.sql("select count(*) from audit_log where resource_id = :id and action like 'staff.%'")
@@ -360,7 +362,8 @@ class StaffSignInTests {
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
             jdbc.sql("update staff_user set state = 'SUSPENDED' where role = 'SUPER_ADMIN' and id <> :id")
                     .param("id", superAdmin.id()).update();
-            directory.update(superAdmin, UUID.randomUUID(), superAdmin.id(), self.version(), operatorProfile(), "t");
+            directory.update(superAdmin, UUID.randomUUID(), superAdmin.id(), self.version(), operatorProfile(), "t",
+                    SUPER_PASSWORD);
         })).isInstanceOf(DomainException.class).hasMessageContaining("super admin must remain");
         assertThat(directory.get(superAdmin, superAdmin.id()).state()).isEqualTo("ACTIVE");
     }

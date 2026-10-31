@@ -31,7 +31,8 @@ class EmergencyAccessController {
     }
 
     record GrantBody(@NotNull UUID commandId, @NotNull Set<String> permissions, @NotNull Boolean allCities,
-                     Set<UUID> cityIds, @NotNull @Min(5) @Max(480) Integer minutes, @NotBlank String reason) {
+                     Set<UUID> cityIds, @NotNull @Min(5) @Max(480) Integer minutes, @NotBlank String reason,
+                     String password) {
     }
 
     record RevokeBody(@NotNull UUID commandId, @NotBlank String reason) {
@@ -48,7 +49,7 @@ class EmergencyAccessController {
                                                 @Valid @RequestBody GrantBody body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(emergency.grant(claims.actor(), body.commandId(),
                 staffId, body.permissions(), body.allCities(), body.cityIds(), Duration.ofMinutes(body.minutes()),
-                body.reason()));
+                body.reason(), body.password()));
     }
 
     @PostMapping("/api/admin/v1/emergency-grants/{grantId}/revoke")

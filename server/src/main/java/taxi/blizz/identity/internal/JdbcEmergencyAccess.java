@@ -54,7 +54,7 @@ class JdbcEmergencyAccess implements EmergencyAccess {
 
     @Override
     public Grant grant(Actor actor, UUID commandId, UUID staffId, Set<String> permissions, boolean allCities,
-                       Set<UUID> cityIds, Duration duration, String reason) {
+                       Set<UUID> cityIds, Duration duration, String reason, String password) {
         requireSuperAdmin(actor);
         Set<String> wanted = permissions == null ? Set.of() : new TreeSet<>(permissions);
         Set<UUID> cities = allCities || cityIds == null ? Set.of() : new TreeSet<>(cityIds);
