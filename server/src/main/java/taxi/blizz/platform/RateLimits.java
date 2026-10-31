@@ -16,6 +16,8 @@ public interface RateLimits {
     String BROADCAST_CLAIM = "broadcast-claim";
     /** Reads of the ALL tab: the app polls it (issue #102, B1). */
     String BROADCAST_LIST = "broadcast-list";
+    /** The operator's lookup of a rider by phone (issue #176): the one bucket that counts staff. */
+    String CUSTOMER_LOOKUP = "customer-lookup";
 
     /** Counts one action of the subject in the bucket, or throws {@link RateLimitedException} when over budget. */
     void acquire(String bucket, Actor subject);
