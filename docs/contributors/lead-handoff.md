@@ -1,4 +1,4 @@
-# Lead handoff (state on 30.10.2026)
+# Lead handoff (state on 31.10.2026)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -24,12 +24,16 @@ Read this first when a new lead session (Claude) takes over. Everything else liv
 ## Work in flight
 
 Audit of 30.10.2026: `docs/status/2026-10-30-server-audit.md` (what is left on the server and in which issue).
+Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 
 | Who | Queue (in order) |
 |---|---|
-| Codex | #124 (ownership sweep; the lead decided claim/reserve are two named shared-pool exceptions) → #136 web foundation → #149 retention layout and a line-length ratchet → #140 payments → #142 admin orders → #144 privacy |
-| Second Claude | PR #148 (#135 documents encrypted at rest: E6 and line wrapping left) → #141 driver states → #137 rider app (needs `packages/api-client` from #136) → #143 operator and driver |
-| Lead | PR #150 (#139 part 1: `current_version`, `retryable`), branch `claude/cursor-pagination` (#139 part 2: cursor pages, 202 for a card order; the rest of the lists is part 3) → #145 operations → #146 pilot proofs |
+| Codex | #136 web foundation (branch `codex/136-web-foundation`, no PR yet; idle since 30.10, token limit) → #149 retention layout and line-length ratchet → #140 payments (includes the WayForPay breaker semantics) |
+| Second Claude | #142 part D in three PRs (settings, staff password, addresses; plus the follow-ups from the reviews of #169 and #170) → #137 rider app (needs `packages/api-client` from #136) |
+| Lead | #146: parts 1 (upgrade test, #157) and 2 (fault tests, branch `claude/146-faults`) done; next part 3, an L1 load run, and part 4, the M1 contract test |
+
+Done since 30.10: #124, #135, #139 (parts 1–3), #141, #143, #144, #145, #142 parts A, B, C1 and C2.
+If Codex stays idle, the lead may take #149 or #140 and say so in the issue.
 
 Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
 Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
@@ -69,6 +73,20 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (31.10.2026)
+
+- **Fault tests (#146 part 2):** `.github/workflows/faults.yml` runs a positive job and one negative control per
+  guard. A control passes only when its own case fails, for its expected reason, after the cases before it passed.
+  The database case found 500s on a lost connection; these are now 503 `TEMPORARILY_UNAVAILABLE`.
+- **Flaky tests** came from random phone numbers that collided: `taxi.blizz.TestPhones.unique(prefix, digits)` (#159).
+  Tests that sort UUIDs must sort by their hex text (PostgreSQL's order), not `UUID.compareTo`.
+- **Branches:**
+  - Pushing to `main` and force-pushing are refused by the session's permissions, so docs go through a PR too.
+  - Branch deletion is refused by the proxy: ask the owner (`claude/blizz-taxi-review-qshlrv`,
+    `claude/upgrade-negative-control`).
+- **New workflows** (`workflow_dispatch` only) need the file on `main` first. Until then, a temporary `push` trigger
+  on the branch runs them; remove it before merging.
 
 ## Recent history (29–30.10.2026)
 
