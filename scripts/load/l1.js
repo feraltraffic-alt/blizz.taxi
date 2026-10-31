@@ -168,14 +168,15 @@ class Driver {
 }
 
 export async function drivers() {
-  const first = (exec.vu.idInScenario - 1) * PER_VU;
+  const first = exec.scenario.iterationInTest * PER_VU; // one iteration per VU: 0, 1, 2…
   const mine = TOKENS.drivers.slice(first, first + PER_VU).map((t) => new Driver(t));
+  if (!mine.length) throw new Error(`no drivers for VU ${exec.vu.idInTest} (from ${first})`);
   for (const d of mine) await d.start();
   setTimeout(() => mine.forEach((d) => d.stop()), DURATION_MS + 60000);
 }
 
 export function riders() {
-  const first = (exec.vu.idInScenario - 1) * 50;
+  const first = exec.scenario.iterationInTest * 50;
   const sockets = TOKENS.riders.slice(first, first + 50).map((t) => {
     const ws = new WebSocket(`${WS_BASE}/ws/v1/rider`, ['blizz.v1', `blizz.bearer.${t.token}`]);
     ws.onerror = () => wsFailed.add(1);
