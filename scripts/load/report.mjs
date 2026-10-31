@@ -32,7 +32,9 @@ for (const line of readFileSync('metrics.prom', 'utf8').split('\n')) {
   if (line.startsWith('# scrape ')) scrapes.push({ time: Number(line.slice(9)), values: [] });
   else if (line && scrapes.length) {
     const space = line.lastIndexOf(' ');
-    scrapes.at(-1).values.push([line.slice(0, space), Number(line.slice(space + 1))]);
+    const value = Number(line.slice(space + 1));
+    // A gauge that has not been measured yet reads NaN: left out, not summed.
+    if (Number.isFinite(value)) scrapes.at(-1).values.push([line.slice(0, space), value]);
   }
 }
 const series = (prefix, filter = () => true) => scrapes.map((s) => s.values
@@ -74,6 +76,16 @@ row('Orders searching', series('blizz_orders_searching'));
 row('Assignments active', series('blizz_assignments_active'));
 row('Orders created (cumulative)', series('blizz_orders_created_total'));
 row('Orders unfulfilled (cumulative)', series('blizz_orders_unfulfilled_total'));
+row('Offers by outcome (cumulative, all outcomes)', series('blizz_offers_total'));
+const timer = (name) => {
+  const count = last(series(`${name}_seconds_count`));
+  const sum = last(series(`${name}_seconds_sum`));
+  const top = max(series(`${name}_seconds_max`));
+  return `${count} measured, mean ${count ? (1000 * sum / count).toFixed(0) : '–'} ms, longest in a scrape window `
+    + `${Number.isFinite(top) ? (1000 * top).toFixed(0) : '–'} ms`;
+};
+out.push('', `Order created → first offer (server): ${timer('blizz_dispatch_first_offer')}.`,
+  `Order created → assignment (server, includes the driver's answer): ${timer('blizz_dispatch_assigned')}.`);
 
 const violations = series('blizz_invariant_violations');
 const runs = scrapes.map((s) => s.values.filter(([k]) => k.startsWith('blizz_invariant_last_success'))
@@ -82,4 +94,6 @@ out.push('', '## Invariants during the run', '',
   `Scans with a violation: ${violations.filter((v) => v > 0).length} of ${violations.length}; the largest sum of `
   + `violations in one scrape: ${max(violations)}. The five checks were last clean at `
   + `${new Date(1000 * Math.min(...(runs.at(-1) ?? [0]))).toISOString()} (the oldest of the five).`);
+out.push('', '## The last scrape (raw)', '', '```', ...(scrapes.at(-1)?.values ?? [])
+  .filter(([k]) => k.startsWith('blizz_')).map(([k, v]) => `${k} ${v}`), '```');
 process.stdout.write(out.join('\n') + '\n');
