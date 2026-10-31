@@ -282,6 +282,12 @@ class CustomerLookupTests {
         assertThat(getLookup(phone.substring(0, phone.length() - 2), token).getResponse().getStatus())
                 .isEqualTo(400);
         assertThat(getLookup(phone(), token).getResponse().getStatus()).isEqualTo(404);
+        // The staff activity log keeps the path, never the query: no phone there either.
+        assertThat(jdbc.sql("""
+                        select coalesce(string_agg(concat_ws(' ', path, resource_ids::text), ' '), '')
+                        from staff_activity where staff_id = :staff""")
+                .param("staff", operator.actor().id()).query(String.class).single())
+                .contains("/api/operator/v1/customers/lookup").doesNotContain(phone.substring(4));
 
         String riderToken = auth.open(new VerifiedSubject(rider, "ACTIVE", false), "lookup-test").accessToken();
         assertThat(getLookup(phone, riderToken).getResponse().getStatus()).isEqualTo(401);
