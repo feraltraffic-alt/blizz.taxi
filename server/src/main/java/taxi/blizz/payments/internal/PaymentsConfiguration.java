@@ -46,8 +46,11 @@ class PaymentsConfiguration {
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     @Bean
-    FakeProvider.Gateway fakeGateway(Merchants merchants, Clock clock) {
-        return new FakeProvider.Gateway(merchants::secretOfAccount, clock);
+    FakeProvider.Gateway fakeGateway(Merchants merchants, Clock clock,
+            @org.springframework.beans.factory.annotation.Value("${blizz.payments.fake-gateway-journal:}")
+            String journal) {
+        return new FakeProvider.Gateway(merchants::secretOfAccount, clock,
+                journal.isBlank() ? null : java.nio.file.Path.of(journal));
     }
 
     @Bean

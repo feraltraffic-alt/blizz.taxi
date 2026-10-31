@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.platform.CorrelationId;
+import taxi.blizz.platform.CrashPoints;
 import taxi.blizz.platform.OutboxHandler;
 import taxi.blizz.platform.OutboxMessage;
 
@@ -119,6 +120,8 @@ public class OutboxRelay {
                 handler.handle(message);
             }
         });
+        // Fault tests (issue #146): this consumer's work is committed, the others' and the DONE mark are not.
+        CrashPoints.reach("outbox.after-handler", message.type() + "/" + handler.consumerId());
     }
 
     private void markDone(OutboxMessage message) {

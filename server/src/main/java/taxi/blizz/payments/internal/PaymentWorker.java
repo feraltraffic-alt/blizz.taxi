@@ -112,7 +112,12 @@ public class PaymentWorker {
 
     private void process(Claimed op) {
         try {
-            PaymentProvider.Result result = "CREATED".equals(op.previous()) ? send(op) : check(op);
+            boolean fresh = "CREATED".equals(op.previous());
+            PaymentProvider.Result result = fresh ? send(op) : check(op);
+            if (fresh) {
+                // Fault tests (issue #146): the bank has the request, this process has not stored the answer.
+                taxi.blizz.platform.CrashPoints.reach("payment.after-send", op.type());
+            }
             payments.apply(op.id(), result.outcome(), result.providerStatus(), result.reasonCode(), result.reason());
         } catch (RuntimeException e) {
             // Leave it SENDING: when the lease runs out the next round asks the provider, it does not resend.
