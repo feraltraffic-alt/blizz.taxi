@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/trip-capture-released.v1.schema.json",
+  "title": "TripCaptureReleased v1 payload",
+  "description": "Published by operations when staff close the review of a card trip's facts corrections that held its capture (REQ-CAN-07, issue #142). Aggregate Order. Payments starts the capture it skipped on TripCompleted, with the order's current final fare (after any fare correction) less the bonuses and the discount, as on TripCompleted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "payment_method", "final_fare_id", "amount_minor", "wallet_minor", "discount_minor", "currency"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "payment_method": { "type": "string", "enum": ["CARD"] },
+    "final_fare_id": { "type": "string", "format": "uuid" },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "wallet_minor": { "type": "integer", "minimum": 0 },
+    "discount_minor": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+  },
+  "examples": [
+    { "order_id": "5f1e9a2c-4b7d-4c3e-8a19-2d6b7e0f1a34", "payment_method": "CARD", "final_fare_id": "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f", "amount_minor": 18500, "wallet_minor": 0, "discount_minor": 0, "currency": "UAH" }
+  ]
+}
