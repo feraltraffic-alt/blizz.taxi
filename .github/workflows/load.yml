@@ -1,0 +1,123 @@
+# Load run of the L1 pilot profile (spec 27.1, REQ-NFR-01/04, AC-26; issue #146 part 3): the sandbox server and its
+# database on one GitHub runner, k6 on the same runner (scripts/load/l1.js). The numbers describe this runner, not the
+# pilot's servers; the report says so. Results go to the sandbox-runs branch, runs/<run id>-load/.
+# Start: Actions → Load → Run workflow, or `gh workflow run load.yml -f minutes=15`.
+name: Load
+
+on:
+  push:
+    branches: [claude/146-load] # temporary: workflow_dispatch needs the file on main
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long the order load runs (the spec asks 15-30 minutes for L1)"
+        default: "15"
+      drivers:
+        description: "Drivers online (L1: 1000)"
+        default: "1000"
+      riders:
+        description: "Riders with an open WebSocket (L1: drivers + riders = 2000 sockets)"
+        default: "1000"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: load-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+        env:
+          POSTGRES_DB: blizz
+          POSTGRES_USER: blizz
+          POSTGRES_PASSWORD: blizz-sandbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U blizz -d blizz" --health-interval 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: blizz
+      PGPASSWORD: blizz-sandbox
+      PGDATABASE: blizz
+      PGAPPNAME: blizz-load
+      MINUTES: ${{ inputs.minutes || '5' }} # TEMP: short runs while the harness is built
+      DRIVERS: ${{ inputs.drivers || '1000' }}
+      RIDERS: ${{ inputs.riders || '1000' }}
+      K6_VERSION: v0.57.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install k6
+        run: |
+          curl -fsSL -o k6.tgz "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          sha256sum k6.tgz
+          tar xzf k6.tgz && sudo mv "k6-${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6 && k6 version
+      - name: Build the server
+        run: cd server && ./mvnw -B -q -ntp -DskipTests package
+      - name: Start the server (profile sandbox)
+        run: |
+          nohup java -jar server/target/server-*[0-9T].jar --spring.profiles.active=sandbox > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 120); do curl -fsS http://localhost:8080/readyz >/dev/null 2>&1 && exit 0; sleep 1; done
+          tail -100 server.log; exit 1
+      - name: Seed drivers and riders, mint their tokens
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -v drivers="$DRIVERS" -v riders="$RIDERS" -f scripts/load/seed.sql
+          node scripts/load/tokens.mjs "$DRIVERS" "$RIDERS" > tokens.json
+      - name: Run the L1 load
+        run: |
+          ulimit -n 65536
+          SERVER_PID=$(cat server.pid) bash scripts/load/scrape.sh &
+          code=0
+          k6 run --quiet -e TOKENS="$PWD/tokens.json" -e MINUTES="$MINUTES" scripts/load/l1.js > k6.log 2>&1 || code=$?
+          touch STOP; sleep 11
+          tail -40 k6.log
+          echo "k6 exit $code"
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "# L1 load run ($(date -u +%FT%TZ), ${GITHUB_SHA::7})"
+            echo
+            echo "Profile: $DRIVERS drivers online (heartbeat every 4 s, so about $((DRIVERS / 4)) GPS points a second),"
+            echo "$DRIVERS + $RIDERS WebSockets, 2 orders a second for $MINUTES minutes with a one-minute burst at 10 a second."
+            echo "Machine: one GitHub-hosted runner ($(nproc) vCPU, $(free -g | awk '/Mem/ {print $2}') GB) holds the server,"
+            echo "PostgreSQL and k6 together; the numbers describe this runner, not the pilot's servers."
+            echo
+            node scripts/load/report.mjs
+          } > transcript.md
+          cat transcript.md >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ load-l1 (see transcript.md; L1 records, it does not gate)" > results.txt
+      - name: Publish results to the sandbox-runs branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_DIR: ${{ github.run_id }}-load
+        run: scripts/sandbox/publish.sh
+      - name: Keep the raw data
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: load-l1
+          path: |
+            summary.json
+            metrics.prom
+            process.tsv
+            database.tsv
+            k6.log
+            server.log
+          if-no-files-found: ignore
