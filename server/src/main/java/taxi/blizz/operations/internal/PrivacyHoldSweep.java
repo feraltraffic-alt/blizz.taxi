@@ -2,7 +2,6 @@ package taxi.blizz.operations.internal;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -52,9 +51,8 @@ class PrivacyHoldSweep {
             List<Hold> page = query.query((rs, i) -> new Hold(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                             rs.getString(3), rs.getObject(4, UUID.class), rs.getObject(5, OffsetDateTime.class)))
                     .list();
-            Set<UUID> disputed = chargebacks.disputed(page.stream().map(Hold::orderId).toList());
             for (Hold hold : page) {
-                if (!disputed.contains(hold.orderId()) && Boolean.TRUE.equals(tx.execute(s -> release(hold)))) {
+                if (Boolean.TRUE.equals(tx.execute(s -> release(hold)))) {
                     released++;
                 }
             }
@@ -69,7 +67,7 @@ class PrivacyHoldSweep {
         boolean claimed = jdbc.sql("""
                         select id from privacy_hold where id = :id and released_at is null for update skip locked""")
                 .param("id", hold.id()).query(UUID.class).optional().isPresent();
-        // Checked again under the lock: a chargeback recorded since the batch was read keeps the hold.
+        // Checked under the lock, so two instances never release the same hold and a still open chargeback keeps it.
         if (!claimed || !chargebacks.disputed(List.of(hold.orderId())).isEmpty()) {
             return false;
         }
