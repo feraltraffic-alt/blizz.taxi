@@ -332,7 +332,7 @@ Common to all rows:
 | Exact points of a deleted rider's orders and quotes | 6 | 2, closed |
 | An open chargeback does not hold deletion | 1, 6, 13 | 2, closed |
 | Drivers cannot be deleted | 2 | 3, closed |
-| Drivers cannot export their data | 2 | 4 |
+| Drivers cannot export their data | 2 | 4, closed |
 
 The first register said expired data export files are not deleted; they are (`content` is set to null at expiry).
 

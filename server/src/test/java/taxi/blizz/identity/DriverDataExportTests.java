@@ -61,6 +61,8 @@ class DriverDataExportTests {
     @Autowired OutboxRelay relay;
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
+    @Autowired taxi.blizz.driver.DriverDeletions drivers;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
 
     TestRides rides;
     UUID city;
@@ -174,6 +176,18 @@ class DriverDataExportTests {
                         select count(*) from audit_log where resource_id = :id
                           and action in ('personal_data_export.request', 'personal_data_export.download')""")
                 .param("id", asked.id().toString()).query(Long.class).single()).isEqualTo(2);
+
+        // The copy goes with the driver's deletion.
+        jdbc.sql("""
+                        update driver set account_state = 'DELETION_PENDING', deletion_previous_state = 'ACTIVE',
+                                          deletion_requested_at = now() where id = :id""")
+                .param("id", me.id()).update();
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where driver_id = :id")
+                .param("id", me.id()).update();
+        tx.executeWithoutResult(s -> drivers.anonymize(me.id()));
+        deliverEvents();
+        assertThat(jdbc.sql("select count(*) from personal_data_export where driver_id = :id").param("id", me.id())
+                .query(Long.class).single()).isZero();
     }
 
     @Test
