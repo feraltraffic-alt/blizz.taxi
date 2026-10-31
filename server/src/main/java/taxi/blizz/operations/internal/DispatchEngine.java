@@ -41,8 +41,9 @@ class DispatchEngine {
 
     /**
      * ASSIGNED → SEARCHING again after the driver was released before the start. The passenger's
-     * search time continues: only what is left of the total search time is used, but at least one
-     * personal phase, since the release was not the passenger's doing (REQ-CAN-05).
+     * search time continues: only what is left of the total search time is used, never more — the
+     * wait is not extended without the rider's shown consent (REQ-CAN-05, issue #143). With nothing
+     * left the order ends UNFULFILLED (NO_DRIVER) and the rider is told.
      */
     void resumeSearch(OrderCore.LockedOrder order) {
         java.time.Duration searched = jdbc.sql("""
@@ -53,8 +54,10 @@ class DispatchEngine {
                 .query((rs, i) -> java.time.Duration.ofMillis(Math.round(rs.getDouble(1) * 1000)))
                 .single();
         java.time.Duration left = properties.totalDeadline().minus(searched);
-        if (left.compareTo(properties.personalPhaseMax()) < 0) {
-            left = properties.personalPhaseMax();
+        if (left.compareTo(java.time.Duration.ofSeconds(1)) < 0) {
+            core.changeStatus(order, "UNFULFILLED", "NO_DRIVER", "OrderUnfulfilled", OrderCore.system(), Map.of());
+            core.releaseCardHold(order.id(), "No driver found");
+            return;
         }
         search(order, left, "OrderSearchResumed");
     }

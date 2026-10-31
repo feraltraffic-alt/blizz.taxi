@@ -52,7 +52,7 @@ class JdbcOrderCalls implements OrderCalls {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public CallTarget forDriver(Actor driver, UUID tripId) {
         if (driver.type() != SubjectType.DRIVER) {
             throw notFound();
@@ -76,7 +76,14 @@ class JdbcOrderCalls implements OrderCalls {
         String caller = jdbc.sql("select phone from order_contact where order_id = :order")
                 .param("order", facts.orderId()).query(String.class).optional().orElse(null);
         Actor payer = facts.payerClientId() == null ? null : new Actor(SubjectType.CLIENT, facts.payerClientId());
-        return target(payer, caller);
+        CallTarget target = target(payer, caller);
+        // A call request is an attempt to reach the rider; a no-show shows how many there were (REQ-CAN-06).
+        jdbc.sql("""
+                        insert into order_contact_attempt (id, order_id, trip_id, driver_id, kind, at)
+                        values (:id, :order, :trip, :driver, 'CALL', now())""")
+                .param("id", UUID.randomUUID()).param("order", facts.orderId()).param("trip", tripId)
+                .param("driver", driver.id()).update();
+        return target;
     }
 
     private CallTarget target(Actor directSubject, String directPhone) {

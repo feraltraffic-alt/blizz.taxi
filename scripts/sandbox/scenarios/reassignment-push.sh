@@ -72,7 +72,7 @@ FIRST=$(api POST "/api/driver/v1/offers/$OFFER/accept" "$ANDRII" "{\"command_id\
 expect 200
 VERSION=$(api GET "/api/operator/v1/orders/$ORDER" "$OPERATOR" | jq -r .version)
 api POST "/api/operator/v1/orders/$ORDER/revoke-assignment" "$OPERATOR" \
-    "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"reason\":\"Driver does not answer\"}" >/dev/null
+    "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"reason_code\":\"DRIVER_NOT_RESPONDING\"}" >/dev/null
 expect 200
 OFFER=$(api GET /api/driver/v1/offers "$OLEH" | jq -r --arg o "$ORDER" '[.[] | select(.order_id == $o)][0].id')
 [[ -n "$OFFER" && "$OFFER" != null ]]

@@ -538,9 +538,6 @@ class JdbcOrders implements Orders {
         core.endAssignmentBeforeStart(assignment, "RELEASED", reason);
     }
 
-    record RevokeRequest(UUID orderId, long expectedVersion, String reason) {
-    }
-
     record ManualOfferRequest(UUID orderId, UUID driverId, String reason) {
     }
 
@@ -594,23 +591,31 @@ class JdbcOrders implements Orders {
                 .findFirst().orElse("NOT_ON_THE_LINE_IN_THE_CITY");
     }
 
+    record RevokeRequest(UUID orderId, long expectedVersion, String reasonCode, String comment) {
+    }
+
     @Override
     public OrderView revokeAssignment(Actor staffActor, UUID commandId, UUID orderId, long expectedVersion,
                                       String reasonCode, String comment) {
-        // Skeleton of issue #143: the code is not checked against the catalog yet.
-        String reason = comment != null && !comment.isBlank() ? comment : reasonCode;
         if (staffActor.type() != SubjectType.STAFF) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can take a driver off an order");
-        }
-        if (reason == null || reason.isBlank()) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
         }
         UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
                 .query(UUID.class).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        // The right first: someone without it learns nothing about the request.
         requireStaff(staffActor, REASSIGN_PERMISSION, cityId);
+        if (reasonCode == null || reasonCode.isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason code from the catalog is required");
+        }
+        String note = comment == null || comment.isBlank() ? null : comment.strip();
+        if (note != null && note.length() > 500) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The comment is at most 500 characters");
+        }
+        String code = reasonCode.strip();
         return commands.execute(new CommandKey(staffActor, "order.assignment.revoke", commandId),
-                new RevokeRequest(orderId, expectedVersion, reason), OrderView.class, () -> {
+                new RevokeRequest(orderId, expectedVersion, code, note), OrderView.class, () -> {
+                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.REASSIGN, code);
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     if (order.version() != expectedVersion) {
                         throw ConflictException.version(order.version(), "The order changed");
@@ -621,12 +626,24 @@ class JdbcOrders implements Orders {
                     AssignmentView assignment = core.assignmentOfOrder(orderId)
                             .filter(a -> "COMMITTED".equals(a.state()))
                             .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "No active assignment"));
-                    core.endAssignmentBeforeStart(assignment, "REVOKED", reason);
+                    String why = note == null ? reason.code() : reason.code() + " — " + note;
+                    core.endAssignmentBeforeStart(assignment, "REVOKED", why);
+                    // The code and its labels at the time stay with the assignment (ADR 0007 p. 5).
+                    jdbc.sql("""
+                                    update assignment set close_reason_code = :code,
+                                                          close_reason_labels = cast(:labels as jsonb)
+                                    where id = :id""")
+                            .param("code", reason.code()).param("labels", json.writeValueAsString(reason.labels()))
+                            .param("id", assignment.id()).update();
                     audit.record(new AuditEntry(staffActor, "order.revokeAssignment", "ride_order", orderId.toString(),
-                            reason, Map.of("driver_id", assignment.driverId().toString()), null));
-                    core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staffActor, reason,
-                            Map.<String, Object>of("assignment_id", assignment.id().toString(),
-                                    "driver_id", assignment.driverId().toString()));
+                            why, Map.of("driver_id", assignment.driverId().toString()),
+                            Map.of("reason_code", reason.code())));
+                    Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                    payload.put("assignment_id", assignment.id().toString());
+                    payload.put("driver_id", assignment.driverId().toString());
+                    payload.put("reason_code", reason.code());
+                    payload.put("reason_labels", reason.labels());
+                    core.recordEvent(orderId, core.touch(orderId), "AssignmentRevoked", staffActor, why, payload);
                     engine.resumeSearch(core.lockOrder(orderId));
                     return core.view(orderId);
                 });
