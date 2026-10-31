@@ -80,6 +80,22 @@ class CardHoldDeadlineTests {
         testPayments.resetGateway();
     }
 
+    /**
+     * Payment operations of this class's city that are still open would be picked up by the worker of the next test
+     * class and take its scripted answers: settle them, then cancel what is left, and clear the script.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void cleanUp() {
+        testPayments.settle();
+        jdbc.sql("""
+                        update payment_operation set state = 'CANCELLED', updated_at = now()
+                        where state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')
+                          and intent_id in (select i.id from payment_intent i join ride_order o on o.id = i.order_id
+                                            where o.city_id = :city)""")
+                .param("city", cityId).update();
+        testPayments.resetGateway();
+    }
+
     private Actor riderWithCard() {
         Actor rider = rides.client();
         jdbc.sql("""
