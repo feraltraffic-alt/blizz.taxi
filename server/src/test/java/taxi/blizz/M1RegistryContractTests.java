@@ -46,9 +46,11 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  * <li>{@code packages/contracts/m1-registry.yaml} names every row of the spec's table, in order. Each row's operations
  * exist in the contracts; what is not built yet is listed with an owner question or an issue.</li>
+ * <li>Every operation of the API contracts has a handler in the server, by its method and path pattern. A request
+ * alone cannot show that: an unknown path still passes the token check (the static-resource handler takes it), so a
+ * missing operation answers 401 like a real one.</li>
  * <li>Scope: every operation of the rider, driver, operator and admin contracts refuses a request without a token and
- * one with another audience's token with 401 {@code UNAUTHENTICATED} in the Problem shape. A 404, 405 or 415 would
- * be a contract operation the server does not serve.</li>
+ * one with another audience's token with 401 {@code UNAUTHENTICATED} in the Problem shape.</li>
  * <li>Idempotency: every registry command carries a {@code command_id}; {@code POST /orders} repeated after a lost
  * answer returns the original order, and the same key with another body is refused.</li>
  * </ul>
@@ -167,6 +169,39 @@ class M1RegistryContractTests {
                 assertThat((String) gap.get("ref")).as(row.row() + ": an owner question or an issue").matches(REF);
             }
         }
+    }
+
+    // ------------------------------------------------------------------ every contract operation is served
+
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping handlers;
+
+    @Test
+    void everyContractOperationHasAHandlerInTheServer() {
+        java.util.Set<String> served = new java.util.TreeSet<>();
+        handlers.getHandlerMethods().keySet().forEach(info -> {
+            var methods = info.getMethodsCondition().getMethods();
+            for (String pattern : info.getPatternValues()) {
+                String path = pattern.replaceAll("\\{[^}]+}", "{}");
+                if (methods.isEmpty()) {
+                    served.add("* " + path);
+                }
+                methods.forEach(m -> served.add(m.name() + " " + path));
+            }
+        });
+        List<String> unserved = new ArrayList<>();
+        for (String contract : List.of("rider.v1.yaml", "driver.v1.yaml", "operator.v1.yaml", "admin.v1.yaml",
+                "auth.v1.yaml", "config.v1.yaml", "providers.v1.yaml")) {
+            for (IsolationContract.Operation op : IsolationContract.allOperations(contract)) {
+                String path = op.path().replaceAll("\\{[^}]+}", "{}");
+                if (!served.contains(op.method().toUpperCase() + " " + path) && !served.contains("* " + path)) {
+                    unserved.add(contract + ": " + op);
+                }
+            }
+        }
+        assertThat(served).as("handler mappings found").hasSizeGreaterThan(100);
+        assertThat(unserved).as("contract operations the server has no handler for").isEmpty();
     }
 
     // ------------------------------------------------------------------ scope
