@@ -49,6 +49,8 @@ jobs:
           cache: npm
           cache-dependency-path: packages/contracts/package-lock.json
       - run: scripts/contracts-lint.sh
+      - name: Java line length (ratchet, issue 149)
+        run: node scripts/audit/java-line-length.mjs
 
   security:
     name: Security (dependencies, secrets, image)
