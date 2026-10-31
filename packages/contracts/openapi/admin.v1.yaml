@@ -126,6 +126,8 @@ paths:
       description: |
         Super admin only. First and last name, at least one contact (phone, e-mail, Telegram), login, initial
         password (must be changed at the first sign-in), role, ticked functions and cities. A taken login → 409.
+        The new account's rights need the acting super admin's own password (REQ-ADM-10): missing or wrong → 403
+        ACCESS_DENIED, counted like a failed sign-in and audited as staff.create.denied.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -186,7 +188,10 @@ paths:
       operationId: updateStaff
       summary: Change names, contacts, role, functions or cities
       description: |
-        Super admin only. The last active super admin cannot lose the role.
+        Super admin only. The last active super admin cannot lose the role. A change of the role, the functions or
+        the cities needs the acting super admin's own password (REQ-ADM-10, issue #142): missing or wrong → 403
+        ACCESS_DENIED, counted like a failed sign-in (enough failures lock the account) and audited as
+        staff.update.denied. Names and contacts alone need no password.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -306,7 +311,7 @@ paths:
       operationId: grantEmergencyAccess
       summary: Give emergency access
       description: >-
-        Super admins only. Extra permissions from the catalog for 5 minutes to 8 hours, with a reason; never to oneself. Counted by every permission check while it lasts; ends by itself or by revoking. Audited.
+        Super admins only. Extra permissions from the catalog for 5 minutes to 8 hours, with a reason; never to oneself. Counted by every permission check while it lasts; ends by itself or by revoking. Audited. Needs the acting super admin's own password (REQ-ADM-10): missing or wrong → 403 ACCESS_DENIED, counted like a failed sign-in and audited as staff.emergency_grant.denied. Revoking needs none.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -7293,7 +7298,7 @@ components:
     CreateStaff:
       type: object
       additionalProperties: false
-      required: [command_id, login, initial_password, profile, reason]
+      required: [command_id, login, initial_password, profile, reason, password]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -7308,6 +7313,12 @@ components:
           $ref: "#/components/schemas/Profile"
         reason:
           type: string
+        password:
+          description: >-
+            The acting super admin's own password (REQ-ADM-10). Required. Never stored or logged.
+          type: string
+          format: password
+          maxLength: 128
 
     UpdateStaff:
       type: object
@@ -7324,6 +7335,13 @@ components:
           $ref: "#/components/schemas/Profile"
         reason:
           type: string
+        password:
+          description: >-
+            The acting super admin's own password (REQ-ADM-10). Required when the role, the functions or the cities
+            change. Never stored or logged.
+          type: string
+          format: password
+          maxLength: 128
 
     ChangeStaff:
       type: object
