@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Duplicates of the service's own addresses (issue #142, part D3; REQ-GEO-14): staff add a house in Kyiv; the same
-# house 10 m away is refused with 409 naming the first; saved as distinct with a reason it is accepted. Both are
-# hidden at the end.
+# house 10 m away is refused with 409 naming the first; saved as distinct with a reason it is accepted. Hidden and
+# restored, it is refused again unless restored as distinct. Both are hidden at the end.
 source "$(dirname "$0")/../lib.sh"
 
 ADMIN=$(admin_token)
@@ -43,4 +43,18 @@ SECOND=$(api POST /api/admin/v1/addresses "$ADMIN" "{\"command_id\":\"$(uuid)\",
 expect 201
 CREATED+=("$SECOND")
 [[ "$SECOND" != "$FIRST" ]]
-note "Done: Хрещатик, $HOUSE added, its duplicate refused with duplicate_of, then saved as distinct; both hidden."
+
+say "Hidden, then restored: a duplicate again unless restored as distinct"
+VERSION=$(api GET "/api/admin/v1/addresses/$SECOND" "$ADMIN" | jq -r .version); expect 200
+VERSION=$(api POST "/api/admin/v1/addresses/$SECOND/hide" "$ADMIN" "{\"command_id\":\"$(uuid)\",
+  \"expected_version\":$VERSION,\"reason\":\"Sandbox: closed for repairs\"}" | jq -r .version)
+expect 200
+api POST "/api/admin/v1/addresses/$SECOND/restore" "$ADMIN" "{\"command_id\":\"$(uuid)\",
+  \"expected_version\":$VERSION,\"reason\":\"Sandbox: open again\"}" >/tmp/sandbox-address.json
+expect 409
+jq -e --arg id "$FIRST" '.duplicate_of == $id' /tmp/sandbox-address.json >/dev/null
+api POST "/api/admin/v1/addresses/$SECOND/restore" "$ADMIN" "{\"command_id\":\"$(uuid)\",
+  \"expected_version\":$VERSION,\"reason\":\"Sandbox: the yard entrance is open again\",\"distinct\":true}" \
+  | jq -e '.visibility == "ACTIVE"' >/dev/null
+expect 200
+note "Done: Хрещатик, $HOUSE added, its duplicate refused with duplicate_of, saved and restored only as distinct; both hidden."
