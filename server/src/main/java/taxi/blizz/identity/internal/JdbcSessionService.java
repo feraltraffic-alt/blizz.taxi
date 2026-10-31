@@ -41,9 +41,10 @@ class JdbcSessionService implements SessionService {
     private static final Set<String> CLIENT_STATES = Set.of("ACTIVE", "DELETION_PENDING");
     /**
      * A blocked driver keeps a limited session to finish the current trip and reach support (REQ-DS-01, issue #141);
-     * the API door lets it do only that ({@code DriverLimitedSession}).
+     * the API door lets it do only that ({@code DriverLimitedSession}). So does a driver who asked to delete the
+     * account, who may also withdraw the request (issue #144).
      */
-    private static final Set<String> DRIVER_STATES = Set.of("ACTIVE", "BLOCKED");
+    private static final Set<String> DRIVER_STATES = Set.of("ACTIVE", "BLOCKED", "DELETION_PENDING");
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;

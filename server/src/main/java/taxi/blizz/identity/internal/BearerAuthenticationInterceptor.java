@@ -43,12 +43,17 @@ class BearerAuthenticationInterceptor implements HandlerInterceptor {
             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
             throw new DomainException(ErrorCode.UNAUTHENTICATED, "A valid access token is required");
         }
-        // A blocked driver keeps a limited session (REQ-DS-01, issue #141): reads, the current trip, support.
-        if (claims.get().actor().type() == SubjectType.DRIVER
-                && "BLOCKED".equals(accounts.accountState(claims.get().actor()).orElse(null))
-                && !DriverLimitedSession.allows(request.getMethod(),
-                        request.getRequestURI().substring(request.getContextPath().length()))) {
-            throw new DomainException(ErrorCode.ACCOUNT_BLOCKED, "The account is blocked: no new work");
+        // A blocked driver keeps a limited session (REQ-DS-01, issue #141): reads, the current trip, support. So does a
+        // driver whose deletion request is pending, who may also withdraw it (issue #144).
+        if (claims.get().actor().type() == SubjectType.DRIVER) {
+            String state = accounts.accountState(claims.get().actor()).orElse(null);
+            boolean blocked = "BLOCKED".equals(state);
+            if ((blocked || "DELETION_PENDING".equals(state)) && !DriverLimitedSession.allows(request.getMethod(),
+                    request.getRequestURI().substring(request.getContextPath().length()))) {
+                throw blocked ? new DomainException(ErrorCode.ACCOUNT_BLOCKED, "The account is blocked: no new work")
+                        : new DomainException(ErrorCode.ACCOUNT_NOT_ACTIVE,
+                                "The account is waiting for its deletion: no new work");
+            }
         }
         request.setAttribute(CLAIMS_ATTRIBUTE, claims.get());
         return true;

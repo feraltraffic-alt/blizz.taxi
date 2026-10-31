@@ -53,4 +53,7 @@ public interface CashDisputes {
     }
 
     Dispute decide(Actor staff, UUID commandId, UUID orderId, long expectedVersion, Decision decision, String reason);
+
+    /** How many cash disputes of the driver's trips are not decided yet; no staff check (issue #144). */
+    int openOf(UUID driverId);
 }

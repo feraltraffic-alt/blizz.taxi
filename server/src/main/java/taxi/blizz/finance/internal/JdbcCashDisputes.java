@@ -199,4 +199,11 @@ class JdbcCashDisputes implements CashDisputes {
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public int openOf(UUID driverId) {
+        return jdbc.sql("select count(*) from cash_dispute where driver_id = :driver and decision is null")
+                .param("driver", driverId).query(Integer.class).single();
+    }
 }

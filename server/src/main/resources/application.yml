@@ -81,6 +81,11 @@ blizz:
     # The erasure journal (REQ-PRV-05, ADR 0013): a directory on durable storage of its own, NOT backed up together
     # with the database, so deletions made after a backup are applied again when that backup is restored.
     erasure-journal-dir: ${ERASURE_JOURNAL_DIR:${java.io.tmpdir}/blizz-erasure-journal}
+  driver:
+    # How long a deleted driver's document files are kept before they are deleted (issue #144): a taxi operator may
+    # have to keep proof of the licence check for years; the owner sets the term (data register, question 5). PT0S:
+    # deleted with the erasure. An ISO-8601 duration, e.g. P1095D.
+    document-keep: ${DRIVER_DOCUMENT_KEEP:PT0S}
   files:
     # Call recordings on a disk of their own (own backup and access rights); empty: below the files directory.
     call-recordings-dir: ${CALL_RECORDINGS_DIR:}

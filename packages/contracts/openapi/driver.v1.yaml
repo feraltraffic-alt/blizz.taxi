@@ -2067,6 +2067,96 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/driver/v1/me/deletion-request/challenge:
+    post:
+      operationId: requestDriverAccountDeletionCode
+      summary: Send a code to confirm the account deletion
+      description: >-
+        Step one of deleting the account (issue #144): a code of purpose ACCOUNT_DELETION goes to the driver's
+        current phone, with the same resend delay and budgets as sign-in. A sign-in code does not confirm a deletion.
+        Open to a blocked driver too.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "201":
+          description: Code sent.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DeletionCodeChallenge"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "./common.yaml#/components/responses/TooManyRequests"
+
+  /api/driver/v1/me/deletion-request:
+    post:
+      operationId: requestDriverAccountDeletion
+      summary: Ask to delete the account
+      description: >-
+        Step two, a command: with the code of step one, ACTIVE or BLOCKED → DELETION_PENDING. Every other session of
+        the driver ends; this one stays, so the app can show the request and offer to cancel it. While the request is
+        pending no new order is offered and the session is limited like a blocked driver's (the current trip, the
+        shift's end, support), other commands answering 403 ACCOUNT_NOT_ACTIVE. Staff complete it by hand once no trip,
+        offer, reservation, debt or open cash dispute is left: the phone, name and language are cleared, the document
+        files deleted; earnings, the ledger, trips and the vehicle stay. Wrong or used code → 422 OTP_INVALID; from
+        another state → 409 STATE_CONFLICT.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionRequestCommand"
+      responses:
+        "200":
+          description: Requested.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DriverAccountDeletionStatus"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/driver/v1/me/deletion-request/cancel:
+    post:
+      operationId: cancelDriverAccountDeletion
+      summary: Withdraw the deletion request
+      description: >-
+        A command: DELETION_PENDING → the state the account had before, as long as staff have not completed the
+        request; otherwise 409 STATE_CONFLICT.
+      tags: [Account]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionCancelCommand"
+      responses:
+        "200":
+          description: Withdrawn.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DriverAccountDeletionStatus"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Legal
     description: Legal texts in force and their acceptance (REQ-PRV-08)

@@ -86,7 +86,7 @@ class RiderErasureTests {
             O dispatch_round: candidates
             N dispatch_round: phase
             O driver: language name phone_normalized
-            N driver: account_state eligibility_rules review_status
+            N driver: account_state deletion_previous_state eligibility_rules review_status
             N driver_balance_top_up: currency kind reason reference
             N driver_capacity: occupancy
             N driver_debt_limit: currency
@@ -248,7 +248,7 @@ class RiderErasureTests {
     }
 
     /** Every column of the schema that can hold text, as the database sees it now. */
-    private List<Column> textColumns() {
+    static List<Column> textColumns(JdbcClient jdbc) {
         return jdbc.sql("""
                         select c.table_name, c.column_name from information_schema.columns c
                         join information_schema.tables t on t.table_schema = c.table_schema
@@ -264,7 +264,7 @@ class RiderErasureTests {
     @Test
     void everyTextColumnOfTheSchemaIsClassified() {
         Map<Column, Character> classes = classification();
-        List<Column> columns = textColumns();
+        List<Column> columns = textColumns(jdbc);
         assertThat(columns).as("columns nobody classified for a deletion").allMatch(classes::containsKey);
         assertThat(classes.keySet()).as("classified columns that no longer exist").allMatch(columns::contains);
         assertThat(classes.values()).allMatch(c -> "RNOK".indexOf(c) >= 0);
@@ -299,12 +299,17 @@ class RiderErasureTests {
                 contact, null, false, null, "Note: " + words, "Gate " + words));
     }
 
-    /** {@code table.column} of every searched column holding one of {@code needles}. */
+    /** {@code table.column} of every searched column holding one of {@code needles}; K columns are not searched. */
     private List<String> holders(List<String> needles) {
         Map<Column, Character> classes = classification();
+        return holders(jdbc, needles, column -> classes.get(column) == Character.valueOf('K'));
+    }
+
+    /** {@code table.column} of every text column but the {@code skipped} holding one of {@code needles}. */
+    static List<String> holders(JdbcClient jdbc, List<String> needles, java.util.function.Predicate<Column> skipped) {
         List<String> found = new ArrayList<>();
-        for (Column column : textColumns()) {
-            if (classes.get(column) == Character.valueOf('K')) {
+        for (Column column : textColumns(jdbc)) {
+            if (skipped.test(column)) {
                 continue;
             }
             String type = jdbc.sql("""

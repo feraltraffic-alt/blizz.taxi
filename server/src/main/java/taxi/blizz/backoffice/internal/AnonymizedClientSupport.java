@@ -48,10 +48,14 @@ class AnonymizedClientSupport implements OutboxHandler {
 
     @Override
     public void handle(OutboxMessage message) {
-        UUID client = json.readValue(message.payload(), Payload.class).clientId();
+        erase(jdbc, files, "CLIENT", json.readValue(message.payload(), Payload.class).clientId());
+    }
+
+    /** The cases a deleted rider or driver ({@code requesterType} CLIENT or DRIVER) opened, as described above. */
+    static void erase(JdbcClient jdbc, FileService files, String requesterType, UUID requester) {
         List<UUID> cases = jdbc.sql("""
-                        select id from support_case where requester_type = 'CLIENT' and requester_id = :client""")
-                .param("client", client).query(UUID.class).list();
+                        select id from support_case where requester_type = :type and requester_id = :requester""")
+                .param("type", requesterType).param("requester", requester).query(UUID.class).list();
         if (cases.isEmpty()) {
             return;
         }

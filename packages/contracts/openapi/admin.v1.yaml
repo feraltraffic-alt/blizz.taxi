@@ -4622,6 +4622,104 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/driver-deletions:
+    get:
+      operationId: listDriverDeletions
+      summary: Drivers' pending deletion requests with what blocks them
+      description: Oldest first; at most 100 per page (issue #144). Needs drivers.delete.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DriverDeletionRequestList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/driver-deletions/{driver_id}/complete:
+    post:
+      operationId: completeDriverDeletion
+      summary: Complete a driver's deletion request
+      description: >-
+        Anonymizes the driver (REQ-PRV-04, issue #144): phone, name and language are cleared, every session and push
+        device ends, the document numbers are cleared and their files deleted (after DRIVER_DOCUMENT_KEEP, by default
+        at once); the driver's chat messages, rating comments and support texts become "[deleted]". Earnings, the
+        ledger, trips and the vehicle stay (AC-24). The phone becomes free: signing in with it creates a new driver.
+        409 DRIVER_HAS_ACTIVE_WORK, DRIVER_HAS_DEBT or DRIVER_HAS_DISPUTE while a blocker exists, STATE_CONFLICT
+        without a pending request. Needs drivers.delete; audited.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionDecisionCommand"
+      responses:
+        "200":
+          description: Completed.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DriverDeletionDecision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/driver-deletions/{driver_id}/reject:
+    post:
+      operationId: rejectDriverDeletion
+      summary: Reject a driver's deletion request
+      description: The account returns to the state it had before the request. Needs drivers.delete; audited.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./privacy.yaml#/components/schemas/DeletionDecisionCommand"
+      responses:
+        "200":
+          description: Rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "./privacy.yaml#/components/schemas/DriverDeletionDecision"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/otp-deliveries:
     get:
       operationId: listOtpDeliveries

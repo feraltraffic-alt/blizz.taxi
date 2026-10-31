@@ -59,6 +59,12 @@ public enum ErrorCode {
     ACCOUNT_BLOCKED(403),
     /** A legal text in force that must be accepted is not (REQ-PRV-08). */
     ACCEPTANCE_REQUIRED(403),
+    /** A driver's deletion cannot be completed while a trip, offer or reservation is open (issue #144). */
+    DRIVER_HAS_ACTIVE_WORK(409),
+    /** A driver's deletion cannot be completed while the driver owes the service money (issue #144). */
+    DRIVER_HAS_DEBT(409),
+    /** A driver's deletion cannot be completed while a cash dispute is not decided (issue #144). */
+    DRIVER_HAS_DISPUTE(409),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),
     /** Wrong, expired, used or exhausted one-time code; deliberately not more specific. */
