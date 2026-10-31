@@ -15,6 +15,13 @@ security:
   - SubjectBearer: []
 
 paths:
+  /api/rider/v1/negative-control/{thing_id}:
+    get:
+      summary: Negative control of the M1 registry test (issue 146); never merged
+      parameters:
+        - {name: thing_id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: never served}
   /ws/v1/rider:
     get:
       operationId: openRiderLiveChannel
