@@ -138,6 +138,14 @@ public interface Integrations {
     /** "Check the connection" of a group; the answer never contains a key. */
     Check check(Actor staff, String group);
 
+    /** {@code instance}: the server that answered, since the breakers are kept per instance. */
+    record Health(String instance, java.time.Instant checkedAt,
+                  List<taxi.blizz.platform.ProviderBreakers.Health> providers) {
+    }
+
+    /** Read-only (registry 22.2 "GET /integration-health", issue #176); needs {@link #MANAGE_PERMISSION}. */
+    Health health(Actor staff);
+
     /** The value set in the panel (decrypted for a secret); empty when not set. For the modules that use it. */
     Optional<String> value(String name);
 

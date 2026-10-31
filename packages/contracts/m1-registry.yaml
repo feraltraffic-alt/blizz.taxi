@@ -122,8 +122,8 @@ rows:
       - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/balance}
       - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/balance/history}
   - row: "Operator | GET /customers/lookup"
-    missing:
-      - {what: "GET /customers/lookup", reason: "The operator API has no targeted customer search; only caller history inside place search.", ref: "#176"}
+    operations:
+      - {contract: operator.v1.yaml, method: get, path: /api/operator/v1/customers/lookup}
   - row: "Operator | POST /quotes; POST /orders"
     operations:
       - {contract: operator.v1.yaml, method: post, path: /api/operator/v1/quotes}
@@ -148,9 +148,8 @@ rows:
   - row: "Admin | POST /cities; PATCH /cities/{id}; POST /cities/{id}/publish"
     operations:
       - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/cities}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/cities/{city_id}/update"}
       - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/cities/{city_id}/publish"}
-    missing:
-      - {what: "PATCH /cities/{id}", reason: "A city draft cannot be edited; its boundary is set only when the draft is created.", ref: "#176"}
   - row: "Admin | POST /tariffs; POST /tariffs/{id}/publish"
     missing:
       - {what: "POST /tariffs", reason: "The tariffs admin API is deferred by the owner.", ref: "#30"}
@@ -185,6 +184,7 @@ rows:
     operations:
       - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/logs/activity}
       - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/logs/changes}
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/integrations/health}
       - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/integrations}
       - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/integrations/{group}/check"}
   - row: "Provider | POST /webhooks/{provider}/{merchantRef}"

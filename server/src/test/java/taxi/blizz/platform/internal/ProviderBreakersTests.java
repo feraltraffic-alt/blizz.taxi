@@ -19,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import taxi.blizz.platform.ProviderBreakers;
 import taxi.blizz.platform.ProviderBreakers.Provider;
 import taxi.blizz.platform.ProviderBreakers.State;
 
@@ -281,4 +282,42 @@ class ProviderBreakersTests {
                     .isInstanceOf(IllegalStateException.class);
         }
     }
+
+    /** Issue #176, part C: the last success and failure per provider, with the failure's kind and no message. */
+    @Test
+    void healthTellsTheStateAndTheLastSuccessAndFailureWithoutAMessage() {
+        assertThat(breakers.health()).extracting(ProviderBreakers.Health::provider)
+                .containsExactly(Provider.values());
+        assertThat(breakers.health()).allSatisfy(h -> {
+            assertThat(h.state()).isEqualTo(State.CLOSED);
+            assertThat(h.lastSuccessAt()).isNull();
+            assertThat(h.lastFailureAt()).isNull();
+            assertThat(h.lastFailureKind()).isNull();
+        });
+
+        answer(Provider.TURBOSMS, "sent", false);
+        Instant succeeded = clock.now;
+        clock.now = clock.now.plusSeconds(5);
+        fail(Provider.TURBOSMS, new java.net.ConnectException("refused by https://user:secret@sms.invalid/"));
+        ProviderBreakers.Health sms = health(Provider.TURBOSMS);
+        assertThat(sms.lastSuccessAt()).isEqualTo(succeeded);
+        assertThat(sms.lastFailureAt()).isEqualTo(clock.now);
+        assertThat(sms.lastFailureKind()).as("the class, never the message").isEqualTo("ConnectException");
+        assertThat(sms.toString()).doesNotContain("secret").doesNotContain("sms.invalid");
+
+        clock.now = clock.now.plusSeconds(5);
+        answer(Provider.TURBOSMS, "HTTP 503", true);
+        assertThat(health(Provider.TURBOSMS).lastFailureKind()).isEqualTo(ProviderBreakers.FAILED_RESULT);
+        assertThat(health(Provider.TURBOSMS).lastFailureAt()).isEqualTo(clock.now);
+        assertThat(health(Provider.TURBOSMS).lastSuccessAt()).as("unchanged by failures").isEqualTo(succeeded);
+        fail(Provider.TURBOSMS, new SocketTimeoutException());
+        assertThat(health(Provider.TURBOSMS).state()).isEqualTo(State.OPEN);
+        assertThat(health(Provider.TURBOSMS).lastFailureKind()).isEqualTo("SocketTimeoutException");
+        assertThat(health(Provider.FCM).lastFailureAt()).as("other providers untouched").isNull();
+    }
+
+    private ProviderBreakers.Health health(Provider provider) {
+        return breakers.health().stream().filter(h -> h.provider() == provider).findFirst().orElseThrow();
+    }
+
 }
