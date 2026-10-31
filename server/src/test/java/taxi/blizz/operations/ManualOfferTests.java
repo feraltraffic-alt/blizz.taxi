@@ -52,6 +52,7 @@ class ManualOfferTests {
     @Autowired FinalFares fares;
     @Autowired DispatchWorker worker;
     @Autowired JdbcClient jdbc;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
 
     TestRides rides;
     UUID city;
@@ -120,7 +121,7 @@ class ManualOfferTests {
         Actor dispatcher = staff(Orders.OFFER_PERMISSION);
         TestRides.Driver otherCityDriver = rides.driverNear(new GeoPoint(-39.5, 154.01));
         TestRides.Driver busy = rides.driverNear(TestRides.north(PICKUP, 1500));
-        rides.assigned(otherCity, busy, new GeoPoint(-39.5, 154.2), new GeoPoint(-39.45, 154.25));
+        rides.assigned(city, busy, TestRides.north(PICKUP, 2500), DROPOFF);
         TestRides.Driver stale = rides.driverNear(TestRides.north(PICKUP, 1600));
         jdbc.sql("""
                         update work_session set last_location_at = now() - interval '1 minute'
@@ -170,7 +171,9 @@ class ManualOfferTests {
                 OrderView waiting = orderNobodyNear();
                 TestRides.Driver driver = rides.driverNear(TestRides.north(PICKUP, 1500));
                 Actor rider = rides.client();
-                long delay = (round % 3) * 5L;
+                // Creating the other order takes longer than the manual offer: holding the manual one back 0-180 ms
+                // in turn lets both sides win.
+                long delay = (round % 4) * 60L;
                 CountDownLatch start = new CountDownLatch(1);
                 Future<?> manual = pool.submit(() -> {
                     start.await();
@@ -210,6 +213,45 @@ class ManualOfferTests {
         assertThat(manualWon + automaticWon).isEqualTo(30);
         assertThat(manualWon).as("the manual offer won some rounds").isPositive();
         assertThat(automaticWon).as("the automatic offer won some rounds").isPositive();
+    }
+
+    @Test
+    void aManualOfferThatWaitsForTheDriversCapacityReadsItAgainAfterTheWait() throws Exception {
+        OrderView order = orderNobodyNear();
+        TestRides.Driver driver = rides.driverNear(TestRides.north(PICKUP, 1500));
+        Actor dispatcher = staff(Orders.OFFER_PERMISSION);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // Another offer in flight: it holds the driver's capacity and makes it OFFERED, not yet committed.
+            Future<?> other = pool.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("select driver_id from driver_capacity where driver_id = :d for update")
+                        .param("d", driver.actor().id()).query(UUID.class).single();
+                jdbc.sql("update driver_capacity set occupancy = 'OFFERED' where driver_id = :d")
+                        .param("d", driver.actor().id()).update();
+                locked.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            locked.await();
+            Future<OrderView> manual = pool.submit(() -> orders.manualOffer(dispatcher, UUID.randomUUID(), order.id(),
+                    driver.actor().id(), "Waits for the lock"));
+            Thread.sleep(500); // the manual offer has read the driver as free and waits for the capacity lock
+            release.countDown();
+            other.get();
+
+            assertThatThrownBy(manual::get).hasCauseInstanceOf(DomainException.class)
+                    .satisfies(e -> assertThat(((DomainException) e.getCause()).code())
+                            .isEqualTo(ErrorCode.DRIVER_BUSY));
+            assertThat(jdbc.sql("select count(*) from offer where order_id = :o").param("o", order.id())
+                    .query(Integer.class).single()).isZero();
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     // ------------------------------------------------------------ the offer's terms (REQ-DRV-07)

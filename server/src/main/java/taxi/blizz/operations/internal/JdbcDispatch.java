@@ -46,11 +46,13 @@ class JdbcDispatch implements Dispatch {
     private final WorkSessions workSessions;
     private final DispatchProperties properties;
     private final AssignmentCommitter committer;
+    private final taxi.blizz.pricing.FinalFares fares;
     private final GeoZones zones;
 
     JdbcDispatch(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
                  WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer,
-                 taxi.blizz.platform.RateLimits rateLimits, GeoZones zones) {
+                 taxi.blizz.platform.RateLimits rateLimits, GeoZones zones, taxi.blizz.pricing.FinalFares fares) {
+        this.fares = fares;
         this.zones = zones;
 
         this.rateLimits = rateLimits;
@@ -67,20 +69,30 @@ class JdbcDispatch implements Dispatch {
     @Transactional(readOnly = true)
     public List<OfferView> offers(Actor driver) {
         requireDriver(driver);
+        OffsetDateTime now = core.now();
         return jdbc.sql("""
                         select f.id, f.order_id, f.expires_at, f.distance_m, o.vehicle_class, ST_Y(o.pickup) as lat,
                                ST_X(o.pickup) as lon, o.pickup_label, o.dropoff_label, o.payment_method, o.price_minor,
-                               o.currency
+                               o.currency, o.quote_id, o.comment, o.entrance
                         from offer f join ride_order o on o.id = f.order_id
                         where f.driver_id = :driver and f.state = 'OPEN' and f.expires_at > :now""")
                 .param("driver", driver.id())
-                .param("now", core.now())
-                .query((rs, i) -> new OfferView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
-                        rs.getObject("expires_at", OffsetDateTime.class), null, 0, rs.getString("vehicle_class"),
-                        new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")), rs.getString("pickup_label"),
-                        rs.getString("dropoff_label"), PaymentMethod.valueOf(rs.getString("payment_method")),
-                        (Long) rs.getObject("price_minor"), rs.getString("currency"),
-                        (Integer) rs.getObject("distance_m"), null, null, null, null))
+                .param("now", now)
+                .query((rs, i) -> {
+                    OffsetDateTime expiresAt = rs.getObject("expires_at", OffsetDateTime.class);
+                    Long price = (Long) rs.getObject("price_minor");
+                    UUID quote = rs.getObject("quote_id", UUID.class);
+                    // The settlement's own split of the agreed price (REQ-DRV-07): an estimate, waiting would add.
+                    Long earnings = price == null || quote == null ? null
+                            : fares.split(quote, price).driverShareMinor();
+                    return new OfferView(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
+                            expiresAt, now, Math.max(0, java.time.Duration.between(now, expiresAt).toSeconds()),
+                            rs.getString("vehicle_class"), new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")),
+                            rs.getString("pickup_label"), rs.getString("dropoff_label"),
+                            PaymentMethod.valueOf(rs.getString("payment_method")), price, rs.getString("currency"),
+                            (Integer) rs.getObject("distance_m"), OfferView.PRICE_FIXED, earnings,
+                            rs.getString("comment"), rs.getString("entrance"));
+                })
                 .list();
     }
 

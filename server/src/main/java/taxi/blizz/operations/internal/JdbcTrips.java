@@ -455,7 +455,7 @@ class JdbcTrips implements Trips {
                                ST_X(o.pickup) as plon, o.pickup_label, ST_Y(o.dropoff) as dlat, ST_X(o.dropoff) as dlon,
                                o.dropoff_label, o.payment_method, o.price_minor, o.currency, t.arrived_at, t.started_at,
                                t.completed_at, t.needs_review, o.wallet_minor, o.discount_minor,
-                               c.name as contact_name, c.phone as contact_phone
+                               c.name as contact_name, c.phone as contact_phone, o.comment, o.entrance
                         from trip t join ride_order o on o.id = t.order_id
                         left join order_contact c on c.order_id = o.id
                         where t.id = :id""")
@@ -470,7 +470,8 @@ class JdbcTrips implements Trips {
                         rs.getObject("completed_at", OffsetDateTime.class), rs.getBoolean("needs_review"),
                         rs.getLong("wallet_minor"), rs.getLong("discount_minor"),
                         recipient(rs.getString("contact_name"), rs.getString("contact_phone"),
-                                rs.getObject("completed_at", OffsetDateTime.class)), null, null))
+                                rs.getObject("completed_at", OffsetDateTime.class)), rs.getString("comment"),
+                        rs.getString("entrance")))
                 .single();
     }
 

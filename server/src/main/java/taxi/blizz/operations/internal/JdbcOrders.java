@@ -73,6 +73,7 @@ class JdbcOrders implements Orders {
     static final int MAX_SCHEDULED_PER_PAYER = 5;
 
     private final FeatureFlags flags;
+    private final DispatchProperties dispatchProperties;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
@@ -80,8 +81,9 @@ class JdbcOrders implements Orders {
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
-               FeatureFlags flags) {
+               FeatureFlags flags, DispatchProperties dispatchProperties) {
 
+        this.dispatchProperties = dispatchProperties;
         this.flags = flags;
         this.cityOperations = cityOperations;
         this.rateLimits = rateLimits;
@@ -115,6 +117,8 @@ class JdbcOrders implements Orders {
                     "A contact is the caller of a phone order or the recipient of a rider's order");
         }
         String channel = authorizeCreate(actor, order, city);
+        String comment = note(order.comment(), 500, "comment");
+        String entrance = note(order.entrance(), 100, "entrance");
         // The city's pause, working hours (at the pickup time of an order for later) and payment methods (REQ-TEN-03/06).
         cityOperations.requireAccepting(city, order.pickupAt() == null ? core.now()
                 : order.pickupAt().atOffset(java.time.ZoneOffset.UTC),
@@ -200,13 +204,15 @@ class JdbcOrders implements Orders {
                                                         dropoff_label, payment_method, selected_payment_method,
                                                         payment_state, price_minor, currency,
                                                         quote_id, source_ref, status, pickup_at, preorder, release_at,
-                                                        terminal_fallback_cash, wallet_minor, discount_minor, created_at,
-                                                        updated_at)
+                                                        terminal_fallback_cash, wallet_minor, discount_minor, comment,
+                                                        entrance, created_at, updated_at)
                                 values (:id, :channel, :payer, :createdByType, :createdById, :cityId, :class,
                                         ST_SetSRID(ST_MakePoint(:pickupLon, :pickupLat), 4326), :pickupLabel,
                                         ST_SetSRID(ST_MakePoint(:dropoffLon, :dropoffLat), 4326), :dropoffLabel,
                                         :payment, :selectedPayment, :paymentState, :price, :currency, :quoteId, :sourceRef, :status, :pickupAt, :preorder,
-                                        :releaseAt, :fallback, :wallet, :discount, :now, :now)""")
+                                        :releaseAt, :fallback, :wallet, :discount, :comment, :entrance, :now, :now)""")
+                        .param("comment", comment)
+                        .param("entrance", entrance)
                         // A card order waits for the hold before anything else (REQ-PAY-01, ADR 0008).
                         .param("status", cardHold ? "AWAITING_PAYMENT" : preorder ? "SCHEDULED" : "READY")
                         .param("pickupAt", pickupAt)
@@ -535,9 +541,57 @@ class JdbcOrders implements Orders {
     record RevokeRequest(UUID orderId, long expectedVersion, String reason) {
     }
 
+    record ManualOfferRequest(UUID orderId, UUID driverId, String reason) {
+    }
+
     @Override
     public OrderView manualOffer(Actor staffActor, UUID commandId, UUID orderId, UUID driverId, String reason) {
-        throw new UnsupportedOperationException("issue #143: the manual offer comes in the next commit");
+        if (staffActor.type() != SubjectType.STAFF) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only staff can offer an order to a driver");
+        }
+        if (driverId == null || reason == null || reason.isBlank()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A driver and a reason are required");
+        }
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        requireStaff(staffActor, OFFER_PERMISSION, cityId);
+        String why = reason.strip();
+        return commands.execute(new CommandKey(staffActor, "order.manual-offer", commandId),
+                new ManualOfferRequest(orderId, driverId, why), OrderView.class, () -> {
+                    // The order first, then the driver's capacity: the lock order of every offer and accept.
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (!"SEARCHING".equals(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a searching order is offered");
+                    }
+                    DispatchEngine.Attempt attempt = engine.liveAttempt(orderId)
+                            .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The order is not searching"));
+                    int open = jdbc.sql("select count(*) from offer where order_id = :id and state = 'OPEN'")
+                            .param("id", orderId).query(Integer.class).single();
+                    if (open > 0) {
+                        // One personal offer per order (M1); someone else's is never revoked for this.
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The order has an open offer");
+                    }
+                    int widest = dispatchProperties.radiiMeters().stream().mapToInt(Integer::intValue).max().orElse(0);
+                    OrderCore.Candidate candidate = core.candidates(orderId, widest, 1, false, driverId).stream()
+                            .findFirst().orElseThrow(() -> new DomainException(ErrorCode.DRIVER_NOT_ELIGIBLE,
+                                    whyNotCandidate(orderId, widest, driverId)));
+                    OrderCore.Capacity capacity = core.lockCapacity(driverId);
+                    if (!"FREE".equals(capacity.occupancy()) || !core.accepting(driverId)) {
+                        throw new DomainException(ErrorCode.DRIVER_BUSY, "The driver is not free");
+                    }
+                    UUID offerId = engine.offer(attempt, candidate, core.now(), "MANUAL", staffActor);
+                    audit.record(new AuditEntry(staffActor, "order.manual_offer", "ride_order", orderId.toString(),
+                            why, null, Map.of("driver_id", driverId.toString(), "offer_id", offerId.toString())));
+                    return core.view(orderId);
+                });
+    }
+
+    /** The first check that leaves the driver out, as the dispatch journal names it (REQ-DSP-12). */
+    private String whyNotCandidate(UUID orderId, int radius, UUID driverId) {
+        return core.explain(orderId, radius, 1000).stream().filter(c -> c.driverId().equals(driverId))
+                .map(c -> c.reason() == null ? "NOT_A_CANDIDATE" : c.reason())
+                .findFirst().orElse("NOT_ON_THE_LINE_IN_THE_CITY");
     }
 
     @Override
@@ -898,6 +952,18 @@ class JdbcOrders implements Orders {
 
     private void requireStaff(Actor actor, String permission, UUID cityId) {
         staff.require(actor, permission, cityId);
+    }
+
+    /** A note for the driver: blank is none, longer than {@code max} characters is refused (issue #143). */
+    private static String note(String value, int max, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String clean = value.strip();
+        if (clean.length() > max) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The " + field + " is at most " + max + " characters");
+        }
+        return clean;
     }
 
     private static String label(String value) {

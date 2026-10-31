@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import taxi.blizz.platform.Actor;
 
 /**
  * Search state machine of one order (section 11): PERSONAL offers one driver at a time, then
@@ -139,31 +140,41 @@ class DispatchEngine {
                 if (!"FREE".equals(capacity.occupancy()) || !core.accepting(candidate.driverId())) {
                     continue;
                 }
-                OffsetDateTime expiresAt = earliest(now.plus(properties.personalOfferTtl()), attempt.totalDeadline());
-                UUID offerId = UUID.randomUUID();
-                jdbc.sql("""
-                                insert into offer (id, order_id, attempt_id, driver_id, state, distance_m, expires_at,
-                                                   created_at)
-                                values (:id, :orderId, :attemptId, :driverId, 'OPEN', :distance, :expiresAt, :now)""")
-                        .param("id", offerId)
-                        .param("orderId", attempt.orderId())
-                        .param("attemptId", attempt.id())
-                        .param("driverId", candidate.driverId())
-                        .param("distance", candidate.distanceM())
-                        .param("expiresAt", expiresAt)
-                        .param("now", now)
-                        .update();
-                core.setOccupancy(candidate.driverId(), "OFFERED", null);
-                core.recordEvent(attempt.orderId(), core.touch(attempt.orderId()), "OfferMade", OrderCore.system(),
-                        null, Map.of("offer_id", offerId.toString(), "driver_id", candidate.driverId().toString(),
-                                "distance_m", candidate.distanceM(), "expires_at", expiresAt.toString()));
-                schedule(attempt, expiresAt);
+                offer(attempt, candidate, now, "AUTO", OrderCore.system());
                 journal.round(attempt, widest, considered, candidate.driverId(), now);
                 return true;
             }
         }
         journal.round(attempt, widest, considered, null, now);
         return false;
+    }
+
+    /**
+     * Opens a personal offer to the candidate whose capacity the caller has locked, after the order: the one path of
+     * an automatic and a manual offer (REQ-OPS-04, issue #143). It lasts the personal offer time, never past the
+     * search's total deadline (REQ-DSP-10), and the attempt is due again when it expires.
+     */
+    UUID offer(Attempt attempt, OrderCore.Candidate candidate, OffsetDateTime now, String source, Actor actor) {
+        OffsetDateTime expiresAt = earliest(now.plus(properties.personalOfferTtl()), attempt.totalDeadline());
+        UUID offerId = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into offer (id, order_id, attempt_id, driver_id, state, distance_m, expires_at,
+                                           created_at)
+                        values (:id, :orderId, :attemptId, :driverId, 'OPEN', :distance, :expiresAt, :now)""")
+                .param("id", offerId)
+                .param("orderId", attempt.orderId())
+                .param("attemptId", attempt.id())
+                .param("driverId", candidate.driverId())
+                .param("distance", candidate.distanceM())
+                .param("expiresAt", expiresAt)
+                .param("now", now)
+                .update();
+        core.setOccupancy(candidate.driverId(), "OFFERED", null);
+        core.recordEvent(attempt.orderId(), core.touch(attempt.orderId()), "OfferMade", actor, null,
+                Map.of("offer_id", offerId.toString(), "driver_id", candidate.driverId().toString(),
+                        "distance_m", candidate.distanceM(), "expires_at", expiresAt.toString(), "source", source));
+        schedule(attempt, expiresAt);
+        return offerId;
     }
 
     /** PERSONAL → BROADCAST; an open personal offer is revoked in the same transaction (REQ-DSP-06). */

@@ -90,7 +90,8 @@ class OperatorOrderController {
                             @NotNull GeoPoint dropoff, @Size(max = 300) String dropoffLabel,
                             @NotNull PaymentMethod paymentMethod, @Size(max = 200) String callRef,
                             @NotNull @Valid CallerInput caller, java.time.Instant pickupAt,
-                            Boolean terminalFallbackToCash, UUID callId, Boolean linkAgain) {
+                            Boolean terminalFallbackToCash, UUID callId, Boolean linkAgain,
+                            @Size(max = 500) String comment, @Size(max = 100) String entrance) {
     }
 
     record CancelRequest(@NotNull UUID commandId, @NotNull Long expectedVersion,
@@ -111,7 +112,9 @@ class OperatorOrderController {
                              Long finalPriceMinor, String currency, String searchPhase,
                              AssignmentView assignment, OffsetDateTime createdAt, CallerView caller,
                              OrderView.Cancellation cancellation, OffsetDateTime pickupAt, boolean preorder,
-                             taxi.blizz.operations.Preorders.Holder reservation, UUID relatedOrderId) {
+                             taxi.blizz.operations.Preorders.Holder reservation, UUID relatedOrderId,
+                             OrderView.DriverCard driver, OrderView.DriverChange driverChange, String comment,
+                             String entrance) {
     }
 
     record Timeline(List<Orders.TimelineEntry> events, taxi.blizz.operations.DispatchJournal.Journal dispatch) {
@@ -150,7 +153,7 @@ class OperatorOrderController {
         CreateOrder request = new CreateOrder(null,
                 body.vehicleClass(), body.pickup(), body.pickupLabel(), body.dropoff(), body.dropoffLabel(),
                 body.paymentMethod(), body.quoteId(), OrderChannel.PHONE, body.callRef(), caller, body.pickupAt(),
-                Boolean.TRUE.equals(body.terminalFallbackToCash()));
+                Boolean.TRUE.equals(body.terminalFallbackToCash()), null, body.comment(), body.entrance());
         // Made during an incoming call: linked to it (issue #64); a phone order without a call works as before.
         OrderView order = body.callId() == null
                 ? orders.create(claims.actor(), body.commandId(), request)
@@ -223,6 +226,16 @@ class OperatorOrderController {
         return new InterruptedView(view(result.order()), result.followUp() == null ? null : view(result.followUp()));
     }
 
+    record ManualOfferRequest(@NotNull UUID commandId, @NotNull UUID driverId, @NotBlank @Size(max = 500) String reason) {
+    }
+
+    /** A dispatcher offers the order to a chosen driver (REQ-OPS-04, issue #143). */
+    @PostMapping("/orders/{orderId}/manual-offers")
+    OperatorOrderView manualOffer(AccessClaims claims, @PathVariable UUID orderId,
+                                  @Valid @RequestBody ManualOfferRequest body) {
+        return view(orders.manualOffer(claims.actor(), body.commandId(), orderId, body.driverId(), body.reason()));
+    }
+
     @PostMapping("/orders/{orderId}/revoke-assignment")
     OperatorOrderView revoke(AccessClaims claims, @PathVariable UUID orderId,
                              @Valid @RequestBody RevokeRequest body) {
@@ -254,7 +267,7 @@ class OperatorOrderController {
                 order.paymentState(), order.priceMinor(), order.finalPriceMinor(), order.currency(), order.searchPhase(),
                 order.assignment(), order.createdAt(), contact(order.id()), order.cancellation(), order.pickupAt(),
                 order.preorder(), "SCHEDULED".equals(order.status()) ? preorders.holder(order.id()).orElse(null) : null,
-                order.relatedOrderId());
+                order.relatedOrderId(), order.driver(), order.driverChange(), order.comment(), order.entrance());
     }
 
     private CallerView contact(UUID orderId) {
