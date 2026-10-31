@@ -675,6 +675,16 @@ class JdbcOrders implements Orders {
     }
 
     @Override
+    public List<Found> search(Actor staffActor, Search search, PageCursor after, int limit) {
+        return List.of();
+    }
+
+    @Override
+    public Overview overview(Actor staffActor, UUID cityId, java.time.LocalDate date) {
+        throw new UnsupportedOperationException("issue #142");
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<HistoryItem> history(Actor payer, PageCursor after, int limit) {
         if (payer.type() != SubjectType.CLIENT) {
