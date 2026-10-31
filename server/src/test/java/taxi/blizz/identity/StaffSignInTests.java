@@ -60,6 +60,8 @@ class StaffSignInTests {
     WebApplicationContext context;
     @Autowired
     JsonMapper json;
+    @Autowired
+    EmergencyAccess emergency;
 
     MockMvc mvc;
     Actor superAdmin;
@@ -128,6 +130,106 @@ class StaffSignInTests {
 
     private String uniqueLogin(String prefix) {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    // ------------------------------------------------------------ REQ-ADM-10: the password for rights (E5)
+
+    private int failedSignIns(Actor staff) {
+        return jdbc.sql("select failed_sign_ins from staff_user where id = :id").param("id", staff.id())
+                .query(Integer.class).single();
+    }
+
+    private long denied(String action, String resource) {
+        return jdbc.sql("""
+                        select count(*) from audit_log
+                        where action = :action and resource_id = :resource and actor_id = :actor""")
+                .param("action", action).param("resource", resource).param("actor", superAdmin.id())
+                .query(Long.class).single();
+    }
+
+    @Test
+    void aRightsChangeWithoutThePasswordOrWithAWrongOneIsRefusedCountedAndAudited() {
+        StaffMember member = operator(uniqueLogin("rights"), "rights-password-123", "orders.view");
+        Profile more = new Profile("Olena", "Shevchenko", new Contacts(null, "olena@example.invalid", "@olena_ops"),
+                Role.ADMIN, List.of("orders.view", "fares.correct"), false, List.of(cityA, cityB));
+        // Each of role, permissions and cities alone is a rights change.
+        Profile base = member.profile();
+        for (Profile changed : List.of(
+                new Profile(base.firstName(), base.lastName(), base.contacts(), Role.ADMIN, base.permissions(),
+                        base.allCities(), base.cityIds()),
+                new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(),
+                        List.of("orders.view", "orders.reassign"), base.allCities(), base.cityIds()),
+                new Profile(base.firstName(), base.lastName(), base.contacts(), base.role(), base.permissions(),
+                        true, List.of()))) {
+            assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), changed,
+                    "One right", null), ErrorCode.ACCESS_DENIED);
+        }
+        // Five failures in a row lock the account, as at sign-in; start the count again for what follows.
+        jdbc.sql("update staff_user set failed_sign_ins = 0 where id = :id").param("id", superAdmin.id()).update();
+
+        assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
+                "Promote", null), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
+                "Promote", "not-the-password"), ErrorCode.ACCESS_DENIED);
+
+        assertThat(directory.get(superAdmin, member.id())).as("nothing changed").isEqualTo(member);
+        assertThat(failedSignIns(superAdmin)).as("both counted like failed sign-ins").isEqualTo(2);
+        assertThat(denied("staff.update.denied", member.id().toString()))
+                .as("audited although refused").isEqualTo(5);
+
+        StaffMember promoted = directory.update(superAdmin, UUID.randomUUID(), member.id(), member.version(), more,
+                "Promote", SUPER_PASSWORD);
+        assertThat(promoted.profile().role()).isEqualTo(Role.ADMIN);
+        assertThat(failedSignIns(superAdmin)).as("the right password resets the count").isZero();
+
+        // Names and contacts alone need no password.
+        StaffMember renamed = directory.update(superAdmin, UUID.randomUUID(), member.id(), promoted.version(),
+                new Profile("Olha", "Shevchenko", new Contacts("+380501112233", null, null), more.role(),
+                        more.permissions(), more.allCities(), more.cityIds()), "Married name", null);
+        assertThat(renamed.profile().firstName()).isEqualTo("Olha");
+    }
+
+    @Test
+    void aNewStaffMemberAndEmergencyAccessNeedThePasswordToo() {
+        String login = uniqueLogin("no-password");
+        assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), login, "some-password-123",
+                operatorProfile("orders.view"), "New operator", null), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> directory.create(superAdmin, UUID.randomUUID(), login, "some-password-123",
+                operatorProfile("orders.view"), "New operator", "wrong-password"), ErrorCode.ACCESS_DENIED);
+        assertThat(jdbc.sql("select count(*) from staff_user where login = :login").param("login", login)
+                .query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("""
+                        select count(*) from audit_log
+                        where action = 'staff.create.denied' and actor_id = :actor and after::text like :login""")
+                .param("actor", superAdmin.id()).param("login", "%" + login + "%").query(Long.class).single())
+                .isEqualTo(2);
+
+        StaffMember clerk = operator(uniqueLogin("clerk"), "clerk-password-123");
+        assertCode(() -> emergency.grant(superAdmin, UUID.randomUUID(), clerk.id(), java.util.Set.of("orders.view"),
+                true, null, java.time.Duration.ofMinutes(30), "Night incident: owner unreachable", null),
+                ErrorCode.ACCESS_DENIED);
+        assertThat(emergency.list(superAdmin, false)).noneMatch(g -> g.staffId().equals(clerk.id()));
+        assertThat(denied("staff.emergency_grant.denied", clerk.id().toString())).isOne();
+        assertThat(emergency.grant(superAdmin, UUID.randomUUID(), clerk.id(), java.util.Set.of("orders.view"),
+                true, null, java.time.Duration.ofMinutes(30), "Night incident: owner unreachable", SUPER_PASSWORD)
+                .active()).isTrue();
+    }
+
+    @Test
+    void overHttpARightsChangeWithoutThePasswordIs403() throws Exception {
+        StaffMember member = operator(uniqueLogin("http-rights"), "http-rights-password-123");
+        String root = signIn.signIn(superLogin, SUPER_PASSWORD, ApiAudience.ADMIN, null, null).session().accessToken();
+        Map<String, Object> profile = Map.of("first_name", "Olena", "last_name", "Shevchenko",
+                "contacts", Map.of("email", "olena@example.invalid"), "role", "ADMIN",
+                "permissions", List.of("orders.view"), "all_cities", false, "city_ids", List.of(cityA));
+        MvcResult refused = postJson("/api/admin/v1/staff/" + member.id() + "/update", root,
+                Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(), "profile", profile,
+                        "reason", "Promote"));
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(body(refused)).containsEntry("code", "ACCESS_DENIED");
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/update", root,
+                Map.of("command_id", UUID.randomUUID(), "expected_version", member.version(), "profile", profile,
+                        "reason", "Promote", "password", SUPER_PASSWORD)).getResponse().getStatus()).isEqualTo(200);
     }
 
     // ------------------------------------------------------------ the whole path over HTTP
