@@ -26,6 +26,7 @@ class FakeProvider extends WayForPayProvider {
         private final Map<String, Map<String, Map<String, Object>>> injected = new ConcurrentHashMap<>();
         private final Map<String, Map<String, Object>> statementOverrides = new ConcurrentHashMap<>();
         private final Deque<String> script = new ArrayDeque<>();
+        private final Map<String, Deque<String>> byToken = new ConcurrentHashMap<>();
         private final Map<String, String> statusOf = new ConcurrentHashMap<>();
         private final List<Map<String, Object>> requests = new ArrayList<>();
 
@@ -177,7 +178,16 @@ class FakeProvider extends WayForPayProvider {
 
         synchronized void reset() {
             script.clear();
+            byToken.clear();
             requests.clear();
+        }
+
+        /**
+         * Answers for the next requests that use this saved card's token (the sandbox's scenarios, issue #140): they
+         * go before the shared script, so other scenarios and background checks never take them.
+         */
+        synchronized void nextForToken(String token, String... answers) {
+            byToken.computeIfAbsent(token, ignored -> new ArrayDeque<>()).addAll(List.of(answers));
         }
 
         @Override
@@ -193,7 +203,8 @@ class FakeProvider extends WayForPayProvider {
             String account = (String) body.get("merchantAccount");
             String type = (String) body.get("transactionType");
             String reference = (String) body.get("orderReference");
-            String scripted = script.poll();
+            Deque<String> ofCard = body.get("recToken") instanceof String token ? byToken.get(token) : null;
+            String scripted = ofCard != null && !ofCard.isEmpty() ? ofCard.poll() : script.poll();
             if ("TIMEOUT".equals(scripted)) {
                 // The request never reached the bank.
                 throw new java.net.SocketTimeoutException("fake gateway timeout");
