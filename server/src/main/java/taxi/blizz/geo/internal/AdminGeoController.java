@@ -81,11 +81,12 @@ class AdminGeoController {
     record Change(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String reason) {
     }
 
-    record CreateAddress(@NotNull UUID commandId, @NotNull AddressBook.Data data, @NotBlank String reason) {
+    record CreateAddress(@NotNull UUID commandId, @NotNull AddressBook.Data data, @NotBlank String reason,
+                         Boolean distinct) {
     }
 
     record UpdateAddress(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull AddressBook.Data data,
-                         @NotBlank String reason) {
+                         @NotBlank String reason, Boolean distinct) {
     }
 
     record AddAlias(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull AddressBook.Alias alias,
@@ -174,14 +175,15 @@ class AdminGeoController {
     @PostMapping("/addresses")
     @ResponseStatus(HttpStatus.CREATED)
     AddressBook.Address createAddress(AccessClaims claims, @Valid @RequestBody CreateAddress body) {
-        return addresses.create(new AddressBook.Create(body.commandId(), claims.actor(), 0, body.data(), body.reason()));
+        return addresses.create(new AddressBook.Create(body.commandId(), claims.actor(), 0, body.data(), body.reason(),
+                Boolean.TRUE.equals(body.distinct())));
     }
 
     @PostMapping("/addresses/{addressId}/update")
     AddressBook.Address updateAddress(AccessClaims claims, @PathVariable UUID addressId,
                                       @Valid @RequestBody UpdateAddress body) {
         return addresses.update(new AddressBook.Update(body.commandId(), claims.actor(), addressId,
-                body.expectedVersion(), body.data(), body.reason()));
+                body.expectedVersion(), body.data(), body.reason(), Boolean.TRUE.equals(body.distinct())));
     }
 
     @PostMapping("/addresses/{addressId}/aliases")

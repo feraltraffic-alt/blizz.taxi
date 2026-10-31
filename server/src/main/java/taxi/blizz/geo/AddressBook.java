@@ -59,12 +59,30 @@ public interface AddressBook {
         }
     }
 
-    /** {@code expectedVersion} is always 0 for a new address. */
-    record Create(UUID commandId, Actor actor, long expectedVersion, Data data, String reason) {
+    /**
+     * {@code expectedVersion} is always 0 for a new address. {@code distinct}: save although an active address of the
+     * same house lies within {@link #DUPLICATE_METRES} (REQ-GEO-14); never overrides a linked provider reference.
+     */
+    record Create(UUID commandId, Actor actor, long expectedVersion, Data data, String reason, boolean distinct) {
+        public Create(UUID commandId, Actor actor, long expectedVersion, Data data, String reason) {
+            this(commandId, actor, expectedVersion, data, reason, false);
+        }
     }
 
-    record Update(UUID commandId, Actor actor, UUID id, long expectedVersion, Data data, String reason) {
+    /** {@code distinct}: as for {@link Create}. */
+    record Update(UUID commandId, Actor actor, UUID id, long expectedVersion, Data data, String reason,
+                  boolean distinct) {
+        public Update(UUID commandId, Actor actor, UUID id, long expectedVersion, Data data, String reason) {
+            this(commandId, actor, id, expectedVersion, data, reason, false);
+        }
     }
+
+    /**
+     * How close two pickup points of the same normalized house must be to count as a duplicate (REQ-GEO-14): a
+     * create or update that would make one is a {@link taxi.blizz.platform.DuplicateException} naming the existing
+     * address, unless {@code distinct}. The same provider reference is always a duplicate.
+     */
+    double DUPLICATE_METRES = 25;
 
     record AddAlias(UUID commandId, Actor actor, UUID id, long expectedVersion, Alias alias, String reason) {
     }

@@ -285,6 +285,102 @@ class AddressBookTests {
         assertThat(history(first.id())).hasSize(2);
     }
 
+    // ------------------------------------------------------------ REQ-GEO-14: duplicates (issue #142, part D3)
+
+    /** {@code metres} north of {@link #POINT}. */
+    private static GeoPoint north(int metres) {
+        return new GeoPoint(POINT.lat() + metres / 111_000.0, POINT.lon());
+    }
+
+    private Data house(String street, String house, GeoPoint point) {
+        return new Data(city, Kind.HOUSE, street + " " + house, "uk", street, house, null, point, null, null);
+    }
+
+    private void rejectDuplicate(Runnable action, UUID existing) {
+        assertThatThrownBy(action::run).isInstanceOf(taxi.blizz.platform.DuplicateException.class)
+                .satisfies(error -> {
+                    assertThat(((DomainException) error).code()).isEqualTo(ErrorCode.STATE_CONFLICT);
+                    assertThat(((taxi.blizz.platform.DuplicateException) error).duplicateOf()).isEqualTo(existing);
+                });
+    }
+
+    private long addressesInCity() {
+        return jdbc.sql("select count(*) from address where city_id = :city").param("city", city)
+                .query(Long.class).single();
+    }
+
+    @Test
+    void theSameHouseWithin25MetresIsADuplicateNamingTheFirst() {
+        Address first = create(house("Хрещатик", "2", POINT));
+
+        rejectDuplicate(() -> create(house("Хрещатик", "2", north(10))), first.id());
+        // The same house however it is written: the street's case and spaces, the house's letter case.
+        rejectDuplicate(() -> create(house("  ХРЕЩАТИК ", "2", north(20))), first.id());
+        Address letter = create(house("Хрещатик", "2а", POINT));
+        rejectDuplicate(() -> create(house("Хрещатик", "2А", north(5))), letter.id());
+        assertThat(addressesInCity()).isEqualTo(2);
+
+        // Farther than 25 m, another number, suffix, building or street: not a duplicate.
+        create(house("Хрещатик", "2", north(40)));
+        create(house("Хрещатик", "26", POINT));
+        create(house("Хрещатик", "2 к1", POINT));
+        create(house("Прорізна", "2", POINT));
+        assertThat(addressesInCity()).isEqualTo(6);
+    }
+
+    @Test
+    void distinctSavesANearOneWithTheReasonAndTheAuditNamesTheOther() {
+        Address first = create(house("Хрещатик", "2", POINT));
+
+        Address second = addresses.create(new Create(UUID.randomUUID(), manager, 0, house("Хрещатик", "2", north(12)),
+                "The yard entrance is a separate pickup point", true));
+
+        assertThat(second.id()).isNotEqualTo(first.id());
+        assertThat(jdbc.sql("""
+                        select after::text from audit_log
+                        where action = 'address.distinct' and resource_id = :id""")
+                .param("id", second.id().toString()).query(String.class).single())
+                .contains(first.id().toString()).contains("The yard entrance is a separate pickup point");
+    }
+
+    @Test
+    void anUpdateOntoAnotherHouseIsADuplicateButEditingItselfIsNot() {
+        Address first = create(house("Хрещатик", "2", POINT));
+        Address other = create(house("Хрещатик", "4", north(10)));
+
+        rejectDuplicate(() -> addresses.update(update(other, house("Хрещатик", "2", north(10)))), first.id());
+        assertThat(addresses.find(other.id()).orElseThrow()).isEqualTo(other);
+
+        Address renamed = addresses.update(update(first, renamed(first.data(), "Хрещатик, 2 (ЦУМ)")));
+        assertThat(renamed.version()).isEqualTo(1);
+        Address moved = addresses.update(new Update(UUID.randomUUID(), manager, other.id(), other.version(),
+                house("Хрещатик", "2", north(10)), "Another entrance of the same house", true));
+        assertThat(moved.house().number()).isEqualTo("2");
+    }
+
+    @Test
+    void aLinkedProviderReferenceIsAlwaysADuplicateEvenWhenDistinct() {
+        ProviderRef ref = new ProviderRef("TEST_PROVIDER", "duplicate-object-" + UUID.randomUUID());
+        Address first = create(withRef(house("Хрещатик", "2", POINT), ref));
+
+        rejectDuplicate(() -> addresses.create(new Create(UUID.randomUUID(), manager, 0,
+                withRef(house("Прорізна", "8", north(500)), ref), "Same provider object", true)), first.id());
+        assertThat(addressesInCity()).isOne();
+    }
+
+    @Test
+    void aHiddenAddressIsNotADuplicateAndEntrancesAreNotComparedByHouse() {
+        Address first = create(house("Хрещатик", "2", POINT));
+        addresses.hide(change(first));
+        create(house("Хрещатик", "2", north(5)));
+
+        // Entrances and places are pickup points: the house alone does not make two of them the same.
+        Data entrance = new Data(city, Kind.ENTRANCE, "Під'їзд 1", "uk", "Хрещатик", "2", null, north(3), null, null);
+        create(entrance);
+        create(new Data(city, Kind.ENTRANCE, "Під'їзд 2", "uk", "Хрещатик", "2", null, north(8), null, null));
+        assertThat(addressesInCity()).isEqualTo(4);
+    }
+
     enum Operation {
         CREATE, UPDATE, ALIAS, HIDE, RESTORE
     }
