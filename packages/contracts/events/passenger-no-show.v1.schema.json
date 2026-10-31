@@ -14,11 +14,42 @@
     "waited_seconds"
   ],
   "properties": {
-    "order_id": {"type": "string", "format": "uuid"},
-    "cancelled_by": {"type": "string"},
-    "reason_code": {"type": "string"},
-    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}},
-    "trip_id": {"type": "string", "format": "uuid"},
-    "waited_seconds": {"type": "integer", "minimum": 0}
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cancelled_by": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "reason_labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "trip_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "waited_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "contact_attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many times the driver tried to reach the rider on this order before the no-show: call requests and chat messages (REQ-CAN-06, issue #143)."
+    },
+    "last_contact_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "When the driver last tried; null without an attempt."
+    }
   }
 }
