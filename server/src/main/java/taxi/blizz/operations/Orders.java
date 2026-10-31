@@ -80,6 +80,45 @@ public interface Orders {
     /** Orders of one city visible to staff, newest first, after {@code after} (REQ-OPS-01, REQ-API-09). */
     List<OrderView> inCity(Actor staff, UUID cityId, boolean activeOnly, PageCursor after, int limit);
 
+    /**
+     * What staff look for in the admin panel (REQ-ADM-01, issue #142); every field is optional. Phones in E.164: the
+     * payer's, or the phone of a driver assigned to the order at any time.
+     */
+    record Search(UUID cityId, java.util.Set<String> statuses, OffsetDateTime from, OffsetDateTime to,
+                  String riderPhone, String driverPhone, Long shortNumber) {
+        public Search {
+            statuses = statuses == null ? java.util.Set.of() : java.util.Set.copyOf(statuses);
+        }
+    }
+
+    /** One order found; {@code driverId} is the driver of the latest assignment. */
+    record Found(UUID id, long shortNumber, UUID cityId, String status, String channel, OffsetDateTime createdAt,
+                 UUID payerClientId, UUID driverId, String vehicleClass, String paymentMethod, Long priceMinor,
+                 Long finalPriceMinor, String currency) {
+    }
+
+    /**
+     * Orders matching {@code search}, newest first, after {@code after} (REQ-API-09). Without a city, only the cities
+     * of the staff member's {@link #VIEW_PERMISSION}; a city outside them is ACCESS_DENIED. A phone only filters: an
+     * unknown one, or one whose orders are in other cities, finds nothing.
+     */
+    List<Found> search(Actor staff, Search search, PageCursor after, int limit);
+
+    String ADMIN_ORDERS = "admin-orders";
+
+    static PageCursor position(Found found) {
+        return PageCursor.of(ADMIN_ORDERS, found.createdAt(), found.id());
+    }
+
+    record StatusCount(String status, int count) {
+    }
+
+    record Overview(UUID cityId, java.time.LocalDate date, String timeZone, int total, List<StatusCount> byStatus) {
+    }
+
+    /** Orders created in the city on its local {@code date}, per status; {@link #VIEW_PERMISSION} for the city. */
+    Overview overview(Actor staff, UUID cityId, java.time.LocalDate date);
+
     /** The signed-in payer's orders, newest first, after {@code after} (REQ-RID-*, REQ-API-09). */
     List<HistoryItem> history(Actor payer, PageCursor after, int limit);
 

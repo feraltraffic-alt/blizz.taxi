@@ -1720,6 +1720,144 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/orders:
+    get:
+      operationId: searchAdminOrders
+      summary: Find orders
+      description: >-
+        Orders newest first (created_at, then id), filtered (REQ-ADM-01, issue #142). Without city_id, only the cities of
+        the staff member's orders.view scope; a city_id outside it → 403. A phone is a filter, never a lookup in another
+        city: an unknown phone, or one whose orders are elsewhere, gives an empty page. Needs orders.view.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: status
+          in: query
+          description: One or more order statuses.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 12
+            items:
+              type: string
+              enum: [SCHEDULED, AWAITING_PAYMENT, READY, SEARCHING, ASSIGNED, IN_SERVICE, FULFILLED, CANCELLED,
+                     UNFULFILLED]
+        - name: from
+          in: query
+          description: Created at or after this time.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: to
+          in: query
+          description: Created before this time.
+          schema:
+            $ref: "./common.yaml#/components/schemas/Timestamp"
+        - name: rider_phone
+          in: query
+          description: The payer's phone in E.164.
+          schema:
+            type: string
+            pattern: "^\\+[1-9][0-9]{7,14}$"
+        - name: driver_phone
+          in: query
+          description: The phone of a driver assigned to the order at any time, in E.164.
+          schema:
+            type: string
+            pattern: "^\\+[1-9][0-9]{7,14}$"
+        - name: short_number
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrderList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/orders/overview:
+    get:
+      operationId: getAdminOrderOverview
+      summary: Orders of a city's day by status
+      description: >-
+        How many orders were created in the city on its local day (its time zone), per status (REQ-ADM-01, issue
+        #142). A city outside the staff member's orders.view scope → 403.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderOverview"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/orders/{order_id}/timeline:
+    get:
+      operationId: getAdminOrderTimeline
+      summary: The order's history with its actors
+      description: >-
+        Every event of the order, oldest first, with who did it and why (the AC-21 registry, issue #142): the same as
+        the operator's history. An order of a city outside the staff member's orders.view scope → 403. Needs
+        orders.view.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/Timeline"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/admin/v1/orders/{order_id}/cash-dispute:
     get:
       operationId: getCashDispute
@@ -5043,6 +5181,8 @@ paths:
 tags:
   - name: Legal
     description: Legal texts and their versions (REQ-PRV-08)
+  - name: Orders
+    description: Orders after the fact — search, the day's overview, history and corrections (REQ-ADM-01, issue #142)
   - name: Clients
     description: Riders' accounts — deletion requests (REQ-RID-10)
   - name: Promotions
@@ -5078,6 +5218,89 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    AdminOrderRow:
+      description: One order in the admin search (issue #142).
+      type: object
+      additionalProperties: false
+      required: [id, short_number, city_id, status, channel, created_at, payer_client_id, driver_id, vehicle_class,
+                 payment_method, price_minor, final_price_minor, currency]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        short_number:
+          type: integer
+          format: int64
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        status:
+          type: string
+        channel:
+          type: string
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        payer_client_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        driver_id:
+          description: The driver of the latest assignment, if any.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        vehicle_class:
+          type: string
+        payment_method:
+          type: string
+        price_minor:
+          type: [integer, "null"]
+          format: int64
+        final_price_minor:
+          type: [integer, "null"]
+          format: int64
+        currency:
+          type: [string, "null"]
+
+    AdminOrderList:
+      type: object
+      additionalProperties: false
+      required: [orders, page]
+      properties:
+        orders:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/AdminOrderRow"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+
+    OrderOverview:
+      type: object
+      additionalProperties: false
+      required: [city_id, date, time_zone, total, by_status]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        date:
+          type: string
+          format: date
+        time_zone:
+          type: string
+        total:
+          type: integer
+          minimum: 0
+        by_status:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [status, count]
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+                minimum: 1
+
     PlatformVersions:
       type: object
       additionalProperties: false
