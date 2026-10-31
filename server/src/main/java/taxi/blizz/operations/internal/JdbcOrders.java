@@ -753,7 +753,8 @@ class JdbcOrders implements Orders {
                 .query((rs, i) -> new Found(rs.getObject(1, UUID.class), rs.getLong(2), rs.getObject(3, UUID.class),
                         rs.getString(4), rs.getString(5), rs.getObject(6, OffsetDateTime.class),
                         rs.getObject(7, UUID.class), rs.getObject(8, UUID.class), rs.getString(9),
-                        rs.getString(10), (Long) rs.getObject(11), (Long) rs.getObject(12), rs.getString(13).strip()))
+                        rs.getString(10), (Long) rs.getObject(11), (Long) rs.getObject(12),
+                        rs.getString(13) == null ? null : rs.getString(13).strip()))
                 .list();
     }
 
