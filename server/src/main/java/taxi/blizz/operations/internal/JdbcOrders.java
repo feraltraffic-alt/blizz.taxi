@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -75,13 +76,16 @@ class JdbcOrders implements Orders {
     private final FeatureFlags flags;
     private final DispatchProperties dispatchProperties;
 
+    private final taxi.blizz.geo.CityCatalog cityCatalog;
+
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
                AuditLog audit, CancelReasons reasons, StaffDirectory directory, JsonMapper json,
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
-               FeatureFlags flags, DispatchProperties dispatchProperties) {
+               FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog) {
+        this.cityCatalog = cityCatalog;
 
         this.dispatchProperties = dispatchProperties;
         this.flags = flags;
@@ -674,14 +678,100 @@ class JdbcOrders implements Orders {
         return query.query(UUID.class).list().stream().map(core::view).toList();
     }
 
+    private static final Set<String> STATUSES = Set.of("SCHEDULED", "AWAITING_PAYMENT", "READY", "SEARCHING",
+            "ASSIGNED", "IN_SERVICE", "FULFILLED", "CANCELLED", "UNFULFILLED");
+
     @Override
+    @Transactional(readOnly = true)
     public List<Found> search(Actor staffActor, Search search, PageCursor after, int limit) {
-        return List.of();
+        StaffAccess.Scope scope = staff.scope(staffActor, VIEW_PERMISSION);
+        if (!scope.allCities() && scope.cityIds().isEmpty()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Orders cannot be viewed");
+        }
+        if (search.cityId() != null) {
+            requireStaff(staffActor, VIEW_PERMISSION, search.cityId());
+        }
+        if (!STATUSES.containsAll(search.statuses())) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Unknown order status in " + search.statuses());
+        }
+        StringBuilder where = new StringBuilder(" where true");
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+        if (search.cityId() != null) {
+            where.append(" and o.city_id = :city");
+            params.put("city", search.cityId());
+        } else if (!scope.allCities()) {
+            where.append(" and o.city_id in (:cities)");
+            params.put("cities", List.copyOf(scope.cityIds()));
+        }
+        if (!search.statuses().isEmpty()) {
+            where.append(" and o.status in (:statuses)");
+            params.put("statuses", List.copyOf(search.statuses()));
+        }
+        if (search.from() != null) {
+            where.append(" and o.created_at >= :from");
+            params.put("from", search.from());
+        }
+        if (search.to() != null) {
+            where.append(" and o.created_at < :to");
+            params.put("to", search.to());
+        }
+        if (search.shortNumber() != null) {
+            where.append(" and o.short_number = :number");
+            params.put("number", search.shortNumber());
+        }
+        // A phone only filters: resolved to the account, then matched within the cities above.
+        if (search.riderPhone() != null) {
+            Optional<UUID> rider = accounts.clientByPhone(PhoneNumber.parse(search.riderPhone()));
+            if (rider.isEmpty()) {
+                return List.of();
+            }
+            where.append(" and o.payer_client_id = :rider");
+            params.put("rider", rider.get());
+        }
+        if (search.driverPhone() != null) {
+            Optional<UUID> driver = accounts.driverByPhone(PhoneNumber.parse(search.driverPhone()));
+            if (driver.isEmpty()) {
+                return List.of();
+            }
+            where.append(" and exists (select 1 from assignment d where d.order_id = o.id and d.driver_id = :driver)");
+            params.put("driver", driver.get());
+        }
+        if (after != null) {
+            where.append(" and (o.created_at, o.id) < (:afterAt, :afterId)");
+            params.put("afterAt", after.time(0));
+            params.put("afterId", after.id(1));
+        }
+        params.put("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
+        return jdbc.sql("""
+                        select o.id, o.short_number, o.city_id, o.status, o.channel, o.created_at, o.payer_client_id,
+                               (select a.driver_id from assignment a where a.order_id = o.id
+                                order by a.created_at desc limit 1) as driver_id,
+                               o.vehicle_class, o.payment_method, o.price_minor, o.final_price_minor, o.currency
+                        from ride_order o"""
+                        + where + " order by o.created_at desc, o.id desc limit :limit")
+                .params(params)
+                .query((rs, i) -> new Found(rs.getObject(1, UUID.class), rs.getLong(2), rs.getObject(3, UUID.class),
+                        rs.getString(4), rs.getString(5), rs.getObject(6, OffsetDateTime.class),
+                        rs.getObject(7, UUID.class), rs.getObject(8, UUID.class), rs.getString(9),
+                        rs.getString(10), (Long) rs.getObject(11), (Long) rs.getObject(12), rs.getString(13).strip()))
+                .list();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Overview overview(Actor staffActor, UUID cityId, java.time.LocalDate date) {
-        throw new UnsupportedOperationException("issue #142");
+        requireStaff(staffActor, VIEW_PERMISSION, cityId);
+        String zone = cityCatalog.timezone(cityId)
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "City not found"));
+        java.time.ZoneId id = java.time.ZoneId.of(zone);
+        List<StatusCount> counts = jdbc.sql("""
+                        select status, count(*) from ride_order
+                        where city_id = :city and created_at >= :from and created_at < :to
+                        group by status order by status""")
+                .param("city", cityId).param("from", date.atStartOfDay(id).toOffsetDateTime())
+                .param("to", date.plusDays(1).atStartOfDay(id).toOffsetDateTime())
+                .query((rs, i) -> new StatusCount(rs.getString(1), rs.getInt(2))).list();
+        return new Overview(cityId, date, zone, counts.stream().mapToInt(StatusCount::count).sum(), counts);
     }
 
     @Override
