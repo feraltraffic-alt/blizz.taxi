@@ -58,6 +58,16 @@ final class PushTemplates {
                     "Поїздку перервано", "Ми шукаємо для вас іншу машину",
                     "Przejazd przerwany", "Szukamy dla Ciebie innego samochodu",
                     "Trip interrupted", "We are finding you another car")),
+            Map.entry("rider.destination-changed", texts(
+                    "Маршрут изменён", "Новый адрес и цена — в приложении",
+                    "Маршрут змінено", "Нова адреса й ціна — у застосунку",
+                    "Trasa zmieniona", "Nowy adres i cena są w aplikacji",
+                    "Route changed", "The new destination and price are in the app")),
+            Map.entry("driver.destination-changed", texts(
+                    "Новый адрес назначения", "Откройте заказ, чтобы увидеть маршрут",
+                    "Нова адреса призначення", "Відкрийте замовлення, щоб побачити маршрут",
+                    "Nowy cel podróży", "Otwórz zlecenie, aby zobaczyć trasę",
+                    "New destination", "Open the order to see the route")),
             Map.entry("driver.offer", texts(
                     "Новый заказ", "Примите заказ, пока предложение действует",
                     "Нове замовлення", "Прийміть замовлення, поки пропозиція діє",

@@ -60,9 +60,14 @@ class ProblemQueues implements OutboxHandler {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
                  "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated",
-                 "CardChargebackRecorded", "PaymentReconciliationDifferencesFound" -> true;
+                 "CardChargebackRecorded", "PaymentReconciliationDifferencesFound", "DestinationChanged" -> true;
             default -> false;
         };
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record DestinationChanged(UUID orderId, UUID quoteId, long priceMinor, String currency, Long holdMinor,
+                              boolean aboveHold) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -75,6 +80,19 @@ class ProblemQueues implements OutboxHandler {
             cases.openFromSystem("reconciliation:"+p.runId(),p.cityId(),Category.PAYMENT,null,
                     "Card reconciliation needs a decision",Priority.HIGH,
                     "Review the open differences in payment reconciliation "+p.runId()+". No money was changed.");
+            return;
+        }
+        if ("DestinationChanged".equals(message.type())) {
+            DestinationChanged d = json.readValue(message.payload(), DestinationChanged.class);
+            UUID orderId = d.orderId() != null ? d.orderId() : message.aggregateId();
+            // Issue #142: a new price above the card hold is not a silent loss; one case per new price.
+            if (d.aboveHold()) {
+                cases.openFromSystem("destination-above-hold:" + orderId + ":" + d.quoteId(), cityOf(orderId),
+                        Category.PAYMENT, orderId, "The new destination costs more than the card hold",
+                        Priority.NORMAL, "The price is now " + d.priceMinor() + " " + d.currency()
+                                + " minor units; the hold is " + d.holdMinor() + ". At completion the hold is taken"
+                                + " and the rest charged to the card once; what fails stays the rider's debt.");
+            }
             return;
         }
         if ("InvariantViolated".equals(message.type())) {

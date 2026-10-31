@@ -151,6 +151,60 @@ class JdbcQuoteService implements QuoteService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public Quote requote(UUID commandId, UUID quoteId, taxi.blizz.geo.GeoPoint dropOff, Actor actor) {
+        if (commandId == null || quoteId == null || dropOff == null || actor == null) {
+            throw error(ErrorCode.VALIDATION_FAILED, "Incomplete re-quote request");
+        }
+        // The destination only: a repeat may name the quote the first call made, which the order holds by then.
+        record Requote(taxi.blizz.geo.GeoPoint dropOff) {
+        }
+        Quote original = jdbc.sql("select snapshot::text from quote where id = :id").param("id", quoteId)
+                .query((rs, n) -> json.readValue(rs.getString(1), Quote.class)).optional()
+                .orElseThrow(() -> error(ErrorCode.NOT_FOUND, "Quote not found"));
+        Request request = new Request(original.request().cityId(), original.request().classId(),
+                original.request().pickup(), dropOff, original.request().payer(), original.request().pickupAt());
+        // Like every quote: the route is asked for outside any transaction, before the idempotent insert.
+        RouteEstimator estimator = estimators.getIfAvailable();
+        if (estimator == null) {
+            throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
+        }
+        RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
+        meters.ifAvailable(m -> m.counter("blizz.quotes", "route_source", route.source().name()).increment());
+        if (route.source() == RouteEstimator.Source.STRAIGHT_LINE && !straightLineQuotes) {
+            throw error(ErrorCode.PROVIDER_UNAVAILABLE, "No road route right now; a price cannot be fixed");
+        }
+        GeoZones.Split split = zones.splitByCityLimits(request.cityId(), request.pickup(), request.dropOff());
+        // The pre-order surcharge stays as the original quote decided it.
+        FareCalculator.Facts facts = new FareCalculator.Facts(
+                !zones.insideCityLimits(request.cityId(), request.pickup()), split.insideMetres(),
+                split.outsideMetres(), Set.copyOf(zones.zonesAt(request.cityId(), request.pickup())),
+                Set.copyOf(zones.zonesAt(request.cityId(), request.dropOff())), original.breakdown().preorder());
+        return commands.execute(new CommandKey(actor, "quote.requote", commandId), new Requote(dropOff),
+                Quote.class, () -> {
+            // The original's terms: the order's tariff version, never the one in force now (AC-14, issue #142).
+            FareCalculator.Result fare = FareCalculator.calculate(original.terms(), route, facts);
+            Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+            Quote quote = new Quote(UUID.randomUUID(), request, original.tariffVersionId(),
+                    original.pricingPolicyVersion(), original.terms(), route, fare.breakdown(), fare.amountMinor(),
+                    original.currency(), now, now.plusSeconds(300), request.fingerprint(), List.of(), 0);
+            jdbc.sql("""
+                    insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
+                        pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at,
+                        consumed_at)
+                    values (:id, :city, :class, :type, :owner, :tariff, :policy, :amount, :currency,
+                        :fingerprint, cast(:snapshot as jsonb), :now, :expires, :now)
+                    """).param("id", quote.id()).param("city", request.cityId()).param("class", request.classId())
+                    .param("type", request.payer().type().name()).param("owner", request.payer().id())
+                    .param("tariff", quote.tariffVersionId()).param("policy", quote.pricingPolicyVersion())
+                    .param("amount", quote.amountMinor()).param("currency", quote.currency())
+                    .param("fingerprint", quote.fingerprint()).param("snapshot", json.writeValueAsString(quote))
+                    .param("now", at(now)).param("expires", at(quote.expiresAt())).update();
+            return quote;
+        });
+    }
+
+    @Override
     @Transactional
     public Quote consume(UUID quoteId, Actor payer, String fingerprint, UUID orderId) {
         payer(payer);
