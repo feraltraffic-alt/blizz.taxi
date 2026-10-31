@@ -97,7 +97,8 @@ class CallRecordings {
         OffsetDateTime now = now();
         return tx.execute(status -> jdbc.sql("""
                         update call_recording r
-                        set attempts = r.attempts + 1, next_attempt_at = :lease, fetching_until = :lease, version = r.version + 1
+                        set attempts = r.attempts + 1, next_attempt_at = :lease, fetching_until = :lease,
+                            version = r.version + 1
                         from call c
                         where c.id = r.call_id
                           and r.call_id = (select call_id from call_recording
@@ -141,13 +142,15 @@ class CallRecordings {
             }
             int updated = tx.execute(status -> {
                 int changed = jdbc.sql("""
-                            update call_recording
-                            set state = 'STORED', file_id = :file, duration_seconds = :seconds, stored_at = :now,
-                                version = version + 1, fetching_until = null
-                            where call_id = :call and state = 'PENDING' and retention_claim is null""")
-                    .param("file", stored.fileId()).param("seconds", seconds).param("now", now())
-                    .param("call", due.callId()).update();
-                if (changed == 1) files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING);
+                                update call_recording
+                                set state = 'STORED', file_id = :file, duration_seconds = :seconds, stored_at = :now,
+                                    version = version + 1, fetching_until = null
+                                where call_id = :call and state = 'PENDING' and retention_claim is null""")
+                        .param("file", stored.fileId()).param("seconds", seconds).param("now", now())
+                        .param("call", due.callId()).update();
+                if (changed == 1) {
+                    files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING);
+                }
                 return changed;
             });
             if (updated == 0) {
@@ -179,7 +182,9 @@ class CallRecordings {
     }
 
     private void retry(Due due) {
-        jdbc.sql("update call_recording set next_attempt_at = :at, fetching_until = null where call_id = :call and state = 'PENDING' and retention_claim is null")
+        jdbc.sql("""
+                        update call_recording set next_attempt_at = :at, fetching_until = null
+                        where call_id = :call and state = 'PENDING' and retention_claim is null""")
                 .param("at", now().plus(pause(due.attempts()))).param("call", due.callId()).update();
     }
 
@@ -206,7 +211,9 @@ class CallRecordings {
         Calls.Call call = calls.find(callId)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Call not found"));
         staff.require(actor, Calls.LISTEN_PERMISSION, call.cityId());
-        UUID fileId = jdbc.sql("select file_id from call_recording where call_id = :call and state = 'STORED' and retention_claim is null")
+        UUID fileId = jdbc.sql("""
+                        select file_id from call_recording
+                        where call_id = :call and state = 'STORED' and retention_claim is null""")
                 .param("call", callId).query(UUID.class).optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "The call has no recording"));
         Map<String, Object> details = new LinkedHashMap<>();

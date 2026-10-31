@@ -34,8 +34,8 @@ class CallRecordingRetention implements RetentionWork {
     private final RecordingSource source;
     private final TransactionTemplate tx;
 
-    CallRecordingRetention(JdbcClient jdbc, FileService files, TelephonyProperties properties, AriRecordingSource asterisk,
-                           FakeCallSource fake, PlatformTransactionManager transactions) {
+    CallRecordingRetention(JdbcClient jdbc, FileService files, TelephonyProperties properties,
+                           AriRecordingSource asterisk, FakeCallSource fake, PlatformTransactionManager transactions) {
         this.jdbc = jdbc;
         this.files = files;
         source = properties.fake() ? fake : asterisk;
@@ -58,7 +58,8 @@ class CallRecordingRetention implements RetentionWork {
     /** The recordings of a deleted rider's calls (issue #144), whatever the retention term; one batch. */
     Result runErased(OffsetDateTime now, int limit) {
         return run(ERASED, "select call_id from call_recording where " + ERASED
-                + " order by erase_requested_at,call_id limit " + RetentionWork.limit(limit), Map.of("now", now), now);
+                + " order by erase_requested_at,call_id limit " + RetentionWork.limit(limit), Map.of("now", now),
+                now);
     }
 
     public Result run(OffsetDateTime cutoff, OffsetDateTime now, int limit) {
@@ -71,7 +72,9 @@ class CallRecordingRetention implements RetentionWork {
         int consecutiveFailures = 0;
         for (UUID id : jdbc.sql(selection).params(params).query(UUID.class).list()) {
             // The current provider request can add at most its 30-second timeout to this one-minute budget.
-            if (System.nanoTime() - started >= RUN_NANOS || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
+            if (System.nanoTime() - started >= RUN_NANOS || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                break;
+            }
             Claimed item = claim(id, eligible, params, now);
             if (item == null) {
                 total = total.plus(new Result(0, 0, 1));
@@ -83,16 +86,19 @@ class CallRecordingRetention implements RetentionWork {
                 if (item.file() != null) {
                     var deletion = files.deleteRecording(item.file());
                     if (!deletion.gone()) {
-                        throw new RecordingSource.DeletionFailure("Recording file not removed", deletion.fenced(), null);
+                        throw new RecordingSource.DeletionFailure("Recording file not removed", deletion.fenced(),
+                                null);
                     }
                     changed = true;
                 }
-                int deleted = tx.execute(status -> jdbc.sql("delete from call_recording where call_id=:id and retention_claim=:claim")
+                int deleted = tx.execute(status -> jdbc.sql("""
+                                delete from call_recording where call_id=:id and retention_claim=:claim""")
                         .param("id", id).param("claim", item.claim()).update());
                 total = total.plus(new Result(deleted, 0, 1));
                 consecutiveFailures = 0;
             } catch (IOException | RuntimeException ex) {
-                boolean keepFence = changed || !(ex instanceof RecordingSource.DeletionFailure failure) || failure.removed();
+                boolean keepFence = changed || !(ex instanceof RecordingSource.DeletionFailure failure)
+                        || failure.removed();
                 try {
                     tx.executeWithoutResult(status -> jdbc.sql("""
                                     update call_recording set retention_claim=:fence,retention_until=:retry
@@ -113,18 +119,25 @@ class CallRecordingRetention implements RetentionWork {
 
     private Claimed claim(UUID id, String eligible, Map<String, Object> params, OffsetDateTime now) {
         return tx.execute(status -> {
-            var row = jdbc.sql("select call_id,file_id,retention_claim,retention_attempts from call_recording where call_id=:id and "
-                            + eligible + " for update skip locked")
+            var row = jdbc.sql("select call_id,file_id,retention_claim,retention_attempts from call_recording"
+                            + " where call_id=:id and " + eligible + " for update skip locked")
                     .params(params).param("id", id).query((rs, i) -> new Claimed(rs.getObject(1, UUID.class),
                             rs.getObject(2, UUID.class), null, UUID.randomUUID(), rs.getObject(3) != null,
                             rs.getInt(4) + 1)).optional();
-            if (row.isEmpty()) return null;
+            if (row.isEmpty()) {
+                return null;
+            }
             Claimed recording = row.get();
-            String channel = jdbc.sql("select channel_id from call where id=:id").param("id", id).query(String.class).single();
-            jdbc.sql("update call_recording set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts where call_id=:id")
+            String channel = jdbc.sql("select channel_id from call where id=:id").param("id", id)
+                    .query(String.class).single();
+            jdbc.sql("""
+                            update call_recording
+                            set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts
+                            where call_id=:id""")
                     .param("claim", recording.claim()).param("until", now.plusMinutes(10))
                     .param("attempts", recording.attempts()).param("id", id).update();
-            return new Claimed(id, recording.file(), channel, recording.claim(), recording.previouslyClaimed(), recording.attempts());
+            return new Claimed(id, recording.file(), channel, recording.claim(), recording.previouslyClaimed(),
+                    recording.attempts());
         });
     }
 }

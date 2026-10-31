@@ -189,7 +189,9 @@ class SupportAttachments {
 
     private void requireVisibleAttachment(SupportCases.Case supportCase, UUID fileId) {
         boolean visible = supportCase.messages().stream().map(SupportCases.Message::id).anyMatch(messageId ->
-                jdbc.sql("select exists(select 1 from support_message_attachment where message_id = :message and file_id = :file)")
+                jdbc.sql("""
+                                select exists(select 1 from support_message_attachment
+                                              where message_id = :message and file_id = :file)""")
                         .param("message", messageId).param("file", fileId).query(Boolean.class).single());
         if (!visible) {
             throw new DomainException(ErrorCode.NOT_FOUND, "Attachment not found");

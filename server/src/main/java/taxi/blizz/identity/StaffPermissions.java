@@ -40,8 +40,10 @@ public final class StaffPermissions {
             new Permission("drivers.delete", "Drivers", "Drivers' deletion requests: check, complete or reject"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
-            new Permission("trips.correct", "Orders", "Correct a trip's start or completion after the fact and review it"),
-            new Permission("fares.correct", "Finance", "Correct a fulfilled order's final fare (the password is asked again)"),
+            new Permission("trips.correct", "Orders",
+                    "Correct a trip's start or completion after the fact and review it"),
+            new Permission("fares.correct", "Finance",
+                    "Correct a fulfilled order's final fare (the password is asked again)"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
             new Permission("wallets.manage", "Finance", "Riders' bonus accounts: view and top up"),
             new Permission("payments.retry", "Finance",
@@ -61,7 +63,8 @@ public final class StaffPermissions {
             new Permission(StaffPermissions.REPORTS_VIEW, "Reports", "Reports of orders and money per city and day"),
             new Permission("legal.manage", "Settings", "Legal texts for riders and drivers: versions and publication"));
 
-    public static final Set<String> CODES = CATALOG.stream().map(Permission::code).collect(Collectors.toUnmodifiableSet());
+    public static final Set<String> CODES = CATALOG.stream().map(Permission::code)
+            .collect(Collectors.toUnmodifiableSet());
 
     private StaffPermissions() {
     }

@@ -37,9 +37,16 @@ class FileRetirement {
 
     static String eligibility(String kind) {
         return switch (kind) {
-            case "upload_sessions" -> "attached_at is null and purpose<>'CALL_RECORDING' and state in ('AWAITING_UPLOAD','SAFE','REJECTED') and coalesce(uploaded_at,scanned_at,upload_expires_at)<:cutoff";
-            case "quarantined_files" -> "attached_at is null and purpose<>'CALL_RECORDING' and state='QUARANTINE' and coalesce(quarantine_at,uploaded_at,created_at)<:cutoff";
-            case "call_recordings" -> "attached_at is null and purpose='CALL_RECORDING' and coalesce(uploaded_at,scanned_at,created_at)<:cutoff";
+            case "upload_sessions" -> """
+                    attached_at is null and purpose<>'CALL_RECORDING'
+                    and state in ('AWAITING_UPLOAD','SAFE','REJECTED')
+                    and coalesce(uploaded_at,scanned_at,upload_expires_at)<:cutoff""";
+            case "quarantined_files" -> """
+                    attached_at is null and purpose<>'CALL_RECORDING' and state='QUARANTINE'
+                    and coalesce(quarantine_at,uploaded_at,created_at)<:cutoff""";
+            case "call_recordings" -> """
+                    attached_at is null and purpose='CALL_RECORDING'
+                    and coalesce(uploaded_at,scanned_at,created_at)<:cutoff""";
             default -> throw new IllegalArgumentException("Unknown file retention kind");
         };
     }
@@ -68,7 +75,8 @@ class FileRetirement {
 
     RetentionWork.Result run(String kind, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
         RetentionWork.Result total = new RetentionWork.Result(0, 0, 0);
-        for (UUID id : jdbc.sql(selection(kind, limit)).params(Map.of("cutoff", cutoff, "now", now)).query(UUID.class).list()) {
+        for (UUID id : jdbc.sql(selection(kind, limit)).params(Map.of("cutoff", cutoff, "now", now))
+                .query(UUID.class).list()) {
             Attempt attempt = retire(id, eligibility(kind), Map.of("cutoff", cutoff, "now", now), now);
             total = total.plus(new RetentionWork.Result(attempt.deleted(), attempt.failures(), 1));
         }
@@ -104,7 +112,10 @@ class FileRetirement {
                             rs.getObject(6) != null, rs.getInt(7) + 1)).optional();
             if (row.isEmpty()) return null;
             Claimed item = row.get();
-            jdbc.sql("update file_object set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts where id=:id")
+            jdbc.sql("""
+                            update file_object
+                            set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts
+                            where id=:id""")
                     .param("claim", item.claim()).param("until", now.plusMinutes(10))
                     .param("attempts", item.attempts()).param("id", id).update();
             return item;
@@ -124,10 +135,13 @@ class FileRetirement {
                 throw new FileStorage.DeletionFailure("Legacy file has no known storage key", false, null);
             }
             if (claimed.stagingKey() != null) changed |= storage.delete(claimed.stagingKey());
-            if (claimed.key() != null && !claimed.key().equals(claimed.stagingKey())) changed |= storage.delete(claimed.key());
+            if (claimed.key() != null && !claimed.key().equals(claimed.stagingKey())) {
+                changed |= storage.delete(claimed.key());
+            }
             // A re-encrypted document's plain copy must not outlive its row (issue #135).
             if (claimed.plainKey() != null) changed |= storage.delete(claimed.plainKey());
-            int deleted = tx.execute(status -> jdbc.sql("delete from file_object where id=:id and retention_claim=:claim")
+            int deleted = tx.execute(status -> jdbc.sql("""
+                            delete from file_object where id=:id and retention_claim=:claim""")
                     .param("id", id).param("claim", claimed.claim()).update());
             return new Attempt(deleted == 1, deleted, 0, deleted != 1);
         } catch (IOException | RuntimeException ex) {
