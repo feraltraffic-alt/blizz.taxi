@@ -80,7 +80,8 @@ class NotificationFeed implements OutboxHandler {
     public boolean supports(String eventType) {
         return switch (eventType) {
             case "OfferMade", "AssignmentCommitted", "DriverArrived", "TripCompleted", "OrderCancelled",
-                 "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted" -> true;
+                 "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted",
+                 "DestinationChanged" -> true;
             default -> false;
         };
     }
@@ -120,6 +121,13 @@ class NotificationFeed implements OutboxHandler {
                 }
             }
             case "DriverArrived" -> toRider.accept("rider.driver-arrived");
+            case "DestinationChanged" -> {
+                toRider.accept("rider.destination-changed");
+                if (payload.driverId() != null) {
+                    pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()),
+                            "driver.destination-changed", DEFAULT_DEADLINE));
+                }
+            }
             case "TripCompleted" -> toRider.accept("rider.trip-completed");
             case "OrderUnfulfilled" -> toRider.accept("rider.no-driver");
             case "CardHoldDeclined" -> toRider.accept("rider.payment-declined");

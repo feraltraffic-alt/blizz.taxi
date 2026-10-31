@@ -37,7 +37,7 @@ import taxi.blizz.pricing.QuoteService;
  * Issue #142, part C2 (REQ-RID-06): support changes where a trip in progress ends. The new price is a new quote with
  * the order's own tariff version, never the tariff in force now; the fare at completion comes from it. A card order
  * whose card part goes above the hold gets a payment problem case, and the capture takes the hold and charges the
- * rest. Its own city at longitude 101.
+ * rest. Its own city at longitude 101; 102 for the other city.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -185,13 +185,13 @@ class DestinationChangeTests {
         return new TestQuotes(jdbc, quotes).quote(rides.client(), city, "STANDARD", PICKUP, dropoff).amountMinor();
     }
 
-    /** From now on the city's STANDARD tariff is a new version with every rate much higher. */
+    /** From now on the city's STANDARD tariff is a new version with every rate twice the one in force. */
     private void publishDearerTariff() {
         UUID classId = new TestQuotes(jdbc, quotes).ensureClass(city, "STANDARD");
-        jdbc.sql("""
-                        update tariff_version set state = 'ARCHIVED', version = version + 1, updated_at = now()
+        UUID current = jdbc.sql("""
+                        select id from tariff_version
                         where city_id = :city and class_id = :class and state = 'PUBLISHED'""")
-                .param("city", city).param("class", classId).update();
+                .param("city", city).param("class", classId).query(UUID.class).single();
         jdbc.sql("""
                         insert into tariff_version (id, city_id, class_id, currency, effective_from, state,
                                                     pickup_minor, per_km_minor, per_minute_minor, minimum_minor,
@@ -199,10 +199,17 @@ class DestinationChangeTests {
                                                     cancellation_fee_minor, commission_rate, waiting_step_seconds,
                                                     waiting_rounding, pickup_outside_minor,
                                                     per_km_outside_minor, zone_surcharges, created_at, updated_at)
-                        select :id, :city, :class, currency, now(), 'PUBLISHED',
-                               9000, 6000, 900, 20000, 3, 200, 0, 0.15, 60, 'UP', 9000, 6000, '[]', now(), now()
-                        from city where id = :city""")
-                .param("id", UUID.randomUUID()).param("city", city).param("class", classId).update();
+                        select :id, city_id, class_id, currency, now(), 'PUBLISHED', pickup_minor * 2,
+                               per_km_minor * 2, per_minute_minor * 2, minimum_minor * 2, free_waiting_minutes,
+                               waiting_per_minute_minor, cancellation_fee_minor, commission_rate,
+                               waiting_step_seconds, waiting_rounding, pickup_outside_minor * 2,
+                               per_km_outside_minor * 2, zone_surcharges, now(), now()
+                        from tariff_version where id = :current""")
+                .param("id", UUID.randomUUID()).param("current", current).update();
+        jdbc.sql("""
+                        update tariff_version set state = 'ARCHIVED', version = version + 1, updated_at = now()
+                        where id = :current""")
+                .param("current", current).update();
     }
 
     private DestinationChanges.Change to(GeoPoint dropoff, String label) {
@@ -250,8 +257,9 @@ class DestinationChangeTests {
         Orders.TimelineEntry entry = orders.timeline(staff, order).getLast();
         assertThat(entry.type()).isEqualTo(DestinationChanges.EVENT);
         assertThat(entry.reason()).isEqualTo("The rider called: they go to the station instead");
-        assertThat(entry.details()).containsEntry("previous_price_minor", before.priceMinor())
-                .containsEntry("price_minor", expected).containsEntry("above_hold", false);
+        assertThat(((Number) entry.details().get("previous_price_minor")).longValue()).isEqualTo(before.priceMinor());
+        assertThat(((Number) entry.details().get("price_minor")).longValue()).isEqualTo(expected);
+        assertThat(entry.details()).containsEntry("above_hold", false);
         assertThat(jdbc.sql("""
                         select count(*) from audit_log
                         where action = 'order.destination' and resource_id = :o and actor_id = :staff
@@ -394,7 +402,7 @@ class DestinationChangeTests {
 
         assertCode(() -> destinations.change(staff(city, Orders.VIEW_PERMISSION), UUID.randomUUID(), order, version,
                 to(FAR, "Station")), ErrorCode.ACCESS_DENIED);
-        UUID elsewhere = rides.city("test-destination-changes-other", "UAH", 100);
+        UUID elsewhere = rides.city("test-destination-changes-other", "UAH", 102);
         assertCode(() -> destinations.change(staff(elsewhere, DestinationChanges.PERMISSION), UUID.randomUUID(),
                 order, version, to(FAR, "Station")), ErrorCode.ACCESS_DENIED);
         assertCode(() -> destinations.change(rides.client(), UUID.randomUUID(), order, version, to(FAR, "Station")),

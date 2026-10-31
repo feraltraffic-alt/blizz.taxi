@@ -20,7 +20,8 @@ public interface QuoteService {
      * #142): the same city, class, pickup, payer and pickup time as the quote {@code quoteId}, its tariff terms (the
      * order's tariff version, never the tariff in force now) and a new route to {@code dropOff}. The new quote is
      * stored already consumed, carries no promotions (the order keeps the discount it has) and is keyed by
-     * {@code (actor, commandId)}, so a repeat returns it. NOT_FOUND for an unknown quote.
+     * {@code (actor, commandId)} and the destination, so a repeat returns it even when it names another quote (the
+     * order holds the new quote by then). NOT_FOUND for an unknown quote.
      */
     Quote requote(UUID commandId, UUID quoteId, GeoPoint dropOff, Actor actor);
 
