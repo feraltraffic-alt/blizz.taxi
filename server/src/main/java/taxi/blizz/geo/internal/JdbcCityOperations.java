@@ -84,7 +84,9 @@ class JdbcCityOperations implements CityOperations {
                     State before = lockedState(cityId, expectedVersion);
                     int returnZone = clean.returnZoneMeters() == null ? before.returnZoneMeters()
                             : clean.returnZoneMeters();
-                    State after = new State(cityId, clean.workingHours(), clean.paymentMethods(), returnZone,
+                    DropoffOutside dropoff = clean.dropoffOutsideCity() == null ? before.dropoffOutsideCity()
+                            : clean.dropoffOutsideCity();
+                    State after = new State(cityId, clean.workingHours(), clean.paymentMethods(), returnZone, dropoff,
                             before.ordersPaused(), before.pauseReason(), before.pausedAt(), before.version() + 1);
                     write(after, actor);
                     audit.record(new AuditEntry(actor, "city.operations.change", "city", cityId.toString(), why,
@@ -116,7 +118,7 @@ class JdbcCityOperations implements CityOperations {
                                 pause ? "New orders are already paused" : "New orders are not paused");
                     }
                     State after = new State(cityId, before.workingHours(), before.paymentMethods(),
-                            before.returnZoneMeters(), pause,
+                            before.returnZoneMeters(), before.dropoffOutsideCity(), pause,
                             pause ? why : null, pause ? now() : null, before.version() + 1);
                     write(after, actor);
                     audit.record(new AuditEntry(actor, action, "city", cityId.toString(), why, snapshot(before),
@@ -155,6 +157,33 @@ class JdbcCityOperations implements CityOperations {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public void requireDropoff(UUID cityId, taxi.blizz.geo.GeoPoint dropoff) {
+        DropoffOutside rule = of(cityId).dropoffOutsideCity();
+        if (rule.allowed() && rule.maxDistanceKm() == null) {
+            return;
+        }
+        // Straight-line metres from the city's polygon; 0 inside it.
+        double outside = jdbc.sql("""
+                        select case when ST_Covers(polygon, p) then 0
+                                    else ST_Distance(polygon::geography, p::geography) end
+                        from city, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) as p
+                        where id = :city""")
+                .param("lon", dropoff.lon()).param("lat", dropoff.lat()).param("city", cityId)
+                .query(Double.class).optional().orElse(0.0);
+        if (outside == 0) {
+            return;
+        }
+        if (!rule.allowed()) {
+            throw new DomainException(ErrorCode.DROPOFF_OUTSIDE_CITY, "The city takes no rides that end outside it");
+        }
+        if (outside > rule.maxDistanceKm() * 1000.0) {
+            throw new DomainException(ErrorCode.DROPOFF_OUTSIDE_CITY,
+                    "The city takes rides that end at most " + rule.maxDistanceKm() + " km outside it");
+        }
+    }
+
     /** Inside one of the intervals; no intervals means around the clock. */
     static boolean open(List<Hours> hours, ZonedDateTime local) {
         if (hours.isEmpty()) {
@@ -180,7 +209,7 @@ class JdbcCityOperations implements CityOperations {
 
     private static final String SELECT = """
             select city_id, working_hours::text as working_hours, payment_methods, return_zone_meters,
-                   orders_paused, pause_reason, paused_at, version
+                   dropoff_outside_allowed, dropoff_outside_max_km, orders_paused, pause_reason, paused_at, version
             from city_operations""";
 
     private Optional<State> read(UUID cityId) {
@@ -211,19 +240,25 @@ class JdbcCityOperations implements CityOperations {
     private void write(State s, Actor actor) {
         jdbc.sql("""
                         insert into city_operations (city_id, working_hours, payment_methods, return_zone_meters,
+                                                     dropoff_outside_allowed, dropoff_outside_max_km,
                                                      orders_paused, pause_reason, paused_at, version, updated_by,
                                                      updated_at)
-                        values (:city, cast(:hours as jsonb), :methods, :returnZone, :paused, :reason, :pausedAt,
-                                :version, :by, :now)
+                        values (:city, cast(:hours as jsonb), :methods, :returnZone, :dropoffAllowed, :dropoffKm,
+                                :paused, :reason, :pausedAt, :version, :by, :now)
                         on conflict (city_id) do update set working_hours = excluded.working_hours,
                             payment_methods = excluded.payment_methods,
-                            return_zone_meters = excluded.return_zone_meters, orders_paused = excluded.orders_paused,
+                            return_zone_meters = excluded.return_zone_meters,
+                            dropoff_outside_allowed = excluded.dropoff_outside_allowed,
+                            dropoff_outside_max_km = excluded.dropoff_outside_max_km,
+                            orders_paused = excluded.orders_paused,
                             pause_reason = excluded.pause_reason, paused_at = excluded.paused_at,
                             version = excluded.version, updated_by = excluded.updated_by,
                             updated_at = excluded.updated_at""")
                 .param("city", s.cityId()).param("hours", json.writeValueAsString(stored(s.workingHours())))
                 .param("methods", new TreeSet<>(s.paymentMethods()).toArray(String[]::new))
                 .param("returnZone", s.returnZoneMeters())
+                .param("dropoffAllowed", s.dropoffOutsideCity().allowed())
+                .param("dropoffKm", s.dropoffOutsideCity().maxDistanceKm())
                 .param("paused", s.ordersPaused()).param("reason", s.pauseReason()).param("pausedAt", s.pausedAt())
                 .param("version", s.version()).param("by", actor.id()).param("now", now()).update();
     }
@@ -242,6 +277,8 @@ class JdbcCityOperations implements CityOperations {
         Array methods = rs.getArray("payment_methods");
         return new State(rs.getObject("city_id", UUID.class), hours,
                 Set.copyOf(Arrays.asList((String[]) methods.getArray())), rs.getInt("return_zone_meters"),
+                new DropoffOutside(rs.getBoolean("dropoff_outside_allowed"),
+                        (Integer) rs.getObject("dropoff_outside_max_km")),
                 rs.getBoolean("orders_paused"),
                 rs.getString("pause_reason"), rs.getObject("paused_at", OffsetDateTime.class), rs.getLong("version"));
     }
@@ -261,6 +298,10 @@ class JdbcCityOperations implements CityOperations {
         m.put("working_hours", stored(s.workingHours()));
         m.put("payment_methods", new TreeSet<>(s.paymentMethods()));
         m.put("return_zone_meters", s.returnZoneMeters());
+        Map<String, Object> dropoff = new LinkedHashMap<>();
+        dropoff.put("allowed", s.dropoffOutsideCity().allowed());
+        dropoff.put("max_distance_km", s.dropoffOutsideCity().maxDistanceKm());
+        m.put("dropoff_outside_city", dropoff);
         m.put("orders_paused", s.ordersPaused());
         m.put("version", s.version());
         return m;
@@ -271,7 +312,7 @@ class JdbcCityOperations implements CityOperations {
     }
 
     private static State defaults(UUID cityId) {
-        return new State(cityId, List.of(), METHODS, 0, false, null, null, 0);
+        return new State(cityId, List.of(), METHODS, 0, DROPOFF_ANYWHERE, false, null, null, 0);
     }
 
     // ---------------------------------------------------------------- validation
@@ -299,6 +340,11 @@ class JdbcCityOperations implements CityOperations {
         if (settings.returnZoneMeters() != null
                 && (settings.returnZoneMeters() < 0 || settings.returnZoneMeters() > MAX_RETURN_ZONE_METERS)) {
             throw invalid("The return zone is 0.." + MAX_RETURN_ZONE_METERS + " metres");
+        }
+        DropoffOutside dropoff = settings.dropoffOutsideCity();
+        if (dropoff != null && dropoff.maxDistanceKm() != null
+                && (dropoff.maxDistanceKm() < 1 || dropoff.maxDistanceKm() > MAX_DROPOFF_DISTANCE_KM)) {
+            throw invalid("The drop-off limit is 1.." + MAX_DROPOFF_DISTANCE_KM + " km");
         }
         return settings;
     }

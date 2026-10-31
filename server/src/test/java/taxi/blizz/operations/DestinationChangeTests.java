@@ -60,6 +60,9 @@ class DestinationChangeTests {
     @Autowired OutboxRelay relay;
     @Autowired JdbcClient jdbc;
     @Autowired javax.sql.DataSource dataSource;
+    @Autowired taxi.blizz.promotions.RiderPromotions riderPromotions;
+    @Autowired taxi.blizz.finance.RiderWallets wallets;
+    @Autowired taxi.blizz.geo.CityOperations cityOperations;
 
     TestRides rides;
     UUID city;
@@ -77,10 +80,12 @@ class DestinationChangeTests {
 
     /**
      * The fake provider's captures are left to nobody, even when a test fails halfway: another class's payment worker
-     * would take them and use up that class's scripted answers.
+     * would take them and use up that class's scripted answers. Events still in the outbox are delivered first, or a
+     * capture they ask for would come after the clean-up.
      */
     @org.junit.jupiter.api.AfterEach
     void cancelLeftoverCaptures() {
+        deliverEvents();
         jdbc.sql("""
                         update payment_operation set state = 'CANCELLED'
                         where intent_id in (select id from payment_intent where city_id = :c)
@@ -121,6 +126,11 @@ class DestinationChangeTests {
 
     /** A card order in the city, its hold in place, accepted by a driver near the pickup and started. */
     private TestRides.Ride startedCardRide() {
+        return startedCardRide(rides.client(), null);
+    }
+
+    /** {@code walletMinor}: bonuses the rider asks to pay with, null — none. */
+    private TestRides.Ride startedCardRide(Actor rider, Long walletMinor) {
         UUID merchant = jdbc.sql("select merchant_id from payment_merchant_city where city_id = :city")
                 .param("city", city).query(UUID.class).optional().orElseGet(() -> {
                     UUID id = UUID.randomUUID();
@@ -133,7 +143,6 @@ class DestinationChangeTests {
                             .param("city", city).param("merchant", id).update();
                     return id;
                 });
-        Actor rider = rides.client();
         jdbc.sql("""
                         insert into payment_card (id, client_id, merchant_id, token, masked_pan, card_type, state,
                                                   created_at)
@@ -143,7 +152,7 @@ class DestinationChangeTests {
         TestRides.Driver driver = rides.driverNear(PICKUP);
         UUID quote = new TestQuotes(jdbc, quotes).quote(rider, city, "STANDARD", PICKUP, DROPOFF).id();
         OrderView order = orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
-                "Home", DROPOFF, "Work", PaymentMethod.CARD, quote));
+                "Home", DROPOFF, "Work", PaymentMethod.CARD, quote, null, null, null, null, false, walletMinor));
         assertThat(intent(order.id())).containsEntry("state", "AUTHORIZED");
         deliverEvents();
         dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(),
@@ -494,6 +503,76 @@ class DestinationChangeTests {
                 .param("o", order).query(Long.class).single()).isZero();
         rides.complete(ride, null);
         offline(ride.driver());
+        deliverEvents();
+    }
+
+    @Test
+    void theDiscountAndTheBonusesCountBeforeTheHoldIsCompared() {
+        // A discount of 20.00 by a promotion of the city and 30.00 of bonuses: the hold is the price less both.
+        Actor marketing = staff(city, taxi.blizz.promotions.RiderPromotions.MANAGE_PERMISSION,
+                taxi.blizz.finance.RiderWallets.MANAGE_PERMISSION);
+        taxi.blizz.promotions.RiderPromotions.Promotion promotion = riderPromotions.create(marketing,
+                UUID.randomUUID(), new taxi.blizz.promotions.RiderPromotions.Draft("Destination test",
+                        taxi.blizz.promotions.RiderPromotions.Kind.DISCOUNT,
+                        taxi.blizz.promotions.RiderPromotions.ValueType.FIXED, 2_000, "UAH",
+                        new taxi.blizz.promotions.RiderPromotions.Conditions(city, null, null, null, null, null, null,
+                                null, null, null)), "test");
+        try {
+            Actor rider = rides.client();
+            wallets.topUp(marketing, UUID.randomUUID(), rider.id(), "UAH", 3_000, "Test bonuses");
+            TestRides.Ride ride = startedCardRide(rider, 3_000L);
+            UUID order = ride.order().id();
+            long price = row(order).priceMinor();
+            long hold = ((Number) intent(order).get("hold_minor")).longValue();
+            assertThat(hold).as("the price less the discount and the bonuses").isEqualTo(price - 5_000);
+
+            // The same destination under another name: the same price, above the hold until the discount and the
+            // bonuses are taken off it.
+            DestinationChanges.Changed changed = destinations.change(support(), UUID.randomUUID(), order,
+                    row(order).version(), to(DROPOFF, "The office"));
+
+            assertThat(changed.priceMinor()).isEqualTo(price).isGreaterThan(hold);
+            assertThat(changed.aboveHold()).isFalse();
+            deliverEvents();
+            assertThat(jdbc.sql("select count(*) from support_case where order_id = :o and category = 'PAYMENT'")
+                    .param("o", order).query(Long.class).single()).isZero();
+            rides.complete(ride, null);
+            offline(ride.driver());
+            deliverEvents();
+        } finally {
+            riderPromotions.archive(marketing, UUID.randomUUID(), promotion.id(),
+                    riderPromotions.list(marketing, false).stream().filter(p -> p.id().equals(promotion.id()))
+                            .findFirst().orElseThrow().version(), "test clean-up");
+        }
+    }
+
+    @Test
+    void aDestinationTheCityDoesNotAllowIsRefusedAsAtTheQuote() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        TestRides.Ride ride = rides.started(city, driver, PICKUP, DROPOFF);
+        UUID order = ride.order().id();
+        Actor cityOps = staff(city, taxi.blizz.geo.GeoConfiguration.MANAGE_PERMISSION);
+        taxi.blizz.geo.CityOperations.State state = cityOperations.get(cityOps, city);
+        state = cityOperations.change(cityOps, UUID.randomUUID(), city, state.version(),
+                new taxi.blizz.geo.CityOperations.Settings(state.workingHours(), state.paymentMethods(), null,
+                        new taxi.blizz.geo.CityOperations.DropoffOutside(false, null)), "No rides out of town");
+        try {
+            OrderRow before = row(order);
+            GeoPoint outOfTown = new GeoPoint(-38.8, 101.5);
+
+            assertCode(() -> destinations.change(support(), UUID.randomUUID(), order, before.version(),
+                    to(outOfTown, "Another town")), ErrorCode.DROPOFF_OUTSIDE_CITY);
+
+            assertThat(row(order)).isEqualTo(before);
+            assertThat(events(order, DestinationChanges.EVENT)).isZero();
+        } finally {
+            taxi.blizz.geo.CityOperations.State now = cityOperations.get(cityOps, city);
+            cityOperations.change(cityOps, UUID.randomUUID(), city, now.version(),
+                    new taxi.blizz.geo.CityOperations.Settings(now.workingHours(), now.paymentMethods(), null,
+                            taxi.blizz.geo.CityOperations.DROPOFF_ANYWHERE), "Test clean-up");
+        }
+        rides.complete(ride, true);
+        offline(driver);
         deliverEvents();
     }
 
