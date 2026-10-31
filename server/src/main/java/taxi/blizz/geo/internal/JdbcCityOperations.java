@@ -158,8 +158,30 @@ class JdbcCityOperations implements CityOperations {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public void requireDropoff(UUID cityId, taxi.blizz.geo.GeoPoint dropoff) {
-        throw new UnsupportedOperationException("issue #142, part D1");
+        DropoffOutside rule = of(cityId).dropoffOutsideCity();
+        if (rule.allowed() && rule.maxDistanceKm() == null) {
+            return;
+        }
+        // Straight-line metres from the city's polygon; 0 inside it.
+        double outside = jdbc.sql("""
+                        select case when ST_Covers(polygon, p) then 0
+                                    else ST_Distance(polygon::geography, p::geography) end
+                        from city, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) as p
+                        where id = :city""")
+                .param("lon", dropoff.lon()).param("lat", dropoff.lat()).param("city", cityId)
+                .query(Double.class).optional().orElse(0.0);
+        if (outside == 0) {
+            return;
+        }
+        if (!rule.allowed()) {
+            throw new DomainException(ErrorCode.DROPOFF_OUTSIDE_CITY, "The city takes no rides that end outside it");
+        }
+        if (outside > rule.maxDistanceKm() * 1000.0) {
+            throw new DomainException(ErrorCode.DROPOFF_OUTSIDE_CITY,
+                    "The city takes rides that end at most " + rule.maxDistanceKm() + " km outside it");
+        }
     }
 
     /** Inside one of the intervals; no intervals means around the clock. */

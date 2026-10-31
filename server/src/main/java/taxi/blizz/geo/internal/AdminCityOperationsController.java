@@ -38,8 +38,9 @@ class AdminCityOperationsController {
                      @NotNull @Pattern(regexp = HHMM) String to) {
     }
 
-    record DropoffView(@NotNull Boolean allowed, @Min(1)
-                       @jakarta.validation.constraints.Max(CityOperations.MAX_DROPOFF_DISTANCE_KM) Integer maxDistanceKm) {
+    record DropoffView(@NotNull Boolean allowed,
+                       @Min(1) @jakarta.validation.constraints.Max(CityOperations.MAX_DROPOFF_DISTANCE_KM)
+                       Integer maxDistanceKm) {
     }
 
     record OperationsView(UUID cityId, List<HoursView> workingHours, Set<String> paymentMethods, int returnZoneMeters,

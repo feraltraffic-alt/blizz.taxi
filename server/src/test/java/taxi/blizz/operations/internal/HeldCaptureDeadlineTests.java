@@ -161,7 +161,9 @@ class HeldCaptureDeadlineTests {
         trip = trips.current(driver.actor()).orElseThrow();
         trip = trips.complete(driver.actor(), UUID.randomUUID(), trip.id(), trip.version(), OffsetDateTime.now(),
                 null);
-        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where driver_id = :d and state <> 'CLOSED'")
+        jdbc.sql("""
+                        update work_session set state = 'CLOSED', closed_at = now()
+                        where driver_id = :d and state <> 'CLOSED'""")
                 .param("d", driver.actor().id()).update();
         deliverEvents();
         assertThat(intent(order.id())).as("the capture waits for the review").containsEntry("state", "AUTHORIZED");

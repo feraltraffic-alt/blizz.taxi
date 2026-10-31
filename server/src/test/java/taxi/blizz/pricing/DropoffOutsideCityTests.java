@@ -55,7 +55,8 @@ class DropoffOutsideCityTests {
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
                                                 created_at, updated_at)
-                        values (:id, :login, 'City ops', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())""")
+                        values (:id, :login, 'City ops', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(),
+                                now())""")
                 .param("id", id).param("login", "dropoff-" + id)
                 .param("permissions", new String[] {GeoConfiguration.MANAGE_PERMISSION})
                 .param("scope", new UUID[] {city}).update();
