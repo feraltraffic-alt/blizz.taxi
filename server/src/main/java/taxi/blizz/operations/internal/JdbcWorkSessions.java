@@ -47,7 +47,6 @@ import taxi.blizz.platform.SubjectType;
  * before the capacity, in the order every assignment takes.
  */
 @Service
-    // Negative control of the line-length ratchet (issue 149): this comment is deliberately longer than 120 chars................
 class JdbcWorkSessions implements WorkSessions {
 
     /** How long the driver's last accepted position stays the baseline for the next one (issue #102). */
