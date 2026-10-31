@@ -5,7 +5,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":50.4501,"lon":30.5234}'
 DROPOFF='{"lat":50.4405,"lon":30.4890}'
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
 REQUEST=$(uuid)
 ORDER=""
 cleanup() {

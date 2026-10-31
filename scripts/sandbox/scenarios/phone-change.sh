@@ -4,7 +4,7 @@
 # another one with a reason; every session ends. Riders only, made fresh: nothing shared to restore.
 source "$(dirname "$0")/../lib.sh"
 
-random_phone() { echo "+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"; }
+random_phone() { echo "+38063$(random_digits 7)"; }
 code_for() { api GET "/sandbox/v1/otp?phone=$(jq -rn --arg p "$1" '$p|@uri')" | jq -r .code; }
 
 OLD=$(random_phone); NEW=$(random_phone); LAST=$(random_phone)

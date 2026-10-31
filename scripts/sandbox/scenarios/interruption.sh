@@ -5,7 +5,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":50.4268,"lon":30.5636}'    # Палац спорту... south-east of the centre
 DROPOFF='{"lat":50.3906,"lon":30.4825}'   # Голосіїв
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
 
 say "A ride starts with Ivan"
 IVAN=$(sign_in DRIVER "+380500000001")

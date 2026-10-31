@@ -8,7 +8,7 @@ source "$(dirname "$0")/../lib.sh"
 ANDRII_ID="5a000000-0000-4000-8000-000000000403"; OLEH_ID="5a000000-0000-4000-8000-000000000402"
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890
-RIDER_PHONE="+38068$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38068$(random_digits 7)"
 
 ORDER=""
 # Whatever happens: the order cancelled, both drivers offline.

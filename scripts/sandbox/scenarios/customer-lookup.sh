@@ -3,8 +3,8 @@
 # with their latest orders; a prefix, the phone with spaces and a name find nobody (400); an unknown number is 404.
 source "$(dirname "$0")/../lib.sh"
 
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
-UNKNOWN_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
+UNKNOWN_PHONE="+38066$(random_digits 7)"
 
 say "A rider signs in and orders"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")

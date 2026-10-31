@@ -8,7 +8,7 @@ source "$(dirname "$0")/../lib.sh"
 PICKUP='{"lat":52.2297,"lon":21.0122}'    # Warszawa, Pałac Kultury
 DROPOFF='{"lat":52.2319,"lon":21.0067}'   # Warszawa Centralna
 LODZ='{"lat":51.7592,"lon":19.4560}'      # Łódź, about 120 km away
-RIDER_PHONE="+48600$(printf '%06d' $(( (RANDOM * 32768 + RANDOM) % 1000000 )))"
+RIDER_PHONE="+48600$(random_digits 6)"
 
 say "Staff open Warsaw's operations (version 0 until the first change: around the clock, every method)"
 ADMIN=$(admin_token)

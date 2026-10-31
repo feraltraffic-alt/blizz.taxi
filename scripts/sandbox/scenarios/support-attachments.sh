@@ -4,7 +4,7 @@
 # antivirus finds, and a PDF whose JavaScript action hides behind a name escape (/J#61vaScript).
 source "$(dirname "$0")/../lib.sh"
 
-RIDER_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38067$(random_digits 7)"
 PNG=/tmp/support-attachment.png
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d >"$PNG"
 SIZE=$(wc -c <"$PNG" | tr -d ' ')

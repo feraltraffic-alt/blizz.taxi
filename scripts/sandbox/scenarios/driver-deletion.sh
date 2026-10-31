@@ -4,7 +4,7 @@
 # complete it; the old token gives 401 and the same phone signs in as a new driver.
 source "$(dirname "$0")/../lib.sh"
 
-DRIVER_PHONE="+38095$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+DRIVER_PHONE="+38095$(random_digits 7)"
 
 say "A new driver signs in"
 DRIVER=$(sign_in DRIVER "$DRIVER_PHONE")

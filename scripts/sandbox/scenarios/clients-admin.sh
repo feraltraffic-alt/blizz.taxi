@@ -3,7 +3,7 @@
 # the session ends and a new sign-in is refused (REQ-AUTH-07) — and unblock; the rider signs in again.
 source "$(dirname "$0")/../lib.sh"
 
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
 
 say "A rider signs in"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")

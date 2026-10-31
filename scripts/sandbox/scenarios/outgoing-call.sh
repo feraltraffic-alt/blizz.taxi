@@ -4,7 +4,7 @@
 # (REQ-PRV-03). The call's events come through /sandbox/v1/calls/events; it is recorded like an incoming one.
 source "$(dirname "$0")/../lib.sh"
 
-CALLER="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+CALLER="+38067$(random_digits 7)"
 DIGITS="${CALLER#+}"
 PICKUP='{"lat":50.4501,"lon":30.5234}'
 DROPOFF='{"lat":50.4405,"lon":30.4890}'
