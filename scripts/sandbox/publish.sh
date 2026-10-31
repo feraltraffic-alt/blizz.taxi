@@ -4,7 +4,7 @@
 set -euo pipefail
 : "${GH_TOKEN:?}" "${GITHUB_REPOSITORY:?}" "${GITHUB_RUN_ID:?}"
 src="$PWD"
-dir="runs/${GITHUB_RUN_ID}"
+dir="runs/${RUN_DIR:-$GITHUB_RUN_ID}" # the fault tests add their negative control
 work=$(mktemp -d)
 cd "$work"
 git init -q

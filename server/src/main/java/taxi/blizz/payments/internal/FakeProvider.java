@@ -29,9 +29,62 @@ class FakeProvider extends WayForPayProvider {
         private final Map<String, String> statusOf = new ConcurrentHashMap<>();
         private final List<Map<String, Object>> requests = new ArrayList<>();
 
+        /**
+         * The fault tests' bank (issue #146): with {@code journal}, every request and every status the bank keeps is
+         * appended to that file and read back at start, so the bank remembers across a crash of this process, as a
+         * real one would. Null keeps it in memory only.
+         */
+        private final java.nio.file.Path journal;
+        private boolean replaying;
+
         Gateway(Function<String, String> secretOfAccount, Clock clock) {
+            this(secretOfAccount, clock, null);
+        }
+
+        Gateway(Function<String, String> secretOfAccount, Clock clock, java.nio.file.Path journal) {
             this.secretOfAccount = secretOfAccount;
             this.clock = clock;
+            this.journal = journal;
+            if (journal != null && java.nio.file.Files.exists(journal)) {
+                replay();
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private synchronized void replay() {
+            replaying = true;
+            try {
+                for (String line : java.nio.file.Files.readAllLines(journal)) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    Map<String, Object> entry = PaymentsConfiguration.PROVIDER_JSON.readValue(line, Map.class);
+                    switch ((String) entry.get("kind")) {
+                        case "record" -> record((String) entry.get("account"), (String) entry.get("reference"),
+                                (String) entry.get("status"), (String) entry.get("amount"),
+                                (String) entry.get("currency"));
+                        case "status" -> record((String) entry.get("reference"), (String) entry.get("status"));
+                        default -> { } // a request: counted by the fault tests, nothing to restore
+                    }
+                }
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            } finally {
+                replaying = false;
+            }
+        }
+
+        private void journal(Map<String, Object> entry) {
+            if (journal == null || replaying) {
+                return;
+            }
+            try {
+                java.nio.file.Files.writeString(journal,
+                        PaymentsConfiguration.PROVIDER_JSON.writeValueAsString(entry) + "\n",
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
         }
 
         /**
@@ -48,6 +101,7 @@ class FakeProvider extends WayForPayProvider {
 
         /** What the bank now knows about {@code reference}, e.g. a payment made on the FAKE payment page. */
         synchronized void record(String reference, String status) {
+            journal(Map.of("kind", "status", "reference", reference, "status", status));
             statusOf.replaceAll((key,old)->key.endsWith("\0"+reference)?status:old);
             for (Map<String,Map<String,Object>> entries:statement.values()) {
                 Map<String,Object> old=entries.get(reference);
@@ -67,6 +121,8 @@ class FakeProvider extends WayForPayProvider {
         }
 
         synchronized void record(String account, String reference, String status, String amount, String currency) {
+            journal(Map.of("kind", "record", "account", account, "reference", reference, "status", status,
+                    "amount", amount, "currency", currency));
             statusOf.put(account+"\0"+reference,status);
             Map<String,Map<String,Object>> entries=statement.computeIfAbsent(account, ignored->new LinkedHashMap<>());
             Map<String,Object> old=entries.get(reference);
@@ -126,6 +182,13 @@ class FakeProvider extends WayForPayProvider {
         @Override
         public synchronized Map<String, Object> post(String url, Map<String, Object> body) throws Exception {
             requests.add(Map.copyOf(body));
+            Map<String, Object> request = new LinkedHashMap<>();
+            request.put("kind", "request");
+            request.put("type", String.valueOf(body.get("transactionType")));
+            request.put("merchant_type", String.valueOf(body.get("merchantTransactionType")));
+            request.put("reference", String.valueOf(body.get("orderReference")));
+            request.put("amount", String.valueOf(body.get("amount")));
+            journal(request);
             String account = (String) body.get("merchantAccount");
             String type = (String) body.get("transactionType");
             String reference = (String) body.get("orderReference");

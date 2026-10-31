@@ -109,7 +109,7 @@ class JdbcDispatch implements Dispatch {
     public AssignmentView accept(Actor driver, UUID deviceSessionId, UUID commandId, UUID offerId) {
         requireDriver(driver);
         rateLimits.acquire(taxi.blizz.platform.RateLimits.OFFER_ACCEPT, driver);
-        return commands.execute(new CommandKey(driver, "offer.accept", commandId),
+        AssignmentView accepted = commands.execute(new CommandKey(driver, "offer.accept", commandId),
                 new AcceptRequest(offerId, deviceSessionId), AssignmentView.class, () -> {
                     UUID orderId = orderOfOffer(offerId, driver);
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
@@ -138,6 +138,9 @@ class JdbcDispatch implements Dispatch {
                             .update();
                     return commit(order, driver, availability.vehicleId(), "OFFER", offerId);
                 });
+        // Fault tests (issue #146): the assignment is committed, the driver has not had the answer.
+        taxi.blizz.platform.CrashPoints.reach("dispatch.after-accept", null);
+        return accepted;
     }
 
     @Override

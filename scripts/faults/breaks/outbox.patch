@@ -1,0 +1,13 @@
+diff --git a/server/src/main/java/taxi/blizz/platform/internal/OutboxRelay.java b/server/src/main/java/taxi/blizz/platform/internal/OutboxRelay.java
+index 7d8a8ec..7e77c0e 100644
+--- a/server/src/main/java/taxi/blizz/platform/internal/OutboxRelay.java
++++ b/server/src/main/java/taxi/blizz/platform/internal/OutboxRelay.java
+@@ -116,7 +116,7 @@ public class OutboxRelay {
+                     .param("eventId", message.eventId())
+                     .param("now", now())
+                     .update();
+-            if (fresh == 1) {
++            if (fresh >= 0) {
+                 handler.handle(message);
+             }
+         });
