@@ -222,12 +222,14 @@ class DriverDeletionTests {
                 .containsEntry("deletion_previous_state", null).containsEntry("deletion_requested_at", null);
 
         // A blocked driver may ask too, and goes back to BLOCKED.
-        jdbc.sql("update driver set account_state = 'BLOCKED' where id = :id").param("id", driver.actor().id())
+        TestRides.Driver blocked = rides.driverNear(PICKUP);
+        offline(blocked.actor());
+        jdbc.sql("update driver set account_state = 'BLOCKED' where id = :id").param("id", blocked.actor().id())
                 .update();
-        UUID again = deletions.requestCode(driver.actor(), null, null).challengeId();
-        assertThat(deletions.request(driver.actor(), current.sessionId(), UUID.randomUUID(), again,
+        UUID again = deletions.requestCode(blocked.actor(), null, null).challengeId();
+        assertThat(deletions.request(blocked.actor(), blocked.device(), UUID.randomUUID(), again,
                 delivery.sent.getLast().code()).accountState()).isEqualTo("DELETION_PENDING");
-        assertThat(deletions.cancel(driver.actor(), UUID.randomUUID()).accountState()).isEqualTo("BLOCKED");
+        assertThat(deletions.cancel(blocked.actor(), UUID.randomUUID()).accountState()).isEqualTo("BLOCKED");
     }
 
     @Test
@@ -305,6 +307,11 @@ class DriverDeletionTests {
         offline(offered.actor());
 
         // A pre-order reservation.
+        jdbc.sql("""
+                        update ride_order set preorder = true, pickup_at = now() + interval '3 hours',
+                                              release_at = now() + interval '150 minutes'
+                        where id = :id""")
+                .param("id", order.id()).update();
         jdbc.sql("""
                         insert into preorder_reservation (id, order_id, driver_id, state, reserved_at)
                         values (:id, :order, :driver, 'RESERVED', now())""")

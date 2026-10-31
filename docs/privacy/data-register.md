@@ -42,8 +42,13 @@ Common to all rows:
   `ClientAnonymized`. The erasure journal applies both again after a restore. Free text becomes `[deleted]`, labels
   `—`, points are rounded to two decimals (about 1 km), files are deleted from storage. An order with an open
   chargeback is held (`privacy_hold`) until the chargeback is decided. `RiderErasureTests` reads every text column of
-  the schema and finds neither the phone nor the rider's words after a deletion. Driver and staff deletion does not
-  exist yet: **gap**, #144 PR 3 for drivers.
+  the schema and finds neither the phone nor the rider's words after a deletion.
+- **Driver deletion** (#144): the same shape. The driver asks with a code; while the request is pending the
+  session is limited like a blocked driver's and no order is offered. Staff complete it once no trip, offer,
+  reservation, debt or open cash dispute is left (`DRIVER_HAS_ACTIVE_WORK`, `DRIVER_HAS_DEBT`,
+  `DRIVER_HAS_DISPUTE`). Phone-only data goes through `DriverErasing`, the rest follows `DriverAnonymized`, and the
+  erasure journal replays it after a restore. `DriverErasureTests` runs the same every-column search for the driver.
+  Staff deletion does not exist: **owner** (staff accounts are deactivated, question 9).
 
 ## Categories
 
@@ -73,11 +78,17 @@ Common to all rows:
 - **Basis:** contract with the driver; documents: legal obligation of a taxi operator — **owner** per country.
 - **Recipients:** the rider sees the name, car and registration number of the assigned driver; staff with
   `drivers.*` permissions; document scans only to reviewers.
-- **Term:** while the driver works with the service. Document scans and review history after the driver leaves:
-  **owner**. Nothing is deleted today. How long a taxi operator must keep the document files as proof of the licence
-  check: **owner**; #144 PR 3 makes it a setting (default 0 = deleted with the driver's erasure).
-- **At expiry:** none: **gap**, #144 PR 3 (driver deletion with the blockers active work, debt, dispute).
-- **Legal hold:** a debt, an open dispute or an investigation — to be enforced by PR 3.
+- **Term:** while the driver works with the service, then until the driver asks for the deletion. How long a taxi
+  operator must keep the document files as proof of the licence check: **owner**; the setting
+  `DRIVER_DOCUMENT_KEEP` (`blizz.driver.document-keep`) holds the answer, 0 by default = deleted with the erasure.
+- **At expiry:** on the driver's deletion: phone, name and language cleared, state `ANONYMIZED`, every session and
+  push device ends, an open shift is closed. The documents keep their type, validity and decision; their numbers and
+  the reviewers' reasons are cleared at once, their files are deleted from storage after `DRIVER_DOCUMENT_KEEP`. The
+  driver's chat messages, rating comments and support texts become `[deleted]`, support files are deleted. Codes,
+  code deliveries and the calls of the driver's phone are erased as for a rider. The vehicle (plate, model, colour)
+  stays with the trips it served — basis **owner**. Review events and risk flags keep staff's reasons — **owner**.
+- **Legal hold:** a trip, offer or reservation, a debt to the service, or a cash dispute not decided blocks the
+  deletion itself (each with its code). An investigation — **owner**.
 - **Owner:** **owner** (driver operations).
 
 ### 3. Sign-in codes and code deliveries
@@ -234,7 +245,8 @@ Common to all rows:
 - **Basis:** legal obligation (accounting) — **owner**.
 - **Recipients:** the driver sees their own balance; finance staff.
 - **Term:** kept for ever; never deleted by any job (#118) — **owner** (accounting term).
-- **At expiry:** none; rows refer to ids, not names.
+- **At expiry:** none; rows refer to ids, not names. A deleted driver's lines stay unchanged under the driver id
+  (AC-24; `DriverDeletionTests` compares them before and after).
 - **Owner:** **owner** (finance).
 
 ### 15. Notifications and push devices
@@ -315,7 +327,8 @@ Common to all rows:
 | Free text of a deleted rider survives (orders, chat, support, ratings, notifications) | 6, 8, 9, 10, 15 | 2, closed |
 | Exact points of a deleted rider's orders and quotes | 6 | 2, closed |
 | An open chargeback does not hold deletion | 1, 6, 13 | 2, closed |
-| Drivers cannot be deleted or export their data | 2 | 3 |
+| Drivers cannot be deleted | 2 | 3, closed |
+| Drivers cannot export their data | 2 | 4 |
 
 The first register said expired data export files are not deleted; they are (`content` is set to null at expiry).
 

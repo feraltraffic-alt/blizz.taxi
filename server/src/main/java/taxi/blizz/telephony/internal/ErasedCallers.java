@@ -29,6 +29,11 @@ class ErasedCallers implements ClientErasing {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void erasing(UUID clientId, String phone) {
+        erase(jdbc, clock, phone, "CLIENT");
+    }
+
+    /** The calls from {@code phone} lose their number, their recordings are queued, the code deliveries go. */
+    static void erase(JdbcClient jdbc, Clock clock, String phone, String audience) {
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         jdbc.sql("""
                         update call_recording set erase_requested_at = :now
@@ -39,7 +44,7 @@ class ErasedCallers implements ClientErasing {
                         update call set caller_phone = null, caller_raw = null, version = version + 1
                         where caller_phone = :phone""")
                 .param("phone", phone).update();
-        jdbc.sql("delete from otp_delivery where audience = 'CLIENT' and phone = :phone").param("phone", phone)
-                .update();
+        jdbc.sql("delete from otp_delivery where audience = :audience and phone = :phone")
+                .param("audience", audience).param("phone", phone).update();
     }
 }
