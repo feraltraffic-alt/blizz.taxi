@@ -437,4 +437,10 @@ class JdbcCardPayments implements CardPayments {
     private static DomainException invalid(String message) {
         return new DomainException(ErrorCode.VALIDATION_FAILED, message);
     }
+
+    @Override
+    public Optional<OffsetDateTime> holdExpiresAt(UUID orderId) {
+        throw new UnsupportedOperationException("issue #142, review of #169");
+    }
+
 }

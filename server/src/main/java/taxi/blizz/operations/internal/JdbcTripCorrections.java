@@ -233,13 +233,14 @@ class JdbcTripCorrections implements TripCorrections {
     private Facts view(UUID orderId, Trip trip) {
         List<Correction> list = jdbc.sql("""
                         select id, kind, recorded_value, corrected_value, reason, created_by, created_at,
-                               holds_capture, reviewed_at, reviewed_by
+                               holds_capture, reviewed_at, reviewed_by, released_by_deadline_at
                         from trip_correction where trip_id = :trip order by created_at, id""")
                 .param("trip", trip.id())
                 .query((rs, i) -> new Correction(rs.getObject(1, UUID.class), rs.getString(2),
                         rs.getObject(3, OffsetDateTime.class), rs.getObject(4, OffsetDateTime.class), rs.getString(5),
                         rs.getObject(6, UUID.class), rs.getObject(7, OffsetDateTime.class), rs.getBoolean(8),
-                        rs.getObject(9, OffsetDateTime.class), rs.getObject(10, UUID.class)))
+                        rs.getObject(9, OffsetDateTime.class), rs.getObject(10, UUID.class),
+                        rs.getObject(11, OffsetDateTime.class)))
                 .list();
         OffsetDateTime start = null;
         OffsetDateTime end = null;

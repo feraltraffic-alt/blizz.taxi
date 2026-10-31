@@ -15,10 +15,17 @@ public interface TripCorrections {
 
     String CORRECT_PERMISSION = "trips.correct";
 
-    /** {@code kind}: START_VOID, STARTED_AT or COMPLETED_AT; {@code correctedValue} null for START_VOID. */
+    /** How long before the card hold expires a held capture starts without the review; a setting, default 6 hours. */
+    String HELD_CAPTURE_MARGIN = "blizz.trips.held-capture-margin";
+
+    /**
+     * {@code kind}: START_VOID, STARTED_AT or COMPLETED_AT; {@code correctedValue} null for START_VOID.
+     * {@code releasedByDeadlineAt}: when the capture it held started without the review, the card hold being about to
+     * expire ({@link #HELD_CAPTURE_MARGIN} before); it still waits for the review.
+     */
     record Correction(UUID id, String kind, OffsetDateTime recordedValue, OffsetDateTime correctedValue, String reason,
                       UUID authorId, OffsetDateTime createdAt, boolean holdsCapture, OffsetDateTime reviewedAt,
-                      UUID reviewedBy) {
+                      UUID reviewedBy, OffsetDateTime releasedByDeadlineAt) {
     }
 
     /** The trip's recorded times and, beside them, the latest correction of each. */

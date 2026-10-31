@@ -5448,7 +5448,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, kind, recorded_value, corrected_value, reason, author_id, created_at, holds_capture, reviewed_at,
-                 reviewed_by]
+                 reviewed_by, released_by_deadline_at]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -5478,6 +5478,13 @@ components:
           oneOf:
             - $ref: "./common.yaml#/components/schemas/Uuid"
             - type: "null"
+        released_by_deadline_at:
+          description: >-
+            When the capture this correction held was started without a review because the card hold was about to
+            expire (blizz.trips.held-capture-margin before it). The correction still waits for its review; any
+            difference found then is a fare correction.
+          type: [string, "null"]
+          format: date-time
 
     TripFacts:
       type: object
