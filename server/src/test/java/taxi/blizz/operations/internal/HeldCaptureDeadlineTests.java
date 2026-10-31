@@ -68,6 +68,7 @@ class HeldCaptureDeadlineTests {
     @Autowired JdbcClient jdbc;
     @Autowired List<DatabaseGauges> gauges;
     @Autowired MeterRegistry meters;
+    @Autowired javax.sql.DataSource dataSource;
 
     TestRides rides;
     UUID city;
@@ -310,4 +311,55 @@ class HeldCaptureDeadlineTests {
                 .allSatisfy(c -> assertThat(c.releasedByDeadlineAt()).isNull());
         cancelLeftoverPayments(order);
     }
+
+    /**
+     * Review of #169: a review and the deadline job at the same moment release the capture once. The order is held
+     * elsewhere while the job and then the review wait for it, so the job goes first: without the review taking the
+     * order lock first, the two lock the order and the corrections in opposite orders and one of them dies.
+     */
+    @Test
+    void aReviewAndTheDeadlineAtOnceReleaseTheCaptureOnce() throws Exception {
+        Actor staff = reviewer();
+        TestRides.Ride ride = heldCardRide(staff);
+        UUID order = ride.order().id();
+        Instant now = Instant.now();
+        holdUntil(order, now.plus(Duration.ofHours(1)));
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.Future<Integer> job;
+        java.util.concurrent.Future<TripCorrections.Facts> review;
+        try (java.sql.Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("select id from ride_order where id = ? for update")) {
+                lock.setObject(1, order);
+                lock.executeQuery();
+            }
+            job = pool.submit(() -> deadline.releaseExpiring(now));
+            waitForLockWaiters(1);
+            review = pool.submit(() -> corrections.review(staff, UUID.randomUUID(), order, "Checked the track"));
+            waitForLockWaiters(2);
+            holder.commit();
+        }
+        try {
+            assertThat(job.get(30, java.util.concurrent.TimeUnit.SECONDS)).as("the job released it").isOne();
+            assertThat(review.get(30, java.util.concurrent.TimeUnit.SECONDS).corrections())
+                    .allSatisfy(c -> assertThat(c.reviewedAt()).isNotNull());
+        } finally {
+            pool.shutdownNow();
+        }
+        deliverEvents();
+        assertThat(releasedEvents(order)).isOne();
+        assertThat(settles(order)).isOne();
+    }
+
+    private void waitForLockWaiters(int count) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+        while (jdbc.sql("""
+                        select count(*) from pg_stat_activity
+                        where wait_event_type = 'Lock' and datname = current_database()""")
+                .query(Long.class).single() < count) {
+            assertThat(System.nanoTime()).as("%d commands wait for a lock", count).isLessThan(deadlineNanos);
+            Thread.sleep(20);
+        }
+    }
+
 }
