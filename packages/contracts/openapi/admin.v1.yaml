@@ -1858,6 +1858,82 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/orders/{order_id}/fare:
+    get:
+      operationId: getAdminOrderFare
+      summary: The order's final fare, every version, and a refund owed
+      description: >-
+        Every version of the final fare, oldest first, with the corrections' reasons and authors (REQ-PRC-10, issue
+        #142). refund_obligation_minor is what a lower fare left the service owing the rider after their open debt
+        on the order was used; refund_state WAITING_FOR_REFUND_FLOW says it is recorded and waits for the refund flow
+        (#140, Q-06) — do not refund it by hand. Needs orders.view in the order's city.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderFare"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/orders/{order_id}/fare-corrections:
+    post:
+      operationId: correctAdminOrderFare
+      summary: Correct a fulfilled order's final fare
+      description: >-
+        A command (REQ-ADM-03, REQ-PRC-10, issue #142): a new version of the final fare with the new amount, split by
+        the same commission rate, the reason, the author and a link to the version it corrects; the original is never
+        changed. The difference is posted to the journal once: a higher fare is a debt of the rider (never a second
+        capture), a lower one first reduces the rider's open debt on the order and the rest becomes a refund obligation
+        (REFUNDS_PAYABLE). Needs fares.correct in the order's city and the staff member's password again (REQ-ADM-10;
+        a wrong one → 403 ACCESS_DENIED and counts like a failed sign-in). expected_version is the current version:
+        another → 409 VERSION_CONFLICT with current_version. An order not FULFILLED, or the same amount → 409
+        STATE_CONFLICT; a payment still in progress → 409 PAYMENT_PENDING. Audited and in the order's history.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FareCorrectionCommand"
+      responses:
+        "200":
+          description: Corrected; the order's fare after it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderFare"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/admin/v1/orders/{order_id}/cash-dispute:
     get:
       operationId: getCashDispute
@@ -5218,6 +5294,92 @@ components:
     SubjectBearer:
       $ref: "./common.yaml#/components/securitySchemes/SubjectBearer"
   schemas:
+    FareCorrectionCommand:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, amount_minor, reason, password]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          description: The current version of the final fare.
+          type: integer
+          minimum: 1
+        amount_minor:
+          description: The correct total fare.
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        password:
+          description: The acting staff member's own password, asked again for a money change (REQ-ADM-10).
+          type: string
+          minLength: 1
+
+    FareVersion:
+      type: object
+      additionalProperties: false
+      required: [id, version, amount_minor, commission_minor, driver_share_minor, created_at, corrects_id, reason,
+                 author_id]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        version:
+          type: integer
+          minimum: 1
+        amount_minor:
+          type: integer
+          format: int64
+        commission_minor:
+          type: integer
+          format: int64
+        driver_share_minor:
+          type: integer
+          format: int64
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
+        corrects_id:
+          description: The version this one corrects; null for the first.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        reason:
+          type: [string, "null"]
+        author_id:
+          description: The staff member who corrected it; null for the first.
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+
+    OrderFare:
+      type: object
+      additionalProperties: false
+      required: [order_id, currency, current_version, versions, refund_obligation_minor, refund_state]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+        current_version:
+          type: integer
+          minimum: 1
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FareVersion"
+        refund_obligation_minor:
+          description: What the service owes the rider back on this order after corrections; 0 when nothing.
+          type: integer
+          format: int64
+          minimum: 0
+        refund_state:
+          description: NONE, or WAITING_FOR_REFUND_FLOW while a refund obligation waits for the refund flow (#140).
+          type: string
+          enum: [NONE, WAITING_FOR_REFUND_FLOW]
+
     AdminOrderRow:
       description: One order in the admin search (issue #142).
       type: object
