@@ -190,6 +190,10 @@ class M1RegistryContractTests {
                 methods.forEach(m -> served.add(m.name() + " " + path));
             }
         });
+        // The WebSocket endpoints are URL mappings (any method; the handshake is a GET), not request mappings.
+        context.getBeansOfType(org.springframework.web.servlet.handler.AbstractUrlHandlerMapping.class).values()
+                .forEach(mapping -> mapping.getHandlerMap().keySet()
+                        .forEach(url -> served.add("* " + url.replaceAll("\\{[^}]+}", "{}"))));
         List<String> unserved = new ArrayList<>();
         for (String contract : List.of("rider.v1.yaml", "driver.v1.yaml", "operator.v1.yaml", "admin.v1.yaml",
                 "auth.v1.yaml", "config.v1.yaml", "providers.v1.yaml")) {
