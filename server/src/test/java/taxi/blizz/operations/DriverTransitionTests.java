@@ -367,17 +367,21 @@ class DriverTransitionTests {
         Actor without = staff(Orders.CANCEL_PERMISSION);
         Actor with = staff(Orders.REASSIGN_PERMISSION);
 
-        assertCode(() -> orders.revokeAssignment(without, UUID.randomUUID(), ride.order().id(), version, "No answer"),
+        assertCode(() -> orders.revokeAssignment(without, UUID.randomUUID(), ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "No answer"),
                 ErrorCode.ACCESS_DENIED);
         assertCode(() -> orders.revokeAssignment(ride.payer(), UUID.randomUUID(), ride.order().id(), version,
-                "No answer"), ErrorCode.ACCESS_DENIED);
+                "DRIVER_NOT_RESPONDING", "No answer"), ErrorCode.ACCESS_DENIED);
         UUID command = UUID.randomUUID();
-        OrderView revoked = orders.revokeAssignment(with, command, ride.order().id(), version, "No answer");
+        OrderView revoked = orders.revokeAssignment(with, command, ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "No answer");
         assertThat(revoked.status()).isEqualTo("SEARCHING");
         assertThat(occupancy(ride.driver())).isEqualTo("FREE");
 
-        assertThat(orders.revokeAssignment(with, command, ride.order().id(), version, "No answer")).isEqualTo(revoked);
-        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), version, "No answer"),
+        assertThat(orders.revokeAssignment(with, command, ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "No answer")).isEqualTo(revoked);
+        assertCode(() -> orders.revokeAssignment(with, UUID.randomUUID(), ride.order().id(), version,
+                "DRIVER_NOT_RESPONDING", "No answer"),
                 ErrorCode.VERSION_CONFLICT);
     }
 

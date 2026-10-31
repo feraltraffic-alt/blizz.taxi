@@ -76,6 +76,13 @@ class CancelReasonsController {
         return items(Audience.STAFF);
     }
 
+    /** The reasons for taking a driver off an order (REQ-CAN-01, issue #143); the right of revoke-assignment. */
+    @GetMapping("/api/operator/v1/reassign-reasons")
+    Items reassign(AccessClaims claims) {
+        staff.require(claims.actor(), "orders.reassign");
+        return items(Audience.REASSIGN);
+    }
+
     @GetMapping("/api/admin/v1/settings/cancel-reasons")
     Catalog all(AccessClaims claims) {
         return new Catalog(reasons.all(claims.actor()));

@@ -99,6 +99,15 @@ class JdbcOrderChat implements OrderChat {
                             .param("assignment", party.assignmentId()).param("role", role)
                             .param("sender", sender.id()).param("body", text).param("now", now)
                             .update();
+                    if ("DRIVER".equals(role)) {
+                        // A message to the rider is an attempt to reach them (REQ-CAN-06, issue #143).
+                        jdbc.sql("""
+                                        insert into order_contact_attempt (id, order_id, trip_id, driver_id, kind, at)
+                                        select :id, t.order_id, t.id, :driver, 'MESSAGE', :now
+                                        from trip t where t.assignment_id = :assignment""")
+                                .param("id", UUID.randomUUID()).param("driver", sender.id())
+                                .param("assignment", party.assignmentId()).param("now", now).update();
+                    }
                     // The body stays out of the event: it goes only to the addressed party through the API (REQ-NTF-04).
                     UUID recipient = "RIDER".equals(role) ? party.driverId() : party.payerClientId();
                     Map<String, Object> event = new java.util.LinkedHashMap<>();

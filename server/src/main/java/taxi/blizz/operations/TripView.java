@@ -35,7 +35,13 @@ public record TripView(
         Recipient recipient,
         /** The rider's or operator's note and where exactly to come (REQ-DRV-07, issue #143). */
         String comment,
-        String entrance) {
+        String entrance,
+        /** The driver's attempts to reach the rider on this order, oldest first (REQ-CAN-06, issue #143). */
+        java.util.List<ContactAttempt> contactAttempts) {
+
+    /** CALL — a call request through the order; MESSAGE — a chat message to the rider. */
+    public record ContactAttempt(String kind, OffsetDateTime at) {
+    }
 
     public record Recipient(String name, String phone) {
     }

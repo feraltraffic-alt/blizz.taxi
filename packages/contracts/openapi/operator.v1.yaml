@@ -572,7 +572,10 @@ paths:
     post:
       operationId: revokeOperatorOrderAssignment
       summary: Take the driver off an order and search again
-      description: Requires orders.reassign for the order city; reason is mandatory (REQ-OPS-05).
+      description: >-
+        Requires orders.reassign for the order city (REQ-OPS-05). reason_code is an active code of the REASSIGN list
+        (GET /api/operator/v1/reassign-reasons; REQ-CAN-01, issue #143); missing, unknown or inactive → 400. comment
+        adds to it, never replaces it. reason, the free text of the first version, is still read as the comment.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -744,6 +747,28 @@ paths:
       operationId: listOperatorCancelReasons
       summary: Reasons staff can give when cancelling
       description: The staff list from the admin panel. Requires orders.cancel.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Active reasons in display order.
+          content:
+            application/json:
+              schema:
+                $ref: "./cancellation.yaml#/components/schemas/ReasonList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/operator/v1/reassign-reasons:
+    get:
+      operationId: listReassignReasons
+      summary: Reasons staff can give when taking a driver off an order
+      description: >-
+        The REASSIGN list from the admin panel (REQ-CAN-01, issue #143); revoke-assignment takes one of these codes.
+        Requires orders.reassign.
       tags: [Orders]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1730,7 +1755,7 @@ components:
     RevokeAssignment:
       type: object
       additionalProperties: false
-      required: [command_id, expected_version, reason]
+      required: [command_id, expected_version]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -1738,7 +1763,13 @@ components:
           type: integer
           format: int64
           minimum: 0
-        reason:
+        reason_code:
+          description: Required by the server (400 without it); a code of the REASSIGN list.
           type: string
-          minLength: 1
+        comment:
+          type: string
+          maxLength: 500
+        reason:
+          description: Deprecated, read as the comment; send reason_code and comment.
+          type: string
           maxLength: 500

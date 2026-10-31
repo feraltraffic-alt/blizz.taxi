@@ -59,10 +59,12 @@ public interface Orders {
     OrderView switchToCash(Actor actor, UUID commandId, UUID orderId, long expectedVersion, String reason);
 
     /**
-     * Takes the driver off an assigned order before the start, with a reason, and searches again
-     * (REQ-OPS-05). Staff with {@link #REASSIGN_PERMISSION} for the order's city.
+     * Takes the driver off an assigned order before the start and searches again (REQ-OPS-05). Staff with
+     * {@link #REASSIGN_PERMISSION} for the order's city. {@code reasonCode} is an active code of the REASSIGN list of
+     * the catalog (REQ-CAN-01, issue #143), else VALIDATION_FAILED; {@code comment} is optional and adds to it.
      */
-    OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reason);
+    OrderView revokeAssignment(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String reasonCode,
+                               String comment);
 
     /**
      * A dispatcher offers a SEARCHING order to a chosen driver (REQ-OPS-04, REQ-DSP-10, issue #143), with a reason;

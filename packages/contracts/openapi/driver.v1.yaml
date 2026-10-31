@@ -2958,6 +2958,21 @@ components:
         entrance:
           description: Where exactly to come (REQ-DRV-07, issue #143).
           type: [string, "null"]
+        contact_attempts:
+          description: >-
+            The driver's attempts to reach the rider on this order — call requests and chat messages — oldest first
+            (REQ-CAN-06, issue #143); a no-show records them.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, at]
+            properties:
+              kind:
+                type: string
+                enum: [CALL, MESSAGE]
+              at:
+                $ref: "./common.yaml#/components/schemas/Timestamp"
         version:
           type: integer
           format: int64

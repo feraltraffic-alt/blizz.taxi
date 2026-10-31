@@ -169,18 +169,32 @@ class JdbcTrips implements Trips {
     }
 
     @Override
-    public TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reason) {
+    public TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reasonCode,
+                             String comment) {
         requireDriver(driver);
-        String why = blankToNull(reason);
-        if (why == null) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");
+        String code = blankToNull(reasonCode);
+        if (code == null) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason code from the catalog is required");
+        }
+        String note = blankToNull(comment);
+        if (note != null && note.length() > 500) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "The comment is at most 500 characters");
         }
         return commands.execute(new CommandKey(driver, "trip.withdraw", commandId),
-                new PhaseRequest(tripId, expectedVersion, why), TripView.class, () -> {
+                new WithdrawRequest(tripId, expectedVersion, code, note), TripView.class, () -> {
+                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, code);
+                    if (reason.driverOutcome() != CancelReasons.DriverOutcome.RETURN_TO_SEARCH) {
+                        throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                                "This reason cancels the order; giving it up needs a RETURN_TO_SEARCH reason");
+                    }
                     Locked trip = lock(driver, tripId, expectedVersion);
-                    giveUp(trip, driver, why, Map.<String, Object>of());
+                    giveUp(trip, driver, note == null ? reason.code() : reason.code() + " — " + note,
+                            Map.of("reason_code", reason.code(), "reason_labels", reason.labels()));
                     return view(tripId);
                 });
+    }
+
+    record WithdrawRequest(UUID tripId, long expectedVersion, String reasonCode, String comment) {
     }
 
     /** The driver drops the order before the start; it goes back to the search with the remaining budget. */
@@ -252,8 +266,13 @@ class JdbcTrips implements Trips {
         }
         taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
         core.endAssignmentBeforeStart(assignment, "RELEASED", "NO_SHOW");
-        core.cancel(trip.order(), "DRIVER", reason, "PassengerNoShow", driver,
-                Map.<String, Object>of("trip_id", trip.id().toString(), "waited_seconds", waited.toSeconds()));
+        List<TripView.ContactAttempt> attempts = contactAttempts(trip.id());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("trip_id", trip.id().toString());
+        payload.put("waited_seconds", waited.toSeconds());
+        payload.put("contact_attempts", attempts.size());
+        payload.put("last_contact_at", attempts.isEmpty() ? null : attempts.getLast().at().toString());
+        core.cancel(trip.order(), "DRIVER", reason, "PassengerNoShow", driver, payload);
     }
 
     record CompleteRequest(UUID tripId, long expectedVersion, OffsetDateTime reportedAt, Boolean cashReceived) {
@@ -471,8 +490,16 @@ class JdbcTrips implements Trips {
                         rs.getLong("wallet_minor"), rs.getLong("discount_minor"),
                         recipient(rs.getString("contact_name"), rs.getString("contact_phone"),
                                 rs.getObject("completed_at", OffsetDateTime.class)), rs.getString("comment"),
-                        rs.getString("entrance")))
+                        rs.getString("entrance"), contactAttempts(tripId)))
                 .single();
+    }
+
+    private List<TripView.ContactAttempt> contactAttempts(UUID tripId) {
+        return jdbc.sql("select kind, at from order_contact_attempt where trip_id = :t order by at, id")
+                .param("t", tripId)
+                .query((rs, i) -> new TripView.ContactAttempt(rs.getString("kind"),
+                        rs.getObject("at", OffsetDateTime.class)))
+                .list();
     }
 
     /** Shown while the trip is on; the phone only when the call mode lets the driver dial it directly. */

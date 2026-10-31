@@ -78,7 +78,10 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         audience:
           type: string
-          enum: [RIDER, DRIVER, STAFF]
+          description: >-
+            RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an
+            order before the start, which then searches again (REQ-CAN-01, issue #143).
+          enum: [RIDER, DRIVER, STAFF, REASSIGN]
         code:
           description: Never changes; to rename, change the labels.
           type: string
@@ -119,7 +122,10 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         audience:
           type: string
-          enum: [RIDER, DRIVER, STAFF]
+          description: >-
+            RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an
+            order before the start, which then searches again (REQ-CAN-01, issue #143).
+          enum: [RIDER, DRIVER, STAFF, REASSIGN]
         code:
           type: string
           pattern: "^[A-Z][A-Z0-9_]{1,39}$"

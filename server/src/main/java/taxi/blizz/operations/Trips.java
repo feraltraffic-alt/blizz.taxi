@@ -52,9 +52,12 @@ public interface Trips {
     /**
      * The driver gives up the order before the start (REQ-ASG-04, REQ-CAN-05): the assignment is
      * released, the driver is free and never offered this order again, and the search resumes with
-     * what is left of the passenger's search time. A reason is required.
+     * what is left of the passenger's search time. {@code reasonCode} is an active driver reason of the catalog whose
+     * outcome is RETURN_TO_SEARCH (ADR 0007, REQ-CAN-01, issue #143), else VALIDATION_FAILED; {@code comment} is
+     * optional and adds to the code, never replaces it.
      */
-    TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reason);
+    TripView withdraw(Actor driver, UUID commandId, UUID tripId, long expectedVersion, String reasonCode,
+                      String comment);
 
     /**
      * The passenger did not come out (REQ-CAN-06): allowed only after the minimum waiting time since
