@@ -33,9 +33,15 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /** When a client may try again after a 503: a provider is down or its breaker is open (REQ-API-08). */
     private final java.time.Duration unavailableRetryAfter;
 
+    /** When a client may try again after the database was lost for a moment (issue #146). */
+    private final java.time.Duration databaseRetryAfter;
+
     ApiExceptionHandler(@org.springframework.beans.factory.annotation.Value(
-            "${blizz.api.unavailable-retry-after:PT30S}") java.time.Duration unavailableRetryAfter) {
+            "${blizz.api.unavailable-retry-after:PT30S}") java.time.Duration unavailableRetryAfter,
+            @org.springframework.beans.factory.annotation.Value(
+            "${blizz.api.database-retry-after:PT2S}") java.time.Duration databaseRetryAfter) {
         this.unavailableRetryAfter = unavailableRetryAfter;
+        this.databaseRetryAfter = databaseRetryAfter;
     }
 
     @ExceptionHandler(DomainException.class)
@@ -55,7 +61,36 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception exception, WebRequest request) {
+        if (databaseLost(exception)) {
+            return respond(exception, ErrorCode.TEMPORARILY_UNAVAILABLE, 503, new HttpHeaders(), request);
+        }
         return respond(exception, ErrorCode.INTERNAL_ERROR, 500, new HttpHeaders(), request);
+    }
+
+    /**
+     * Whether the request failed because the connection to the database broke (fault tests, issue #146): its
+     * transaction was rolled back, so it is safe to send again. A cut connection surfaces as Spring's resource failure,
+     * as a failed commit or rollback wrapping one, or as a bare JDBC error of SQL state class 08 (connection exception)
+     * or 57P (the server shut the session down).
+     */
+    static boolean databaseLost(Throwable exception) {
+        for (Throwable t = exception; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof org.springframework.dao.DataAccessResourceFailureException
+                    || t instanceof org.springframework.transaction.CannotCreateTransactionException
+                    || t instanceof java.sql.SQLTransientConnectionException
+                    || t instanceof java.sql.SQLNonTransientConnectionException) {
+                return true;
+            }
+            if (t instanceof org.springframework.transaction.TransactionSystemException system
+                    && system.getApplicationException() != null && databaseLost(system.getApplicationException())) {
+                return true;
+            }
+            if (t instanceof java.sql.SQLException sql && sql.getSQLState() != null
+                    && (sql.getSQLState().startsWith("08") || sql.getSQLState().startsWith("57P"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -76,6 +111,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty("minimum_version", upgrade.minimumVersion());
         }
         java.time.Duration retryAfter = exception instanceof RateLimitedException limited ? limited.retryAfter()
+                : code == ErrorCode.TEMPORARILY_UNAVAILABLE ? databaseRetryAfter
                 : status == 503 ? unavailableRetryAfter : null;
         if (retryAfter != null) {
             long seconds = retryAfter.toSeconds();

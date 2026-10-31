@@ -224,10 +224,28 @@ case_dispatch() {
 case_database() {
     say "Database: every connection of the server is cut; it comes back by itself"
     start_server
-    local cut rider driver session order offer
+    local cut rider driver session order offer statuses
+    # Requests keep coming while the connections are cut, as they would in service: some are inside a transaction
+    # at that moment. None may answer 500; a lost connection is a 503 the app retries (TEMPORARILY_UNAVAILABLE).
+    rm -f /tmp/faults-load-*
+    for worker in 1 2 3 4; do
+        (end=$(( $(date +%s) + 8 ))
+         while (( $(date +%s) < end )); do
+             curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+                 --data "{\"audience\":\"CLIENT\",\"phone\":\"+38099$(printf %07d $((RANDOM * 300 % 10000000)))\",\"device_ref\":\"faults-$worker\"}" \
+                 "$BASE/auth/v1/otp/challenges" >> "/tmp/faults-load-$worker" 2>/dev/null || echo 000 >> "/tmp/faults-load-$worker"
+         done) &
+    done
+    sleep 3
     cut=$(sql "select count(pg_terminate_backend(pid)) from pg_stat_activity
                where datname = current_database() and pid <> pg_backend_pid() and application_name <> '$PGAPPNAME'")
-    note "Connections cut: $cut."
+    note "Connections cut: $cut, while four clients ask for sign-in codes."
+    wait
+    statuses=$(cat /tmp/faults-load-* | sort | uniq -c | awk '{printf "%s×%s ", $1, $2}')
+    note "Answers during the cut: $statuses"
+    if grep -qx 500 /tmp/faults-load-*; then
+        note "**A lost database connection was answered with 500, not a retryable 503.**"; exit 1
+    fi
     rider=""
     for _ in $(seq 1 20); do
         rider=$(sign_in CLIENT "$(phone)" 2>/dev/null) && break || true

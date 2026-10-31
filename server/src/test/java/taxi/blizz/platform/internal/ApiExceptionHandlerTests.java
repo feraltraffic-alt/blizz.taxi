@@ -94,6 +94,19 @@ class ApiExceptionHandlerTests {
     }
 
     @Test
+    void aLostDatabaseConnectionIsATemporaryUnavailabilityNotAnInternalError() throws Exception {
+        for (String kind : new String[] {"resource", "rollback", "sql-state"}) {
+            MvcResult result = mvc.perform(get("/__errors/database").param("kind", kind)).andReturn();
+            Map<String, Object> body = check(result, 503, ErrorCode.TEMPORARILY_UNAVAILABLE);
+            assertThat(body).as(kind).containsEntry("retryable", true).containsEntry("retry_after_seconds", 2);
+            assertThat(result.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("2");
+        }
+        // Any other database error stays an internal error: only a lost connection is safe to retry blindly.
+        check(mvc.perform(get("/__errors/database").param("kind", "syntax")).andReturn(), 500,
+                ErrorCode.INTERNAL_ERROR);
+    }
+
+    @Test
     void idempotencyConflictUsesTheSameHandler() throws Exception {
         check(mvc.perform(get("/__errors/idempotency")).andReturn(), 409, ErrorCode.IDEMPOTENCY_CONFLICT);
     }
@@ -205,9 +218,11 @@ class ApiExceptionHandlerTests {
                 .containsEntry("type", "https://errors.blizz.taxi/" + code.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'))
                 .containsEntry("correlation_id", result.getResponse().getHeader(CorrelationId.HEADER));
         if (status == 503) {
-            // A provider is down: the client may try again, and is told when (REQ-API-08, #139).
-            assertThat(body).containsEntry("retryable", true).containsEntry("retry_after_seconds", 30);
-            assertThat(result.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
+            // A provider is down: the client may try again, and is told when (REQ-API-08, #139). A lost database
+            // connection is retried sooner (issue #146).
+            int after = code == ErrorCode.TEMPORARILY_UNAVAILABLE ? 2 : 30;
+            assertThat(body).containsEntry("retryable", true).containsEntry("retry_after_seconds", after);
+            assertThat(result.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo(Integer.toString(after));
         } else if (!"/__errors/rate-limit".equals(result.getRequest().getRequestURI())) {
             assertThat(body).doesNotContainKeys("retryable", "retry_after_seconds");
         }
@@ -266,6 +281,25 @@ class ApiExceptionHandlerTests {
     static class Endpoints {
         private final Validator validator;
         Endpoints(Validator validator) { this.validator = validator; }
+
+        @GetMapping("/__errors/database")
+        void database(@RequestParam String kind) {
+            java.sql.SQLException io = new java.sql.SQLException("An I/O error occurred", "08006");
+            switch (kind) {
+                case "resource" -> throw new org.springframework.dao.DataAccessResourceFailureException("lost", io);
+                case "rollback" -> {
+                    org.springframework.transaction.TransactionSystemException failed =
+                            new org.springframework.transaction.TransactionSystemException("rollback failed");
+                    failed.initApplicationException(
+                            new org.springframework.dao.DataAccessResourceFailureException("lost", io));
+                    throw failed;
+                }
+                case "sql-state" -> throw new org.springframework.jdbc.UncategorizedSQLException("query", "select 1",
+                        new java.sql.SQLException("terminating connection due to administrator command", "57P01"));
+                default -> throw new org.springframework.jdbc.BadSqlGrammarException("query", "selec 1",
+                        new java.sql.SQLException("syntax error", "42601"));
+            }
+        }
 
         @GetMapping("/__errors/domain")
         void domain(@RequestParam ErrorCode code) { throw new DomainException(code, "secret provider details"); }

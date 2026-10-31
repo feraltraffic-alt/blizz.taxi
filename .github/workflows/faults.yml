@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       break:
-        description: "none (the guards as they are), payment, outbox, dispatch, or all of them"
+        description: "none (the guards as they are), payment, outbox, dispatch, database, or all of them"
         default: all
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        break: ${{ fromJSON((inputs.break == '' || inputs.break == 'all') && '["none","payment","outbox","dispatch"]' || format('["{0}"]', inputs.break)) }}
+        break: ${{ fromJSON((inputs.break == '' || inputs.break == 'all') && '["none","payment","outbox","dispatch","database"]' || format('["{0}"]', inputs.break)) }}
     services:
       postgres:
         image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
@@ -100,6 +100,7 @@ jobs:
             payment) reason="The tip was charged 2 times" ;;
             outbox) reason="The live message went out 2 times" ;;
             dispatch) reason="The retry was not answered with the first result" ;;
+            database) reason="A lost database connection was answered with 500" ;;
           esac
           if [ "$code" != 0 ] && $others_passed && ! grep -q "✅ $BREAK" results.txt 2>/dev/null \
               && grep -q "$reason" transcript.md; then

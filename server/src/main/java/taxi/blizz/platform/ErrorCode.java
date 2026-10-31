@@ -67,6 +67,11 @@ public enum ErrorCode {
     DRIVER_HAS_DISPUTE(409),
     NOT_FOUND(404),
     PROVIDER_UNAVAILABLE(503),
+    /**
+     * The server lost its database for a moment (a cut connection, a failover): nothing was done, the same request
+     * with the same command id may be sent again (issue #146).
+     */
+    TEMPORARILY_UNAVAILABLE(503),
     /** Wrong, expired, used or exhausted one-time code; deliberately not more specific. */
     OTP_INVALID(422),
     /** The app build is below the minimum allowed for its platform (REQ-API-10). */

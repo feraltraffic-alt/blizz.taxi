@@ -1,0 +1,13 @@
+diff --git a/server/src/main/java/taxi/blizz/platform/internal/ApiExceptionHandler.java b/server/src/main/java/taxi/blizz/platform/internal/ApiExceptionHandler.java
+index 4a29f1f..e550638 100644
+--- a/server/src/main/java/taxi/blizz/platform/internal/ApiExceptionHandler.java
++++ b/server/src/main/java/taxi/blizz/platform/internal/ApiExceptionHandler.java
+@@ -61,7 +61,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+ 
+     @ExceptionHandler(Exception.class)
+     ResponseEntity<Object> unexpected(Exception exception, WebRequest request) {
+-        if (databaseLost(exception)) {
++        if (false && databaseLost(exception)) {
+             return respond(exception, ErrorCode.TEMPORARILY_UNAVAILABLE, 503, new HttpHeaders(), request);
+         }
+         return respond(exception, ErrorCode.INTERNAL_ERROR, 500, new HttpHeaders(), request);
