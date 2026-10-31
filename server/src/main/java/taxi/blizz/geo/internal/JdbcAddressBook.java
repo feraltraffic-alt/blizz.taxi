@@ -148,14 +148,22 @@ class JdbcAddressBook implements AddressBook {
         String action = target == Visibility.HIDDEN ? "address.hide" : "address.restore";
         return commands.execute(key(c.actor(), action, c.commandId(), currentCity(c.id())), c, Address.class, () -> {
             reason(c.reason());
+            boolean restore = target == Visibility.ACTIVE;
+            if (restore) {
+                // The same order as create and update: the override lock, then the address.
+                lockOverrides();
+            }
             Address before = locked(c.id(), c.expectedVersion());
             if (before.visibility() == target) {
                 throw error(ErrorCode.STATE_CONFLICT, "Address already has this visibility");
             }
+            // Back in search only if it duplicates nothing active now (REQ-GEO-14, review of #174).
+            UUID near = restore ? requireNotDuplicate(c.id(), before.data(), before.house(), c.distinct()) : null;
             jdbc.sql("update address set visibility = :visibility, version = version + 1, updated_at = :now where id = :id")
                     .param("visibility", target.name()).param("id", c.id()).param("now", now()).update();
             Address after = get(c.id(), false).orElseThrow();
             changed(c.actor(), action, c.reason(), before, after);
+            distinct(c.actor(), c.reason(), after, near);
             return after;
         });
     }

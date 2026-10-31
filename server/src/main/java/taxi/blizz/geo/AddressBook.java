@@ -87,6 +87,10 @@ public interface AddressBook {
     record AddAlias(UUID commandId, Actor actor, UUID id, long expectedVersion, Alias alias, String reason) {
     }
 
-    record Change(UUID commandId, Actor actor, UUID id, long expectedVersion, String reason) {
+    /** {@code distinct}: for a restore, as for {@link Create}; a hide ignores it. */
+    record Change(UUID commandId, Actor actor, UUID id, long expectedVersion, String reason, boolean distinct) {
+        public Change(UUID commandId, Actor actor, UUID id, long expectedVersion, String reason) {
+            this(commandId, actor, id, expectedVersion, reason, false);
+        }
     }
 }
