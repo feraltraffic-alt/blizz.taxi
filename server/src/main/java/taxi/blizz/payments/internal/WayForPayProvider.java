@@ -91,7 +91,7 @@ class WayForPayProvider implements PaymentProvider {
     public Form purchaseForm(Merchant merchant, String reference, long amountMinor, String description,
                              String returnUrl, String serviceUrl, String clientPhone, String language,
                              long lifetimeSeconds) {
-        String amount = amount(amountMinor);
+        String amount = amount(amountMinor, merchant.currency());
         String orderDate = Long.toString(clock.instant().getEpochSecond());
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("merchantAccount", merchant.account());
@@ -138,7 +138,7 @@ class WayForPayProvider implements PaymentProvider {
     private Result chargeRequest(Merchant merchant, String reference, String token, long amountMinor,
                                  Customer customer, String description, String type, long holdSeconds,
                                  String serviceUrl) {
-        String amount = amount(amountMinor);
+        String amount = amount(amountMinor, merchant.currency());
         String orderDate = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("transactionType", "CHARGE");
@@ -175,7 +175,7 @@ class WayForPayProvider implements PaymentProvider {
 
     @Override
     public Result settle(Merchant merchant, String reference, long amountMinor) {
-        String amount = amount(amountMinor);
+        String amount = amount(amountMinor, merchant.currency());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("transactionType", "SETTLE");
         body.put("merchantAccount", merchant.account());
@@ -189,7 +189,7 @@ class WayForPayProvider implements PaymentProvider {
 
     @Override
     public Result refund(Merchant merchant, String reference, long amountMinor, String comment) {
-        String amount = amount(amountMinor);
+        String amount = amount(amountMinor, merchant.currency());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("transactionType", "REFUND");
         body.put("merchantAccount", merchant.account());
@@ -375,7 +375,8 @@ class WayForPayProvider implements PaymentProvider {
         }
         String status = text(body.get("transactionStatus"));
         return Optional.of(new Notification(reference, status, status == null ? Outcome.UNKNOWN
-                : outcome(status, Kind.STATUS), minor(text(body.get("amount"))), text(body.get("currency")),
+                : outcome(status, Kind.STATUS), minor(text(body.get("amount")),
+                        or(text(body.get("currency")), merchant.currency())), text(body.get("currency")),
                 text(body.get("recToken")), text(body.get("cardPan")), text(body.get("cardType")),
                 text(body.get("reasonCode")), text(body.get("reason"))));
     }
@@ -405,13 +406,24 @@ class WayForPayProvider implements PaymentProvider {
         }
     }
 
-    /** 12345 → "123.45"; the provider takes decimals in the main unit. */
-    static String amount(long minor) {
-        return BigDecimal.valueOf(minor, 2).toPlainString();
+    /**
+     * The provider takes decimals in the main unit, with the currency's own fraction digits (REQ-DATA-01, issue #140):
+     * 12345 UAH → "123.45", 100 JPY → "100", 1234 KWD → "1.234".
+     */
+    static String amount(long minor, String currency) {
+        return BigDecimal.valueOf(minor, digits(currency)).toPlainString();
     }
 
-    static long minor(String amount) {
-        return amount == null ? 0 : new BigDecimal(amount).movePointRight(2).longValueExact();
+    static long minor(String amount, String currency) {
+        return amount == null ? 0 : new BigDecimal(amount).movePointRight(digits(currency)).longValueExact();
+    }
+
+    static int digits(String currency) {
+        int digits = java.util.Currency.getInstance(currency).getDefaultFractionDigits();
+        if (digits < 0) {
+            throw new IllegalArgumentException("Currency " + currency + " has no minor unit");
+        }
+        return digits;
     }
 
     private static String text(Object value) {

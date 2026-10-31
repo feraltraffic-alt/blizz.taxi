@@ -143,14 +143,15 @@ class FakeProvider extends WayForPayProvider {
             Map<String,Map<String,Object>> entries=injected.computeIfAbsent(account,ignored->new LinkedHashMap<>());
             Map<String,Object> old=entries.get(reference);
             if (old!=null) {
-                if (!WayForPayProvider.amount(amount).equals(old.get("amount")) || !currency.equals(old.get("currency"))) {
+                if (!WayForPayProvider.amount(amount, currency).equals(old.get("amount"))
+                        || !currency.equals(old.get("currency"))) {
                     throw new IllegalArgumentException("Fixture already has different accounting fields");
                 }
                 return;
             }
             long now=clock.instant().getEpochSecond();
             entries.put(reference,Map.of("orderReference",reference,"transactionType","PURCHASE",
-                    "transactionStatus","Approved","amount",WayForPayProvider.amount(amount),"currency",currency,
+                    "transactionStatus","Approved","amount",WayForPayProvider.amount(amount, currency),"currency",currency,
                     "createdDate",now,"processingDate",now));
         }
 
