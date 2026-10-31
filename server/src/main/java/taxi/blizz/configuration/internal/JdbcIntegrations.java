@@ -413,4 +413,10 @@ class JdbcIntegrations implements Integrations {
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
+
+    @Override
+    public Health health(Actor staff) {
+        throw new UnsupportedOperationException("issue #176, part C");
+    }
+
 }
