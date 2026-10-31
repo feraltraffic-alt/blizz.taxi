@@ -75,6 +75,19 @@ class DestinationChangeTests {
         deliverEvents();
     }
 
+    /**
+     * The fake provider's captures are left to nobody, even when a test fails halfway: another class's payment worker
+     * would take them and use up that class's scripted answers.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void cancelLeftoverCaptures() {
+        jdbc.sql("""
+                        update payment_operation set state = 'CANCELLED'
+                        where intent_id in (select id from payment_intent where city_id = :c)
+                          and state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')""")
+                .param("c", city).update();
+    }
+
     // ------------------------------------------------------------ fixtures
 
     private void deliverEvents() {
@@ -145,15 +158,6 @@ class DestinationChangeTests {
     private Map<String, Object> intent(UUID order) {
         return jdbc.sql("select state, hold_minor, capture_minor from payment_intent where order_id = :o")
                 .param("o", order).query().singleRow();
-    }
-
-    private void cancelLeftoverPayments(UUID order) {
-        // The fake provider's capture is left to nobody: other test classes' payment workers would take it.
-        jdbc.sql("""
-                        update payment_operation set state = 'CANCELLED'
-                        where intent_id in (select id from payment_intent where order_id = :o)
-                          and state in ('CREATED', 'SENDING', 'PENDING', 'UNKNOWN')""")
-                .param("o", order).update();
     }
 
     private record OrderRow(UUID quoteId, long priceMinor, String dropoffLabel, double lat, double lon,
@@ -471,7 +475,6 @@ class DestinationChangeTests {
         assertThat(fare).isEqualTo(changed.priceMinor());
         assertThat(intent(order)).as("the capture asks for the whole new fare: the hold, then the rest")
                 .containsEntry("capture_minor", fare);
-        cancelLeftoverPayments(order);
     }
 
     @Test
@@ -492,7 +495,6 @@ class DestinationChangeTests {
         rides.complete(ride, null);
         offline(ride.driver());
         deliverEvents();
-        cancelLeftoverPayments(order);
     }
 
     @Test
