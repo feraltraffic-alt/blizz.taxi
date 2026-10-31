@@ -194,6 +194,63 @@ class TrackRetentionTests {
         assertThat(exists(behind)).as("dated two days ago by a slow clock, received just now").isTrue();
     }
 
+    /**
+     * #186: a phone whose clock is days off had its trip points matched by its own clock against the trip's server
+     * time, so they were deleted as off-trip after a day. The device session's clock offset corrects it.
+     */
+    @Test
+    void aPhoneDaysBehindKeepsItsTripPointsWithTheTrip() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        OffsetDateTime start = now().minusDays(3);
+        UUID trip = tripBetween(driver, start, start.plusMinutes(30));
+        Duration behind = Duration.ofDays(2);
+        UUID during = point(driver, start.plusMinutes(10).minus(behind), start.plusMinutes(10).plusSeconds(2));
+        UUID before = point(driver, start.minusHours(2).minus(behind), start.minusHours(2).plusSeconds(2));
+
+        sweepAll();
+
+        assertThat(exists(during)).as("sent during the trip by a phone two days behind").isTrue();
+        assertThat(orderOf(during)).isEqualTo(trip);
+        assertThat(exists(before)).as("off-trip, older than a day by the server").isFalse();
+    }
+
+    @Test
+    void aPhoneDaysAheadKeepsItsTripPointsWithTheTrip() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        OffsetDateTime start = now().minusDays(3);
+        UUID trip = tripBetween(driver, start, start.plusMinutes(30));
+        Duration ahead = Duration.ofDays(2);
+        UUID during = point(driver, start.plusMinutes(10).plus(ahead), start.plusMinutes(10).plusSeconds(2));
+        UUID before = point(driver, start.minusHours(2).plus(ahead), start.minusHours(2).plusSeconds(2));
+
+        sweepAll();
+
+        assertThat(orderOf(during)).isEqualTo(trip);
+        assertThat(exists(before)).isFalse();
+    }
+
+    /**
+     * A correct clock whose points arrive with a small delay, and a batch kept offline for hours: matched by the
+     * phone's own time, never shifted by the delay.
+     */
+    @Test
+    void aCorrectPhoneWithALateBufferedBatchIsMatchedByItsOwnTime() {
+        TestRides.Driver driver = rides.driverNear(PICKUP);
+        OffsetDateTime start = now().minusDays(3);
+        UUID trip = tripBetween(driver, start, start.plusMinutes(30));
+        UUID live = point(driver, start.plusMinutes(5), start.plusMinutes(5).plusSeconds(30));
+        UUID buffered = point(driver, start.plusMinutes(20), start.plusHours(2));
+        UUID justBefore = point(driver, start.minusSeconds(10), start.plusHours(2));
+        UUID offTrip = point(driver, start.minusHours(3), start.plusHours(2));
+
+        sweepAll();
+
+        assertThat(orderOf(live)).isEqualTo(trip);
+        assertThat(orderOf(buffered)).as("recorded during the trip, sent after it").isEqualTo(trip);
+        assertThat(exists(justBefore)).as("ten seconds before the trip, not moved into it by the delay").isFalse();
+        assertThat(exists(offTrip)).isFalse();
+    }
+
     @Test
     void twoInstancesCleaningAtOnceDeleteEveryDuePointOnce() throws Exception {
         TestRides.Driver driver = rides.driverNear(PICKUP);
