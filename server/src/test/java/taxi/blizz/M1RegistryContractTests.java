@@ -195,7 +195,8 @@ class M1RegistryContractTests {
             String label = operation + (token == null ? " without a token" : " with a " + other + " token");
             assertThat(result.getResponse().getStatus()).as(label + ": " + result.getResponse().getContentAsString())
                     .isEqualTo(401);
-            Map<?, ?> problem = json.readValue(result.getResponse().getContentAsString(), Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> problem = json.readValue(result.getResponse().getContentAsString(), Map.class);
             assertThat(problem).as(label).containsEntry("code", "UNAUTHENTICATED").containsEntry("status", 401)
                     .containsKeys("type", "title", "correlation_id");
         }
