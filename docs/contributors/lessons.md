@@ -127,6 +127,15 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Missed:** the code was written compressed: several statements on one line, no spaces, lines up to 250 characters (`if(...)throw ...` after a read on the same line). CI has no formatter, and the lead reviewed the logic and missed the layout. Such code hides a missed condition from every later reader.
 - **Habit:** **write in the layout of the surrounding code**: one statement per line, at most 120 characters, SQL in text blocks. Before the PR, `awk 'length>120'` over your files prints nothing (the ratchet from #149 enforces it).
 
+## 15. Negative controls that were green for the wrong reason (lead's PRs #172 and #146 part 4)
+
+- **Task:** fault tests and an M1 registry test, each with a negative control: a broken guard must make its check go red.
+- **Handed in by the lead:** the first fault matrix was all green.
+- **Missed:**
+  - **Two of the four controls were green for the wrong reason.** A lost `STATUS` in a subshell failed the dispatch case in every job, so the outbox case never ran and its control "passed".
+  - **The registry test's first drift check was a request sweep** ("a missing operation answers 404"). A contract operation with no server handler still answered 401, because the static-resource handler takes an unknown path and the token check runs first. Only a deliberately added fake operation showed that the check could not see what it claimed.
+- **Habit:** **a negative control passes only for its own reason.** Check the failure's message, not just the colour, and require the cases before it to pass. **Prove every new check red once on purpose** before you rely on its green.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

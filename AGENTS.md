@@ -43,6 +43,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 10. **Re-read the issue before you open the PR.** Every comment since your plan, the lead's above all, is part of the task: each request gets a row in the Acceptance table (lessons case 12).
 11. **Test parsers and protocols on realistic input**: several elements of each kind (two streams, two chunks, two records), every way an element can be damaged, and a peer that hangs. Every network call has a total deadline, writes included (lessons case 13).
 12. **Write in the layout of the surrounding code**: one statement per line, at most 120 characters, SQL in text blocks. `awk 'length>120'` over your Java files prints nothing (lessons case 14).
+13. **A negative control passes only for its own reason.** Prove every new check red once on purpose, read the failure's message (not just the colour), and make sure nothing failed earlier for another reason (lessons case 15).
 
 ## Rules that must not be broken
 

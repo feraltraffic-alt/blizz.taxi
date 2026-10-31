@@ -1,0 +1,192 @@
+# M1 registry (spec 22.2) mapped to the contracts (AC-21, issue #146 part 4). One entry per spec row, in the spec's
+# order. `row` is the spec's first two cells joined by " | ", copied exactly. A row's operations must exist in the named
+# contract; what the contracts lack is listed under `missing` with the reason (an owner question Q-xx or an issue).
+rows:
+  - row: "Public auth | POST /auth/v1/otp/challenges"
+    operations:
+      - {contract: auth.v1.yaml, method: post, path: /auth/v1/otp/challenges}
+  - row: "Public auth | POST /auth/v1/otp/verify"
+    operations:
+      - {contract: auth.v1.yaml, method: post, path: /auth/v1/otp/verify}
+  - row: "Auth | POST /auth/v1/token/refresh"
+    operations:
+      - {contract: auth.v1.yaml, method: post, path: /auth/v1/token/refresh}
+  - row: "Auth | POST /auth/v1/logout"
+    operations:
+      - {contract: auth.v1.yaml, method: post, path: /auth/v1/logout}
+  - row: "Общая | GET /api/config/v1/bootstrap"
+    operations:
+      - {contract: config.v1.yaml, method: get, path: /api/config/v1/bootstrap}
+  - row: "Rider | GET /cities; GET /cities/{id}/classes"
+    operations:
+      - {contract: config.v1.yaml, method: get, path: /api/config/v1/bootstrap}
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/vehicle-classes}
+  - row: "Rider/operator | GET /addresses/suggest; POST /addresses/reverse"
+    operations:
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/places}
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/places/reverse}
+      - {contract: operator.v1.yaml, method: get, path: /api/operator/v1/places}
+      - {contract: operator.v1.yaml, method: get, path: /api/operator/v1/places/reverse}
+  - row: "Rider | POST /quotes"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: /api/rider/v1/quotes}
+  - row: "Rider | POST /orders"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: /api/rider/v1/orders}
+  - row: "Rider | GET /orders/active"
+    operations:
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/orders/active}
+  - row: "Rider | GET /orders; GET /orders/{id}"
+    operations:
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/orders}
+      - {contract: rider.v1.yaml, method: get, path: "/api/rider/v1/orders/{order_id}"}
+  - row: "Rider | POST /orders/{id}/cancellation-quotes"
+    missing:
+      - {what: "POST /orders/{id}/cancellation-quotes", reason: "No cancellation fee exists until the owner sets the cancellation policy.", ref: "Q-07"}
+  - row: "Rider | POST /orders/{id}/cancel"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: "/api/rider/v1/orders/{order_id}/cancel"}
+  - row: "Rider | POST /orders/{id}/ratings"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: "/api/rider/v1/orders/{order_id}/rating"}
+  - row: "Rider | POST /payment-methods/binding-sessions"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: /api/rider/v1/card-bindings}
+      - {contract: rider.v1.yaml, method: get, path: "/api/rider/v1/card-bindings/{binding_id}"}
+  - row: "Rider | GET /payment-methods; DELETE /payment-methods/{id}"
+    operations:
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/cards}
+      - {contract: rider.v1.yaml, method: post, path: "/api/rider/v1/cards/{card_id}/remove"}
+  - row: "Rider | GET /payments/{id}; POST /obligations/{id}/payment-sessions"
+    missing:
+      - {what: "GET /payments/{id}", reason: "The rider cannot yet see a payment or debt; added with the obligation record.", ref: "#140"}
+      - {what: "POST /obligations/{id}/payment-sessions", reason: "Card repayment of a rider debt is not in the contract yet.", ref: "#140"}
+  - row: "Rider | POST /support-cases"
+    operations:
+      - {contract: rider.v1.yaml, method: post, path: /api/rider/v1/support/cases}
+  - row: "Driver | GET /profile; PATCH /profile"
+    operations:
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/profile}
+      - {contract: driver.v1.yaml, method: patch, path: /api/driver/v1/profile}
+  - row: "Driver | POST /documents/upload-sessions; POST /documents"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/documents/upload-sessions}
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/documents}
+  - row: "Driver | POST /verification/submit"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/verification/submit}
+  - row: "Driver | GET /vehicles; POST /vehicles"
+    operations:
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/profile}
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/vehicles}
+  - row: "Driver | POST /work-sessions; GET /work-sessions/current"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/work-sessions}
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/work-sessions/current}
+  - row: "Driver | POST /work-sessions/{id}/pause; /resume; /close"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/work-sessions/{id}/pause"}
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/work-sessions/{id}/resume"}
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/work-sessions/{id}/close"}
+  - row: "Driver | GET /offers; GET /broadcast-orders"
+    operations:
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/offers}
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/broadcast-orders}
+  - row: "Driver | POST /offers/{id}/accept; /reject"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/offers/{offer_id}/accept"}
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/offers/{offer_id}/reject"}
+  - row: "Driver | POST /orders/{id}/claim"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/orders/{order_id}/claim"}
+  - row: "Driver | GET /assignments/current"
+    operations:
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/assignments/current}
+  - row: "Driver | POST /trips/{id}/arrive; /start; /complete"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/trips/{trip_id}/arrive"}
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/trips/{trip_id}/start"}
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/trips/{trip_id}/complete"}
+  - row: "Driver | POST /assignments/{id}/withdraw"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/trips/{trip_id}/cancel"}
+  - row: "Driver | POST /trips/{id}/cash-report"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: "/api/driver/v1/trips/{trip_id}/complete"}
+  - row: "Driver | POST /locations/batches"
+    operations:
+      - {contract: driver.v1.yaml, method: post, path: /api/driver/v1/location-batches}
+  - row: "Driver | GET /earnings; GET /settlements"
+    operations:
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/earnings}
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/balance}
+      - {contract: driver.v1.yaml, method: get, path: /api/driver/v1/balance/history}
+  - row: "Operator | GET /customers/lookup"
+    missing:
+      - {what: "GET /customers/lookup", reason: "The operator API has no targeted customer search; only caller history inside place search.", ref: "#176"}
+  - row: "Operator | POST /quotes; POST /orders"
+    operations:
+      - {contract: operator.v1.yaml, method: post, path: /api/operator/v1/quotes}
+      - {contract: operator.v1.yaml, method: post, path: /api/operator/v1/orders}
+  - row: "Operator | POST /orders/{id}/manual-offers"
+    operations:
+      - {contract: operator.v1.yaml, method: post, path: "/api/operator/v1/orders/{order_id}/manual-offers"}
+  - row: "Operator | POST /assignments/{id}/revoke"
+    operations:
+      - {contract: operator.v1.yaml, method: post, path: "/api/operator/v1/orders/{order_id}/revoke-assignment"}
+  - row: "Operator | GET /problem-orders; POST /cases/{id}/claim"
+    operations:
+      - {contract: operator.v1.yaml, method: get, path: /api/operator/v1/support/cases}
+      - {contract: operator.v1.yaml, method: post, path: "/api/operator/v1/support/cases/{case_id}/assign"}
+  - row: "Admin | GET /orders; GET /orders/{id}/timeline"
+    operations:
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/orders}
+      - {contract: admin.v1.yaml, method: get, path: "/api/admin/v1/orders/{order_id}/timeline"}
+  - row: "Admin | POST /driver-reviews/{id}/decide"
+    operations:
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/drivers/{driver_id}/decision"}
+  - row: "Admin | POST /cities; PATCH /cities/{id}; POST /cities/{id}/publish"
+    operations:
+      - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/cities}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/cities/{city_id}/publish"}
+    missing:
+      - {what: "PATCH /cities/{id}", reason: "A city draft cannot be edited; its boundary is set only when the draft is created.", ref: "#176"}
+  - row: "Admin | POST /tariffs; POST /tariffs/{id}/publish"
+    missing:
+      - {what: "POST /tariffs", reason: "The tariffs admin API is deferred by the owner.", ref: "#30"}
+      - {what: "POST /tariffs/{id}/publish", reason: "The tariffs admin API is deferred by the owner.", ref: "#30"}
+  - row: "Admin | POST/PATCH /addresses; POST /addresses/{id}/hide; /restore"
+    operations:
+      - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/addresses}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/addresses/{address_id}/update"}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/addresses/{address_id}/hide"}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/addresses/{address_id}/restore"}
+  - row: "Admin | POST /provider-addresses/{ref}/override"
+    operations:
+      - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/addresses}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/addresses/{address_id}/update"}
+  - row: "Finance | POST /refund-requests; POST /refunds/{id}/approve; /execute"
+    missing:
+      - {what: "POST /refund-requests", reason: "Refund limits and approval rules wait for the owner.", ref: "Q-06"}
+      - {what: "POST /refunds/{id}/approve", reason: "Refund limits and approval rules wait for the owner.", ref: "Q-06"}
+      - {what: "POST /refunds/{id}/execute", reason: "Refund limits and approval rules wait for the owner.", ref: "Q-06"}
+  - row: "Finance | GET /reconciliation; POST /payout-batches; /approve"
+    operations:
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/payment-reconciliations}
+      - {contract: admin.v1.yaml, method: get, path: "/api/admin/v1/payment-reconciliations/{run_id}"}
+    missing:
+      - {what: "POST /payout-batches", reason: "Driver payouts wait for the owner's decision.", ref: "Q-11"}
+      - {what: "POST /payout-batches/{id}/approve", reason: "Driver payouts wait for the owner's decision.", ref: "Q-11"}
+  - row: "Admin | POST /exports; GET /exports/{id}"
+    operations:
+      - {contract: admin.v1.yaml, method: post, path: /api/admin/v1/reports/exports}
+      - {contract: admin.v1.yaml, method: get, path: "/api/admin/v1/reports/exports/{export_id}"}
+  - row: "Admin | GET /audit; GET /integration-health"
+    operations:
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/logs/activity}
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/logs/changes}
+      - {contract: admin.v1.yaml, method: get, path: /api/admin/v1/integrations}
+      - {contract: admin.v1.yaml, method: post, path: "/api/admin/v1/integrations/{group}/check"}
+  - row: "Provider | POST /webhooks/{provider}/{merchantRef}"
+    operations:
+      - {contract: providers.v1.yaml, method: post, path: "/payments/v1/callbacks/{merchant_id}"}

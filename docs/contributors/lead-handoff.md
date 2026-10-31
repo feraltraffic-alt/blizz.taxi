@@ -29,10 +29,10 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 | Who | Queue (in order) |
 |---|---|
 | Codex | #136 web foundation (branch `codex/136-web-foundation`, no PR yet; idle since 30.10, token limit) → #149 retention layout and line-length ratchet → #140 payments (includes the WayForPay breaker semantics) |
-| Second Claude | #142 part D in three PRs (settings, staff password, addresses; plus the follow-ups from the reviews of #169 and #170) → #137 rider app (needs `packages/api-client` from #136) |
-| Lead | #146: parts 1 (upgrade test, #157) and 2 (fault tests, branch `claude/146-faults`) done; next part 3, an L1 load run, and part 4, the M1 contract test |
+| Second Claude | #142 done (A–D). The `restore` duplicate check (follow-up of #174) → #176 (M1 registry gaps) → #137 rider app (needs `packages/api-client` from #136) |
+| Lead | #146 done with this PR: parts 1 (#157), 2 (#172), 3 (#175), 4 (M1 registry test). Next: an issue for the L1 findings before L2 (pool, heartbeat cost, outbox relay), then the audit's remaining items |
 
-Done since 30.10: #124, #135, #139 (parts 1–3), #141, #143, #144, #145, #142 parts A, B, C1 and C2.
+Done since 30.10: #124, #135, #139 (parts 1–3), #141, #143, #144, #145, #142.
 If Codex stays idle, the lead may take #149 or #140 and say so in the issue.
 
 Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
@@ -45,6 +45,9 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 - #46 payment link by SMS.
 
 ### Open owner questions
+
+From the review of #173: should a staff password reset ask for the acting admin's password too, and may wrong
+confirmation passwords lock the only super admin out?
 
 Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never treat them as decided.
 

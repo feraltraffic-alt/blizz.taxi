@@ -105,6 +105,38 @@ final class IsolationContract {
         return result;
     }
 
+    /** Every operation of a contract, with or without path parameters (the M1 registry test, issue #146). */
+    static List<Operation> allOperations(String contract) {
+        List<Operation> result = new ArrayList<>();
+        map(document(ROOT.resolve(contract)).get("paths")).forEach((path, item) ->
+                map(item).forEach((method, definition) -> {
+                    if (List.of("get", "post", "put", "patch", "delete").contains(method)) {
+                        result.add(new Operation(contract, method, path, map(definition)));
+                    }
+                }));
+        return result;
+    }
+
+    /** Whether the contract has this operation at all. */
+    static boolean exists(String contract, String method, String path) {
+        Object item = map(document(ROOT.resolve(contract)).get("paths")).get(path);
+        return item instanceof Map<?, ?> methods && methods.containsKey(method);
+    }
+
+    /** The required properties of the operation's JSON request body; empty without one. */
+    static List<String> requiredBody(Operation operation) {
+        if (!operation.definition().containsKey("requestBody")) {
+            return List.of();
+        }
+        Node request = resolve(map(operation.definition().get("requestBody")), ROOT.resolve(operation.contract()));
+        Map<String, Object> content = map(request.value().get("content"));
+        if (!content.containsKey("application/json")) {
+            return List.of();
+        }
+        Node schema = resolve(map(map(content.get("application/json")).get("schema")), request.source());
+        return ((List<?>) schema.value().getOrDefault("required", List.of())).stream().map(Object::toString).toList();
+    }
+
     static Operation operation(String contract, String method, String path) {
         return new Operation(contract, method, path,
                 map(map(map(document(ROOT.resolve(contract)).get("paths")).get(path)).get(method)));
