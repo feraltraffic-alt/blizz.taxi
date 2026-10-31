@@ -47,8 +47,11 @@ class JdbcStaffDirectory implements StaffDirectory {
     private final Outbox outbox;
     private final Clock clock;
 
+    private final RightsPassword rightsPassword;
+
     JdbcStaffDirectory(JdbcClient jdbc, IdempotentCommands commands, StaffPasswords passwords, SessionService sessions,
-                       AuditLog audit, Outbox outbox, Clock clock) {
+                       AuditLog audit, Outbox outbox, Clock clock, RightsPassword rightsPassword) {
+        this.rightsPassword = rightsPassword;
         this.outbox = outbox;
         this.jdbc = jdbc;
         this.commands = commands;
@@ -66,12 +69,15 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember create(Actor superAdmin, UUID commandId, String login, String initialPassword, Profile profile,
-                              String reason) {
+                              String reason, String password) {
         requireSuperAdmin(superAdmin);
         String cleanLogin = login(login);
         Profile clean = profile(profile);
         reason(reason);
         passwords.check(cleanLogin, initialPassword);
+        // A new account is given rights: the acting super admin's own password (REQ-ADM-10).
+        rightsPassword.confirm(superAdmin, password, "staff.create", "staff_user", cleanLogin, reason,
+                java.util.Map.of("login", cleanLogin, "profile", clean));
         return commands.execute(new CommandKey(superAdmin, "staff.create", commandId),
                 new CreateRequest(cleanLogin, clean, reason), StaffMember.class, () -> {
                     UUID id = UUID.randomUUID();
@@ -110,13 +116,25 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember update(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, Profile profile,
-                              String reason) {
+                              String reason, String password) {
         requireSuperAdmin(superAdmin);
         Profile clean = profile(profile);
         reason(reason);
+        // The role, the permissions or the cities change: the acting super admin's own password (REQ-ADM-10).
+        boolean confirmed = false;
+        StaffMember current = read(staffId);
+        if (current.version() == expectedVersion && rightsChange(current.profile(), clean)) {
+            rightsPassword.confirm(superAdmin, password, "staff.update", "staff_user", staffId.toString(), reason,
+                    java.util.Map.of("profile", clean));
+            confirmed = true;
+        }
+        boolean passwordConfirmed = confirmed;
         return commands.execute(new CommandKey(superAdmin, "staff.update", commandId),
                 new UpdateRequest(staffId, expectedVersion, clean, reason), StaffMember.class, () -> {
                     StaffMember before = locked(staffId, expectedVersion);
+                    if (!passwordConfirmed && rightsChange(before.profile(), clean)) {
+                        throw ConflictException.version(before.version(), "The staff member changed meanwhile");
+                    }
                     if (before.profile().role() == Role.SUPER_ADMIN && clean.role() != Role.SUPER_ADMIN) {
                         keepOneSuperAdmin(staffId);
                     }
@@ -229,6 +247,14 @@ class JdbcStaffDirectory implements StaffDirectory {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** The role, the permissions or the cities differ; names and contacts are not rights. */
+    static boolean rightsChange(Profile before, Profile after) {
+        return before.role() != after.role()
+                || !new java.util.TreeSet<>(before.permissions()).equals(new java.util.TreeSet<>(after.permissions()))
+                || before.allCities() != after.allCities()
+                || !new java.util.TreeSet<>(before.cityIds()).equals(new java.util.TreeSet<>(after.cityIds()));
+    }
 
     private void requireSuperAdmin(Actor actor) {
         boolean allowed = actor != null && actor.type() == SubjectType.STAFF && jdbc.sql("""

@@ -355,8 +355,10 @@ class AccessIsolationTests {
         verify(read, staffFixture(ids, Map.of(), owner, missing));
         Actor boss = staff();
         jdbc.sql("update staff_user set role='SUPER_ADMIN' where id=:id").param("id", boss.id()).update();
+        setPassword(boss);
         var grant = emergency.grant(boss, UUID.randomUUID(), missing.id(), java.util.Set.of("support.manage"), false,
-                java.util.Set.of(city), java.time.Duration.ofMinutes(30), "Isolation emergency access control");
+                java.util.Set.of(city), java.time.Duration.ofMinutes(30), "Isolation emergency access control",
+                STAFF_PASSWORD);
         String temporary = staffToken(missing);
         String path = read.path().replace("{case_id}", ids.get("case_id").toString());
         assertThat(perform(get(path), temporary).getResponse().getStatus())

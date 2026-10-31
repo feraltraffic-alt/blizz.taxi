@@ -37,11 +37,13 @@ class EmergencyAccessTests {
 
         UUID command = UUID.randomUUID();
         EmergencyAccess.Grant grant = emergency.grant(boss, command, clerk.id(), Set.of(StaffPermissions.REPORTS_VIEW),
-                false, Set.of(city), Duration.ofMinutes(60), "Night incident: owner unreachable");
+                false, Set.of(city), Duration.ofMinutes(60), "Night incident: owner unreachable",
+                PASSWORD);
         assertThat(grant.active()).isTrue();
         assertThat(grant.expiresAt()).isEqualTo(grant.grantedAt().plusMinutes(60));
         assertThat(emergency.grant(boss, command, clerk.id(), Set.of(StaffPermissions.REPORTS_VIEW), false,
-                Set.of(city), Duration.ofMinutes(60), "Night incident: owner unreachable").id())
+                Set.of(city), Duration.ofMinutes(60), "Night incident: owner unreachable",
+                PASSWORD).id())
                 .as("a repeat").isEqualTo(grant.id());
 
         access.require(clerk, StaffPermissions.REPORTS_VIEW, city);
@@ -81,17 +83,17 @@ class EmergencyAccessTests {
         Set<String> reports = Set.of(StaffPermissions.REPORTS_VIEW);
         String why = "Night incident: owner unreachable";
         assertCode(() -> emergency.grant(admin, UUID.randomUUID(), clerk.id(), reports, true, null,
-                Duration.ofHours(1), why), ErrorCode.ACCESS_DENIED);
+                Duration.ofHours(1), why, PASSWORD), ErrorCode.ACCESS_DENIED);
         assertCode(() -> emergency.grant(boss, UUID.randomUUID(), boss.id(), reports, true, null,
-                Duration.ofHours(1), why), ErrorCode.VALIDATION_FAILED);
+                Duration.ofHours(1), why, PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> emergency.grant(boss, UUID.randomUUID(), clerk.id(), reports, true, null,
-                Duration.ofHours(9), why), ErrorCode.VALIDATION_FAILED);
+                Duration.ofHours(9), why, PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> emergency.grant(boss, UUID.randomUUID(), clerk.id(), Set.of("db.root"), true, null,
-                Duration.ofHours(1), why), ErrorCode.VALIDATION_FAILED);
+                Duration.ofHours(1), why, PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> emergency.grant(boss, UUID.randomUUID(), clerk.id(), reports, true, null,
-                Duration.ofHours(1), "because"), ErrorCode.VALIDATION_FAILED);
+                Duration.ofHours(1), "because", PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> emergency.grant(boss, UUID.randomUUID(), clerk.id(), reports, false, Set.of(),
-                Duration.ofHours(1), why), ErrorCode.VALIDATION_FAILED);
+                Duration.ofHours(1), why, PASSWORD), ErrorCode.VALIDATION_FAILED);
         assertCode(() -> emergency.list(admin, true), ErrorCode.ACCESS_DENIED);
 
         // A grant whose time is over counts for nothing.
@@ -108,12 +110,17 @@ class EmergencyAccessTests {
                 .satisfies(g -> assertThat(g.active()).isFalse());
     }
 
+    static final String PASSWORD = "Emergency-Access-Test-2026";
+
     private Actor staff(String role) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Emergency', :role, '{}', 'ACTIVE', now(), now())""")
-                .param("id", id).param("login", "emergency-" + id).param("role", role).update();
+                        insert into staff_user (id, login, name, role, permissions, state, password_hash, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Emergency', :role, '{}', 'ACTIVE', :hash, now(), now())""")
+                .param("id", id).param("login", "emergency-" + id).param("role", role)
+                .param("hash", new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4).encode(PASSWORD))
+                .update();
         return new Actor(SubjectType.STAFF, id);
     }
 

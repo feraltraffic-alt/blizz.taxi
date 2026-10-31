@@ -42,11 +42,11 @@ class StaffController {
     }
 
     record CreateStaff(@NotNull UUID commandId, @NotBlank String login, @NotBlank String initialPassword,
-                       @NotNull Profile profile, @NotBlank String reason) {
+                       @NotNull Profile profile, @NotBlank String reason, String password) {
     }
 
     record UpdateStaff(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull Profile profile,
-                       @NotBlank String reason) {
+                       @NotBlank String reason, String password) {
     }
 
     record ChangeStaff(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String reason) {
@@ -92,7 +92,7 @@ class StaffController {
     @ResponseStatus(HttpStatus.CREATED)
     StaffMember create(AccessClaims claims, @Valid @RequestBody CreateStaff body) {
         return directory.create(claims.actor(), body.commandId(), body.login(), body.initialPassword(), body.profile(),
-                body.reason());
+                body.reason(), body.password());
     }
 
     @GetMapping("/api/admin/v1/staff/{staffId}")
@@ -103,7 +103,7 @@ class StaffController {
     @PostMapping("/api/admin/v1/staff/{staffId}/update")
     StaffMember update(AccessClaims claims, @PathVariable UUID staffId, @Valid @RequestBody UpdateStaff body) {
         return directory.update(claims.actor(), body.commandId(), staffId, body.expectedVersion(), body.profile(),
-                body.reason());
+                body.reason(), body.password());
     }
 
     @PostMapping("/api/admin/v1/staff/{staffId}/suspend")

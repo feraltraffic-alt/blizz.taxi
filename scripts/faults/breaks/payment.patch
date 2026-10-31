@@ -1,0 +1,13 @@
+diff --git a/server/src/main/java/taxi/blizz/payments/internal/PaymentWorker.java b/server/src/main/java/taxi/blizz/payments/internal/PaymentWorker.java
+index ee667a7..78bf1c3 100644
+--- a/server/src/main/java/taxi/blizz/payments/internal/PaymentWorker.java
++++ b/server/src/main/java/taxi/blizz/payments/internal/PaymentWorker.java
+@@ -112,7 +112,7 @@ public class PaymentWorker {
+ 
+     private void process(Claimed op) {
+         try {
+-            boolean fresh = "CREATED".equals(op.previous());
++            boolean fresh = "CREATED".equals(op.previous()) || "SENDING".equals(op.previous());
+             PaymentProvider.Result result = fresh ? send(op) : check(op);
+             if (fresh) {
+                 // Fault tests (issue #146): the bank has the request, this process has not stored the answer.

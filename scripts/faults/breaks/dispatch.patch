@@ -1,0 +1,13 @@
+diff --git a/server/src/main/java/taxi/blizz/operations/internal/JdbcDispatch.java b/server/src/main/java/taxi/blizz/operations/internal/JdbcDispatch.java
+index a6db6b7..e1764d7 100644
+--- a/server/src/main/java/taxi/blizz/operations/internal/JdbcDispatch.java
++++ b/server/src/main/java/taxi/blizz/operations/internal/JdbcDispatch.java
+@@ -109,7 +109,7 @@ class JdbcDispatch implements Dispatch {
+     public AssignmentView accept(Actor driver, UUID deviceSessionId, UUID commandId, UUID offerId) {
+         requireDriver(driver);
+         rateLimits.acquire(taxi.blizz.platform.RateLimits.OFFER_ACCEPT, driver);
+-        AssignmentView accepted = commands.execute(new CommandKey(driver, "offer.accept", commandId),
++        AssignmentView accepted = commands.execute(new CommandKey(driver, "offer.accept", UUID.randomUUID()),
+                 new AcceptRequest(offerId, deviceSessionId), AssignmentView.class, () -> {
+                     UUID orderId = orderOfOffer(offerId, driver);
+                     OrderCore.LockedOrder order = core.lockOrder(orderId);

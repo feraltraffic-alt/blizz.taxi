@@ -28,8 +28,12 @@ public interface EmergencyAccess {
     record Activity(OffsetDateTime at, String method, String path, Integer status, String outcome) {
     }
 
+    /**
+     * {@code password}: the acting super admin's own (REQ-ADM-10); missing or wrong is ACCESS_DENIED, counted like a
+     * failed sign-in and audited as {@code staff.emergency_grant.denied}.
+     */
     Grant grant(Actor superAdmin, UUID commandId, UUID staffId, Set<String> permissions, boolean allCities,
-                Set<UUID> cityIds, Duration duration, String reason);
+                Set<UUID> cityIds, Duration duration, String reason, String password);
 
     Grant revoke(Actor superAdmin, UUID commandId, UUID grantId, String reason);
 

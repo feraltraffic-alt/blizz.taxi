@@ -35,7 +35,11 @@ class JdbcEmergencyAccess implements EmergencyAccess {
     private final AuditLog audit;
     private final Clock clock;
 
-    JdbcEmergencyAccess(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock) {
+    private final RightsPassword rightsPassword;
+
+    JdbcEmergencyAccess(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock,
+                        RightsPassword rightsPassword) {
+        this.rightsPassword = rightsPassword;
         this.jdbc = jdbc;
         this.commands = commands;
         this.audit = audit;
@@ -54,7 +58,7 @@ class JdbcEmergencyAccess implements EmergencyAccess {
 
     @Override
     public Grant grant(Actor actor, UUID commandId, UUID staffId, Set<String> permissions, boolean allCities,
-                       Set<UUID> cityIds, Duration duration, String reason) {
+                       Set<UUID> cityIds, Duration duration, String reason, String password) {
         requireSuperAdmin(actor);
         Set<String> wanted = permissions == null ? Set.of() : new TreeSet<>(permissions);
         Set<UUID> cities = allCities || cityIds == null ? Set.of() : new TreeSet<>(cityIds);
@@ -74,6 +78,9 @@ class JdbcEmergencyAccess implements EmergencyAccess {
         if (actor.id().equals(staffId)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Nobody grants emergency access to themselves");
         }
+        rightsPassword.confirm(actor, password, "staff.emergency_grant", "staff_user", staffId.toString(), why,
+                java.util.Map.of("permissions", wanted, "all_cities", allCities, "city_ids", cities,
+                        "minutes", duration.toMinutes()));
         return commands.execute(new CommandKey(actor, "staff.emergency_grant", commandId),
                 new GrantRequest(staffId, wanted, allCities, cities, duration.toMinutes(), why), Grant.class, () -> {
                     String state = jdbc.sql("select state from staff_user where id = :id for update")
