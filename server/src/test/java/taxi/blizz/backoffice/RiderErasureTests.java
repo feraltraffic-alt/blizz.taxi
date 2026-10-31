@@ -191,6 +191,7 @@ class RiderErasureTests {
             N tariff_version: currency preorder_surcharge state waiting_rounding zone_surcharges
             N track_point: flags
             N trip: arrival_exception phase start_exception
+            N trip_correction: kind reason review_reason
             O vehicle: color make model registration_number
             N vehicle: class_approvals state
             N vehicle_class: code name
