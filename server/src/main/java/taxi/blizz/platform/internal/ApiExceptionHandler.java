@@ -72,6 +72,9 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         if (exception instanceof taxi.blizz.platform.ConflictException conflict) {
             problem.setProperty("current_version", conflict.currentVersion());
         }
+        if (exception instanceof taxi.blizz.platform.DuplicateException duplicate) {
+            problem.setProperty("duplicate_of", duplicate.duplicateOf());
+        }
         if (exception instanceof taxi.blizz.platform.UpgradeRequiredException upgrade) {
             problem.setProperty("minimum_version", upgrade.minimumVersion());
         }
