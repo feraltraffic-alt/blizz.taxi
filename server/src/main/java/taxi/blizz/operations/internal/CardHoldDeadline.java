@@ -3,6 +3,13 @@ package taxi.blizz.operations.internal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,6 +23,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 class CardHoldDeadline {
+
+    private static final Logger log = LoggerFactory.getLogger(CardHoldDeadline.class);
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -40,6 +49,36 @@ class CardHoldDeadline {
 
     /** Ends every card order that has waited for its hold longer than the deadline at {@code now}; how many. */
     int expire(Instant now) {
-        return 0;
+        List<UUID> due = jdbc.sql("""
+                        select id from ride_order
+                        where status = 'AWAITING_PAYMENT' and created_at < :before
+                        order by created_at limit 200""")
+                .param("before", OffsetDateTime.ofInstant(now.minus(deadline), ZoneOffset.UTC))
+                .query(UUID.class).list();
+        int ended = 0;
+        for (UUID orderId : due) {
+            try {
+                if (Boolean.TRUE.equals(tx.execute(status -> end(orderId)))) {
+                    ended++;
+                }
+            } catch (RuntimeException e) {
+                log.error("Card order {} could not be ended at its hold deadline", orderId, e);
+            }
+        }
+        return ended;
+    }
+
+    /** Under the order's lock, as the hold's outcome takes it: whichever comes first decides, the other sees it. */
+    private boolean end(UUID orderId) {
+        OrderCore.LockedOrder order = core.lockOrder(orderId);
+        if (!"AWAITING_PAYMENT".equals(order.status())) {
+            return false;
+        }
+        core.releaseCardHold(orderId, "The bank did not answer before the hold deadline");
+        core.setPaymentState(orderId, "HOLD_RELEASED");
+        core.changeStatus(order, "UNFULFILLED", "PAYMENT_TIMEOUT", "CardHoldDeclined", OrderCore.system(),
+                Map.of("reason", "PAYMENT_TIMEOUT"));
+        log.warn("Card order {} ended: no answer from the bank within {}", orderId, deadline);
+        return true;
     }
 }
