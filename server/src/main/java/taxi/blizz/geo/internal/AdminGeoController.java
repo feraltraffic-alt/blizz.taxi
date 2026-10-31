@@ -198,10 +198,15 @@ class AdminGeoController {
                 body.reason()));
     }
 
+    record RestoreAddress(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String reason,
+                          Boolean distinct) {
+    }
+
     @PostMapping("/addresses/{addressId}/restore")
-    AddressBook.Address restore(AccessClaims claims, @PathVariable UUID addressId, @Valid @RequestBody Change body) {
+    AddressBook.Address restore(AccessClaims claims, @PathVariable UUID addressId,
+                                @Valid @RequestBody RestoreAddress body) {
         return addresses.restore(new AddressBook.Change(body.commandId(), claims.actor(), addressId,
-                body.expectedVersion(), body.reason()));
+                body.expectedVersion(), body.reason(), Boolean.TRUE.equals(body.distinct())));
     }
 
     // ---------------------------------------------------------------- helpers

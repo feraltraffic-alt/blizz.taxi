@@ -1592,7 +1592,11 @@ paths:
     post:
       operationId: restoreOwnAddress
       summary: Restore a hidden address
-      description: Back in search.
+      description: >-
+        Back in search. The same duplicate check as create and update (REQ-GEO-14, issue #142): a provider reference
+        now linked to another address, or an active address of the same house within 25 m, is 409 STATE_CONFLICT with
+        duplicate_of; distinct: true with the reason restores a near house anyway (never a linked provider
+        reference).
       tags: [Geography]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -1606,7 +1610,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GeoChange"
+              $ref: "#/components/schemas/RestoreAddress"
       responses:
         "200":
           description: OK
@@ -6680,6 +6684,26 @@ components:
           minimum: 0
         reason:
           type: string
+
+    RestoreAddress:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+        distinct:
+          description: >-
+            Restore although an active address of the same house lies within 25 m (REQ-GEO-14). Never overrides a
+            provider reference linked to another address.
+          type: boolean
+          default: false
 
     City:
       type: object

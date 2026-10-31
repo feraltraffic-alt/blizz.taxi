@@ -18,7 +18,8 @@ record RateLimitProperties(Map<String, Limit> buckets) {
             "offer-accept", new Limit(60, Duration.ofMinutes(10)),
             "file-upload", new Limit(30, Duration.ofHours(1)),
             "broadcast-claim", new Limit(30, Duration.ofMinutes(10)),
-            "broadcast-list", new Limit(120, Duration.ofMinutes(1)));
+            "broadcast-list", new Limit(120, Duration.ofMinutes(1)),
+            "customer-lookup", new Limit(60, Duration.ofHours(1)));
 
     RateLimitProperties {
         buckets = buckets == null ? Map.of() : Map.copyOf(buckets);
