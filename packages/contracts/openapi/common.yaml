@@ -109,7 +109,9 @@ components:
         ACTIVE_ORDER_LIMIT (409): the payer already has active_orders_per_payer orders not in a final state, pre-orders
         included (ADR 0012); it replaces ORDER_ALREADY_ACTIVE, which is no longer returned.
         ACCOUNT_NOT_ACTIVE (403): a new order for a rider whose account is not ACTIVE (e.g. a deletion request is
-        pending), from the app or by an operator; a caller without an account is not affected.
+        pending), from the app or by an operator; a caller without an account is not affected. For a driver whose
+        deletion request is pending, the same limited session as a blocked driver (see ACCOUNT_BLOCKED), plus the
+        deletion request itself, answers this to any other command.
         PICKUP_TOO_FAR (422): arrival reported far from the pickup (can be confirmed with a reason, REQ-ASG-06), or a
         claim of an order in the ALL tab whose pickup is outside the tab's radius from the driver (issue #102).
         PHONE_COUNTRY_NOT_SERVED (422): a one-time code was asked for a number outside the countries the service
@@ -122,6 +124,9 @@ components:
         reads of new work (broadcast-orders, offers, preorders), the
         current trip's commands and the passenger's rating, the shift's heartbeat, pause, close and handover, location
         batches, support and push devices; any other command answers this. New orders never reach a blocked driver.
+        DRIVER_HAS_ACTIVE_WORK, DRIVER_HAS_DEBT, DRIVER_HAS_DISPUTE (409): staff cannot complete a driver's deletion
+        request yet: the driver has a trip, an accepted assignment, an open offer or a pre-order reservation; owes the
+        service money (a negative balance); or has a cash dispute not yet decided (issue #144).
         ACCEPTANCE_REQUIRED (403): a rider's new order or a driver going online while a legal text in force that must
         be accepted is not (REQ-PRV-08); GET /api/{rider|driver}/v1/legal tells which.
         PAYMENT_PENDING and PAYMENT_UNKNOWN appear in a Problem only as 409, when an action conflicts with a
@@ -161,6 +166,9 @@ components:
         - ACCOUNT_NOT_ACTIVE
         - ACCOUNT_BLOCKED
         - ACCEPTANCE_REQUIRED
+        - DRIVER_HAS_ACTIVE_WORK
+        - DRIVER_HAS_DEBT
+        - DRIVER_HAS_DISPUTE
         - NOT_FOUND
         - PROVIDER_UNAVAILABLE
         - OTP_INVALID

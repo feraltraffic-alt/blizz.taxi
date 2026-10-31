@@ -3,9 +3,9 @@ info:
   title: Blizz Taxi — account deletion components
   version: 1.0.0
   description: >-
-    Shared schemas of a rider's request to delete the account (REQ-RID-10, REQ-PRV-04, section 36.4): the rider asks,
-    staff check what blocks it and complete it by hand. Completion anonymizes the profile; orders, the journal,
-    ratings and the audit log stay. Referenced by the rider and admin APIs.
+    Shared schemas of a rider's or a driver's request to delete the account (REQ-RID-10, REQ-PRV-04, section 36.4,
+    issue #144): the person asks, staff check what blocks it and complete it by hand. Completion anonymizes the
+    profile; orders, the journal, ratings and the audit log stay. Referenced by the rider, driver and admin APIs.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -152,6 +152,91 @@ components:
       required: [client_id, account_state, requested_at]
       properties:
         client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: DELETION_PENDING after a request; after a cancellation the state the account had before.
+          type: string
+          enum: [DELETION_PENDING, ACTIVE, BLOCKED]
+        requested_at:
+          type: [string, "null"]
+          format: date-time
+
+    DriverDeletionBlockers:
+      description: >-
+        What stops staff from completing a driver's request (issue #144). blocked is true while any of them is there;
+        completing then answers 409 with DRIVER_HAS_ACTIVE_WORK, DRIVER_HAS_DEBT or DRIVER_HAS_DISPUTE, in that order.
+      type: object
+      additionalProperties: false
+      required: [active_work, debt, open_cash_disputes, blocked]
+      properties:
+        active_work:
+          description: >-
+            The driver's current trip, accepted assignment, open offer or pre-order reservations: what has to end
+            first, as kinds (TRIP, OFFER, RESERVATION).
+          type: array
+          items:
+            type: string
+            enum: [TRIP, OFFER, RESERVATION]
+        debt:
+          description: What the driver owes the service per currency (a negative balance).
+          type: array
+          items:
+            $ref: "#/components/schemas/Amount"
+        open_cash_disputes:
+          type: integer
+          minimum: 0
+        blocked:
+          type: boolean
+
+    DriverDeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [driver_id, previous_state, requested_at, blockers]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        previous_state:
+          description: The state the account returns to if the request is cancelled or rejected.
+          type: string
+          enum: [ACTIVE, BLOCKED]
+        requested_at:
+          type: string
+          format: date-time
+        blockers:
+          $ref: "#/components/schemas/DriverDeletionBlockers"
+
+    DriverDeletionRequestList:
+      description: One page of drivers' pending requests, oldest first (requested_at, then driver id) (REQ-API-09).
+      type: object
+      additionalProperties: false
+      required: [requests, page]
+      properties:
+        requests:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/DriverDeletionRequest"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+
+    DriverDeletionDecision:
+      type: object
+      additionalProperties: false
+      required: [driver_id, account_state]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        account_state:
+          description: ANONYMIZED after completion; after a rejection the state the account had before the request.
+          type: string
+          enum: [ANONYMIZED, ACTIVE, BLOCKED]
+
+    DriverAccountDeletionStatus:
+      type: object
+      additionalProperties: false
+      required: [driver_id, account_state, requested_at]
+      properties:
+        driver_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           description: DELETION_PENDING after a request; after a cancellation the state the account had before.

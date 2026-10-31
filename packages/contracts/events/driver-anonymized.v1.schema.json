@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-anonymized.v1.schema.json",
+  "title": "DriverAnonymized v1 payload",
+  "description": "Published by driver when staff complete a driver's deletion request and the driver is anonymized (REQ-PRV-04, REQ-PRV-07, issue #144). Aggregate Driver. Identity writes it to the erasure journal (ADR 0013); each module removes the driver's personal data it owns: notification the push devices and notification texts, operations the driver's chat messages and rating comments, backoffice the driver's support cases. Earnings, the ledger, trips and the vehicle stay (AC-24). Consumers are idempotent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["driver_id"],
+  "properties": {
+    "driver_id": { "type": "string", "format": "uuid" }
+  },
+  "examples": [
+    { "driver_id": "5a000000-0000-4000-8000-000000000401" }
+  ]
+}
