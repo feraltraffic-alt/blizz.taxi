@@ -62,12 +62,12 @@ final class FileCipher {
 
     /** Writes the encrypted form of {@code plain} to {@code target}; {@code storageKey} is bound to it. */
     void encrypt(Path plain, Path target, String storageKey) throws IOException {
-        encrypt(plain,target,storageKey,false);
+        encrypt(plain, target, storageKey, false);
     }
 
     /** A cleanup-fenced reservation: a removed output must never be recreated. */
     void encryptReserved(Path plain, Path target, String storageKey) throws IOException {
-        encrypt(plain,target,storageKey,true);
+        encrypt(plain, target, storageKey, true);
     }
 
     private void encrypt(Path plain, Path target, String storageKey, boolean reserved) throws IOException {
@@ -75,7 +75,8 @@ final class FileCipher {
         random.nextBytes(prefix);
         byte[] aad = storageKey.getBytes(StandardCharsets.UTF_8);
         try (InputStream in = Files.newInputStream(plain); OutputStream out = reserved
-                ? Files.newOutputStream(target,java.nio.file.StandardOpenOption.WRITE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)
+                ? Files.newOutputStream(target, java.nio.file.StandardOpenOption.WRITE,
+                        java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)
                 : Files.newOutputStream(target)) {
             out.write(MAGIC);
             out.write(prefix);

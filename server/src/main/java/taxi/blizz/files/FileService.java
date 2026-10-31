@@ -44,10 +44,10 @@ public interface FileService {
     FileContent open(Actor requester, UUID fileId);
 
     /**
-     * Stores a file the server itself produced or fetched (no uploading subject), for {@link FilePurpose#CALL_RECORDING}
-     * only: the real type must be {@code contentType}, and the bytes are encrypted at rest. SAFE, or REJECTED with the
-     * reason (nothing is kept then). The file is reachable only through {@link #openAttached}. Never in a transaction:
-     * the body is read and written here.
+     * Stores a file the server itself produced or fetched (no uploading subject), for
+     * {@link FilePurpose#CALL_RECORDING} only: the real type must be {@code contentType}, and the bytes are encrypted
+     * at rest. SAFE, or REJECTED with the reason (nothing is kept then). The file is reachable only through
+     * {@link #openAttached}. Never in a transaction: the body is read and written here.
      */
     StoredFile storeSystemFile(FilePurpose purpose, String contentType, InputStream body, long maxBytes);
 

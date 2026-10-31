@@ -85,13 +85,17 @@ class FileCipherTests {
         assertThat(FileCipher.fromMasterKey(null)).isEmpty();
         assertThatThrownBy(() -> FileCipher.fromMasterKey("c2hvcnQ=")).isInstanceOf(IllegalStateException.class);
     }
-    @Test void reservedEncryptionNeverRecreatesAnOutputRemovedByCleanup() throws IOException {
-        byte[] bytes={1,2,3};Path plain=Files.write(dir.resolve("reserved-plain"),bytes);
-        Path sealed=Files.createFile(dir.resolve("reserved-sealed"));
-        cipher.encryptReserved(plain,sealed,STORAGE_KEY);
-        assertThat(decrypt(cipher,sealed,STORAGE_KEY)).isEqualTo(bytes);
+
+    @Test
+    void reservedEncryptionNeverRecreatesAnOutputRemovedByCleanup() throws IOException {
+        byte[] bytes = {1, 2, 3};
+        Path plain = Files.write(dir.resolve("reserved-plain"), bytes);
+        Path sealed = Files.createFile(dir.resolve("reserved-sealed"));
+        cipher.encryptReserved(plain, sealed, STORAGE_KEY);
+        assertThat(decrypt(cipher, sealed, STORAGE_KEY)).isEqualTo(bytes);
         Files.delete(sealed);
-        assertThatThrownBy(()->cipher.encryptReserved(plain,sealed,STORAGE_KEY)).isInstanceOf(java.nio.file.NoSuchFileException.class);
+        assertThatThrownBy(() -> cipher.encryptReserved(plain, sealed, STORAGE_KEY))
+                .isInstanceOf(java.nio.file.NoSuchFileException.class);
         assertThat(Files.exists(sealed)).isFalse();
     }
 

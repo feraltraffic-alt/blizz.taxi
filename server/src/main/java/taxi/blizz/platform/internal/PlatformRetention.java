@@ -30,7 +30,8 @@ class PlatformRetention {
         // Non-DONE events can be requeued: their completed consumers must still be skipped by the relay.
         return batch("consumer_receipts", "consumer_inbox", "consumer_id,event_id",
                 // Scalar primary-key lookup stays bounded per receipt; an anti-join can scan the whole outbox.
-                "coalesce((select o.state = 'DONE' from outbox o where o.event_id = consumer_inbox.event_id),true) and ");
+                "coalesce((select o.state = 'DONE' from outbox o where o.event_id = consumer_inbox.event_id),"
+                        + "true) and ");
     }
 
     @Bean

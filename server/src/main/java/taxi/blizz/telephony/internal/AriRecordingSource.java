@@ -42,11 +42,13 @@ class AriRecordingSource implements RecordingSource {
         Path file = downloaded(channelId);
         Files.createDirectories(file.getParent());
         Files.deleteIfExists(file);
-        Files.createFile(file,java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
+        Files.createFile(file, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
         boolean keep = false;
         try {
             HttpResponse<Path> response = send(request(channelId, "/file").GET()
-                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file, java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING));
+                    .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file,
+                    java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING));
             if (response.statusCode() == 404) {
                 return Optional.empty();
             }

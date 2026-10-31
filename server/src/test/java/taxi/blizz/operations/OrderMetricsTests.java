@@ -116,7 +116,8 @@ class OrderMetricsTests {
         UUID staffId = UUID.randomUUID();
         jdbc.sql("""
                 insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at, updated_at)
-                values (:id, :login, 'Metrics', 'OPERATOR', '{orders.create,orders.cancel}', true, 'ACTIVE', now(), now())
+                values (:id, :login, 'Metrics', 'OPERATOR', '{orders.create,orders.cancel}', true, 'ACTIVE', now(),
+                        now())
                 """).param("id", staffId).param("login", "metrics-" + staffId).update();
         Actor staff = new Actor(taxi.blizz.platform.SubjectType.STAFF, staffId);
         UUID quote = new TestQuotes(jdbc, quotes).quote(staff, city, "STANDARD", PICKUP, DROPOFF).id();
@@ -153,7 +154,8 @@ class OrderMetricsTests {
         assertThat(counter("blizz.orders.cancelled", "by", "DRIVER", "reason", "PASSENGER_ASKED")).isEqualTo(before);
         cancel.run();
         cancel.run();
-        assertThat(counter("blizz.orders.cancelled", "by", "DRIVER", "reason", "PASSENGER_ASKED")).isEqualTo(before + 1);
+        assertThat(counter("blizz.orders.cancelled", "by", "DRIVER", "reason", "PASSENGER_ASKED"))
+                .isEqualTo(before + 1);
     }
 
     @Test
@@ -231,7 +233,10 @@ class OrderMetricsTests {
                 if (offer != null) dispatch.accept(d.actor(), d.device(), command, offer);
                 else dispatch.claim(d.actor(), d.device(), command, order.id());
             };
-            rollback(() -> { assign.run(); assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before); });
+            rollback(() -> {
+                assign.run();
+                assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before);
+            });
             assertThat(timer("blizz.dispatch.assigned", "source", source)).isEqualTo(before);
             assertThat(counter("blizz.offers", "outcome", "ACCEPTED")).isEqualTo(accepted);
             assign.run();

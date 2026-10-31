@@ -120,10 +120,18 @@ class OutboxTests {
         UUID eventId = tx.execute(status -> outbox.publish(event()));
         var laterFails = new java.util.concurrent.atomic.AtomicBoolean(true);
         OutboxHandler second = new OutboxHandler() {
-            public String consumerId() { return "retention-second"; }
-            public boolean supports(String type) { return type.equals("AssignmentCommitted"); }
+            public String consumerId() {
+                return "retention-second";
+            }
+
+            public boolean supports(String type) {
+                return type.equals("AssignmentCommitted");
+            }
+
             public void handle(OutboxMessage message) {
-                if (laterFails.get()) throw new IllegalStateException("Second consumer unavailable");
+                if (laterFails.get()) {
+                    throw new IllegalStateException("Second consumer unavailable");
+                }
             }
         };
         var testRelay = new OutboxRelay(jdbc, tx, List.of(handler, second),
@@ -142,8 +150,14 @@ class OutboxTests {
         for (String kind : taxi.blizz.platform.RetentionPolicy.KINDS) {
             if (works.stream().noneMatch(w -> w.kind().equals(kind))) {
                 allWork.add(new taxi.blizz.platform.RetentionWork() {
-                    public String kind() { return kind; }
-                    public String selectionSql(int limit) { throw new AssertionError(); }
+                    public String kind() {
+                        return kind;
+                    }
+
+                    public String selectionSql(int limit) {
+                        throw new AssertionError();
+                    }
+
                     public Result run(java.time.OffsetDateTime cutoff, java.time.OffsetDateTime at, int limit) {
                         return new Result(0, 0);
                     }
@@ -152,8 +166,13 @@ class OutboxTests {
         }
         var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         var runner = new RetentionRunner(() -> taxi.blizz.platform.RetentionPolicy.KINDS.stream()
-                .collect(java.util.stream.Collectors.toMap(k -> k, k -> 1)), allWork, meters, java.time.Clock.systemUTC());
-        try { runner.runOnce(); } finally { meters.close(); }
+                .collect(java.util.stream.Collectors.toMap(k -> k, k -> 1)), allWork, meters,
+                java.time.Clock.systemUTC());
+        try {
+            runner.runOnce();
+        } finally {
+            meters.close();
+        }
         jdbc.sql("update outbox set state='PENDING',next_attempt_at=now(),attempts=0 where event_id=:id")
                 .param("id", eventId).update();
         laterFails.set(false);

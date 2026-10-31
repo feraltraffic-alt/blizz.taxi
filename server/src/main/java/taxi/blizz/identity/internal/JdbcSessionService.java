@@ -121,10 +121,14 @@ class JdbcSessionService implements SessionService {
         OffsetDateTime now = now();
         UUID sessionId = jdbc.sql("select session_id from refresh_token where token_hash=:hash")
                 .param("hash", hash(refreshToken)).query(UUID.class).optional().orElse(null);
-        if (sessionId == null) return Refreshed.rejected();
+        if (sessionId == null) {
+            return Refreshed.rejected();
+        }
         // Revocation updates the session and then its token retention markers: use that order here too.
-        if (jdbc.sql("select id from device_session where id=:id for update").param("id",sessionId)
-                .query(UUID.class).optional().isEmpty()) return Refreshed.rejected();
+        if (jdbc.sql("select id from device_session where id=:id for update").param("id", sessionId)
+                .query(UUID.class).optional().isEmpty()) {
+            return Refreshed.rejected();
+        }
         Optional<StoredToken> found = jdbc.sql("""
                         select t.session_id, t.expires_at as token_expires_at, t.used_at,
                                s.subject_type, s.subject_id, s.audience, s.expires_at as session_expires_at,

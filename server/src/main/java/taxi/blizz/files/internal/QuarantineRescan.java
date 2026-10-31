@@ -96,12 +96,13 @@ class QuarantineRescan {
                 jdbc.sql("update file_object set scan_attempts = :attempts, next_scan_at = :next where id = :id")
                         .param("attempts", previous.attempts()).param("next", now.plus(wait(previous.attempts())))
                         .param("id", previous.fileId()).update();
-                log.warn("Cannot reserve rescan stage for file {} ({})", previous.fileId(), ex.getClass().getSimpleName());
+                log.warn("Cannot reserve rescan stage for file {} ({})", previous.fileId(),
+                        ex.getClass().getSimpleName());
                 return Optional.empty();
             }
             jdbc.sql("""
-                            update file_object set scan_attempts = :attempts, next_scan_at = :lease, staging_key = :stage,
-                              version = version + 1 where id = :id
+                            update file_object set scan_attempts = :attempts, next_scan_at = :lease,
+                              staging_key = :stage, version = version + 1 where id = :id
                             """).param("attempts", previous.attempts()).param("lease", now.plus(LEASE))
                     .param("stage", stageKey).param("id", previous.fileId()).update();
             return Optional.of(new Due(previous.fileId(), previous.key(), previous.encryption(), stageKey,
@@ -124,7 +125,8 @@ class QuarantineRescan {
                                 update file_object
                                 set state = 'SAFE', scanned_at = :now, scan_engine = :engine, next_scan_at = null,
                                     version = version + 1
-                                where id = :id and state = 'QUARANTINE' and retention_claim is null and scan_attempts = :attempts""")
+                                where id = :id and state = 'QUARANTINE' and retention_claim is null
+                                  and scan_attempts = :attempts""")
                         .param("now", now).param("engine", files.engine()).param("id", due.fileId())
                         .param("attempts", due.attempts()).update();
                 if (updated == 1) {
@@ -140,7 +142,8 @@ class QuarantineRescan {
                             update file_object
                             set state = 'REJECTED', reject_reason = :reason, scanned_at = :now,
                                 next_scan_at = null, scan_engine = :engine, version = version + 1
-                            where id = :id and state = 'QUARANTINE' and retention_claim is null and scan_attempts = :attempts""")
+                            where id = :id and state = 'QUARANTINE' and retention_claim is null
+                              and scan_attempts = :attempts""")
                     .param("reason", JdbcFileService.MALWARE).param("now", now).param("engine", files.engine())
                     .param("id", due.fileId()).param("attempts", due.attempts()).update();
             if (rejected == 1) {
@@ -154,7 +157,8 @@ class QuarantineRescan {
                 jdbc.sql("""
                                 update file_object set storage_key = null where id = :id and state = 'REJECTED'
                                   and retention_claim is null and scan_attempts = :attempts and storage_key = :key
-                                """).param("id", due.fileId()).param("attempts", due.attempts()).param("key", due.key()).update();
+                                """).param("id", due.fileId()).param("attempts", due.attempts())
+                        .param("key", due.key()).update();
             }
             return rejected == 1;
         } catch (ContentScanner.Unavailable | IOException | FileStorage.TooLargeException e) {
@@ -164,13 +168,14 @@ class QuarantineRescan {
             jdbc.sql("""
                             update file_object set next_scan_at = :next where id = :id and state = 'QUARANTINE'
                               and retention_claim is null and scan_attempts = :attempts
-                            """).param("next", now().plus(wait)).param("id", due.fileId()).param("attempts", due.attempts()).update();
+                            """).param("next", now().plus(wait)).param("id", due.fileId())
+                    .param("attempts", due.attempts()).update();
             return false;
         } finally {
             try {
                 storage.clearStage(due.stagingKey());
             } catch (IOException ex) {
-                log.warn("Could not clear rescan stage for file {} ({})",due.fileId(), ex.getClass().getSimpleName());
+                log.warn("Could not clear rescan stage for file {} ({})", due.fileId(), ex.getClass().getSimpleName());
             }
         }
     }

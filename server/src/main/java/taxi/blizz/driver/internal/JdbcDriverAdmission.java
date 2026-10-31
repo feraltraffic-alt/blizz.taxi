@@ -68,8 +68,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     private final Clock clock;
 
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
-                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock, StaffAccess staff,
-                        DriverRiskFlagCheck riskFlags, CityCatalog cities) {
+                        AuditLog auditLog, FileService files, DriverProperties properties, Clock clock,
+                        StaffAccess staff, DriverRiskFlagCheck riskFlags, CityCatalog cities) {
         this.cities = cities;
         this.staff = staff;
         this.riskFlags = riskFlags;
@@ -113,7 +113,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                         select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
                                id, type, vehicle_id, file_id, number, valid_from, valid_to, decision, decision_reason
                         from driver_document where driver_id = :id
-                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc""")
+                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type,
+                                 created_at desc""")
                 .param("id", driverId)
                 .query((rs, i) -> new DriverProfile.Document(rs.getObject("id", UUID.class),
                         DocumentType.valueOf(rs.getString("type")), rs.getObject("vehicle_id", UUID.class),
@@ -122,8 +123,9 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                         rs.getString("decision"), rs.getString("decision_reason")))
                 .list();
 
-        return new DriverProfile(driverId, row.account(), row.name(), row.language(), ReviewStatus.valueOf(row.status()),
-                row.version(), row.terminal(), List.copyOf(admissionCities(driverId)), vehicles, documents);
+        return new DriverProfile(driverId, row.account(), row.name(), row.language(),
+                ReviewStatus.valueOf(row.status()), row.version(), row.terminal(),
+                List.copyOf(admissionCities(driverId)), vehicles, documents);
     }
 
     @Override
@@ -166,7 +168,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                 new ProfileRequest(name, language), DriverProfile.class, () -> {
                     lock(driver.id());
                     jdbc.sql("""
-                                    update driver set name = coalesce(:name, name), language = coalesce(:language, language),
+                                    update driver set name = coalesce(:name, name),
+                                                      language = coalesce(:language, language),
                                                       updated_at = :now, version = version + 1
                                     where id = :id""")
                             .param("name", name)
@@ -187,8 +190,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
             UUID id = UUID.randomUUID();
             OffsetDateTime now = now();
             jdbc.sql("""
-                            insert into vehicle (id, driver_id, registration_number, make, model, color, production_year,
-                                                 created_at, updated_at)
+                            insert into vehicle (id, driver_id, registration_number, make, model, color,
+                                                 production_year, created_at, updated_at)
                             values (:id, :driverId, :registration, :make, :model, :color, :year, :now, :now)""")
                     .param("id", id)
                     .param("driverId", driver.id())
@@ -211,9 +214,11 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
         }
         if (document.type().belongsToVehicle() != (document.vehicleId() != null)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED,
-                    document.type().belongsToVehicle() ? "This document needs a vehicle" : "This document is not a vehicle document");
+                    document.type().belongsToVehicle() ? "This document needs a vehicle"
+                            : "This document is not a vehicle document");
         }
-        if (document.validFrom() != null && document.validTo() != null && document.validTo().isBefore(document.validFrom())) {
+        if (document.validFrom() != null && document.validTo() != null
+                && document.validTo().isBefore(document.validFrom())) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "valid_to is before valid_from");
         }
         return commands.execute(new CommandKey(driver, "driver.document.add", commandId), document, UUID.class, () -> {
@@ -292,7 +297,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                     }
                     List<String> missing = missingDocuments(driver.id());
                     if (!missing.isEmpty()) {
-                        throw new DomainException(ErrorCode.VALIDATION_FAILED, "Missing or invalid: " + String.join(", ", missing));
+                        throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                                "Missing or invalid: " + String.join(", ", missing));
                     }
                     jdbc.sql("""
                                     update vehicle set state = 'IN_REVIEW', updated_at = :now, version = version + 1
@@ -333,7 +339,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                     if (decision == ReviewDecision.APPROVE) {
                         List<String> missing = missingDocuments(driverId);
                         if (!missing.isEmpty()) {
-                            throw new DomainException(ErrorCode.STATE_CONFLICT, "Documents became invalid: " + String.join(", ", missing));
+                            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                    "Documents became invalid: " + String.join(", ", missing));
                         }
                         jdbc.sql("""
                                         update vehicle set state = 'APPROVED', class_approvals = :classes,
@@ -347,9 +354,11 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                                         update driver_document
                                         set decision = 'ACCEPTED', reviewer_staff_id = :reviewer, decided_at = :now
                                         where id in (
-                                            select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type) id
+                                            select distinct on (coalesce(vehicle_id,
+                                                '00000000-0000-0000-0000-000000000000'::uuid), type) id
                                             from driver_document where driver_id = :id
-                                            order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc)
+                                            order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                                                     type, created_at desc)
                                           and decision = 'PENDING'""")
                                 .param("reviewer", reviewer.id())
                                 .param("now", now)
@@ -420,7 +429,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                 new SuspendRequest(driverId, expectedVersion, reason), DriverProfile.class, () -> {
                     Locked locked = lockVersion(driverId, expectedVersion);
                     if (locked.status() != ReviewStatus.SUSPENDED) {
-                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a suspended driver can be reinstated");
+                        throw new DomainException(ErrorCode.STATE_CONFLICT,
+                                "Only a suspended driver can be reinstated");
                     }
                     // A licence may have ended during the suspension; the expiry check skips suspended drivers
                     // (audit 29.10.2026). Back to work only if no current document has ended.
@@ -627,11 +637,13 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
         properties.requiredVehicleDocuments().forEach(t -> required.add(t.name()));
         List<UUID> candidates = jdbc.sql("""
                         with accepted as (
-                            select distinct on (driver_id, coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
+                            select distinct on (driver_id, coalesce(vehicle_id,
+                                    '00000000-0000-0000-0000-000000000000'::uuid), type)
                                    driver_id, vehicle_id, type, valid_to
                             from driver_document
                             where decision = 'ACCEPTED'
-                            order by driver_id, coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc)
+                            order by driver_id, coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                                     type, created_at desc)
                         select distinct a.driver_id
                         from accepted a
                         join driver d on d.id = a.driver_id
@@ -733,9 +745,11 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
         List<String> missing = new ArrayList<>();
         Map<String, CurrentDocument> current = new LinkedHashMap<>();
         jdbc.sql("""
-                        select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type) vehicle_id, type, decision, valid_to
+                        select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
+                               vehicle_id, type, decision, valid_to
                         from driver_document where driver_id = :id
-                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type, created_at desc""")
+                        order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type,
+                                 created_at desc""")
                 .param("id", driverId)
                 .query((rs, i) -> new CurrentDocument(rs.getObject("vehicle_id", UUID.class), rs.getString("type"),
                         rs.getString("decision"), rs.getObject("valid_to", LocalDate.class)))
@@ -754,7 +768,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
         }
         for (UUID vehicleId : vehicles) {
             for (DocumentType type : properties.requiredVehicleDocuments()) {
-                check(current.get(vehicleId + ":" + type.name()), type.name() + " (vehicle " + vehicleId + ")", today, missing);
+                check(current.get(vehicleId + ":" + type.name()), type.name() + " (vehicle " + vehicleId + ")", today,
+                        missing);
             }
         }
         return missing;
@@ -765,7 +780,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
         LocalDate today = LocalDate.now(clock.withZone(properties.marketTimeZone()));
         return jdbc.sql("""
                         select type from (
-                            select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type)
+                            select distinct on (coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                                                type)
                                    type, valid_to
                             from driver_document where driver_id = :id
                             order by coalesce(vehicle_id, '00000000-0000-0000-0000-000000000000'::uuid), type,
@@ -809,7 +825,8 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     private static void validate(VehicleInput vehicle) {
         if (vehicle == null || blank(vehicle.registrationNumber()) || blank(vehicle.make()) || blank(vehicle.model())
                 || blank(vehicle.color())) {
-            throw new DomainException(ErrorCode.VALIDATION_FAILED, "Registration number, make, model and colour are required");
+            throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                    "Registration number, make, model and colour are required");
         }
         int year = vehicle.productionYear();
         if (year < 1950 || year > LocalDate.now().getYear() + 1) {
