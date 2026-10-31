@@ -116,6 +116,20 @@ class AdminGeoController {
                 body.name(), body.currency(), body.timezone(), ewkt(body.polygon()), body.priority(), body.reason()));
     }
 
+    record UpdateCity(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotBlank String name,
+                      @NotBlank String currency, @NotBlank String timezone, @NotNull Map<String, Object> polygon,
+                      int priority, @NotBlank String reason) {
+    }
+
+    /** Registry 22.2: a city draft's details and boundary, while it is a draft (issue #176). */
+    @PostMapping("/cities/{cityId}/update")
+    GeoConfiguration.Revision updateCity(AccessClaims claims, @PathVariable UUID cityId,
+                                         @Valid @RequestBody UpdateCity body) {
+        return geo.updateCityDraft(new GeoConfiguration.CityUpdate(body.commandId(), claims.actor(), cityId,
+                body.expectedVersion(), body.name(), body.currency(), body.timezone(), ewkt(body.polygon()),
+                body.priority(), body.reason()));
+    }
+
     @PostMapping("/cities/{cityId}/publish")
     GeoConfiguration.Revision publishCity(AccessClaims claims, @PathVariable UUID cityId, @Valid @RequestBody Change body) {
         return geo.publishCity(change(claims, cityId, body));

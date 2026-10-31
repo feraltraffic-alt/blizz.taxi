@@ -79,6 +79,11 @@ class JdbcGeoConfiguration implements GeoConfiguration {
     }
 
     @Override
+    public Revision updateCityDraft(CityUpdate c) {
+        throw new UnsupportedOperationException("issue #176, part B");
+    }
+
+    @Override
     public Revision createZoneDraft(ZoneDraft c) {
         return commands.execute(key(c.actor(), "zone.createDraft", c.commandId(), c.cityId()), c, Revision.class, () -> {
             initialVersion(c.expectedVersion());
