@@ -40,6 +40,7 @@ public final class StaffPermissions {
             new Permission("drivers.delete", "Drivers", "Drivers' deletion requests: check, complete or reject"),
             new Permission("geo.manage", "Geography", "Cities, zones and addresses"),
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
+            new Permission("fares.correct", "Finance", "Correct a fulfilled order's final fare (the password is asked again)"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),
             new Permission("wallets.manage", "Finance", "Riders' bonus accounts: view and top up"),
             new Permission("payments.retry", "Finance",

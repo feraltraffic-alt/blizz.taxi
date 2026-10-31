@@ -109,4 +109,14 @@ class JdbcFinalFares implements FinalFares {
                         json.readValue(rs.getString(11), Breakdown.class)))
                 .optional();
     }
+
+    @Override
+    public java.util.List<Version> versions(UUID orderId) {
+        return java.util.List.of();
+    }
+
+    @Override
+    public Version correct(UUID orderId, int expectedVersion, long amountMinor, String reason, UUID authorId) {
+        throw new UnsupportedOperationException("issue #142");
+    }
 }

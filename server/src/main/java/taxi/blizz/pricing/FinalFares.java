@@ -63,4 +63,23 @@ public interface FinalFares {
 
     /** The order's final fare when it has one, e.g. for a chargeback's evidence (REQ-PAY-23). */
     java.util.Optional<FinalFare> ofOrder(UUID orderId);
+
+    /**
+     * One version of an order's final fare (issue #142): version 1 is the trip's own; a correction has the version it
+     * corrects, its reason and its author.
+     */
+    record Version(UUID id, int version, long amountMinor, long commissionMinor, long driverShareMinor,
+                   java.time.OffsetDateTime createdAt, UUID correctsId, String reason, UUID authorId) {
+    }
+
+    /** Every version of the order's final fare, oldest first; empty when it has none. */
+    java.util.List<Version> versions(UUID orderId);
+
+    /**
+     * A correction (REQ-PRC-10, issue #142), in the caller's transaction: locks the order's latest version, checks it
+     * is {@code expectedVersion} (otherwise {@code ConflictException} VERSION_CONFLICT with the current one) and
+     * writes version + 1 with {@code amountMinor} split by the same commission rate. Rows are never changed. No final
+     * fare, or the same amount → STATE_CONFLICT.
+     */
+    Version correct(UUID orderId, int expectedVersion, long amountMinor, String reason, UUID authorId);
 }
