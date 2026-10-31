@@ -384,6 +384,11 @@ class JdbcFileService implements FileService {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void requestErasure(java.util.Collection<UUID> fileIds) {
+        if (fileIds.isEmpty()) {
+            return;
+        }
+        jdbc.sql("update file_object set erase_requested_at = :now where id in (:ids) and erase_requested_at is null")
+                .param("now", now()).param("ids", java.util.List.copyOf(fileIds)).update();
     }
 
     @Override

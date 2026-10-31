@@ -10,8 +10,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * {@code ClientAnonymized} (REQ-PRV-04, issue #56): the rider's phones get nothing more — their push devices and the
- * notifications not yet sent are deleted. Notifications already sent stay as the delivery record; they carry no
- * personal data. A repeat finds nothing to delete.
+ * notifications not yet sent are deleted. Notifications already sent stay as the delivery record (template, channel,
+ * state, times), their texts and data replaced (issue #144): a text may name the rider's pickup or driver. A repeat
+ * changes nothing.
  */
 @Component
 class AnonymizedClientPushes implements OutboxHandler {
@@ -47,5 +48,10 @@ class AnonymizedClientPushes implements OutboxHandler {
                         delete from notification
                         where recipient_type = 'CLIENT' and recipient_id = :client and state in ('PENDING', 'SENDING')""")
                 .param("client", client).update();
+        jdbc.sql("""
+                        update notification set title = :deleted, body = :deleted, data = '{}'::jsonb
+                        where recipient_type = 'CLIENT' and recipient_id = :client
+                          and (title <> :deleted or body <> :deleted or data <> '{}'::jsonb)""")
+                .param("deleted", "[deleted]").param("client", client).update();
     }
 }

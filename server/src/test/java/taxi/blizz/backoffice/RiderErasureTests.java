@@ -49,8 +49,8 @@ import taxi.blizz.pricing.QuoteService;
 @Import({TestcontainersConfiguration.class, ClientDeletionTests.Capture.class})
 class RiderErasureTests {
 
-    static final GeoPoint PICKUP = new GeoPoint(-39.512345, 110.523456);
-    static final GeoPoint DROPOFF = new GeoPoint(-39.456789, 110.587654);
+    static final GeoPoint PICKUP = new GeoPoint(-39.512345, 117.523456);
+    static final GeoPoint DROPOFF = new GeoPoint(-39.456789, 117.587654);
 
     /**
      * R: the rider's data, erased or deleted by the deletion. N: not personal (codes, states, settings, the service's
@@ -77,7 +77,7 @@ class RiderErasureTests {
             N city_operations: pause_reason payment_methods working_hours
             R client: language name phone_normalized
             N client: account_state blocked_reason deletion_previous_state
-            R command_receipt: outcome
+            K command_receipt: outcome
             N command_receipt: request_hash scope
             N consumer_inbox: consumer_id
             R device_session: device_ref
@@ -124,8 +124,7 @@ class RiderErasureTests {
             N operator_status: status
             R order_contact: name phone
             N order_contact_attempt: kind
-            R order_event: payload reason
-            N order_event: actor_type type
+            N order_event: actor_type payload reason type
             R order_message: body
             N order_message: sender_role
             N order_tip: currency failure_reason method state
@@ -165,9 +164,10 @@ class RiderErasureTests {
             K report_export: content file_name
             N report_export: error kind state
             N retention_settings: days reason
-            R ride_order: comment dropoff_label entrance pickup_label source_ref status_reason
+            R ride_order: comment dropoff_label entrance pickup_label
             N ride_order: cancel_reason_code cancel_reason_labels cancelled_by channel created_by_type currency
-            N ride_order: payment_method payment_state selected_payment_method status vehicle_class
+            N ride_order: payment_method payment_state selected_payment_method source_ref status status_reason
+            N ride_order: vehicle_class
             N rider_promotion: currency days_of_week kind name state value_type vehicle_class
             N rider_wallet: currency
             N rider_wallet_hold: currency state
@@ -315,7 +315,8 @@ class RiderErasureTests {
             StringBuilder where = new StringBuilder();
             Map<String, Object> params = new LinkedHashMap<>();
             for (int i = 0; i < needles.size(); i++) {
-                where.append(i == 0 ? "" : " or ").append(value.formatted(column.column())).append(" like :n").append(i);
+                where.append(i == 0 ? "" : " or ").append(value.formatted(column.column())).append(" like :n")
+                        .append(i);
                 params.put("n" + i, "%" + needles.get(i) + "%");
             }
             long hits = jdbc.sql("select count(*) from \"%s\" where %s".formatted(column.table(), where))
@@ -334,13 +335,14 @@ class RiderErasureTests {
     @Test
     void afterTheDeletionNoColumnHoldsTheRidersPhoneOrWords() {
         TestRides rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
-        UUID city = rides.city("test-rider-erasure", "UAH", 110);
+        UUID city = rides.city("test-rider-erasure", "UAH", 117);
         String words = "Sunflower" + UUID.randomUUID().toString().substring(0, 8);
         Actor rider = rides.client();
         String phone = phone(rider);
         jdbc.sql("update client set name = :name, language = 'uk' where id = :id")
                 .param("name", "Olena " + words).param("id", rider.id()).update();
-        String friend = "+48" + (600_000_000L + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 99_999_999L));
+        String friend = "+48"
+                + (600_000_000L + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 99_999_999L));
 
         // The rider's ride for a friend, with a note, an entrance, a chat, a rating and a support case with a file.
         TestRides.Driver driver = rides.driverNear(PICKUP);
@@ -398,13 +400,25 @@ class RiderErasureTests {
         OrderView forThem = order(rides, other, city, "theirs", new CallerContact("Olena " + words, phone));
         orders.cancel(other, UUID.randomUUID(), forThem.id(), orders.get(forThem.id()).version(), "CHANGED_MIND");
         deliverEvents();
+        // A push already sent to the rider whose text names their pickup.
+        jdbc.sql("""
+                        insert into notification (id, event_id, recipient_type, recipient_id, channel, template,
+                                                  template_version, locale, title, body, data, state, next_attempt_at,
+                                                  deadline, created_at)
+                        values (:id, :event, 'CLIENT', :rider, 'PUSH', 'rider.driver-arrived', 1, 'uk', 'Arrived',
+                                :body, cast(:data as jsonb), 'SENT', now(), now() + interval '1 hour', now())""")
+                .param("id", UUID.randomUUID()).param("event", UUID.randomUUID()).param("rider", rider.id())
+                .param("body", "The car is at Home of " + words)
+                .param("data", "{\"label\":\"Home of " + words + "\"}").update();
         String digits = phone.substring(phone.length() - 9);
         String friendDigits = friend.substring(friend.length() - 9);
         assertThat(holders(List.of(digits, friendDigits, words))).as("the fixture spread the data")
                 .contains("client.phone_normalized", "ride_order.comment", "order_message.body", "rating.comment",
                         "support_message.body", "support_message_attachment.name", "call.caller_phone",
                         "otp_challenge.phone_normalized", "otp_delivery.phone", "order_contact.phone",
-                        "command_receipt.outcome");
+                        "notification.body", "notification.data");
+        assertThat(jdbc.sql("select count(*) from command_receipt where scope like :scope")
+                .param("scope", "CLIENT:" + rider.id() + ":%").query(Long.class).single()).isPositive();
 
         jdbc.sql("""
                         update client set account_state = 'DELETION_PENDING', deletion_previous_state = 'ACTIVE',
@@ -416,6 +430,11 @@ class RiderErasureTests {
 
         assertThat(new TreeSet<>(holders(List.of(digits, friendDigits, words))))
                 .as("columns still holding the deleted rider's phone, their friend's phone or their words").isEmpty();
+        // Receipts are K: the rider's own go now; a driver's trip commands may repeat the note until the receipts'
+        // retention term (register, section 16).
+        assertThat(jdbc.sql("select count(*) from command_receipt where scope like :scope")
+                .param("scope", "CLIENT:" + rider.id() + ":%").query(Long.class).single())
+                .as("the rider's own command receipts").isZero();
 
         // Points: about 1 km, enough for the city and zone statistics and the fare, not for the address.
         Map<String, Object> points = jdbc.sql("""
@@ -424,7 +443,7 @@ class RiderErasureTests {
                 .param("id", order.id()).query().singleRow();
         assertThat(points).containsEntry("plat", rounded(PICKUP.lat())).containsEntry("plon", rounded(PICKUP.lon()))
                 .containsEntry("dlat", rounded(DROPOFF.lat())).containsEntry("dlon", rounded(DROPOFF.lon()))
-                .containsEntry("status", "COMPLETED").containsEntry("price_minor", order.priceMinor());
+                .containsEntry("status", "FULFILLED").containsEntry("price_minor", order.priceMinor());
         assertThat(points.get("final_fare_id")).as("the fare facts stay").isNotNull();
         List<Double> quoted = jdbc.sql("""
                         select (jsonb_array_elements(jsonb_path_query_array(snapshot, 'lax $.**.lat')
@@ -445,7 +464,8 @@ class RiderErasureTests {
                 .param("id", call).query(Long.class).single()).isZero();
 
         // A redelivered event and a replay after a restore change nothing more.
-        UUID event = jdbc.sql("select event_id from outbox where event_type = 'ClientAnonymized' and aggregate_id = :id")
+        UUID event = jdbc.sql("""
+                        select event_id from outbox where event_type = 'ClientAnonymized' and aggregate_id = :id""")
                 .param("id", rider.id()).query(UUID.class).single();
         jdbc.sql("delete from consumer_inbox where event_id = :id").param("id", event).update();
         jdbc.sql("update outbox set state = 'PENDING', next_attempt_at = now() where event_id = :id")

@@ -243,7 +243,8 @@ class RecordingRetentionTests {
     @Test void anErasedCallersRecordingGoesWhateverTheTermAndOthersStay() throws Exception {
         keepRecordingsForever();
         OffsetDateTime now=OffsetDateTime.now();
-        var stored=files.storeSystemFile(FilePurpose.CALL_RECORDING,"audio/wav",new java.io.ByteArrayInputStream(WavFiles.tone(1)),1000000);
+        var stored=files.storeSystemFile(FilePurpose.CALL_RECORDING,"audio/wav",
+            new java.io.ByteArrayInputStream(WavFiles.tone(1)),1000000);
         UUID erased=recording("STORED",stored.fileId(),now.minusMinutes(5));
         UUID pending=recording("PENDING",null,now.minusMinutes(5));
         UUID kept=recording("NONE",null,now.minusMinutes(5));

@@ -36,9 +36,14 @@ Common to all rows:
   default (REQ-PRV-03); whether a partner is a joint controller or a processor for its own drivers: **owner**.
 - **Staff access** goes through permissions and the order's scope; reading personal data in the admin panel is
   audited (REQ-SEC, `audit_log`).
-- **Rider deletion** (#56, ADR 0013): the account is anonymized after the grace period, `ClientAnonymized` reaches
-  the modules that hold copies, and the erasure journal applies it again after a restore. Driver and staff deletion
-  does not exist yet: **gap**, #144 PR 3 for drivers.
+- **Rider deletion** (#56, ADR 0013, #144): the account is anonymized after the grace period. What other modules
+  know only by the phone (call log, code deliveries, someone else's order contact) is erased in the same transaction
+  through `ClientErasing`; the phone never goes into an event. What they know by the rider's id follows
+  `ClientAnonymized`. The erasure journal applies both again after a restore. Free text becomes `[deleted]`, labels
+  `—`, points are rounded to two decimals (about 1 km), files are deleted from storage. An order with an open
+  chargeback is held (`privacy_hold`) until the chargeback is decided. `RiderErasureTests` reads every text column of
+  the schema and finds neither the phone nor the rider's words after a deletion. Driver and staff deletion does not
+  exist yet: **gap**, #144 PR 3 for drivers.
 
 ## Categories
 
@@ -51,10 +56,11 @@ Common to all rows:
   numbers); the caller's name is shown to operators on an incoming call; staff in scope.
 - **Term:** while the account exists. Not enforced by time: an account without orders for years is kept — **owner**
   (inactive-account term).
-- **At expiry:** on the rider's deletion: phone, name and language set to null, state `ANONYMIZED`; data exports
-  deleted. Acceptance rows stay (proof of what was accepted) — **owner**.
-- **Legal hold:** none in code. A rider with an open chargeback or cash dispute is anonymized all the same: **gap**,
-  #144 PR 2 (`privacy_hold`).
+- **At expiry:** on the rider's deletion: phone, name and language set to null, state `ANONYMIZED`; data exports,
+  receipts of the rider's commands and device references of their sessions deleted. Acceptance rows stay (proof of
+  what was accepted) — **owner**.
+- **Legal hold:** an open chargeback holds the order it disputes (category 6). An unpaid debt, an active order or an
+  open support case blocks the deletion itself (#56). Other holds (complaint, police request) — **owner**.
 - **Owner:** **owner** (data protection lead).
 
 ### 2. Driver account, vehicle and documents
@@ -68,7 +74,8 @@ Common to all rows:
 - **Recipients:** the rider sees the name, car and registration number of the assigned driver; staff with
   `drivers.*` permissions; document scans only to reviewers.
 - **Term:** while the driver works with the service. Document scans and review history after the driver leaves:
-  **owner**. Nothing is deleted today.
+  **owner**. Nothing is deleted today. How long a taxi operator must keep the document files as proof of the licence
+  check: **owner**; #144 PR 3 makes it a setting (default 0 = deleted with the driver's erasure).
 - **At expiry:** none: **gap**, #144 PR 3 (driver deletion with the blockers active work, debt, dispute).
 - **Legal hold:** a debt, an open dispute or an investigation — to be enforced by PR 3.
 - **Owner:** **owner** (driver operations).
@@ -80,10 +87,9 @@ Common to all rows:
 - **Basis:** contract; abuse control: legitimate interest — **owner**.
 - **Recipients:** the SMS provider (TurboSMS) and the service's own Asterisk for code calls (ADR 0012, Q-18).
 - **Term:** panel default 90 days each (`sign_in_codes`, `code_deliveries`); enforced by the retention job (#118).
-- **At expiry:** rows deleted.
+- **At expiry:** rows deleted. On a rider's deletion the codes and deliveries of the rider's phone (audience CLIENT)
+  are deleted at once.
 - **Legal hold:** none.
-- **Gap:** these rows are linked to a rider only by phone, so a rider's deletion leaves them for up to 90 days —
-  #144 PR 2.
 - **Owner:** **owner**.
 
 ### 4. Calls and call recordings
@@ -96,8 +102,10 @@ Common to all rows:
 - **Term:** recordings: panel default 0 = kept for ever until the owner sets a term (`call_recordings`). Call rows
   are not on the retention list and are kept for ever — **owner**.
 - **At expiry:** files deleted first, then their rows (#118).
+- **On a rider's deletion:** the caller's number (normalized and as dialled) is cleared from every call from the
+  rider's phone; the call rows stay without it. Their recordings are discarded on Asterisk and deleted from storage
+  whatever the term, by the recording sweep. A number that could not be parsed (no normalized phone) is not matched.
 - **Legal hold:** none in code; a recording needed for a complaint or police request — **owner**.
-- **Gap:** calls of a rider who deleted the account still carry the phone — #144 PR 2.
 - **Owner:** **owner** (operations).
 
 ### 5. Order contact (ordering for someone else)
@@ -108,9 +116,9 @@ Common to all rows:
 - **Recipients:** the assigned driver while the trip is open: the name, and the phone only when calls are DIRECT
   (otherwise calls go through the service's numbers); staff in scope.
 - **Term:** kept with the order, for ever — **owner**.
-- **At expiry:** none: **gap**, #144 PR 2 (null the contact when the ordering rider is anonymized; a term for
-  closed orders is the owner's).
-- **Legal hold:** an open dispute on the order.
+- **At expiry:** none by time (a term for closed orders: **owner**). The contact is deleted when the ordering rider
+  is deleted, and when the person named is a rider who deletes their account (matched by phone).
+- **Legal hold:** an open chargeback on the order keeps the contact until it is decided.
 - **Owner:** **owner**.
 
 ### 6. Orders and trips
@@ -122,9 +130,15 @@ Common to all rows:
 - **Recipients:** rider and assigned driver; staff in scope; the payment provider sees the amount only.
 - **Term:** kept for ever — **owner** (accounting term per country). Points remain identifying after the name is
   gone (REQ-PRV-06).
-- **At expiry:** none. On the rider's deletion the order keeps the rider id of an anonymized account; free text
-  (comment, entrance, labels) stays: **gap**, #144 PR 2.
-- **Legal hold:** chargeback, cash dispute, investigation.
+- **At expiry:** none by time. On the rider's deletion the order keeps its facts (status, price, final fare, times,
+  driver, the rider id of an anonymized account). The labels become `—`, the note and the entrance `[deleted]`. The
+  pickup, drop-off and interruption points are **rounded to two decimals** (about 1 km): enough for city and zone
+  statistics and the fare facts, not for the address (a pickup repeated over many orders is the rider's home). The
+  same rounding applies to the points in the rider's quotes. The trip track and the dispatch journal still hold the
+  driver's positions near the pickup until their own terms (90 days, categories 7 and 12).
+- **Legal hold:** an open chargeback keeps the order exact (labels, note, points, contact, chat) under a
+  `privacy_hold` row; when the chargeback is decided, a sweep (every 10 minutes) anonymizes it like the rest and
+  releases the hold. Cash disputes and investigations — **owner**.
 - **Owner:** **owner**.
 
 ### 7. Dispatch journal
@@ -145,7 +159,8 @@ Common to all rows:
 - **Basis:** contract — **owner**.
 - **Recipients:** the two parties of the order; staff in scope, audited.
 - **Term:** kept for ever with the order — **owner** (design README defers it to Q-19).
-- **At expiry:** none. A deleted rider's messages keep their text: **gap**, #144 PR 2.
+- **At expiry:** none by time. On the rider's deletion every message the rider wrote becomes `[deleted]`; what the
+  driver wrote stays. Messages stay append-only otherwise: the database allows only this one change.
 - **Legal hold:** complaint or investigation.
 - **Owner:** **owner**.
 
@@ -156,7 +171,9 @@ Common to all rows:
 - **Basis:** contract; safety reports: legitimate or vital interest — **owner**.
 - **Recipients:** support staff in scope.
 - **Term:** kept for ever — **owner**.
-- **At expiry:** none. A deleted rider's cases keep text and files: **gap**, #144 PR 2.
+- **At expiry:** none by time. On the rider's deletion their cases keep the number, category, order, states and
+  times; the subject, the resolution and every message in them (staff replies and notes included: they are about
+  the rider) become `[deleted]`; attachments lose their names and their files are deleted from storage.
 - **Legal hold:** open case, safety incident.
 - **Owner:** **owner** (support).
 
@@ -167,7 +184,7 @@ Common to all rows:
 - **Basis:** legitimate interest — **owner**.
 - **Recipients:** the rated driver sees the score without the rider's name; staff.
 - **Term:** kept for ever — **owner**.
-- **At expiry:** none; a deleted rider's comment stays: **gap**, #144 PR 2.
+- **At expiry:** none by time; on the rider's deletion their comments become `[deleted]`, the scores stay.
 - **Owner:** **owner**.
 
 ### 11. Address searches and the address directory
@@ -229,9 +246,9 @@ Common to all rows:
   SMS provider.
 - **Term:** delivered outbox rows: panel default 30 days (`delivered_events`). Notifications: kept for ever —
   **owner**. Devices: until the app signs out or the account is deleted.
-- **At expiry:** on the rider's deletion devices and unsent notifications are deleted; sent notifications stay.
-- **Gap:** sent notifications and outbox payloads may carry a name or address in their text — #144 PR 2 checks
-  every template.
+- **At expiry:** on the rider's deletion devices and unsent notifications are deleted; sent ones keep their
+  template, channel, state and times, with title and text `[deleted]` and no data. Outbox payloads carry ids only
+  (REQ-NTF-04; the chat event leaves the text out).
 - **Owner:** **owner**.
 
 ### 16. Sessions, devices and technical receipts
@@ -243,17 +260,21 @@ Common to all rows:
 - **Recipients:** none outside the database.
 - **Term:** sessions 30 days after expiry or revocation, command and consumer receipts 30 days (panel defaults);
   rate-limit rows when the window passes. `device_session` is not on the list — **gap** (kept for ever).
-- **At expiry:** deleted.
+- **At expiry:** deleted. On a rider's deletion the receipts of the rider's own commands and the device references
+  of their sessions go at once. A receipt keeps the answer to a command for its repeat, so the receipts of the
+  driver's trip commands repeat the rider's note, entrance and contact until the receipts' term (30 days by
+  default): a residual copy, read only by a repeat of that driver's command.
 - **Owner:** **owner**.
 
 ### 17. Files
 
 - **Data:** `file_object` and files on disk: document scans, support attachments, data exports, report exports.
 - **Purpose:** as the category that owns the file.
-- **Term:** never-attached uploads 7 days, quarantined files 30 days (panel defaults). A rider's data export can no
-  longer be downloaded after 7 days (`blizz.privacy.data-export-keep`), but its file stays until the rider's
-  deletion: **gap**, #144 PR 2.
-- **At expiry:** file deleted first, then the row.
+- **Term:** never-attached uploads 7 days, quarantined files 30 days (panel defaults). A rider's data export is
+  dropped 7 days after it is ready (`blizz.privacy.data-export-keep`; its content is set to null), and at once on
+  the rider's deletion.
+- **At expiry:** file deleted first, then the row. A file whose owner record asks for its erasure (a deleted
+  rider's support attachment) is deleted the same way whatever the terms, by the erasure sweep.
 - **Owner:** **owner**.
 
 ### 18. Audit log and staff
@@ -265,8 +286,8 @@ Common to all rows:
 - **Recipients:** administrators.
 - **Term:** kept for ever; the audit log is never deleted by any job (#118). `staff_sign_in` is not on the list —
   **owner**.
-- **At expiry:** none. Before/after values may hold a rider's phone or name after the rider's deletion: **gap**,
-  #144 PR 2 decides with the lead whether the audit keeps them (an audit record is not rewritten without trace,
+- **At expiry:** none. Phones in the audit are masked (`+380*****12`); a name changed by staff may stay in the
+  before/after values after the rider's deletion — question 7 (an audit record is not rewritten without trace,
   REQ-PRV-07).
 - **Owner:** **owner** (security).
 
@@ -276,9 +297,9 @@ Common to all rows:
 2. **Legal basis** of each category above, per country (Poland, Ukraine).
 3. **Controller or processor:** partner fleets; WayForPay; Google (geocoder, FCM); TurboSMS.
 4. **Transfers outside the EEA / Ukraine:** Google geocoder and FCM; any other processor.
-5. **Terms** not set by the code: inactive rider accounts; drivers who left and their document scans; call rows
-   and recordings; order contacts; orders, chat, support, ratings, notifications; staff sign-ins; finance and ledger
-   (accounting term per country).
+5. **Terms** not set by the code: inactive rider accounts; drivers who left and their document scans (how long the
+   document files must be kept as proof of the licence check); call rows and recordings; order contacts; orders,
+   chat, support, ratings, notifications; staff sign-ins; finance and ledger (accounting term per country).
 6. **Legal hold:** who sets it and on what (chargeback, dispute, complaint, police request); how long a trip track
    under dispute is kept after 90 days.
 7. **Audit log:** whether a rider's phone and name stay in the before/after values of the audit after the rider's
@@ -290,11 +311,18 @@ Common to all rows:
 
 | Gap | Category | PR |
 |---|---|---|
-| Rows linked only by phone survive deletion (codes, calls, order contacts) | 3, 4, 5 | 2 |
-| Free text of a deleted rider survives (orders, chat, support, ratings, notifications) | 6, 8, 9, 10, 15 | 2 |
-| An open chargeback or dispute does not hold deletion | 1, 13 | 2 |
-| Expired data export files are not deleted | 17 | 2 |
+| Rows linked only by phone survive deletion (codes, calls, order contacts) | 3, 4, 5 | 2, closed |
+| Free text of a deleted rider survives (orders, chat, support, ratings, notifications) | 6, 8, 9, 10, 15 | 2, closed |
+| Exact points of a deleted rider's orders and quotes | 6 | 2, closed |
+| An open chargeback does not hold deletion | 1, 6, 13 | 2, closed |
 | Drivers cannot be deleted or export their data | 2 | 3 |
+
+The first register said expired data export files are not deleted; they are (`content` is set to null at expiry).
+
+**Residual copies after a rider's deletion** (kept with the basis above): the driver's trip command receipts until
+their term (16); the trip track and the dispatch journal near the pickup until 90 days (7, 12); provider callbacks
+in `payment_event` (13); database backups until the erasure journal is applied after a restore (ADR 0013); server
+logs, which do not record request bodies, until their rotation.
 
 Not closed by #144 and left to the owner's terms: `device_session`, `staff_sign_in`, and every "kept for ever"
 above.

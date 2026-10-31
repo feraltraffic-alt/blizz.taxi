@@ -23,7 +23,8 @@ import taxi.blizz.files.FileService;
  * Files their owner asked to erase (issue #144): a deleted rider's support attachments go from storage, then their
  * row, whatever the retention terms; a storage failure keeps the row for the next run.
  */
-@SpringBootTest(properties = "blizz.files.local-dir=${java.io.tmpdir}/blizz-erased-files")
+@SpringBootTest(properties = {"blizz.retention.enabled=false",
+        "blizz.files.local-dir=${java.io.tmpdir}/blizz-erased-files"})
 @Import(TestcontainersConfiguration.class)
 class ErasedFilesTests {
 

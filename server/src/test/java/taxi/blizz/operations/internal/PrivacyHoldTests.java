@@ -97,7 +97,9 @@ class PrivacyHoldTests {
                         insert into order_contact (order_id, name, phone, created_by, created_at)
                         values (:id, 'Olena', :phone, :by, now())""")
                 .param("id", order).param("phone", contactPhone).param("by", rider.id()).update();
-        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where driver_id = :d and state <> 'CLOSED'")
+        jdbc.sql("""
+                        update work_session set state = 'CLOSED', closed_at = now()
+                        where driver_id = :d and state <> 'CLOSED'""")
                 .param("d", driver.actor().id()).update();
         return order;
     }
@@ -124,8 +126,9 @@ class PrivacyHoldTests {
                 .param("card", card).update();
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into payment_chargeback (id, order_id, intent_id, payer_client_id, amount_minor, currency,
-                                                        bank_reason, received_on, state, recorded_by, created_at)
+                        insert into payment_chargeback (id, order_id, intent_id, payer_client_id, amount_minor,
+                                                        currency, bank_reason, received_on, state, recorded_by,
+                                                        created_at)
                         values (:id, :order, :intent, :client, 5000, 'UAH', 'Not recognised', current_date, 'OPEN',
                                 :client, now())""")
                 .param("id", id).param("order", order).param("intent", intent).param("client", payer).update();
@@ -134,8 +137,9 @@ class PrivacyHoldTests {
 
     private void decide(UUID chargeback) {
         jdbc.sql("""
-                        update payment_chargeback set state = 'WON', resolution_reason = 'Proof sent', resolved_at = now(),
-                                                      resolved_by = recorded_by, version = version + 1
+                        update payment_chargeback set state = 'WON', resolution_reason = 'Proof sent',
+                                                      resolved_at = now(), resolved_by = recorded_by,
+                                                      version = version + 1
                         where id = :id""")
                 .param("id", chargeback).update();
     }
@@ -144,8 +148,8 @@ class PrivacyHoldTests {
         return jdbc.sql("""
                         select pickup_label, dropoff_label, comment, entrance, ST_Y(pickup) as lat, ST_X(pickup) as lon,
                                (select count(*) from order_contact c where c.order_id = o.id) as contacts,
-                               (select string_agg(body, '|') from order_message m where m.order_id = o.id
-                                                                                     and m.sender_role = 'RIDER') as chat
+                               (select string_agg(body, '|') from order_message m
+                                where m.order_id = o.id and m.sender_role = 'RIDER') as chat
                         from ride_order o where id = :id""")
                 .param("id", id).query().singleRow();
     }
@@ -197,7 +201,8 @@ class PrivacyHoldTests {
 
         // Still open: the sweep keeps it; a redelivered event neither adds a hold nor touches the order.
         sweep.runOnce();
-        UUID event = jdbc.sql("select event_id from outbox where event_type = 'ClientAnonymized' and aggregate_id = :id")
+        UUID event = jdbc.sql("""
+                        select event_id from outbox where event_type = 'ClientAnonymized' and aggregate_id = :id""")
                 .param("id", rider.id()).query(UUID.class).single();
         jdbc.sql("delete from consumer_inbox where event_id = :id").param("id", event).update();
         jdbc.sql("update outbox set state = 'PENDING', next_attempt_at = now() where event_id = :id")

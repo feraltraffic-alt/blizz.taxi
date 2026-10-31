@@ -22,7 +22,11 @@ import taxi.blizz.platform.RetentionWork;
 @Order(0)
 class CallRecordingRetention implements RetentionWork {
     private static final Logger log = LoggerFactory.getLogger(CallRecordingRetention.class);
-    private static final String ELIGIBLE = "created_at<:cutoff and (fetching_until is null or fetching_until<=:now) and (retention_until is null or retention_until<=:now)";
+    private static final String AVAILABLE =
+            "(fetching_until is null or fetching_until<=:now) and (retention_until is null or retention_until<=:now)";
+    private static final String ELIGIBLE = "created_at<:cutoff and " + AVAILABLE;
+    /** A deleted rider's recordings (issue #144): whatever the retention term, even when kept for ever. */
+    private static final String ERASED = "erase_requested_at is not null and " + AVAILABLE;
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final long RUN_NANOS = Duration.ofMinutes(1).toNanos();
     private final JdbcClient jdbc;
@@ -53,18 +57,22 @@ class CallRecordingRetention implements RetentionWork {
 
     /** The recordings of a deleted rider's calls (issue #144), whatever the retention term; one batch. */
     Result runErased(OffsetDateTime now, int limit) {
-        return new Result(0, 0, 0);
+        return run(ERASED, "select call_id from call_recording where " + ERASED
+                + " order by erase_requested_at,call_id limit " + RetentionWork.limit(limit), Map.of("now", now), now);
     }
 
     public Result run(OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+        return run(ELIGIBLE, selectionSql(limit), Map.of("cutoff", cutoff, "now", now), now);
+    }
+
+    private Result run(String eligible, String selection, Map<String, Object> params, OffsetDateTime now) {
         Result total = new Result(0, 0, 0);
-        Map<String, Object> params = Map.of("cutoff", cutoff, "now", now);
         long started = System.nanoTime();
         int consecutiveFailures = 0;
-        for (UUID id : jdbc.sql(selectionSql(limit)).params(params).query(UUID.class).list()) {
+        for (UUID id : jdbc.sql(selection).params(params).query(UUID.class).list()) {
             // The current provider request can add at most its 30-second timeout to this one-minute budget.
             if (System.nanoTime() - started >= RUN_NANOS || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
-            Claimed item = claim(id, params, now);
+            Claimed item = claim(id, eligible, params, now);
             if (item == null) {
                 total = total.plus(new Result(0, 0, 1));
                 continue;
@@ -103,10 +111,10 @@ class CallRecordingRetention implements RetentionWork {
         return total;
     }
 
-    private Claimed claim(UUID id, Map<String, Object> params, OffsetDateTime now) {
+    private Claimed claim(UUID id, String eligible, Map<String, Object> params, OffsetDateTime now) {
         return tx.execute(status -> {
             var row = jdbc.sql("select call_id,file_id,retention_claim,retention_attempts from call_recording where call_id=:id and "
-                            + ELIGIBLE + " for update skip locked")
+                            + eligible + " for update skip locked")
                     .params(params).param("id", id).query((rs, i) -> new Claimed(rs.getObject(1, UUID.class),
                             rs.getObject(2, UUID.class), null, UUID.randomUUID(), rs.getObject(3) != null,
                             rs.getInt(4) + 1)).optional();

@@ -101,7 +101,8 @@ class CallRecordings {
                         from call c
                         where c.id = r.call_id
                           and r.call_id = (select call_id from call_recording
-                                           where state = 'PENDING' and retention_claim is null and next_attempt_at <= :now
+                                           where state = 'PENDING' and retention_claim is null
+                                             and erase_requested_at is null and next_attempt_at <= :now
                                            order by next_attempt_at, call_id
                                            limit 1 for update skip locked)
                         returning r.call_id, c.channel_id, r.attempts, r.created_at""")
