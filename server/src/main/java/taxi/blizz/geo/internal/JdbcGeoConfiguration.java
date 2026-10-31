@@ -48,17 +48,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
             initialVersion(c.expectedVersion());
             text(c.code());
             text(c.name());
-            try {
-                if (c.currency() == null || !c.currency().matches("[A-Z]{3}")) {
-                    throw new IllegalArgumentException();
-                }
-                Currency.getInstance(c.currency());
-                if (!ZoneId.getAvailableZoneIds().contains(c.timezone())) {
-                    throw new IllegalArgumentException();
-                }
-            } catch (IllegalArgumentException | NullPointerException invalid) {
-                throw error(ErrorCode.VALIDATION_FAILED, "Invalid currency or IANA timezone");
-            }
+            currencyAndTimezone(c.currency(), c.timezone());
             polygon(c.polygonEwkt());
             UUID id = UUID.randomUUID();
             try {
@@ -80,7 +70,58 @@ class JdbcGeoConfiguration implements GeoConfiguration {
 
     @Override
     public Revision updateCityDraft(CityUpdate c) {
-        throw new UnsupportedOperationException("issue #176, part B");
+        return commands.execute(key(c.actor(), "city.update", c.commandId(), c.id()), c, Revision.class, () -> {
+            text(c.name());
+            text(c.reason());
+            currencyAndTimezone(c.currency(), c.timezone());
+            polygon(c.polygonEwkt());
+            // Stricter than create, which leaves validity to publish: an edited boundary is checked at once.
+            boolean usable = jdbc.sql("""
+                    select ST_IsValid(p) and not ST_IsEmpty(p) from (select ST_GeomFromEWKT(:polygon) p) geometry
+                    """).param("polygon", c.polygonEwkt()).query(Boolean.class).single();
+            if (!usable) {
+                throw error(ErrorCode.VALIDATION_FAILED, "The boundary must be a valid, non-empty polygon");
+            }
+            record Draft(String state, long version, String name, String currency, String timezone, int priority,
+                         String polygon) {
+            }
+            Draft before = jdbc.sql("""
+                            select state, version, name, currency, timezone, priority, ST_AsEWKT(polygon)
+                            from city where id = :id for update""")
+                    .param("id", c.id())
+                    .query((rs, n) -> new Draft(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4),
+                            rs.getString(5), rs.getInt(6), rs.getString(7)))
+                    .optional().orElseThrow(() -> error(ErrorCode.NOT_FOUND, "City not found"));
+            if (before.version() != c.expectedVersion()) {
+                throw ConflictException.version(before.version(), "Stale city version");
+            }
+            if (!"DRAFT".equals(before.state())) {
+                throw error(ErrorCode.STATE_CONFLICT,
+                        "Only a draft city is changed here; a published city's boundary changes through a new draft");
+            }
+            if (jdbc.sql("""
+                    select exists(select 1 from city other
+                                  where other.id <> :id and other.state = 'PUBLISHED' and other.priority = :priority
+                                    and ST_Intersects(other.polygon, ST_GeomFromEWKT(:polygon)))
+                    """).param("id", c.id()).param("priority", c.priority()).param("polygon", c.polygonEwkt())
+                    .query(Boolean.class).single()) {
+                // The rule publish applies: equal priorities must not share any point.
+                throw error(ErrorCode.STATE_CONFLICT, "The boundary intersects a published city of the same priority");
+            }
+            jdbc.sql("""
+                    update city set name = :name, currency = :currency, timezone = :timezone,
+                        polygon = ST_GeomFromEWKT(:polygon), priority = :priority, version = version + 1,
+                        updated_at = :now
+                    where id = :id
+                    """).param("name", c.name()).param("currency", c.currency()).param("timezone", c.timezone())
+                    .param("polygon", c.polygonEwkt()).param("priority", c.priority()).param("now", now())
+                    .param("id", c.id()).update();
+            Revision after = new Revision(c.id(), "DRAFT", before.version() + 1);
+            audit.record(new AuditEntry(c.actor(), "city.update", "city", c.id().toString(), c.reason(), before,
+                    new Draft("DRAFT", after.version(), c.name(), c.currency(), c.timezone(), c.priority(),
+                            c.polygonEwkt())));
+            return after;
+        });
     }
 
     @Override
@@ -199,6 +240,20 @@ class JdbcGeoConfiguration implements GeoConfiguration {
             throw error(ErrorCode.VALIDATION_FAILED, "command_id required");
         }
         return new CommandKey(actor, operation, commandId);
+    }
+
+    private static void currencyAndTimezone(String currency, String timezone) {
+        try {
+            if (currency == null || !currency.matches("[A-Z]{3}")) {
+                throw new IllegalArgumentException();
+            }
+            Currency.getInstance(currency);
+            if (!ZoneId.getAvailableZoneIds().contains(timezone)) {
+                throw new IllegalArgumentException();
+            }
+        } catch (IllegalArgumentException | NullPointerException invalid) {
+            throw error(ErrorCode.VALIDATION_FAILED, "Invalid currency or IANA timezone");
+        }
     }
 
     private void polygon(String ewkt) {
