@@ -395,6 +395,122 @@ class GeographyTests {
                 .isEqualTo("PUBLISHED");
     }
 
+    // ------------------------------------------------------------ issue #176, part B: editing a city draft
+
+    private static final String SEPARATE = "SRID=4326;MULTIPOLYGON(((32 50,33 50,33 51,32 51,32 50)))";
+
+    private GeoConfiguration.CityUpdate edit(Revision city, String polygon, int priority) {
+        return new GeoConfiguration.CityUpdate(UUID.randomUUID(), STAFF, city.id(), city.version(), "Synthetic edited",
+                "PLN", "Europe/Warsaw", polygon, priority, "Boundary corrected");
+    }
+
+    private java.util.Map<String, Object> cityRow(Revision city) {
+        return jdbc.sql("""
+                        select name, currency, timezone, priority, version, state, ST_AsEWKT(polygon) as polygon
+                        from city where id = :id""")
+                .param("id", city.id()).query().singleRow();
+    }
+
+    @Test
+    void aDraftsDetailsAndBoundaryChangeVersionedAndAudited() {
+        Revision draft = draft(BOX, 0);
+
+        Revision edited = geo.updateCityDraft(edit(draft, SEPARATE, 3));
+
+        assertThat(edited).isEqualTo(new Revision(draft.id(), "DRAFT", 1));
+        java.util.Map<String, Object> row = cityRow(draft);
+        assertThat(row).containsEntry("name", "Synthetic edited").containsEntry("currency", "PLN")
+                .containsEntry("timezone", "Europe/Warsaw").containsEntry("priority", 3).containsEntry("version", 1L);
+        assertThat((String) row.get("polygon")).contains("32 50");
+        assertThat(audits(draft, "city.update")).isOne();
+        assertThat(jdbc.sql("""
+                        select before::text || ' ' || after::text from audit_log
+                        where resource_id = :id and action = 'city.update'""")
+                .param("id", draft.id().toString()).query(String.class).single())
+                .contains("Synthetic").contains("Synthetic edited");
+        assertThat(geo.publishCity(change(edited)).state()).as("the edited draft publishes").isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void aStaleVersionIsAConflictWithTheCurrentVersion() {
+        Revision draft = draft(BOX, 0);
+        geo.updateCityDraft(edit(draft, BOX, 0));
+
+        assertThatThrownBy(() -> geo.updateCityDraft(edit(draft, SEPARATE, 0)))
+                .isInstanceOf(taxi.blizz.platform.ConflictException.class)
+                .satisfies(e -> {
+                    assertThat(((DomainException) e).code()).isEqualTo(ErrorCode.VERSION_CONFLICT);
+                    assertThat(((taxi.blizz.platform.ConflictException) e).currentVersion()).isEqualTo(1);
+                });
+    }
+
+    @Test
+    void onlyADraftIsEdited() {
+        Revision published = geo.publishCity(change(draft(BOX, 0)));
+        // A valid boundary, the current version: only the state is wrong.
+        reject(() -> geo.updateCityDraft(edit(published, BOX, 0)), ErrorCode.STATE_CONFLICT);
+        Revision archived = geo.archiveCity(change(published));
+        reject(() -> geo.updateCityDraft(edit(archived, BOX, 0)), ErrorCode.STATE_CONFLICT);
+        assertThat(cityRow(archived)).containsEntry("name", "Synthetic").containsEntry("currency", "UAH");
+    }
+
+    @Test
+    void anInvalidBoundaryOrDetailIsRefusedAndChangesNothing() {
+        Revision draft = draft(BOX, 0);
+        for (String polygon : List.of(INVALID, "SRID=4326;MULTIPOLYGON EMPTY",
+                "SRID=4326;POLYGON((30 50,31 50,31 51,30 51,30 50))",
+                "SRID=3857;MULTIPOLYGON(((30 50,31 50,31 51,30 51,30 50)))", "not a polygon")) {
+            reject(() -> geo.updateCityDraft(edit(draft, polygon, 0)), ErrorCode.VALIDATION_FAILED);
+        }
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(UUID.randomUUID(), STAFF, draft.id(), 0,
+                "X", "uah", "Europe/Kyiv", BOX, 0, "x")), ErrorCode.VALIDATION_FAILED);
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(UUID.randomUUID(), STAFF, draft.id(), 0,
+                "X", "UAH", "Mars/Olympus", BOX, 0, "x")), ErrorCode.VALIDATION_FAILED);
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(UUID.randomUUID(), STAFF, draft.id(), 0,
+                " ", "UAH", "Europe/Kyiv", BOX, 0, "x")), ErrorCode.VALIDATION_FAILED);
+        assertThat(cityRow(draft)).containsEntry("version", 0L).containsEntry("name", "Synthetic");
+        assertThat(audits(draft, "city.update")).isZero();
+    }
+
+    @Test
+    void aBoundaryOverAPublishedCityOfTheSamePriorityIsAConflict() {
+        geo.publishCity(change(draft(BOX, 4)));
+        Revision draft = draft(SEPARATE, 4);
+
+        reject(() -> geo.updateCityDraft(edit(draft, BOX, 4)), ErrorCode.STATE_CONFLICT);
+        assertThat(cityRow(draft)).containsEntry("version", 0L);
+        // Another priority may overlap: the higher one wins where they do.
+        assertThat(geo.updateCityDraft(edit(draft, BOX, 5)).version()).isEqualTo(1);
+    }
+
+    @Test
+    void theCommandNeedsThePermissionForTheCityAndReplaysByItsKey() {
+        Revision mine = draft(BOX, 0);
+        Revision theirs = draft(SEPARATE, 0);
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                insert into staff_user(id, login, name, role, permissions, all_cities, city_scope, state, created_at,
+                                       updated_at)
+                values (:id, :login, 'City geography', 'ADMIN', :permissions, false, :scope, 'ACTIVE', now(), now())
+                """).param("id", id).param("login", "geo-edit-" + id)
+                .param("permissions", new String[] {GeoConfiguration.MANAGE_PERMISSION})
+                .param("scope", new UUID[] {mine.id()}).update();
+        Actor local = new Actor(SubjectType.STAFF, id);
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(UUID.randomUUID(), local, theirs.id(), 0,
+                "X", "UAH", "Europe/Kyiv", SEPARATE, 0, "x")), ErrorCode.ACCESS_DENIED);
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(UUID.randomUUID(),
+                new Actor(SubjectType.CLIENT, UUID.randomUUID()), mine.id(), 0, "X", "UAH", "Europe/Kyiv", BOX, 0,
+                "x")), ErrorCode.ACCESS_DENIED);
+
+        GeoConfiguration.CityUpdate command = new GeoConfiguration.CityUpdate(UUID.randomUUID(), local, mine.id(), 0,
+                "Mine", "UAH", "Europe/Kyiv", BOX, 0, "Renamed");
+        Revision first = geo.updateCityDraft(command);
+        assertThat(geo.updateCityDraft(command)).as("a repeat returns the first result").isEqualTo(first);
+        assertThat(audits(mine, "city.update")).isOne();
+        reject(() -> geo.updateCityDraft(new GeoConfiguration.CityUpdate(command.commandId(), local, mine.id(), 0,
+                "Another name", "UAH", "Europe/Kyiv", BOX, 0, "Renamed")), ErrorCode.IDEMPOTENCY_CONFLICT);
+    }
+
     private Actor permittedStaff(UUID id, String state, String... permissions) {
         jdbc.sql("""
                 insert into staff_user(id, login, name, role, permissions, all_cities, state, created_at, updated_at)
