@@ -1679,6 +1679,30 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/integrations/health:
+    get:
+      operationId: getIntegrationHealth
+      summary: How the outside providers are doing now
+      description: >-
+        Registry row "Admin | GET /integration-health" (issue #176). Per provider the circuit breaker's state (CLOSED,
+        HALF_OPEN, OPEN; REQ-ENG-07) and, since this server instance started, when a call last succeeded and last
+        failed and the kind of that failure (the exception's class, or FAILED_RESULT for an answer the caller counts
+        as a failure, e.g. HTTP 5xx). Never a secret, a URL, a message or a payload. The breakers live in memory, so
+        the answer is of the instance that served it (instance). Read-only; needs integrations.manage.
+      tags: [Integrations]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Every provider, in a fixed order.
+          content:
+            application/json:
+              schema:
+                $ref: "./integrations.yaml#/components/schemas/IntegrationHealth"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
   /api/admin/v1/integrations/{group}/check:
     post:
       operationId: checkIntegration
