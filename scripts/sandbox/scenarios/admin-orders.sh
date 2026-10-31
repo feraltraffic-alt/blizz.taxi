@@ -5,7 +5,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234
 DROPOFF_LAT=50.4405; DROPOFF_LON=30.4890
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
 
 say "A rider orders and changes their mind"
 RIDER=$(sign_in CLIENT "$RIDER_PHONE")

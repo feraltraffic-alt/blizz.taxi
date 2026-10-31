@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 KYIV=5a000000-0000-4000-8000-000000000001
 PICKUP='{"lat":50.4501,"lon":30.5234}'    # Майдан Незалежності
 DROPOFF='{"lat":50.4405,"lon":30.4890}'   # Залізничний вокзал
-RIDER_PHONE="+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38063$(random_digits 7)"
 
 say "The admin starts «Осінь −10 %» in Kyiv"
 ADMIN=$(admin_token)

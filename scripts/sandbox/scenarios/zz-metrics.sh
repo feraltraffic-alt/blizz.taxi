@@ -21,7 +21,7 @@ for number in +380500000001 +380500000002 +380500000003; do
     DRIVER=$(sign_in DRIVER "$number")
     go_offline "$DRIVER"
 done
-RIDER=$(sign_in CLIENT "+38069$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))")
+RIDER=$(sign_in CLIENT "+38069$(random_digits 7)")
 PICKUP='{"lat":50.4501,"lon":30.5234}'
 DROPOFF='{"lat":50.4405,"lon":30.4890}'
 QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,\"dropoff\":$DROPOFF}" | jq -r .id)

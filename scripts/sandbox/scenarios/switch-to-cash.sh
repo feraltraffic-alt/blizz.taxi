@@ -6,7 +6,7 @@ source "$(dirname "$0")/../lib.sh"
 KYIV=5a000000-0000-4000-8000-000000000001
 PICKUP='{"lat":50.4437,"lon":30.4970}'
 DROPOFF='{"lat":50.4584,"lon":30.4300}'
-RIDER_PHONE="+38073$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38073$(random_digits 7)"
 
 wait_for() {
     local value=""

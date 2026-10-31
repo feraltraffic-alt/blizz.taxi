@@ -6,8 +6,8 @@ source "$(dirname "$0")/../lib.sh"
 PICKUP='{"lat":50.4501,"lon":30.5234}'     # Майдан Незалежності
 DROPOFF='{"lat":50.4405,"lon":30.4890}'    # Залізничний вокзал
 DRIVER_PHONE="+380500000002"; DRIVER_VEHICLE="5a000000-0000-4000-8000-000000000502"
-RIDER_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
-GRANNY_PHONE="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38067$(random_digits 7)"
+GRANNY_PHONE="+38067$(random_digits 7)"
 
 # order RIDER [PICKUP_AT] [RECIPIENT_JSON] — quotes and orders cash; prints the order id (empty when refused).
 order() {

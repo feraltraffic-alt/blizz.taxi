@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 KYIV="5a000000-0000-4000-8000-000000000001"
 LINE="+380441110060"                                   # a fictional service number of Kyiv
 LINE_PATH=$(jq -rn --arg n "$LINE" '$n|@uri')
-CALLER="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+CALLER="+38067$(random_digits 7)"
 CHANNEL="1730052600.$RANDOM$RANDOM"
 MISSED="1730052700.$RANDOM$RANDOM"
 

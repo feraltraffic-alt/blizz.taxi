@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 PICKUP='{"lat":50.4501,"lon":30.5234}'    # Майдан
 DROPOFF='{"lat":50.4405,"lon":30.4890}'   # Вокзал
 NEW_DROPOFF='{"lat":50.4017,"lon":30.4512}' # Деміївка, further out
-RIDER_PHONE="+38066$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38066$(random_digits 7)"
 
 IVAN=""
 cleanup() {

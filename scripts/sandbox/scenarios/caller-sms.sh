@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 
 PICKUP='{"lat":50.4501,"lon":30.5234}'    # Майдан Незалежності
 DROPOFF='{"lat":50.4405,"lon":30.4890}'   # Залізничний вокзал
-CALLER="+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+CALLER="+38067$(random_digits 7)"
 [[ "$CALLER" == *0000 ]] && CALLER="${CALLER%0000}1234"   # the fake provider refuses numbers ending in 0000
 texts() { api GET "/sandbox/v1/sms?phone=$(jq -rn --arg p "$CALLER" '$p|@uri')"; }
 

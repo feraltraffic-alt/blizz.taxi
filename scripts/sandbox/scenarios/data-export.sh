@@ -3,7 +3,7 @@
 # background, downloaded by the rider; another rider gets 404, a second request the same day 409.
 source "$(dirname "$0")/../lib.sh"
 
-RIDER_PHONE="+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"
+RIDER_PHONE="+38063$(random_digits 7)"
 code_for() { api GET "/sandbox/v1/otp?phone=$(jq -rn --arg p "$1" '$p|@uri')" | jq -r .code; }
 
 say "A rider signs in and asks for a code to confirm the copy"
@@ -35,7 +35,7 @@ note "\`GET /api/rider/v1/me/data-exports/$ID/file\` → **200**, sections: $(jq
 [[ "$(jq -r .sections.profile.phone /tmp/sandbox-copy.json)" == "$RIDER_PHONE" ]]
 
 say "Another rider does not see it"
-OTHER=$(sign_in CLIENT "+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))")
+OTHER=$(sign_in CLIENT "+38063$(random_digits 7)")
 api GET "/api/rider/v1/me/data-exports/$ID/file" "$OTHER" >/dev/null
 expect 404
 

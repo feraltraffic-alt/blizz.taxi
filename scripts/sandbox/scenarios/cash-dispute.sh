@@ -13,7 +13,7 @@ SESSION=$(go_online "$IVAN" 5a000000-0000-4000-8000-000000000501 50.4510 30.5234
 trap 'go_offline "$IVAN" || true' EXIT
 
 say "A rider orders for cash"
-RIDER=$(sign_in CLIENT "+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))")
+RIDER=$(sign_in CLIENT "+38063$(random_digits 7)")
 QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
   \"pickup\":$PICKUP,\"dropoff\":$DROPOFF}" | jq -r .id)
 expect 201

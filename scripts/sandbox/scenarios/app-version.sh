@@ -24,7 +24,7 @@ say "Ivan is online with his app and takes an order"
 IVAN=$(sign_in DRIVER "+380500000001")
 trap restore EXIT
 SESSION=$(go_online "$IVAN" 5a000000-0000-4000-8000-000000000501 50.4510 30.5234)
-RIDER=$(sign_in CLIENT "+38063$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))")
+RIDER=$(sign_in CLIENT "+38063$(random_digits 7)")
 QUOTE=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
   \"pickup\":$PICKUP,\"dropoff\":$DROPOFF}" | jq -r .id)
 expect 201

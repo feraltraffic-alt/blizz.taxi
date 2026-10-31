@@ -4,7 +4,7 @@
 # third call in an hour refused, numbers outside Poland and Ukraine refused, and what support sees for each phone.
 source "$(dirname "$0")/../lib.sh"
 
-random_phone() { echo "+38067$(printf '%07d' $(( (RANDOM * 32768 + RANDOM) % 10000000 )))"; }
+random_phone() { echo "+38067$(random_digits 7)"; }
 # The fake provider refuses an SMS to a number ending in 0000.
 NO_SMS_PHONE="+38067$(printf '%03d' $(( RANDOM % 1000 )))0000"
 uri() { jq -rn --arg p "$1" '$p|@uri'; }
