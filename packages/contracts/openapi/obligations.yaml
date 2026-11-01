@@ -1,0 +1,63 @@
+openapi: 3.1.0
+info:
+  title: Rider obligations (REQ-PAY-18, issue #140)
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Obligation:
+      description: >-
+        What the rider still owes on one order after its payment ended (REQ-PAY-18): a card payment that took less
+        than the fare, or a final-fare correction that raised it. Read from the journal (RIDER_RECEIVABLE of the rider
+        with the order as the basis): owed is what was charged to the rider there, paid what came in against it, and
+        remainder the difference. An order whose payment is still in progress is not an obligation yet. Whether an
+        open obligation blocks new orders is the owner's question Q-10; it does not now.
+      type: object
+      additionalProperties: false
+      required: [order_id, currency, owed_minor, paid_minor, remainder_minor, repayments]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        owed_minor:
+          type: integer
+          format: int64
+        paid_minor:
+          type: integer
+          format: int64
+        remainder_minor:
+          type: integer
+          format: int64
+        repayments:
+          description: The card repayments of this obligation, newest first.
+          type: array
+          items:
+            $ref: "./wallets.yaml#/components/schemas/CardTopUp"
+
+    ObligationList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          description: The rider's obligations with something still owed, newest order first.
+          type: array
+          items:
+            $ref: "#/components/schemas/Obligation"
+
+    StartRepayment:
+      type: object
+      additionalProperties: false
+      required: [command_id]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          description: >-
+            Part of the remainder; the whole remainder when left out. Within the card limits of the service and at
+            most the remainder.
+          type: integer
+          format: int64
+          minimum: 1

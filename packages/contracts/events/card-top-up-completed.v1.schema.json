@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://blizz.taxi/contracts/events/card-top-up-completed.v1.schema.json",
   "title": "CardTopUpCompleted v1",
-  "description": "The provider took the money of a top-up on its payment page (ADR 0009 p. 1, ADR 0010 p. 1); also a late or reconciled approval after the top-up failed or expired. Published by payments once per top-up; consumed by finance, which credits the rider's bonus account (CLIENT) or the driver's balance (DRIVER).",
+  "description": "The provider took the money of a top-up on its payment page (ADR 0009 p. 1, ADR 0010 p. 1); also a late or reconciled approval after the top-up failed or expired. Published by payments once per top-up; consumed by finance, which credits the rider's bonus account (CLIENT) or the driver's balance (DRIVER). A repayment of a rider's debt on an order carries obligation_order_id (REQ-PAY-18, issue #140): finance then pays the rider's RIDER_RECEIVABLE of that order instead of crediting the bonus account.",
   "type": "object",
   "additionalProperties": false,
   "required": ["top_up_id", "account_type", "account_id", "amount_minor", "currency"],
@@ -11,10 +11,14 @@
     "account_type": { "type": "string", "enum": ["CLIENT", "DRIVER"] },
     "account_id": { "type": "string", "format": "uuid" },
     "amount_minor": { "type": "integer", "minimum": 1 },
-    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "obligation_order_id": { "type": "string", "format": "uuid", "description": "Only for a repayment: the order whose debt it pays." }
   },
   "examples": [
     { "top_up_id": "3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6b", "account_type": "DRIVER",
-      "account_id": "4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", "amount_minor": 50000, "currency": "UAH" }
+      "account_id": "4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", "amount_minor": 50000, "currency": "UAH" },
+    { "top_up_id": "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d", "account_type": "CLIENT",
+      "account_id": "6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e", "amount_minor": 4200, "currency": "UAH",
+      "obligation_order_id": "7c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f" }
   ]
 }

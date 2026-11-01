@@ -127,10 +127,85 @@ class JdbcCardTopUps implements CardTopUps {
                 .optional().orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Top-up not found"));
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public TopUp openRepayment(Actor payer, UUID cityId, UUID obligationOrderId, long amountMinor) {
+        if (payer == null || payer.type() != SubjectType.CLIENT) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Only riders repay their debts");
+        }
+        if (amountMinor < properties.topUpMinMinor() || amountMinor > properties.topUpMaxMinor()) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A card payment is from "
+                    + properties.topUpMinMinor() + " to " + properties.topUpMaxMinor() + " minor units");
+        }
+        Merchant merchant = merchants.forCity(cityId)
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Cards are not accepted in this city"));
+        OffsetDateTime now = now();
+        // The caller holds the order's lock, so two starts of one obligation cannot both find it free (E2).
+        boolean open = jdbc.sql("""
+                        select exists (select 1 from card_top_up
+                                       where obligation_order_id = :order and state = 'PENDING'
+                                         and expires_at > :now)""")
+                .param("order", obligationOrderId).param("now", now).query(Boolean.class).single();
+        if (open) {
+            throw new DomainException(ErrorCode.STATE_CONFLICT,
+                    "A payment page of this debt is open; finish it or wait until it closes");
+        }
+        UUID id = UUID.randomUUID();
+        String reference = "repay-" + id;
+        OffsetDateTime expiresAt = now.plus(properties.bindingTtl());
+        jdbc.sql("""
+                        insert into card_top_up (id, account_type, account_id, merchant_id, reference, amount_minor,
+                                                 currency, state, created_at, expires_at, next_check_at,
+                                                 obligation_order_id)
+                        values (:id, 'CLIENT', :account, :merchant, :reference, :amount, :currency, 'PENDING', :now,
+                                :expires, :expires, :order)""")
+                .param("id", id).param("account", payer.id()).param("merchant", merchant.id())
+                .param("reference", reference).param("amount", amountMinor).param("currency", merchant.currency())
+                .param("now", now).param("expires", expiresAt).param("order", obligationOrderId).update();
+        String returnUrl = properties.publicBaseUrl() + "/payments/v1/return?top_up=" + id;
+        PaymentProvider.Form form = providers.of(merchant).purchaseForm(merchant, reference, amountMinor,
+                "Taxi ride, the rest of the fare", returnUrl,
+                properties.publicBaseUrl() + "/payments/v1/callbacks/" + merchant.id(),
+                accounts.phone(payer).orElse(null), accounts.language(payer).orElse(null),
+                properties.bindingTtl().toSeconds());
+        return new TopUp(id, "PENDING", amountMinor, merchant.currency(), form.url(), form.fields(), returnUrl, now,
+                expiresAt, null, null, null);
+    }
+
+    private static final String READ = """
+            select id, state, amount_minor, currency, created_at, expires_at, completed_at, masked_pan,
+                   failure_reason
+            from card_top_up""";
+
+    private static TopUp read(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new TopUp(rs.getObject("id", UUID.class), rs.getString("state"), rs.getLong("amount_minor"),
+                rs.getString("currency"), null, null, null, rs.getObject("created_at", OffsetDateTime.class),
+                rs.getObject("expires_at", OffsetDateTime.class), rs.getObject("completed_at", OffsetDateTime.class),
+                rs.getString("masked_pan"), rs.getString("failure_reason"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TopUp> repaymentsOf(UUID obligationOrderId) {
+        return jdbc.sql(READ + " where obligation_order_id = :order order by created_at desc, id")
+                .param("order", obligationOrderId).query((rs, i) -> read(rs)).list();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TopUp repayment(Actor payer, UUID repaymentId) {
+        return jdbc.sql(READ + """
+
+                        where id = :id and account_type = 'CLIENT' and account_id = :payer
+                          and obligation_order_id is not null""")
+                .param("id", repaymentId).param("payer", payer.id()).query((rs, i) -> read(rs)).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Payment not found"));
+    }
+
     // ---------------------------------------------------------------- results
 
     private record Locked(UUID id, String accountType, UUID accountId, long amountMinor, String currency,
-                          String state) {
+                          String state, UUID obligationOrderId) {
     }
 
     /**
@@ -140,11 +215,12 @@ class JdbcCardTopUps implements CardTopUps {
     Optional<String> apply(UUID merchantId, String reference, PaymentProvider.Outcome outcome, Long amountMinor,
                            String currency, String maskedPan, String reason) {
         Optional<Locked> found = jdbc.sql("""
-                        select id, account_type, account_id, amount_minor, currency, state from card_top_up
+                        select id, account_type, account_id, amount_minor, currency, state, obligation_order_id
+                        from card_top_up
                         where reference = :reference and merchant_id = :merchant for update""")
                 .param("reference", reference).param("merchant", merchantId)
                 .query((rs, i) -> new Locked(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class),
-                        rs.getLong(4), rs.getString(5), rs.getString(6)))
+                        rs.getLong(4), rs.getString(5), rs.getString(6), rs.getObject(7, UUID.class)))
                 .optional();
         if (found.isEmpty()) {
             return Optional.empty();
@@ -173,6 +249,9 @@ class JdbcCardTopUps implements CardTopUps {
                 payload.put("account_id", t.accountId().toString());
                 payload.put("amount_minor", t.amountMinor());
                 payload.put("currency", t.currency());
+                if (t.obligationOrderId() != null) {
+                    payload.put("obligation_order_id", t.obligationOrderId().toString());
+                }
                 outbox.publish(new OutboxEvent(COMPLETED, 1, "CardTopUp", t.id(), 1, payload));
                 return Optional.of("TOP_UP_COMPLETED");
             }
