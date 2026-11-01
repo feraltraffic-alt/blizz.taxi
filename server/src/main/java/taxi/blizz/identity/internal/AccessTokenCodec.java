@@ -47,7 +47,7 @@ class AccessTokenCodec {
     record Signed(String token, OffsetDateTime expiresAt) {
     }
 
-    Signed sign(Actor actor, ApiAudience audience, UUID sessionId) {
+    Signed sign(Actor actor, ApiAudience audience, UUID sessionId, UUID serviceId) {
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         OffsetDateTime expiresAt = now.plus(ttl);
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
@@ -60,6 +60,7 @@ class AccessTokenCodec {
                 .claim("sub_type", actor.type().name())
                 .claim("sid", sessionId.toString())
                 .claim("iid", instanceId.toString())
+                .claim("svc", serviceId.toString())
                 .build();
         try {
             SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
@@ -91,8 +92,10 @@ class AccessTokenCodec {
             }
             SubjectType type = SubjectType.valueOf(claims.getStringClaim("sub_type"));
             Actor actor = new Actor(type, UUID.fromString(claims.getSubject()));
+            // A token without its service (issued before services existed) is not accepted (ADR 0016).
             return Optional.of(new AccessClaims(actor, expectedAudience,
-                    UUID.fromString(claims.getStringClaim("sid")), instanceId, expiresAt));
+                    UUID.fromString(claims.getStringClaim("sid")), instanceId, expiresAt,
+                    UUID.fromString(claims.getStringClaim("svc"))));
         } catch (ParseException | JOSEException | IllegalArgumentException | NullPointerException e) {
             return Optional.empty();
         }
