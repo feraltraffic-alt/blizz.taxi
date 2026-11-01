@@ -168,6 +168,8 @@ class RiderObligationTests {
         Actor rider = ride.payer();
         UUID order = ride.order().id();
 
+        // Two threads of their own: the common pool may have one worker on a small machine and run them in turn.
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<CompletableFuture<Object>> both = new ArrayList<>();
         for (int i = 0; i < 2; i++) {
@@ -180,13 +182,14 @@ class RiderObligationTests {
                 } catch (InterruptedException e) {
                     throw new IllegalStateException(e);
                 }
-            }));
+            }, pool));
         }
         start.countDown();
         List<Object> results = new ArrayList<>();
         for (CompletableFuture<Object> f : both) {
             results.add(f.get());
         }
+        pool.shutdown();
         assertThat(results).filteredOn(r -> r instanceof CardTopUps.TopUp).as("one page").hasSize(1);
         assertThat(results).filteredOn(r -> r == ErrorCode.STATE_CONFLICT).as("the other refused").hasSize(1);
 
