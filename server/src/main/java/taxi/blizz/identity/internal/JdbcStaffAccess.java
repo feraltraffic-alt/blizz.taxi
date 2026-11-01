@@ -178,7 +178,8 @@ class JdbcStaffAccess implements StaffAccess {
                                                 and cast(:city as uuid) = any(g.city_scope)))
                         order by 1""")
                 .param("permission", permission).param("city", cityId)
-                .param("service", cityId == null ? null : cityServices.servicesOf(java.util.List.of(cityId)).get(cityId))
+                .param("service", cityId == null ? null
+                        : cityServices.servicesOf(java.util.List.of(cityId)).get(cityId))
                 .query(UUID.class).list());
     }
 }
