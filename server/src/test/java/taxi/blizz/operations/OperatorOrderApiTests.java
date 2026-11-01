@@ -105,6 +105,9 @@ class OperatorOrderApiTests {
         assertThat(object(quote)).containsEntry("city_id", cityA.toString())
                 .as("the operator gets the quote the contract describes (rider.v1.yaml Quote)")
                 .containsKeys("discount_minor", "to_pay_minor", "promotions", "route_source");
+        assertThat(object(quote).get("payment_methods")).as("REQ-PRC-05, issue #140")
+                .isEqualTo(List.of("CASH", "TERMINAL"));
+        assertThat(object(quote)).containsEntry("card_hold_minor", null);
 
         UUID createCommand = UUID.randomUUID();
         MvcResult created = postJson("/api/operator/v1/orders", full.token(), orderBody(

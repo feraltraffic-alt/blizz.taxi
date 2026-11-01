@@ -83,14 +83,18 @@ public interface QuoteService {
     /**
      * {@code amountMinor} is the full price — the driver's share and the commission come from it; {@code discountMinor}
      * is what the rider's promotions take off it (the service pays it, ADR 0009) and {@code promotions} what applied.
+     * {@code paymentMethods}: how the payer may pay an order made from it, sorted, and {@code cardHoldMinor}: what a
+     * card order holds before bonuses, null without CARD (REQ-PRC-05); both null in a snapshot made before them.
      */
     record Quote(UUID id, Request request, UUID tariffVersionId, int pricingPolicyVersion,
                  TariffService.Terms terms, RouteEstimator.Estimate route, Breakdown breakdown,
                  long amountMinor, String currency, Instant createdAt, Instant expiresAt, String fingerprint,
-                 List<taxi.blizz.promotions.RiderPromotions.Applied> promotions, long discountMinor) {
+                 List<taxi.blizz.promotions.RiderPromotions.Applied> promotions, long discountMinor,
+                 List<String> paymentMethods, Long cardHoldMinor) {
 
         public Quote {
             promotions = promotions == null ? List.of() : List.copyOf(promotions);
+            paymentMethods = paymentMethods == null ? null : List.copyOf(paymentMethods);
         }
 
         /** What the rider pays before bonuses. */
