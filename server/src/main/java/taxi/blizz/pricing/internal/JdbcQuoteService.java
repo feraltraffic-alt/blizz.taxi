@@ -46,14 +46,16 @@ class JdbcQuoteService implements QuoteService {
     private final ServiceSettings settings;
     private final taxi.blizz.promotions.RiderPromotions promotions;
     private final taxi.blizz.geo.CityOperations cityOperations;
+    private final taxi.blizz.configuration.FeatureFlags flags;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
                      Clock clock, ObjectProvider<RouteEstimator> estimators, GeoZones zones, ServiceSettings settings,
                      taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits,
                      ObjectProvider<MeterRegistry> meters,
                      @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes,
-                     taxi.blizz.geo.CityOperations cityOperations) {
+                     taxi.blizz.geo.CityOperations cityOperations, taxi.blizz.configuration.FeatureFlags flags) {
         this.cityOperations = cityOperations;
+        this.flags = flags;
         this.rateLimits = rateLimits;
         this.meters = meters;
         this.straightLineQuotes = straightLineQuotes;
@@ -137,9 +139,11 @@ class JdbcQuoteService implements QuoteService {
             }
             long discount = applied.stream().mapToLong(taxi.blizz.promotions.RiderPromotions.Applied::discountMinor)
                     .sum();
+            List<String> methods = paymentMethods(request);
             Quote quote = new Quote(quoteId, request, tariff.id(), 1, tariff.terms(), route,
                     fare.breakdown(), fare.amountMinor(), tariff.currency(), now, now.plusSeconds(300),
-                    request.fingerprint(), applied, discount);
+                    request.fingerprint(), applied, discount, methods,
+                    methods.contains("CARD") ? fare.amountMinor() - discount : null);
             jdbc.sql("""
                     insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
                         pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at)
@@ -191,9 +195,11 @@ class JdbcQuoteService implements QuoteService {
             // The original's terms: the order's tariff version, never the one in force now (AC-14, issue #142).
             FareCalculator.Result fare = FareCalculator.calculate(original.terms(), route, facts);
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+            List<String> methods = paymentMethods(request);
             Quote quote = new Quote(UUID.randomUUID(), request, original.tariffVersionId(),
                     original.pricingPolicyVersion(), original.terms(), route, fare.breakdown(), fare.amountMinor(),
-                    original.currency(), now, now.plusSeconds(300), request.fingerprint(), List.of(), 0);
+                    original.currency(), now, now.plusSeconds(300), request.fingerprint(), List.of(), 0, methods,
+                    methods.contains("CARD") ? fare.amountMinor() : null);
             jdbc.sql("""
                     insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
                         pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at,
@@ -208,6 +214,22 @@ class JdbcQuoteService implements QuoteService {
                     .param("now", at(now)).param("expires", at(quote.expiresAt())).update();
             return quote;
         });
+    }
+
+    /**
+     * REQ-PRC-05: the methods the city offers that the payer may use, as order creation checks them (JdbcOrders): a
+     * rider pays in cash or by card (while card payments are on), an operator's phone order in cash or at the
+     * driver's terminal. Vehicle classes have no payment rule of their own.
+     */
+    private List<String> paymentMethods(Request request) {
+        Set<String> payer = switch (request.payer().type()) {
+            case CLIENT -> flags.enabled(taxi.blizz.configuration.FeatureFlags.Flag.CARD_PAYMENTS)
+                    ? Set.of("CASH", "CARD") : Set.of("CASH");
+            case STAFF -> Set.of("CASH", "TERMINAL");
+            default -> Set.of();
+        };
+        return cityOperations.of(request.cityId()).paymentMethods().stream().filter(payer::contains).sorted()
+                .toList();
     }
 
     @Override
