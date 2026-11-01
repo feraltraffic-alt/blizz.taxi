@@ -35,8 +35,11 @@ class JdbcDriverEarnings implements DriverEarnings {
     private final Ledger ledger;
     private final CityCatalog cities;
     private final StaffAccess staff;
+    private final taxi.blizz.finance.FareAccounting accounting;
 
-    JdbcDriverEarnings(JdbcClient jdbc, Ledger ledger, CityCatalog cities, StaffAccess staff) {
+    JdbcDriverEarnings(JdbcClient jdbc, Ledger ledger, CityCatalog cities, StaffAccess staff,
+                       taxi.blizz.finance.FareAccounting accounting) {
+        this.accounting = accounting;
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.cities = cities;
@@ -113,7 +116,7 @@ class JdbcDriverEarnings implements DriverEarnings {
                 .filter(b -> b.currency().equals(city.currency()))
                 .mapToLong(b -> b.creditMinor() - b.debitMinor()).sum();
         return new Earnings(driverId, city.id(), city.currency(), city.timezone(), from, to, days, total.figures(),
-                balance, new taxi.blizz.finance.FareAccounting.Pending(0, 0));
+                balance, accounting.ofDriver(driverId, city.id()));
     }
 
     /** Sums one way for a day and for the period. */

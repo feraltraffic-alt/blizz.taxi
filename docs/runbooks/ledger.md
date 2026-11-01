@@ -23,3 +23,36 @@ group by t.id having sum(l.debit_minor) <> sum(l.credit_minor);
 ## Эскалация
 
 Сразу ответственный за финансы и разработчики.
+
+---
+
+# Проводка поездки опаздывает
+
+**Алерт:** `TripPostingLate` — завершённая поездка с итоговой ценой больше 10 минут ждёт проводки в журнал
+(«pending accounting», REQ-LED-05). Метрика `blizz_finance_postings_pending_oldest_seconds`: сколько секунд ждёт
+самая старая такая поездка (поездки моложе минуты не считаются).
+
+## Проверить
+
+- В админке: `GET /api/admin/v1/finance/pending-postings?city_id=…` — какие поездки ждут и сколько.
+- Событие `TripCompleted` не обработано потребителем `finance.trip-fare-posting`; причина — в `last_error`:
+
+```sql
+select o.event_id, o.payload ->> 'order_id' as order_id, o.state, o.attempts, o.next_attempt_at, o.last_error
+from outbox o
+where o.event_type = 'TripCompleted' and o.state <> 'DONE'
+  and not exists (select 1 from consumer_inbox i
+                  where i.consumer_id = 'finance.trip-fare-posting' and i.event_id = o.event_id)
+order by o.occurred_at;
+```
+
+## Сделать
+
+- Пока событие в `PENDING`, сервер повторяет сам. Устраните причину (журнал, база), повтор проведёт поездку один
+  раз: ключ проводки — `trip-fare:<final_fare_id>`.
+- Событие в `FAILED` (попытки кончились) — см. [outbox.md](outbox.md), как вернуть его в очередь после исправления.
+- Водитель видит такие поездки в заработке отдельно («ожидают проводки»), их доля ещё не на балансе.
+
+## Эскалация
+
+Ответственный за финансы, если проводки не идут больше часа или их много.

@@ -62,6 +62,14 @@ groups:
           summary: "A card trip's capture waits for a facts review and its card hold expires within 24 hours"
           runbook: docs/runbooks/payment-unknown.md
 
+      - alert: TripPostingLate
+        expr: max(blizz_finance_postings_pending_oldest_seconds) > 600
+        for: 2m
+        labels: {severity: warning, owner: finance-oncall}
+        annotations:
+          summary: "A completed trip's fare has not been posted to the journal for more than 10 minutes"
+          runbook: docs/runbooks/ledger.md
+
       - alert: LedgerUnbalanced
         expr: max(blizz_ledger_unbalanced) > 0
         for: 1m

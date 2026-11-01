@@ -77,6 +77,7 @@ class JdbcOrders implements Orders {
     private final DispatchProperties dispatchProperties;
 
     private final taxi.blizz.geo.CityCatalog cityCatalog;
+    private final taxi.blizz.finance.FareAccounting accounting;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
@@ -84,8 +85,10 @@ class JdbcOrders implements Orders {
                ServiceSettings settings, CardPayments cardPayments, taxi.blizz.finance.RiderWallets wallets,
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
-               FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog) {
+               FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog,
+               taxi.blizz.finance.FareAccounting accounting) {
         this.cityCatalog = cityCatalog;
+        this.accounting = accounting;
 
         this.dispatchProperties = dispatchProperties;
         this.flags = flags;
@@ -742,7 +745,7 @@ class JdbcOrders implements Orders {
             params.put("afterId", after.id(1));
         }
         params.put("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
-        return jdbc.sql("""
+        List<Found> found = jdbc.sql("""
                         select o.id, o.short_number, o.city_id, o.status, o.channel, o.created_at, o.payer_client_id,
                                (select a.driver_id from assignment a where a.order_id = o.id
                                 order by a.created_at desc limit 1) as driver_id,
@@ -756,6 +759,17 @@ class JdbcOrders implements Orders {
                         rs.getString(10), (Long) rs.getObject(11), (Long) rs.getObject(12),
                         rs.getString(13) == null ? null : rs.getString(13).strip(), null))
                 .list();
+        // REQ-LED-05: a fulfilled order with a fare to post is PENDING until the journal has it.
+        java.util.Set<UUID> posted = accounting.posted(found.stream().filter(JdbcOrders::owesPosting)
+                .map(Found::id).toList());
+        return found.stream().map(f -> !owesPosting(f) ? f : new Found(f.id(), f.shortNumber(), f.cityId(),
+                f.status(), f.channel(), f.createdAt(), f.payerClientId(), f.driverId(), f.vehicleClass(),
+                f.paymentMethod(), f.priceMinor(), f.finalPriceMinor(), f.currency(),
+                posted.contains(f.id()) ? "POSTED" : "PENDING")).toList();
+    }
+
+    private static boolean owesPosting(Found order) {
+        return "FULFILLED".equals(order.status()) && order.finalPriceMinor() != null && order.finalPriceMinor() > 0;
     }
 
     @Override
