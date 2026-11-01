@@ -62,7 +62,8 @@ class RiderQuoteController {
      */
     record QuoteView(UUID id, String vehicleClass, UUID cityId, long amountMinor, String currency,
                      long distanceM, long durationS, String routeSource, Instant expiresAt, WaitingTerms waiting, Instant pickupAt,
-                     boolean preorder, long discountMinor, long toPayMinor, List<PromotionView> promotions) {
+                     boolean preorder, long discountMinor, long toPayMinor, List<PromotionView> promotions,
+                     List<String> paymentMethods, Long cardHoldMinor) {
     }
 
     @GetMapping("/api/rider/v1/vehicle-classes")
@@ -85,7 +86,8 @@ class RiderQuoteController {
                         quote.terms().waitingStepSeconds(), quote.terms().waitingRounding().name()), body.pickupAt(),
                 quote.breakdown().preorder(), quote.discountMinor(), quote.toPayMinor(),
                 quote.promotions().stream().map(p -> new PromotionView(p.promotionId(), p.name(), p.kind().name(),
-                        p.valueType().name(), p.value(), p.discountMinor())).toList());
+                        p.valueType().name(), p.value(), p.discountMinor())).toList(),
+                quote.paymentMethods(), quote.cardHoldMinor());
     }
 
     private City city(GeoPoint point) {

@@ -139,7 +139,7 @@ class JdbcQuoteService implements QuoteService {
                     .sum();
             Quote quote = new Quote(quoteId, request, tariff.id(), 1, tariff.terms(), route,
                     fare.breakdown(), fare.amountMinor(), tariff.currency(), now, now.plusSeconds(300),
-                    request.fingerprint(), applied, discount);
+                    request.fingerprint(), applied, discount, null, null);
             jdbc.sql("""
                     insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
                         pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at)
@@ -193,7 +193,7 @@ class JdbcQuoteService implements QuoteService {
             Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
             Quote quote = new Quote(UUID.randomUUID(), request, original.tariffVersionId(),
                     original.pricingPolicyVersion(), original.terms(), route, fare.breakdown(), fare.amountMinor(),
-                    original.currency(), now, now.plusSeconds(300), request.fingerprint(), List.of(), 0);
+                    original.currency(), now, now.plusSeconds(300), request.fingerprint(), List.of(), 0, null, null);
             jdbc.sql("""
                     insert into quote(id, city_id, class_id, owner_type, owner_id, tariff_version_id,
                         pricing_policy_version, amount_minor, currency, fingerprint, snapshot, created_at, expires_at,
