@@ -16,12 +16,28 @@ public final class TestPayments {
     private final PaymentWorker worker;
     private final OutboxRelay relay;
     private final JdbcClient jdbc;
+    private final FakeVerifyController fakePages;
 
     public TestPayments(ApplicationContext context) {
         this.gateway = context.getBean(FakeProvider.Gateway.class);
         this.worker = context.getBean(PaymentWorker.class);
         this.relay = context.getBean(OutboxRelay.class);
         this.jdbc = context.getBean(JdbcClient.class);
+        this.fakePages = context.getBean(FakeVerifyController.class);
+    }
+
+    /**
+     * Posts a payment page's form to the FAKE provider's page, as the app's web view does; {@code flags} such as
+     * {@code fake_decline} or {@code fake_lost_notification}. Returns the page's HTTP status.
+     */
+    public int payOnFakePage(Map<String, String> fields, String... flags) {
+        org.springframework.util.MultiValueMap<String, String> form =
+                new org.springframework.util.LinkedMultiValueMap<>();
+        fields.forEach(form::add);
+        for (String flag : flags) {
+            form.add(flag, "1");
+        }
+        return fakePages.pay(form).getStatusCode().value();
     }
 
     public void resetGateway() {
