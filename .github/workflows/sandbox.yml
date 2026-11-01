@@ -67,6 +67,9 @@ jobs:
           SCENARIO: ${{ inputs.scenario }}
         run: |
           set -o pipefail
+          # first-city.sh adds a tariff by SQL: the tariffs admin API waits for #30.
+          export PG_RUN="docker run --rm --network host -e PGHOST=localhost -e PGUSER=blizz -e PGPASSWORD=blizz-sandbox
+            -e PGDATABASE=blizz -v $PWD:/w -w /w postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4"
           echo "# Sandbox transcript ($(date -u +%FT%TZ), ${GITHUB_SHA::7})" > transcript.md
           if [ "$SCENARIO" = all ]; then list=$(ls scripts/sandbox/scenarios/*.sh); else
             list="scripts/sandbox/scenarios/${SCENARIO}.sh"; fi
