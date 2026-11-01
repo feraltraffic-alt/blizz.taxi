@@ -73,8 +73,8 @@ class JdbcFinanceReports implements FinanceReports {
                     "A period of 1 to " + MAX_DAYS + " days, the last day included");
         }
         ZoneId zone = ZoneId.of(city.timezone());
-        OffsetDateTime start = from.atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
-        OffsetDateTime end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
+        OffsetDateTime start = midnight(from, zone);
+        OffsetDateTime end = midnight(to.plusDays(1), zone);
         List<Row> rows = jdbc.sql("""
                         select (t.occurred_at at time zone :zone)::date as day, t.basis_type, l.account,
                                sum(l.debit_minor) as debit, sum(l.credit_minor) as credit,
@@ -98,9 +98,15 @@ class JdbcFinanceReports implements FinanceReports {
             total.add(row);
         }
         List<Day> days = new ArrayList<>();
-        byDay.forEach((day, sums) -> days.add(new Day(day, null, null, sums.figures())));
-        return new Report(cityId, city.currency(), city.timezone(), from, to, null, null, days, total.figures(),
+        byDay.forEach((day, sums) -> days.add(new Day(day, midnight(day, zone), midnight(day.plusDays(1), zone),
+                sums.figures())));
+        return new Report(cityId, city.currency(), city.timezone(), from, to, start, end, days, total.figures(),
                 OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    /** The local midnight of a day in UTC: a DST day is 23 or 25 hours long (REQ-LED-09). */
+    private static OffsetDateTime midnight(LocalDate day, ZoneId zone) {
+        return day.atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
     }
 
     private static final class Sums {

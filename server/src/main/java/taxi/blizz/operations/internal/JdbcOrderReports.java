@@ -67,8 +67,8 @@ class JdbcOrderReports implements OrderReports {
                     "A period of 1 to " + MAX_DAYS + " days, the last day included");
         }
         ZoneId zone = ZoneId.of(city.timezone());
-        OffsetDateTime start = from.atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
-        OffsetDateTime end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
+        OffsetDateTime start = midnight(from, zone);
+        OffsetDateTime end = midnight(to.plusDays(1), zone);
         List<Row> rows = jdbc.sql("""
                         select (created_at at time zone :zone)::date as day, channel, payment_method, status,
                                cancelled_by, cancel_reason_code, count(*) as n
@@ -91,13 +91,19 @@ class JdbcOrderReports implements OrderReports {
             }
         }
         List<Day> days = new ArrayList<>();
-        byDay.forEach((day, tally) -> days.add(new Day(day, null, null, tally.counts())));
+        byDay.forEach((day, tally) -> days.add(new Day(day, midnight(day, zone), midnight(day.plusDays(1), zone),
+                tally.counts())));
         List<Reason> top = reasons.entrySet().stream()
                 .map(e -> new Reason(e.getKey().split("\\|", 2)[0], e.getKey().split("\\|", 2)[1], e.getValue()))
                 .sorted(Comparator.comparingInt(Reason::count).reversed().thenComparing(Reason::code))
                 .toList();
-        return new Report(cityId, city.timezone(), from, to, null, null, days, total.counts(), top,
+        return new Report(cityId, city.timezone(), from, to, start, end, days, total.counts(), top,
                 OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    /** The local midnight of a day in UTC: a DST day is 23 or 25 hours long (REQ-LED-09). */
+    private static OffsetDateTime midnight(LocalDate day, ZoneId zone) {
+        return day.atStartOfDay(zone).toOffsetDateTime().withOffsetSameInstant(ZoneOffset.UTC);
     }
 
     private static final class Tally {

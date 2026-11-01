@@ -24,7 +24,7 @@ import taxi.blizz.platform.SubjectType;
  * Issue #140 E5, REQ-LED-09: reports and exports carry the UTC bounds of the local days they cover. In Europe/Kyiv
  * summer time starts on 29.03.2026 at 03:00 (a day of 23 hours) and ends on 25.10.2026 at 04:00 (25 hours, the hour
  * from 03:00 to 04:00 comes twice); in 2027 on 28.03 and 31.10. Each test has its own days in one city at longitude
- * 103.
+ * 13.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -136,9 +136,9 @@ class ReportBoundsTests {
                                     insert into city (id, code, name, currency, timezone, polygon, priority, state,
                                                       created_at, updated_at)
                                     values (:id, :code, :code, 'UAH', 'Europe/Kyiv',
-                                            ST_GeomFromEWKT(:area), 7756, 'PUBLISHED', now(), now())""")
+                                            ST_GeomFromEWKT(:area), 7666, 'PUBLISHED', now(), now())""")
                             .param("id", id).param("code", code)
-                            .param("area", "SRID=4326;MULTIPOLYGON(((103 -40,104 -40,104 -39,103 -39,103 -40)))")
+                            .param("area", "SRID=4326;MULTIPOLYGON(((13 -40,14 -40,14 -39,13 -39,13 -40)))")
                             .update();
                     return id;
                 });
@@ -151,8 +151,8 @@ class ReportBoundsTests {
                             pickup, pickup_label, dropoff, dropoff_label, payment_method, status, created_at,
                             updated_at, version)
                         values (:id, 'APP', 'STAFF', :creator, :city, 'STANDARD',
-                            ST_SetSRID(ST_MakePoint(103.5, -39.5), 4326), 'A',
-                            ST_SetSRID(ST_MakePoint(103.6, -39.6), 4326), 'B', 'CASH', 'FULFILLED',
+                            ST_SetSRID(ST_MakePoint(13.5, -39.5), 4326), 'A',
+                            ST_SetSRID(ST_MakePoint(13.6, -39.6), 4326), 'B', 'CASH', 'FULFILLED',
                             cast(:created as timestamptz), cast(:created as timestamptz), 1)""")
                 .param("id", id).param("creator", UUID.randomUUID()).param("city", city)
                 .param("created", createdAt).update();

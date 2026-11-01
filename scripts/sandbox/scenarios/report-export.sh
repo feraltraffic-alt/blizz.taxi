@@ -37,6 +37,18 @@ export_report ORDERS
 say "Money of Kyiv this month, as CSV"
 export_report FINANCE
 
+say "The day summer time ended in Kyiv (25.10.2026) has 25 hours in UTC (REQ-LED-09, #140 E5)"
+DST=$(api GET "/api/admin/v1/reports/orders?city_id=$KYIV&from=2026-10-25&to=2026-10-25" "$ADMIN")
+expect 200
+HOURS=$(( ($(date -ud "$(jq -r .to_utc <<<"$DST")" +%s) - $(date -ud "$(jq -r .from_utc <<<"$DST")" +%s)) / 3600 ))
+note "\`$(jq -c '{timezone, from_utc, to_utc}' <<<"$DST")\` — $HOURS hours."
+[[ "$HOURS" == 25 ]]
+DST_EXPORT=$(api POST /api/admin/v1/reports/exports "$ADMIN" "{\"command_id\":\"$(uuid)\",\"kind\":\"ORDERS\",
+  \"city_id\":\"$KYIV\",\"from\":\"2026-10-25\",\"to\":\"2026-10-25\"}")
+expect 202
+note "The export of that day: \`$(jq -c '{timezone, from_utc, to_utc}' <<<"$DST_EXPORT")\`."
+[[ "$(jq -r .from_utc <<<"$DST_EXPORT")" == "$(jq -r .from_utc <<<"$DST")" ]]
+
 say "An export that is not mine is not found"
 api GET "/api/admin/v1/reports/exports/$(uuid)" "$ADMIN" >/dev/null
 expect 404
