@@ -24,6 +24,14 @@ public interface OtpService {
                                      OtpChannel preferred);
 
     /**
+     * As {@link #requestChallenge(OtpAudience, String, String, String, OtpChannel)} in the taxi service
+     * {@code serviceId} (ADR 0016): the code signs in, or creates, the account of that service only. The others use
+     * the first service.
+     */
+    ChallengeIssued requestChallenge(java.util.UUID serviceId, OtpAudience audience, String rawPhone,
+                                     String deviceRef, String clientIp, OtpChannel preferred);
+
+    /**
      * Checks the code. A wrong code still counts as an attempt even though the call fails.
      *
      * @throws taxi.blizz.platform.DomainException with {@code OTP_INVALID} for a wrong, expired,

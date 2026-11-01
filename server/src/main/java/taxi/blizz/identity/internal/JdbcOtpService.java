@@ -26,6 +26,7 @@ import taxi.blizz.identity.OtpDelivery;
 import taxi.blizz.identity.OtpPurpose;
 import taxi.blizz.identity.OtpService;
 import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.identity.Services;
 import taxi.blizz.identity.VerifiedSubject;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommittedMetrics;
@@ -57,10 +58,13 @@ class JdbcOtpService implements OtpService {
     private final CommittedMetrics metrics;
     private final java.util.concurrent.Executor sendExecutor;
 
+    private final Services services;
+
     JdbcOtpService(JdbcClient jdbc, TransactionTemplate tx, OtpDelivery delivery, OtpProperties properties,
                    Clock clock, CommittedMetrics metrics,
                    @org.springframework.beans.factory.annotation.Qualifier(OtpSendConfiguration.EXECUTOR)
-                   java.util.concurrent.Executor sendExecutor) {
+                   java.util.concurrent.Executor sendExecutor, Services services) {
+        this.services = services;
         this.sendExecutor = sendExecutor;
         this.metrics = metrics;
         this.jdbc = jdbc;
@@ -82,14 +86,21 @@ class JdbcOtpService implements OtpService {
     @Override
     public ChallengeIssued requestChallenge(OtpAudience audience, String rawPhone, String deviceRef, String clientIp,
                                             OtpChannel preferred) {
-        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp, preferred, null);
+        return requestChallenge(Services.DEFAULT_ID, audience, rawPhone, deviceRef, clientIp, preferred);
+    }
+
+    @Override
+    public ChallengeIssued requestChallenge(UUID serviceId, OtpAudience audience, String rawPhone, String deviceRef,
+                                            String clientIp, OtpChannel preferred) {
+        return issue(serviceId, audience, PhoneNumber.parse(rawPhone), OtpPurpose.SIGN_IN, deviceRef, clientIp,
+                preferred, null);
     }
 
     @Override
     public ChallengeIssued requestForNewPhone(Actor subject, String rawPhone, String deviceRef, String clientIp) {
         OtpAudience audience = audienceOf(subject);
-        return issue(audience, PhoneNumber.parse(rawPhone), OtpPurpose.NEW_PHONE, deviceRef, clientIp, null,
-                subject.id());
+        return issue(serviceOf(subject), audience, PhoneNumber.parse(rawPhone), OtpPurpose.NEW_PHONE, deviceRef,
+                clientIp, null, subject.id());
     }
 
     @Override
@@ -119,15 +130,15 @@ class JdbcOtpService implements OtpService {
         OtpAudience audience = audienceOf(subject);
         PhoneNumber phone = currentPhone(subject)
                 .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT, "The account has no phone"));
-        return issue(audience, phone, purpose, deviceRef, clientIp, null, null);
+        return issue(serviceOf(subject), audience, phone, purpose, deviceRef, clientIp, null, null);
     }
 
     /**
      * A new challenge of the purpose; the code is sent after commit by one channel. Budgets are shared by all
      * purposes. A number outside the served countries gets nothing and leaves no challenge (issue #101, P1).
      */
-    private ChallengeIssued issue(OtpAudience audience, PhoneNumber phone, OtpPurpose purpose, String deviceRef,
-                                  String clientIp, OtpChannel preferred, UUID subjectId) {
+    private ChallengeIssued issue(UUID serviceId, OtpAudience audience, PhoneNumber phone, OtpPurpose purpose,
+                                  String deviceRef, String clientIp, OtpChannel preferred, UUID subjectId) {
         String country = properties.countryOf(phone).orElseThrow(() -> new DomainException(
                 ErrorCode.PHONE_COUNTRY_NOT_SERVED, "Codes are sent only to numbers of the served countries"));
         if (!OtpProperties.fullNumber(phone, country)) {
@@ -136,8 +147,8 @@ class JdbcOtpService implements OtpService {
         String address = addressBlock(clientIp);
         return tx.execute(status -> {
             OffsetDateTime now = now();
-            OtpChannel channel = enforceLimits(audience, phone, OtpProperties.rangeOf(phone, country), deviceRef,
-                    address, preferred, now);
+            OtpChannel channel = enforceLimits(serviceId, audience, phone, OtpProperties.rangeOf(phone, country),
+                    deviceRef, address, preferred, now);
 
             UUID challengeId = UUID.randomUUID();
             String code = newCode();
@@ -145,10 +156,11 @@ class JdbcOtpService implements OtpService {
             jdbc.sql("""
                             insert into otp_challenge (id, audience, phone_normalized, code_hmac, expires_at,
                                                        max_attempts, device_ref, client_ip, created_at, purpose,
-                                                       subject_id, channel)
+                                                       subject_id, channel, service_id)
                             values (:id, :audience, :phone, :hmac, :expiresAt, :maxAttempts, :deviceRef, :clientIp,
-                                    :now, :purpose, :subject, :channel)
+                                    :now, :purpose, :subject, :channel, :service)
                             """)
+                    .param("service", serviceId)
                     .param("subject", subjectId)
                     .param("channel", channel.name())
                     .param("id", challengeId)
@@ -185,19 +197,22 @@ class JdbcOtpService implements OtpService {
     }
 
     /** Checks every budget and returns the one channel this code goes by (issue #101). */
-    private OtpChannel enforceLimits(OtpAudience audience, PhoneNumber phone, String range, String deviceRef,
-                                     String clientIp, OtpChannel requested, OffsetDateTime now) {
+    private OtpChannel enforceLimits(UUID serviceId, OtpAudience audience, PhoneNumber phone, String range,
+                                     String deviceRef, String clientIp, OtpChannel requested, OffsetDateTime now) {
         // Serializes concurrent requests for the same phone, riders and drivers together, within this transaction.
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
                 .param("key", "otp:" + phone.e164())
                 .query().singleRow();
 
+        // The resend delay is per service: another taxi service's app asks for its own code. The budgets below stay
+        // per number, whatever the service, so one phone is not flooded (ADR 0016).
         Optional<OffsetDateTime> last = jdbc.sql("""
                         select created_at from otp_challenge
-                        where audience = :audience and phone_normalized = :phone
+                        where service_id = :service and audience = :audience and phone_normalized = :phone
                         order by created_at desc
                         limit 1
                         """)
+                .param("service", serviceId)
                 .param("audience", audience.name())
                 .param("phone", phone.e164())
                 .query((rs, i) -> rs.getObject(1, OffsetDateTime.class))
@@ -347,16 +362,18 @@ class JdbcOtpService implements OtpService {
             return Result.invalid();
         }
         return new Result(challenge.audience() == OtpAudience.CLIENT
-                ? signInClient(challenge.phone(), now)
-                : signInDriver(challenge.phone(), now));
+                ? signInClient(challenge.serviceId(), challenge.phone(), now)
+                : signInDriver(challenge.serviceId(), challenge.phone(), now));
     }
 
-    private VerifiedSubject signInClient(PhoneNumber phone, OffsetDateTime now) {
+    private VerifiedSubject signInClient(UUID serviceId, PhoneNumber phone, OffsetDateTime now) {
+        // The account of this phone in the challenge's service only (ADR 0016).
         Optional<Account> existing = jdbc.sql("""
                         select id, account_state from client
-                        where phone_normalized = :phone and account_state <> 'ANONYMIZED'
+                        where service_id = :service and phone_normalized = :phone and account_state <> 'ANONYMIZED'
                         for update
                         """)
+                .param("service", serviceId)
                 .param("phone", phone.e164())
                 .query((rs, i) -> new Account(rs.getObject("id", UUID.class), rs.getString("account_state")))
                 .optional();
@@ -380,9 +397,10 @@ class JdbcOtpService implements OtpService {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into client (id, phone_normalized, phone_verified_at, account_state, has_app,
-                                            created_at, updated_at)
-                        values (:id, :phone, :now, 'ACTIVE', true, :now, :now)
+                                            created_at, updated_at, service_id)
+                        values (:id, :phone, :now, 'ACTIVE', true, :now, :now, :service)
                         """)
+                .param("service", serviceId)
                 .param("id", id)
                 .param("phone", phone.e164())
                 .param("now", now)
@@ -390,12 +408,14 @@ class JdbcOtpService implements OtpService {
         return new VerifiedSubject(new Actor(OtpAudience.CLIENT.subjectType(), id), "ACTIVE", true);
     }
 
-    private VerifiedSubject signInDriver(PhoneNumber phone, OffsetDateTime now) {
+    private VerifiedSubject signInDriver(UUID serviceId, PhoneNumber phone, OffsetDateTime now) {
+        // The account of this phone in the challenge's service only (ADR 0016).
         Optional<Account> existing = jdbc.sql("""
                         select id, account_state from driver
-                        where phone_normalized = :phone and account_state <> 'ANONYMIZED'
+                        where service_id = :service and phone_normalized = :phone and account_state <> 'ANONYMIZED'
                         for update
                         """)
+                .param("service", serviceId)
                 .param("phone", phone.e164())
                 .query((rs, i) -> new Account(rs.getObject("id", UUID.class), rs.getString("account_state")))
                 .optional();
@@ -413,9 +433,10 @@ class JdbcOtpService implements OtpService {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into driver (id, phone_normalized, phone_verified_at, account_state, review_status,
-                                            created_at, updated_at)
-                        values (:id, :phone, :now, 'ACTIVE', 'NOT_SUBMITTED', :now, :now)
+                                            created_at, updated_at, service_id)
+                        values (:id, :phone, :now, 'ACTIVE', 'NOT_SUBMITTED', :now, :now, :service)
                         """)
+                .param("service", serviceId)
                 .param("id", id)
                 .param("phone", phone.e164())
                 .param("now", now)
@@ -433,7 +454,7 @@ class JdbcOtpService implements OtpService {
         OffsetDateTime now = now();
         return jdbc.sql("""
                         select id, audience, phone_normalized, code_hmac, expires_at, attempts, max_attempts,
-                               consumed_at, purpose, subject_id
+                               consumed_at, purpose, subject_id, service_id
                         from otp_challenge where id = :id for update
                         """)
                 .param("id", challengeId)
@@ -447,7 +468,8 @@ class JdbcOtpService implements OtpService {
                         rs.getInt("max_attempts"),
                         rs.getObject("consumed_at", OffsetDateTime.class),
                         OtpPurpose.valueOf(rs.getString("purpose")),
-                        rs.getObject("subject_id", UUID.class)))
+                        rs.getObject("subject_id", UUID.class),
+                        rs.getObject("service_id", UUID.class)))
                 .optional()
                 .filter(c -> c.consumedAt() == null && now.isBefore(c.expiresAt()) && c.attempts() < c.maxAttempts());
     }
@@ -505,9 +527,13 @@ class JdbcOtpService implements OtpService {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
 
+    private UUID serviceOf(Actor subject) {
+        return services.of(subject).orElse(Services.DEFAULT_ID);
+    }
+
     private record Challenge(UUID id, OtpAudience audience, PhoneNumber phone, byte[] codeHmac,
                              OffsetDateTime expiresAt, int attempts, int maxAttempts, OffsetDateTime consumedAt,
-                             OtpPurpose purpose, UUID subjectId) {
+                             OtpPurpose purpose, UUID subjectId, UUID serviceId) {
     }
 
     private record Account(UUID id, String state) {

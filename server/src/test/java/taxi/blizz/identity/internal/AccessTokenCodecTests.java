@@ -16,6 +16,8 @@ import taxi.blizz.platform.SubjectType;
 /** REQ-AUTH-06, REQ-USR-08: what an access token carries and when it is refused. */
 class AccessTokenCodecTests {
 
+    static final java.util.UUID SVC = taxi.blizz.identity.Services.DEFAULT_ID;
+
     private static final String SECRET = "test-secret-test-secret-test-secret-123";
     private static final UUID INSTANCE = UUID.randomUUID();
     private static final Instant T0 = Instant.parse("2026-10-26T12:00:00Z");
@@ -29,7 +31,7 @@ class AccessTokenCodecTests {
 
     @Test
     void roundTripCarriesSubjectSessionAndInstance() {
-        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session).token();
+        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session, SVC).token();
 
         AccessClaims claims = codecAt(T0.plusSeconds(60)).verify(token, ApiAudience.RIDER).orElseThrow();
 
@@ -41,7 +43,7 @@ class AccessTokenCodecTests {
 
     @Test
     void tokenOfOneAudienceIsRejectedByAnother() {
-        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session).token();
+        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session, SVC).token();
 
         assertThat(codecAt(T0).verify(token, ApiAudience.DRIVER)).isEmpty();
         assertThat(codecAt(T0).verify(token, ApiAudience.ADMIN)).isEmpty();
@@ -49,14 +51,14 @@ class AccessTokenCodecTests {
 
     @Test
     void expiredTokenIsRejected() {
-        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session).token();
+        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session, SVC).token();
 
         assertThat(codecAt(T0.plus(Duration.ofMinutes(16))).verify(token, ApiAudience.RIDER)).isEmpty();
     }
 
     @Test
     void tokenFromAnotherInstanceOrKeyIsRejected() {
-        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session).token();
+        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session, SVC).token();
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
 
         assertThat(new AccessTokenCodec(SECRET, UUID.randomUUID(), Duration.ofMinutes(15), clock)
@@ -67,7 +69,7 @@ class AccessTokenCodecTests {
 
     @Test
     void tamperedOrUnsignedTokenIsRejected() {
-        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session).token();
+        String token = codecAt(T0).sign(client, ApiAudience.RIDER, session, SVC).token();
         String[] parts = token.split("\\.");
         String tampered = parts[0] + "." + parts[1] + "x." + parts[2];
         String unsigned = "eyJhbGciOiJub25lIn0." + parts[1] + ".";

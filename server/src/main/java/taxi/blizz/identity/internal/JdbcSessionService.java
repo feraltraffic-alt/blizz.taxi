@@ -52,9 +52,11 @@ class JdbcSessionService implements SessionService {
     private final AuthProperties properties;
     private final AccessTokenCodec codec;
     private final Clock clock;
+    private final taxi.blizz.identity.Services services;
 
     JdbcSessionService(JdbcClient jdbc, TransactionTemplate tx, AuditLog auditLog, AuthProperties properties,
-                       Clock clock) {
+                       Clock clock, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.tx = tx;
         this.auditLog = auditLog;
@@ -85,14 +87,20 @@ class JdbcSessionService implements SessionService {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "The account cannot sign in");
         }
         Actor actor = subject.actor();
+        // The session lives in the subject's service, and so does every token of it (ADR 0016).
+        UUID serviceId = services.of(actor)
+                .filter(id -> jdbc.sql("select state = 'ACTIVE' from service where id = :id").param("id", id)
+                        .query(Boolean.class).single())
+                .orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED, "The account cannot sign in"));
         return tx.execute(status -> {
             OffsetDateTime now = now();
             UUID sessionId = UUID.randomUUID();
             jdbc.sql("""
                             insert into device_session (id, subject_type, subject_id, audience, device_ref,
-                                                        created_at, last_refreshed_at, expires_at)
-                            values (:id, :type, :subjectId, :audience, :deviceRef, :now, :now, :expiresAt)
+                                                        created_at, last_refreshed_at, expires_at, service_id)
+                            values (:id, :type, :subjectId, :audience, :deviceRef, :now, :now, :expiresAt, :service)
                             """)
+                    .param("service", serviceId)
                     .param("id", sessionId)
                     .param("type", actor.type().name())
                     .param("subjectId", actor.id())
@@ -101,7 +109,7 @@ class JdbcSessionService implements SessionService {
                     .param("now", now)
                     .param("expiresAt", now.plus(maxAge))
                     .update();
-            return issue(sessionId, actor, audience, now, now.plus(maxAge));
+            return issue(sessionId, actor, audience, serviceId, now, now.plus(maxAge));
         });
     }
 
@@ -132,7 +140,8 @@ class JdbcSessionService implements SessionService {
         Optional<StoredToken> found = jdbc.sql("""
                         select t.session_id, t.expires_at as token_expires_at, t.used_at,
                                s.subject_type, s.subject_id, s.audience, s.expires_at as session_expires_at,
-                               s.revoked_at
+                               s.revoked_at, s.service_id,
+                               (select state from service where id = s.service_id) as service_state
                         from refresh_token t join device_session s on s.id = t.session_id
                         where t.token_hash = :hash and t.session_id = :session
                         for update of t
@@ -146,7 +155,9 @@ class JdbcSessionService implements SessionService {
                                 rs.getObject("subject_id", UUID.class)),
                         ApiAudience.fromValue(rs.getString("audience")),
                         rs.getObject("session_expires_at", OffsetDateTime.class),
-                        rs.getObject("revoked_at", OffsetDateTime.class)))
+                        rs.getObject("revoked_at", OffsetDateTime.class),
+                        rs.getObject("service_id", UUID.class),
+                        "ACTIVE".equals(rs.getString("service_state"))))
                 .optional();
         if (found.isEmpty()) {
             return Refreshed.rejected();
@@ -163,8 +174,9 @@ class JdbcSessionService implements SessionService {
                     "subject_id", token.actor().id().toString())));
             return Refreshed.rejected();
         }
+        // A suspended service ends its sessions (ADR 0016).
         if (!now.isBefore(token.tokenExpiresAt()) || !now.isBefore(token.sessionExpiresAt())
-                || !accountActive(token.actor())) {
+                || !token.serviceActive() || !accountActive(token.actor())) {
             return Refreshed.rejected();
         }
 
@@ -176,7 +188,8 @@ class JdbcSessionService implements SessionService {
                 .param("now", now)
                 .param("id", token.sessionId())
                 .update();
-        return new Refreshed(issue(token.sessionId(), token.actor(), token.audience(), now, token.sessionExpiresAt()));
+        return new Refreshed(issue(token.sessionId(), token.actor(), token.audience(), token.serviceId(), now,
+                token.sessionExpiresAt()));
     }
 
     @Override
@@ -223,16 +236,18 @@ class JdbcSessionService implements SessionService {
     @Override
     public Optional<AccessClaims> verifyAccess(String accessToken, ApiAudience expectedAudience) {
         return codec.verify(accessToken, expectedAudience).filter(claims -> jdbc.sql("""
-                        select count(*) from device_session
-                        where id = :id and revoked_at is null and expires_at > :now
+                        select count(*) from device_session s join service v on v.id = s.service_id
+                        where s.id = :id and s.revoked_at is null and s.expires_at > :now
+                          and s.service_id = :service and v.state = 'ACTIVE'
                         """)
+                .param("service", claims.serviceId())
                 .param("id", claims.sessionId())
                 .param("now", now())
                 .query(Integer.class)
                 .single() == 1);
     }
 
-    private IssuedSession issue(UUID sessionId, Actor actor, ApiAudience audience, OffsetDateTime now,
+    private IssuedSession issue(UUID sessionId, Actor actor, ApiAudience audience, UUID serviceId, OffsetDateTime now,
                                 OffsetDateTime sessionExpiresAt) {
         String refreshToken = newRefreshToken();
         OffsetDateTime refreshExpiresAt = earliest(now.plus(properties.refreshTtl()), sessionExpiresAt);
@@ -245,7 +260,7 @@ class JdbcSessionService implements SessionService {
                 .param("now", now)
                 .param("expiresAt", refreshExpiresAt)
                 .update();
-        AccessTokenCodec.Signed access = codec.sign(actor, audience, sessionId);
+        AccessTokenCodec.Signed access = codec.sign(actor, audience, sessionId, serviceId);
         return new IssuedSession(sessionId, actor, audience, access.token(), access.expiresAt(),
                 refreshToken, refreshExpiresAt);
     }
@@ -318,7 +333,8 @@ class JdbcSessionService implements SessionService {
     }
 
     private record StoredToken(UUID sessionId, OffsetDateTime tokenExpiresAt, OffsetDateTime usedAt, Actor actor,
-                               ApiAudience audience, OffsetDateTime sessionExpiresAt, OffsetDateTime revokedAt) {
+                               ApiAudience audience, OffsetDateTime sessionExpiresAt, OffsetDateTime revokedAt,
+                               UUID serviceId, boolean serviceActive) {
     }
 
     private record Refreshed(IssuedSession session) {

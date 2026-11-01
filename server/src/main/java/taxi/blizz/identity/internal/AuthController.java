@@ -34,14 +34,19 @@ class AuthController {
     private final SessionService sessions;
     private final StaffSignIn staffSignIn;
 
-    AuthController(OtpService otp, SessionService sessions, StaffSignIn staffSignIn) {
+    private final taxi.blizz.identity.Services services;
+
+    AuthController(OtpService otp, SessionService sessions, StaffSignIn staffSignIn,
+                   taxi.blizz.identity.Services services) {
+        this.services = services;
         this.otp = otp;
         this.sessions = sessions;
         this.staffSignIn = staffSignIn;
     }
 
+    /** {@code service}: the code of the app's taxi service (ADR 0016); absent — the first service. */
     record ChallengeRequest(@NotNull OtpAudience audience, @NotBlank String phone, @Size(max = 128) String deviceRef,
-                            OtpChannel channel) {
+                            OtpChannel channel, @Size(max = 40) String service) {
     }
 
     record ChallengeResponse(UUID challengeId, OffsetDateTime expiresAt, OffsetDateTime resendAvailableAt,
@@ -82,7 +87,10 @@ class AuthController {
     @PostMapping("/otp/challenges")
     @ResponseStatus(HttpStatus.CREATED)
     ChallengeResponse requestChallenge(@Valid @RequestBody ChallengeRequest body, HttpServletRequest request) {
-        ChallengeIssued issued = otp.requestChallenge(body.audience(), body.phone(), body.deviceRef(),
+        java.util.UUID service = body.service() == null ? taxi.blizz.identity.Services.DEFAULT_ID
+                : services.active(body.service()).orElseThrow(() -> new taxi.blizz.platform.DomainException(
+                        taxi.blizz.platform.ErrorCode.VALIDATION_FAILED, "Unknown taxi service"));
+        ChallengeIssued issued = otp.requestChallenge(service, body.audience(), body.phone(), body.deviceRef(),
                 request.getRemoteAddr(), body.channel());
         return new ChallengeResponse(issued.challengeId(), issued.expiresAt(), issued.resendAvailableAt(),
                 issued.channel());

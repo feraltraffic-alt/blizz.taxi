@@ -41,6 +41,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Import({TestcontainersConfiguration.class, AuthApiTests.Capture.class})
 class AuthApiTests {
 
+    static final java.util.UUID SVC = taxi.blizz.identity.Services.DEFAULT_ID;
+
     @Autowired
     WebApplicationContext context;
     @Autowired
@@ -82,8 +84,17 @@ class AuthApiTests {
     }
 
     private Map<String, Object> signIn(String audience) throws Exception {
-        MvcResult challenge = postJson("/auth/v1/otp/challenges",
+        return signIn(audience, null);
+    }
+
+    /** {@code service}: the taxi service's code (ADR 0016), or null for the first service. */
+    private Map<String, Object> signIn(String audience, String service) throws Exception {
+        Map<String, Object> request = new java.util.HashMap<>(
                 Map.of("audience", audience, "phone", phone, "device_ref", "test-device"));
+        if (service != null) {
+            request.put("service", service);
+        }
+        MvcResult challenge = postJson("/auth/v1/otp/challenges", request);
         assertThat(challenge.getResponse().getStatus()).isEqualTo(201);
         Map<String, Object> issued = body(challenge);
         assertThat(issued).containsOnlyKeys("challenge_id", "expires_at", "resend_available_at", "channel");
@@ -129,13 +140,13 @@ class AuthApiTests {
         AccessTokenCodec codec = new AccessTokenCodec(properties.accessTokenSecret(), properties.instanceId(),
                 properties.accessTtl(), clock);
 
-        String neverIssued = codec.sign(client, ApiAudience.RIDER, UUID.randomUUID()).token();
+        String neverIssued = codec.sign(client, ApiAudience.RIDER, UUID.randomUUID(), SVC).token();
         assertThat(codec.verify(neverIssued, ApiAudience.RIDER)).as("signed correctly").isPresent();
         assertThat(sessions.verifyAccess(neverIssued, ApiAudience.RIDER)).isEmpty();
         assertUnauthenticated(getWithToken("/api/rider/v1/me", neverIssued));
 
         UUID sessionId = UUID.fromString((String) session.get("session_id"));
-        String ofTheRealSession = codec.sign(client, ApiAudience.RIDER, sessionId).token();
+        String ofTheRealSession = codec.sign(client, ApiAudience.RIDER, sessionId, SVC).token();
         assertThat(getWithToken("/api/rider/v1/me", ofTheRealSession).getResponse().getStatus())
                 .as("the control: the same token for the real session works").isEqualTo(200);
         jdbc.sql("delete from refresh_token where session_id = :id").param("id", sessionId).update();
@@ -266,5 +277,72 @@ class AuthApiTests {
         CapturingDelivery authApiCapturingDelivery() {
             return new CapturingDelivery();
         }
+    }
+
+    // ------------------------------------------------------------ taxi services (ADR 0016, #214)
+
+    private UUID service(String prefix) {
+        UUID id = UUID.randomUUID();
+        String code = prefix + "-" + id.toString().substring(0, 8);
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, :code, now(), now())""")
+                .param("id", id).param("code", code).update();
+        return id;
+    }
+
+    private String code(UUID service) {
+        return jdbc.sql("select code from service where id = :id").param("id", service).query(String.class).single();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String subjectId(Map<String, Object> session) {
+        return (String) ((Map<String, Object>) session.get("subject")).get("id");
+    }
+
+    @Test
+    void theSamePhoneSignsInToTwoServicesAsTwoAccountsEachTokenInItsOwnService() throws Exception {
+        UUID other = service("second");
+        for (String audience : List.of("CLIENT", "DRIVER")) {
+            Map<String, Object> first = signIn(audience);
+            Map<String, Object> second = signIn(audience, code(other));
+            assertThat(second).containsEntry("account_created", true);
+            assertThat(subjectId(second)).as(audience + ": another account").isNotEqualTo(subjectId(first));
+            String table = audience.equals("CLIENT") ? "client" : "driver";
+            assertThat(jdbc.sql("select service_id from " + table + " where id = :id")
+                    .param("id", UUID.fromString(subjectId(second))).query(UUID.class).single()).isEqualTo(other);
+            assertThat(sessions.verifyAccess((String) second.get("access_token"),
+                    audience.equals("CLIENT") ? ApiAudience.RIDER : ApiAudience.DRIVER).orElseThrow().serviceId())
+                    .as("the token carries the service").isEqualTo(other);
+            assertThat(sessions.verifyAccess((String) first.get("access_token"),
+                    audience.equals("CLIENT") ? ApiAudience.RIDER : ApiAudience.DRIVER).orElseThrow().serviceId())
+                    .isEqualTo(SVC);
+            // Signing in again in either service finds that service's own account.
+            assertThat(subjectId(signIn(audience, code(other)))).isEqualTo(subjectId(second));
+        }
+    }
+
+    @Test
+    void anUnknownOrSuspendedServiceSignsNobodyIn() throws Exception {
+        UUID suspended = service("paused");
+        jdbc.sql("update service set state = 'SUSPENDED' where id = :id").param("id", suspended).update();
+        for (String code : List.of("no-such-service", code(suspended))) {
+            MvcResult refused = postJson("/auth/v1/otp/challenges",
+                    Map.of("audience", "CLIENT", "phone", phone, "device_ref", "test-device", "service", code));
+            assertThat(refused.getResponse().getStatus()).as(code).isEqualTo(422);
+        }
+        assertThat(delivery.codes).as("no code sent").isEmpty();
+    }
+
+    @Test
+    void suspendingAServiceEndsItsSessions() throws Exception {
+        UUID service = service("ending");
+        Map<String, Object> session = signIn("CLIENT", code(service));
+        assertThat(getWithToken("/api/rider/v1/me", session.get("access_token")).getResponse().getStatus())
+                .isEqualTo(200);
+        jdbc.sql("update service set state = 'SUSPENDED' where id = :id").param("id", service).update();
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", session.get("access_token")));
+        assertThat(postJson("/auth/v1/token/refresh", Map.of("refresh_token", session.get("refresh_token")))
+                .getResponse().getStatus()).as("no new token either").isEqualTo(401);
     }
 }
