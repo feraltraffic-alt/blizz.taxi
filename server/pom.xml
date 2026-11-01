@@ -24,6 +24,7 @@
         <!-- Reproducible release (REQ-ENG-11, issue #199): the jar's entries carry this time, not the build's, so the
              same commit builds the same bytes (scripts/reproducible-build.sh checks it in CI). -->
         <project.build.outputTimestamp>2026-11-01T00:00:00Z</project.build.outputTimestamp>
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss.SSS</maven.build.timestamp.format>
     </properties>
 
     <dependencyManagement>
@@ -121,6 +122,22 @@
     </dependencies>
 
     <build>
+        <!-- NEGATIVE CONTROL for #199, never merged: a resource that carries where it was built. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>build-time.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes>
+                    <exclude>build-time.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
