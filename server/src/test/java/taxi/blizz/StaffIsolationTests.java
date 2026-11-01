@@ -185,6 +185,7 @@ class StaffIsolationTests {
     @Autowired OutboxRelay relay;
     @Autowired org.springframework.context.ApplicationContext application;
     @Autowired JdbcClient jdbc;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
 
@@ -383,14 +384,7 @@ class StaffIsolationTests {
         values.put("text", "Staff isolation probe");
         values.put("visibility", "INTERNAL");
         values.put("dropoff", Map.of("lat", -39.4, "lon", 19.6));
-        // A fixture of its own: earlier orders and drivers of the city must not take this one's place.
-        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where city_id = :c and state <> 'CLOSED'")
-                .param("c", city).update();
-        jdbc.sql("""
-                        update dispatch_attempt set phase = 'STOPPED', next_action_at = null
-                        where phase in ('PERSONAL', 'BROADCAST')
-                          and order_id in (select id from ride_order where city_id = :c)""")
-                .param("c", city).update();
+        freeCity();
         boolean card = path.contains("/payment-operations") || path.contains("/evidence")
                 || path.contains("/chargebacks");
         TestRides.Ride ride = card ? cardRide() : rides.started(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
@@ -492,7 +486,8 @@ class StaffIsolationTests {
         if (path.contains("/addresses")) {
             Map<String, Object> data = new LinkedHashMap<>(Map.of("city_id", city, "kind", "HOUSE",
                     "label", "Isolation street " + UUID.randomUUID().toString().substring(0, 8), "language", "en",
-                    "street", "Isolation street", "house_raw", "1", "pickup", Map.of("lat", -39.5, "lon", 19.5)));
+                    "street", "Isolation street", "house_raw", String.valueOf(SPARE.incrementAndGet()),
+                    "pickup", Map.of("lat", -39.9 + SPARE.get() * 0.004, "lon", 19.1 + SPARE.get() * 0.004)));
             Map<String, Object> address = postJson("/api/admin/v1/addresses", admin,
                     Map.of("command_id", UUID.randomUUID(), "reason", "Fixture", "data", data));
             if (path.endsWith("/restore")) {
@@ -561,6 +556,7 @@ class StaffIsolationTests {
             values.put("expected_version", 0L);
             values.put("decision", "EXPLAINED");
         } else if (path.contains("/payment-operations/")) {
+            freeCity();
             TestRides.Ride ride = cardRide();
             ids.put("operation_id", jdbc.sql("""
                             select o.id from payment_operation o join payment_intent i on i.id = o.intent_id
@@ -577,7 +573,7 @@ class StaffIsolationTests {
             values.put("promotion", promotion);
         } else if (path.contains("/promotions/")) {
             Map<String, Object> promotion = Map.of("name", "Isolation " + UUID.randomUUID(), "kind", "BONUS",
-                    "value_type", "FIXED", "value", 100, "conditions", Map.of("city_id", home));
+                    "value_type", "FIXED", "value", 100, "currency", "UAH", "conditions", Map.of("city_id", home));
             Map<String, Object> created = postJson("/api/admin/v1/promotions", admin,
                     Map.of("command_id", UUID.randomUUID(), "promotion", promotion, "reason", "Fixture"));
             ids.put("promotion_id", created.get("id"));
@@ -605,7 +601,8 @@ class StaffIsolationTests {
                 byte[] wav = taxi.blizz.telephony.internal.TestRecordings.tone(1);
                 var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
                         new ByteArrayInputStream(wav), wav.length);
-                files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING);
+                new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(
+                        status -> files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING));
                 jdbc.sql("""
                                 insert into call_recording (call_id, state, file_id, duration_seconds, next_attempt_at,
                                                             created_at, stored_at)
@@ -669,6 +666,17 @@ class StaffIsolationTests {
         assertThat(result.getResponse().getStatus()).as(path + " " + result.getResponse().getContentAsString())
                 .isEqualTo(200);
         return json.readValue(result.getResponse().getContentAsString(), Map.class);
+    }
+
+    /** A fixture of its own: earlier orders and drivers of the city must not take this one's place. */
+    private void freeCity() {
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where city_id = :c and state <> 'CLOSED'")
+                .param("c", city).update();
+        jdbc.sql("""
+                        update dispatch_attempt set phase = 'STOPPED', next_action_at = null
+                        where phase in ('PERSONAL', 'BROADCAST')
+                          and order_id in (select id from ride_order where city_id = :c)""")
+                .param("c", city).update();
     }
 
     /** A finished card ride of the city, paid from the hold. */
@@ -751,7 +759,7 @@ class StaffIsolationTests {
         MvcResult result = perform(post(path).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(body)), token);
         assertThat(result.getResponse().getStatus()).as(path + " " + result.getResponse().getContentAsString())
-                .isBetween(200, 201);
+                .isBetween(200, 202);
         return json.readValue(result.getResponse().getContentAsString(), Map.class);
     }
 
