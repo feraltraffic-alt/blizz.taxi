@@ -1917,7 +1917,10 @@ components:
           description: >-
             CARD — the rider's saved card for the city (GET /api/rider/v1/cards; no card → 400). The order is created
             AWAITING_PAYMENT; the agreed price is held on the card and only then the search starts (or a pre-order
-            waits SCHEDULED). A declined hold ends the order UNFULFILLED with status_reason PAYMENT_DECLINED.
+            waits SCHEDULED). A declined hold ends the order UNFULFILLED with status_reason PAYMENT_DECLINED. A hold
+            the bank has not answered within the deadline (blizz.orders.card-hold-deadline, 3 minutes by default;
+            REQ-PAY-02) ends it UNFULFILLED with status_reason PAYMENT_TIMEOUT and payment_state HOLD_RELEASED: a
+            success that comes later is voided, never captured.
           type: string
           enum: [CASH, CARD]
         channel:
@@ -2304,7 +2307,8 @@ components:
           type: [string, "null"]
           description: >-
             Cash — what the driver reported. Card (ADR 0008) — AUTH_PENDING while the hold is asked for (the order is
-            AWAITING_PAYMENT and no search runs), AUTHORIZED once it is held, PAYMENT_DECLINED when the bank refused.
+            AWAITING_PAYMENT and no search runs), AUTHORIZED once it is held, PAYMENT_DECLINED when the bank refused,
+            HOLD_RELEASED when the order ended before the hold was used (cancelled, or the hold deadline passed).
             Terminal — what the driver reported, like cash.
           enum: [CASH_EXPECTED, CASH_REPORTED, CASH_NOT_RECEIVED, AUTH_PENDING, AUTHORIZED, PAYMENT_DECLINED,
                  HOLD_RELEASED, CAPTURE_PENDING, PAID, PARTIALLY_PAID, TERMINAL_EXPECTED, TERMINAL_REPORTED,

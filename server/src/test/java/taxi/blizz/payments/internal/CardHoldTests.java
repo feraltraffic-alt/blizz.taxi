@@ -154,7 +154,7 @@ class CardHoldTests {
         assertThat(gateway.requests()).singleElement().satisfies(request -> {
             assertThat(request).containsEntry("transactionType", "CHARGE").containsEntry("merchantTransactionType",
                     "AUTH").containsEntry("recToken", "tok-" + rider.id());
-            assertThat(WayForPayProvider.minor((String) request.get("amount"))).isEqualTo(order.priceMinor());
+            assertThat(WayForPayProvider.minor((String) request.get("amount"), "UAH")).isEqualTo(order.priceMinor());
         });
         assertThat(intentState(order.id())).isEqualTo("AUTHORIZED");
         deliverEvents();

@@ -113,7 +113,7 @@ class CardReconciliationTests {
         assertThat(op.get("state")).isEqualTo("SUCCEEDED");
         operation = (UUID) op.get("id");
         statement = new LinkedHashMap<>(Map.of("orderReference", op.get("reference"), "transactionType", "PURCHASE",
-                "transactionStatus", "WaitingAuthComplete", "amount", WayForPayProvider.amount(((Number) op.get("amount_minor")).longValue()),
+                "transactionStatus", "WaitingAuthComplete", "amount", WayForPayProvider.amount(((Number) op.get("amount_minor")).longValue(), "UAH"),
                 "currency", "UAH", "createdDate", OffsetDateTime.now().toEpochSecond(),
                 "processingDate", OffsetDateTime.now().toEpochSecond(), "fee", "1.23"));
     }
@@ -477,8 +477,8 @@ class CardReconciliationTests {
 
     @Test
     void anAmountOffByOneMinorUnitIsADifference() {
-        long hold=WayForPayProvider.minor((String)statement.get("amount"));
-        statement.put("amount",WayForPayProvider.amount(hold+1));
+        long hold=WayForPayProvider.minor((String)statement.get("amount"), "UAH");
+        statement.put("amount",WayForPayProvider.amount(hold+1, "UAH"));
         difference("AMOUNT");
     }
 
@@ -546,7 +546,7 @@ class CardReconciliationTests {
 
     @Test
     void captureDuringStatementFetchNeverCreatesAFalseDifference() {
-        long hold=WayForPayProvider.minor((String)statement.get("amount"));
+        long hold=WayForPayProvider.minor((String)statement.get("amount"), "UAH");
         assertThat(hold).isGreaterThan(100);
         WayForPayProvider bank=(WayForPayProvider)providers.byName().get("FAKE");
         var previous=(WayForPayProvider.Transport)ReflectionTestUtils.getField(bank,"transport");

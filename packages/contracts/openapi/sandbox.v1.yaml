@@ -35,6 +35,36 @@ paths:
           description: Invalid request parameters.
         "404":
           description: No code has been sent to this phone.
+  /sandbox/v1/bank/next-answers:
+    post:
+      operationId: sandboxQueueBankAnswers
+      summary: The fake bank's next answers for one rider's saved cards
+      description: >-
+        Sandbox profile only (issue #140). The answers go to the next requests that use a saved card of the rider with
+        this phone, before the shared script, so no other scenario takes them. LOST_ANSWER means the bank does it
+        but its answer never comes; TIMEOUT means the request never arrives.
+      tags: [Sandbox]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [phone, answers]
+              properties:
+                phone: {type: string, pattern: "^\\+[1-9][0-9]{7,14}$"}
+                answers:
+                  type: array
+                  minItems: 1
+                  items: {type: string, enum: [Approved, Declined, TIMEOUT, LOST_ANSWER]}
+      responses:
+        "204":
+          description: Queued.
+        "400":
+          description: Invalid request.
+        "404":
+          description: No rider or no saved card for this phone.
   /sandbox/v1/sms:
     get:
       operationId: sandboxObserveSms

@@ -163,8 +163,8 @@ class CardCaptureTests {
         OrderView paid = orders.get(order.id());
         assertThat(paid.paymentState()).isEqualTo("PAID");
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
-        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(order.priceMinor()),
-                "SETTLE::" + WayForPayProvider.amount(paid.finalPriceMinor()));
+        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(order.priceMinor(), "UAH"),
+                "SETTLE::" + WayForPayProvider.amount(paid.finalPriceMinor(), "UAH"));
         assertThat(receivable(rider)).as("the fare is paid in full").isZero();
         assertThat(jdbc.sql("""
                         select sum(l.debit_minor) from journal_line l join journal_transaction t on t.id = l.transaction_id
@@ -217,8 +217,8 @@ class CardCaptureTests {
         tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold + 700, "UAH")); // a repeated event
         settlePayments();
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
-        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(hold),
-                "SETTLE::" + WayForPayProvider.amount(hold), "CHARGE:SALE:7.00");
+        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(hold, "UAH"),
+                "SETTLE::" + WayForPayProvider.amount(hold, "UAH"), "CHARGE:SALE:7.00");
     }
 
     @Test
@@ -246,8 +246,8 @@ class CardCaptureTests {
         tx.executeWithoutResult(s -> internal.startCapture(order.id(), hold - 100, "UAH"));
         settlePayments();
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
-        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(hold),
-                "SETTLE::" + WayForPayProvider.amount(hold - 100), "CHARGE:SALE:" + WayForPayProvider.amount(hold - 100));
+        assertThat(sent()).containsExactly("CHARGE:AUTH:" + WayForPayProvider.amount(hold, "UAH"),
+                "SETTLE::" + WayForPayProvider.amount(hold - 100, "UAH"), "CHARGE:SALE:" + WayForPayProvider.amount(hold - 100, "UAH"));
     }
 
     /**
@@ -321,7 +321,7 @@ class CardCaptureTests {
                         select o.state from payment_operation o join payment_intent i on i.id = o.intent_id
                         where i.order_id = :order and o.type = 'SETTLE'""")
                 .param("order", order.id()).query(String.class).single()).isEqualTo("DECLINED");
-        assertThat(sent()).contains("CHARGE:SALE:" + WayForPayProvider.amount(hold - 100));
+        assertThat(sent()).contains("CHARGE:SALE:" + WayForPayProvider.amount(hold - 100, "UAH"));
         assertThat(payments.intent(order.id()).orElseThrow().state()).isEqualTo("PAID");
     }
 
@@ -711,7 +711,7 @@ class CardCaptureTests {
         assertThat(jdbc.sql(outcome).param("ref", reference).query(String.class).single())
                 .isEqualTo("OPERATION_AMOUNT_MISMATCH");
         assertThat(notifications.receive(merchantId,
-                callback.apply(WayForPayProvider.amount(order.priceMinor()), "PLN")).trusted()).isTrue();
+                callback.apply(WayForPayProvider.amount(order.priceMinor(), "PLN"), "PLN")).trusted()).isTrue();
         assertThat(jdbc.sql(outcome).param("ref", reference).query(String.class).single())
                 .isEqualTo("OPERATION_AMOUNT_MISMATCH");
         assertThat(payments.intent(order.id()).orElseThrow().state()).as("the hold stands").isEqualTo("AUTHORIZED");

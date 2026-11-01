@@ -39,6 +39,20 @@ class FakeGatewayJournalTests {
                 .anySatisfy(line -> assertThat(line).contains("\"type\":\"CHARGE\"", "\"reference\":\"tip-1\""));
     }
 
+    /** Issue #140: an answer queued for one card goes to that card only, before the shared script. */
+    @Test
+    void anAnswerForOneCardIsTakenOnlyByThatCard() {
+        FakeProvider.Gateway gateway = new FakeProvider.Gateway(a -> "unit-secret", CLOCK);
+        FakeProvider bank = new FakeProvider(gateway, CLOCK, "http://example.test");
+        gateway.nextForToken("card-a", "Declined");
+        assertThat(bank.charge(MERCHANT, "other-1", "card-b", 500, CUSTOMER, "Tip", null).providerStatus())
+                .as("another card").isEqualTo("Approved");
+        assertThat(bank.charge(MERCHANT, "mine-1", "card-a", 500, CUSTOMER, "Tip", null).providerStatus())
+                .isEqualTo("Declined");
+        assertThat(bank.charge(MERCHANT, "mine-2", "card-a", 500, CUSTOMER, "Tip", null).providerStatus())
+                .as("used once").isEqualTo("Approved");
+    }
+
     @Test
     void withoutAJournalTheBankForgets() {
         FakeProvider before = new FakeProvider(new FakeProvider.Gateway(a -> "unit-secret", CLOCK), CLOCK,
