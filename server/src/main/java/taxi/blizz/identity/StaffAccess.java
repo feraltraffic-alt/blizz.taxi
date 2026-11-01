@@ -39,6 +39,23 @@ public interface StaffAccess {
     Scope scope(Actor actor, String permission);
 
     /**
+     * {@link #require} for an action on a driver (owner decision 01.11.2026, #201): the member must hold
+     * {@code permission} in at least one city the driver is admitted in, or in every city. An applicant admitted
+     * nowhere yet is open to every holder of the permission. Fails with {@code ACCESS_DENIED}.
+     */
+    void requireForDriver(Actor actor, String permission, UUID driverId);
+
+    /**
+     * {@link #require} for an action on another staff member (owner decision 01.11.2026, #201): {@code permission} in
+     * every city of that member — every city when the member has all of them, or is a super admin. An unknown member:
+     * the permission alone (the caller answers NOT_FOUND). Fails with {@code ACCESS_DENIED}.
+     */
+    void requireOverStaff(Actor actor, String permission, UUID staffId);
+
+    /** {@link #require} with every city: for objects that serve several cities at once. */
+    void requireEveryCity(Actor actor, String permission);
+
+    /**
      * The ACTIVE staff members who may use {@code permission} in {@code cityId} — or, for a null city, only those with
      * all cities. For pushing to the people concerned (a ringing call); never a check of access itself.
      */

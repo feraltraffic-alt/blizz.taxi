@@ -67,7 +67,7 @@ class JdbcDriverDeletionReview implements DriverDeletionReview {
 
     @Override
     public Decision complete(Actor actor, UUID commandId, UUID driverId, String reason) {
-        staff.require(actor, DELETE_PERMISSION);
+        staff.requireForDriver(actor, DELETE_PERMISSION, driverId);
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "driver_deletion.complete", commandId),
                 new DecisionRequest(driverId, why), Decision.class, () -> {
@@ -94,7 +94,7 @@ class JdbcDriverDeletionReview implements DriverDeletionReview {
 
     @Override
     public Decision reject(Actor actor, UUID commandId, UUID driverId, String reason) {
-        staff.require(actor, DELETE_PERMISSION);
+        staff.requireForDriver(actor, DELETE_PERMISSION, driverId);
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "driver_deletion.reject", commandId),
                 new DecisionRequest(driverId, why), Decision.class, () -> {

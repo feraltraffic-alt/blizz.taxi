@@ -478,7 +478,9 @@ paths:
     get:
       operationId: listDriversForReview
       summary: Review queue
-      description: Drivers in a review status (default IN_REVIEW — the queue), oldest first. Needs driver.review.
+      description: >-
+        Drivers in a review status (default IN_REVIEW — the queue), oldest first. Needs driver.review.
+        The queue holds drivers admitted in the reviewer's cities and applicants admitted nowhere yet (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -514,6 +516,8 @@ paths:
     get:
       operationId: getDriverReviewCase
       summary: A driver with documents, vehicles and the history of decisions
+      description: >-
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -543,6 +547,7 @@ paths:
       description: >-
         Private, not cached; every opening is audited (REQ-SEC-07). Needs driver.review. Always an attachment with
         `X-Content-Type-Options: nosniff`, so a PDF is never rendered inline in the admin's browser (issue #105).
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -587,6 +592,7 @@ paths:
         REQ-AUTH-08, support's process, step one: after identifying the person, staff with driver.review send a code to the
         new phone; the person reads it to them. Audited with the masked number. Another account's phone is found
         out only at the change. The same phone as now → 409.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Account]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -631,6 +637,7 @@ paths:
         reason (how the person was identified) and the code the person received on the new phone (owner decision
         28.10.2026). Every session of the account ends. Another account's phone → 409 STATE_CONFLICT; a wrong code →
         OTP_INVALID. Audited with masked numbers.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Account]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -668,7 +675,9 @@ paths:
     post:
       operationId: decideDriverReview
       summary: Approve, request changes or reject
-      description: IN_REVIEW only, reason required. On APPROVE the given vehicle classes are granted; otherwise rejected_documents tell the driver what to replace.
+      description: >-
+        IN_REVIEW only, reason required. On APPROVE the given vehicle classes are granted; otherwise rejected_documents tell the driver what to replace.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -710,6 +719,7 @@ paths:
       description: >-
         No new orders; a trip in progress is not interrupted (REQ-DS-01). Reason required. risk_flag_id names the risk
         flag that caused it (it must be this driver's; 422 otherwise) and is kept with the change and in the audit.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -753,6 +763,7 @@ paths:
         required and the change is audited (event DriverAdmissionCitiesChanged). Replaces the whole list. A city that
         does not exist → 400 VALIDATION_FAILED. A driver online in a city taken off the list keeps the current trip and the shift but
         gets no new order there (ADMISSION_CITY).
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201). The cities added or removed need the permission too.
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -794,6 +805,7 @@ paths:
       description: >-
         Needs driver.review; the reason is required and the change is audited. Phone orders paid at a terminal are
         offered to drivers marked here (owner decision 27.10.2026).
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -851,6 +863,7 @@ paths:
         orders: NOT_ACCEPTING when free, PAUSE_AFTER_CURRENT on a trip. The driver keeps a limited session: the current
         trip can be completed, support reached, and everything read (GET) — trips, balance, earnings, documents — but
         not new work (the ALL tab, offers, pre-orders); anything else answers 403 ACCOUNT_BLOCKED. A driver not ACTIVE → 409.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -890,6 +903,7 @@ paths:
       description: >-
         BLOCKED → ACTIVE (issue #141). Needs driver.review; reason required; audited (event
         DriverAccountUnblocked). The shift stays as it is; the driver resumes it. A driver not BLOCKED → 409.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -926,7 +940,9 @@ paths:
     post:
       operationId: reinstateDriver
       summary: Reinstate a suspended driver
-      description: SUSPENDED → APPROVED, reason required.
+      description: >-
+        SUSPENDED → APPROVED, reason required.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2619,7 +2635,9 @@ paths:
     post:
       operationId: createPaymentMerchant
       summary: Add a merchant account
-      description: The password is asked again; the key is stored encrypted and never shown (REQ-ADM-10).
+      description: >-
+        The password is asked again; the key is stored encrypted and never shown (REQ-ADM-10).
+        Staff of every city only: a merchant serves several cities (owner decision 01.11.2026, #201).
       tags: [Integrations]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2649,6 +2667,8 @@ paths:
     post:
       operationId: changePaymentMerchant
       summary: Change the domain, the key or the cities of a merchant
+      description: >-
+        Staff of every city only: a merchant serves several cities (owner decision 01.11.2026, #201).
       tags: [Integrations]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2686,6 +2706,7 @@ paths:
       description: >-
         Asks the provider about an order that does not exist; nothing is charged. The provider's answer is shown,
         never the key.
+        Staff of every city only: a merchant serves several cities (owner decision 01.11.2026, #201).
       tags: [Integrations]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -3045,7 +3066,9 @@ paths:
     get:
       operationId: listOperatorBonusEntries
       summary: Bonus entries of one staff member, newest first
-      description: Requires operator-bonuses.manage.
+      description: >-
+        Requires operator-bonuses.manage.
+        Needs operator-bonuses.manage in every city of the operator (owner decision 01.11.2026, #201).
       tags: [Settings]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -4571,7 +4594,9 @@ paths:
     get:
       operationId: getDriverBalanceForStaff
       summary: A driver's balance and its movements
-      description: Needs finance.manage.
+      description: >-
+        Needs finance.manage.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -4605,6 +4630,7 @@ paths:
         service (its expense). Needs finance.manage; the reason is required and audited (ADR 0010). 422
         TOP_UP_DAILY_LIMIT when it would take the staff member over the settings' staff_top_ups limit for the
         currency.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -5099,6 +5125,7 @@ paths:
         ledger, trips and the vehicle stay (AC-24). The phone becomes free: signing in with it creates a new driver.
         409 DRIVER_HAS_ACTIVE_WORK, DRIVER_HAS_DEBT or DRIVER_HAS_DISPUTE while a blocker exists, STATE_CONFLICT
         without a pending request. Needs drivers.delete; audited.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -5133,7 +5160,9 @@ paths:
     post:
       operationId: rejectDriverDeletion
       summary: Reject a driver's deletion request
-      description: The account returns to the state it had before the request. Needs drivers.delete; audited.
+      description: >-
+        The account returns to the state it had before the request. Needs drivers.delete; audited.
+        Staff need the permission in a city the driver is admitted in, or in every city; an applicant admitted nowhere yet is open to every holder (owner decision 01.11.2026, #201).
       tags: [Drivers]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -5296,6 +5325,7 @@ paths:
       description: >-
         extension null removes it. One extension — one staff member (another's → 409 STATE_CONFLICT). Needs
         settings.manage; audited.
+        Needs settings.manage in every city of the operator (owner decision 01.11.2026, #201).
       tags: [Settings]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"

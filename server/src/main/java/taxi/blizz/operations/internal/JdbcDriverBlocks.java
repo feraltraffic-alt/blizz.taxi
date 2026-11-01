@@ -41,7 +41,7 @@ class JdbcDriverBlocks implements DriverBlocks {
     @Override
     public DriverProfile block(Actor staffMember, UUID commandId, UUID driverId, long expectedVersion,
                                String reason) {
-        staff.require(staffMember, DriverAdmission.REVIEW_PERMISSION);
+        staff.requireForDriver(staffMember, DriverAdmission.REVIEW_PERMISSION, driverId);
         requireReason(reason);
         return commands.execute(new CommandKey(staffMember, "driver.block", commandId),
                 new Change(driverId, expectedVersion, reason), DriverProfile.class, () -> {
@@ -57,7 +57,7 @@ class JdbcDriverBlocks implements DriverBlocks {
     @Override
     public DriverProfile unblock(Actor staffMember, UUID commandId, UUID driverId, long expectedVersion,
                                  String reason) {
-        staff.require(staffMember, DriverAdmission.REVIEW_PERMISSION);
+        staff.requireForDriver(staffMember, DriverAdmission.REVIEW_PERMISSION, driverId);
         requireReason(reason);
         return commands.execute(new CommandKey(staffMember, "driver.unblock", commandId),
                 new Change(driverId, expectedVersion, reason), DriverProfile.class, () -> {

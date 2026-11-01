@@ -99,7 +99,8 @@ class MerchantAdmin {
     }
 
     MerchantView create(Actor actor, UUID commandId, String password, NewMerchant body, String reason) {
-        staff.require(actor, Integrations.MANAGE_PERMISSION);
+        // A merchant serves several cities with the service's keys: staff of every city (owner decision 01.11.2026).
+        staff.requireEveryCity(actor, Integrations.MANAGE_PERMISSION);
         String provider = body.provider() == null ? "" : body.provider().toUpperCase(Locale.ROOT);
         if (!provider.equals("WAYFORPAY") && !(provider.equals("FAKE") && properties.fakeMerchantsAllowed())) {
             throw invalid("provider must be WAYFORPAY");
@@ -137,7 +138,7 @@ class MerchantAdmin {
 
     MerchantView change(Actor actor, UUID commandId, String password, UUID merchantId, MerchantChange body,
                         String reason) {
-        staff.require(actor, Integrations.MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, Integrations.MANAGE_PERMISSION);
         String domain = body.domain() == null ? null : require(body.domain(), DOMAIN, "domain");
         String secret = secret(body.secret(), false);
         List<UUID> cities = body.cityIds() == null ? null : cities(body.cityIds());
@@ -190,7 +191,7 @@ class MerchantAdmin {
      * are accepted; a complaint about the signature or the merchant means they are not. Nothing is charged.
      */
     Integrations.Check check(Actor actor, UUID merchantId) {
-        staff.require(actor, Integrations.MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, Integrations.MANAGE_PERMISSION);
         String group = "payments";
         Merchant merchant = merchants.byId(merchantId).orElse(null);
         if (merchant == null) {

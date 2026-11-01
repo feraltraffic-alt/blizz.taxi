@@ -3,9 +3,11 @@ package taxi.blizz.identity.internal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import taxi.blizz.identity.DriverCities;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.DomainException;
@@ -16,9 +18,52 @@ import taxi.blizz.platform.SubjectType;
 class JdbcStaffAccess implements StaffAccess {
 
     private final JdbcClient jdbc;
+    private final DriverCities driverCities;
 
-    JdbcStaffAccess(JdbcClient jdbc) {
+    JdbcStaffAccess(JdbcClient jdbc, DriverCities driverCities) {
         this.jdbc = jdbc;
+        this.driverCities = driverCities;
+    }
+
+    @Override
+    public void requireForDriver(Actor actor, String permission, UUID driverId) {
+        require(actor, permission);
+        Set<UUID> cities = driverId == null ? Set.of() : driverCities.of(driverId);
+        if (cities.isEmpty()) {
+            return;
+        }
+        Scope scope = scope(actor, permission);
+        if (!scope.allCities() && cities.stream().noneMatch(scope.cityIds()::contains)) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + permission
+                    + " for a city of this driver");
+        }
+    }
+
+    @Override
+    public void requireOverStaff(Actor actor, String permission, UUID staffId) {
+        List<Scope> target = jdbc.sql("""
+                        select role = 'SUPER_ADMIN' or all_cities as all_cities, city_scope from staff_user
+                        where id = :id""")
+                .param("id", staffId)
+                .query((rs, i) -> new Scope(rs.getBoolean("all_cities"),
+                        new java.util.HashSet<>(Arrays.asList((UUID[]) rs.getArray("city_scope").getArray()))))
+                .list();
+        if (target.isEmpty()) {
+            require(actor, permission);
+        } else if (target.getFirst().allCities()) {
+            requireEveryCity(actor, permission);
+        } else {
+            require(actor, permission, target.getFirst().cityIds().toArray(UUID[]::new));
+        }
+    }
+
+    @Override
+    public void requireEveryCity(Actor actor, String permission) {
+        require(actor, permission);
+        if (!scope(actor, permission).allCities()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + permission
+                    + " for every city");
+        }
     }
 
     @Override
