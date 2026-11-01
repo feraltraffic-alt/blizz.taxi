@@ -75,7 +75,7 @@ components:
     Earnings:
       type: object
       additionalProperties: false
-      required: [driver_id, city_id, currency, timezone, from, to, days, total, balance_minor]
+      required: [driver_id, city_id, currency, timezone, from, to, days, total, balance_minor, pending]
       properties:
         driver_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -111,3 +111,19 @@ components:
           description: The balance now, whatever the period; negative — the driver owes the service.
           type: integer
           format: int64
+        pending:
+          description: >-
+            Trips completed but not in the journal yet ("pending accounting", REQ-LED-05, issue #140), now, whatever
+            the period: how many and their fares. Their share is in neither the figures nor the balance until the
+            posting comes, normally within seconds.
+          type: object
+          additionalProperties: false
+          required: [trips, fare_minor]
+          properties:
+            trips:
+              type: integer
+              minimum: 0
+            fare_minor:
+              type: integer
+              format: int64
+              minimum: 0

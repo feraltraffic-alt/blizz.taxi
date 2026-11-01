@@ -1805,6 +1805,37 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+  /api/admin/v1/finance/pending-postings:
+    get:
+      operationId: listPendingPostings
+      summary: Completed trips whose fare is not in the journal yet
+      description: >-
+        "Pending accounting" (REQ-LED-05, issue #140): trips of the city completed in the last 7 days with a fare to
+        post that the journal does not have yet, the longest waiting first, at most 100 (more tells there are
+        others). A posting is normally there within seconds; the alert TripPostingLate fires past 10 minutes. Needs
+        finance.manage for the city.
+      tags: [Finance]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingPostingList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/orders:
     get:
       operationId: searchAdminOrders
@@ -5678,7 +5709,7 @@ components:
     OrderFare:
       type: object
       additionalProperties: false
-      required: [order_id, currency, current_version, versions, refund_obligation_minor, refund_state]
+      required: [order_id, currency, current_version, versions, refund_obligation_minor, refund_state, accounting]
       properties:
         order_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -5700,13 +5731,19 @@ components:
           description: NONE, or WAITING_FOR_REFUND_FLOW while a refund obligation waits for the refund flow (#140).
           type: string
           enum: [NONE, WAITING_FOR_REFUND_FLOW]
+        accounting:
+          description: >-
+            For an order whose trip ended with a fare to post: POSTED once the journal has the trip's fare, PENDING
+            until then (REQ-LED-05, issue #140); null for any other order.
+          type: [string, "null"]
+          enum: [POSTED, PENDING, null]
 
     AdminOrderRow:
       description: One order in the admin search (issue #142).
       type: object
       additionalProperties: false
       required: [id, short_number, city_id, status, channel, created_at, payer_client_id, driver_id, vehicle_class,
-                 payment_method, price_minor, final_price_minor, currency]
+                 payment_method, price_minor, final_price_minor, currency, accounting]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -5742,6 +5779,12 @@ components:
           format: int64
         currency:
           type: [string, "null"]
+        accounting:
+          description: >-
+            For an order whose trip ended with a fare to post: POSTED once the journal has the trip's fare, PENDING
+            until then (REQ-LED-05, issue #140); null for any other order.
+          type: [string, "null"]
+          enum: [POSTED, PENDING, null]
 
     AdminOrderList:
       type: object
@@ -6258,6 +6301,41 @@ components:
         version:
           type: integer
           format: int64
+    PendingPostingList:
+      type: object
+      additionalProperties: false
+      required: [city_id, trips, more]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        trips:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [order_id, driver_id, completed_at, waiting_seconds, fare_minor, currency]
+            properties:
+              order_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              driver_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              completed_at:
+                $ref: "./common.yaml#/components/schemas/Timestamp"
+              waiting_seconds:
+                description: Since the trip was completed.
+                type: integer
+                format: int64
+                minimum: 0
+              fare_minor:
+                description: The final fare to post.
+                type: integer
+                format: int64
+              currency:
+                type: string
+        more:
+          description: True when more than 100 trips wait; the oldest are listed.
+          type: boolean
     CashDisputeList:
       description: One page of undecided disputes, the soonest deadline first (decide_by, then order id) (REQ-API-09).
       type: object
