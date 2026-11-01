@@ -125,8 +125,11 @@ class PendingAccountingTests {
                         update outbox set occurred_at = now() - interval '6 days'
                         where event_type = 'TripCompleted' and payload ->> 'order_id' = :id""")
                 .param("id", order.toString()).update();
+        // A younger trip waiting too: the gauge shows the oldest.
+        UUID younger = event(city, UUID.randomUUID(), 300, "10 minutes");
         refreshGauges();
         double late = meters.get(GAUGE).gauge().value();
+        jdbc.sql("delete from outbox where aggregate_id = :order").param("order", younger).update();
         assertThat(late).isGreaterThan(6 * 86_400 - 120);
 
         // The ledger works again; the retry posts the fare.
