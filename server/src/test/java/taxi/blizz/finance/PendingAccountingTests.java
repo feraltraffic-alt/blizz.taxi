@@ -177,6 +177,37 @@ class PendingAccountingTests {
         }
     }
 
+    /**
+     * The list and the earnings take only their own: the city, the driver, the list's window, and only events the
+     * posting consumer has not handled. Synthetic FAILED TripCompleted events, as a ledger down for a while leaves.
+     */
+    @Test
+    void theListAndTheEarningsTakeOnlyTheirOwnWaitingTrips() {
+        UUID driver = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        UUID mine = event(city, driver, 500, "1 hour");
+        UUID elsewhere = event(UUID.randomUUID(), driver, 700, "1 hour");
+        UUID colleague = event(city, other, 900, "2 hours");
+        UUID old = event(city, other, 1_100, "8 days");
+        UUID handled = event(city, driver, 1_300, "3 hours");
+        jdbc.sql("""
+                        insert into consumer_inbox (consumer_id, event_id, completed_at)
+                        select 'finance.trip-fare-posting', event_id, now() from outbox where aggregate_id = :order""")
+                .param("order", handled).update();
+        try {
+            assertThat(accounting.pending(staff, city).trips()).extracting(FareAccounting.PendingTrip::orderId)
+                    .as("the oldest first, inside 7 days, this city, not handled").containsExactly(colleague, mine);
+            assertThat(accounting.ofDriver(driver, city)).isEqualTo(new FareAccounting.Pending(1, 500));
+            assertThat(accounting.ofDriver(other, city)).as("no window for the driver: it is still owed")
+                    .isEqualTo(new FareAccounting.Pending(2, 2_000));
+        } finally {
+            jdbc.sql("delete from consumer_inbox where event_id in (select event_id from outbox where aggregate_id"
+                    + " in (:orders))").param("orders", List.of(mine, elsewhere, colleague, old, handled)).update();
+            jdbc.sql("delete from outbox where aggregate_id in (:orders)")
+                    .param("orders", List.of(mine, elsewhere, colleague, old, handled)).update();
+        }
+    }
+
     @Test
     void theListNeedsFinanceRightsForTheCity() {
         Actor viewer = staff(city, Orders.VIEW_PERMISSION);
@@ -194,6 +225,25 @@ class PendingAccountingTests {
         return orders.search(staff, new Orders.Search(city, Set.of(), null, null, null, null,
                         orders.get(order).shortNumber()), null, 10).stream()
                 .filter(f -> f.id().equals(order)).findFirst().orElseThrow();
+    }
+
+    /** A FAILED TripCompleted of a made-up order, {@code age} ago; the order id. */
+    private UUID event(UUID cityId, UUID driver, long fare, String age) {
+        UUID order = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into outbox (event_id, event_type, schema_version, aggregate_type, aggregate_id,
+                                            aggregate_version, payload, correlation_id, occurred_at, state,
+                                            next_attempt_at)
+                        values (:id, 'TripCompleted', 1, 'Order', :order, 1, cast(:payload as jsonb), :id,
+                                now() - cast(:age as interval), 'FAILED', now())""")
+                .param("id", id).param("order", order).param("age", age)
+                .param("payload", """
+                        {"order_id": "%s", "driver_id": "%s", "city_id": "%s", "final_fare_id": "%s",
+                         "amount_minor": %d, "currency": "UAH"}""".formatted(order, driver, cityId, UUID.randomUUID(),
+                        fare))
+                .update();
+        return order;
     }
 
     private void deliverEvents() {
