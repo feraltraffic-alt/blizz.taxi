@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionTemplate;
 import taxi.blizz.backoffice.ReportExports;
 import taxi.blizz.finance.FinanceReports;
 import taxi.blizz.identity.StaffPermissions;
@@ -38,6 +39,7 @@ class ReportBoundsTests {
     @Autowired FinanceReports financeReports;
     @Autowired ReportExports exports;
     @Autowired JdbcClient jdbc;
+    @Autowired TransactionTemplate tx;
 
     @Test
     void theDaysOfTheChangeHave23And25Hours() {
@@ -157,22 +159,24 @@ class ReportBoundsTests {
         return id;
     }
 
-    /** A balanced trip fare at the moment of the order (the journal is append-only, written as it should stay). */
+    /** A balanced trip fare at the moment of the order (the journal is append-only and checked at the commit). */
     private void fare(UUID order, String at, UUID driver, long amount) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("""
-                        insert into journal_transaction (id, business_key, basis_type, basis_id, currency, reason,
-                                                         occurred_at)
-                        values (:id, :key, 'TRIP_FARE', :order, 'UAH', 'Test', cast(:at as timestamptz))""")
-                .param("id", id).param("key", "report-bounds:" + id).param("order", order).param("at", at)
-                .update();
-        jdbc.sql("""
-                        insert into journal_line (transaction_id, line_no, account, party_id, debit_minor,
-                                                  credit_minor)
-                        values (:tx, 1, 'RIDER_RECEIVABLE', :rider, :amount, 0),
-                               (:tx, 2, 'DRIVER_PAYABLE', :driver, 0, :amount)""")
-                .param("tx", id).param("rider", UUID.randomUUID()).param("driver", driver).param("amount", amount)
-                .update();
+        tx.executeWithoutResult(s -> {
+            jdbc.sql("""
+                            insert into journal_transaction (id, business_key, basis_type, basis_id, currency, reason,
+                                                             occurred_at)
+                            values (:id, :key, 'TRIP_FARE', :order, 'UAH', 'Test', cast(:at as timestamptz))""")
+                    .param("id", id).param("key", "report-bounds:" + id).param("order", order).param("at", at)
+                    .update();
+            jdbc.sql("""
+                            insert into journal_line (transaction_id, line_no, account, party_id, debit_minor,
+                                                      credit_minor)
+                            values (:tx, 1, 'RIDER_RECEIVABLE', :rider, :amount, 0),
+                                   (:tx, 2, 'DRIVER_PAYABLE', :driver, 0, :amount)""")
+                    .param("tx", id).param("rider", UUID.randomUUID()).param("driver", driver).param("amount", amount)
+                    .update();
+        });
     }
 
     private Actor staff(UUID city) {
