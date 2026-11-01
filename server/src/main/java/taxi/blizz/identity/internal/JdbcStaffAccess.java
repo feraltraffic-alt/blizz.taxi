@@ -146,8 +146,8 @@ class JdbcStaffAccess implements StaffAccess {
         return new java.util.LinkedHashSet<>(jdbc.sql("""
                         select id from staff_user
                         where state = 'ACTIVE' and not must_change_password
-                          and (cast(:city as uuid) is null
-                               or service_id = (select service_id from city where id = cast(:city as uuid)))
+                          and service_id = coalesce((select service_id from city where id = cast(:city as uuid)),
+                                                    service_id)
                           and (role = 'SUPER_ADMIN'
                                or (:permission = any(permissions)
                                    and (all_cities or (cast(:city as uuid) is not null
@@ -155,8 +155,8 @@ class JdbcStaffAccess implements StaffAccess {
                         union
                         select g.staff_id from staff_emergency_grant g join staff_user u on u.id = g.staff_id
                         where u.state = 'ACTIVE' and not u.must_change_password
-                          and (cast(:city as uuid) is null
-                               or u.service_id = (select service_id from city where id = cast(:city as uuid)))
+                          and u.service_id = coalesce((select service_id from city where id = cast(:city as uuid)),
+                                                      u.service_id)
                           and g.revoked_at is null and g.expires_at > now() and :permission = any(g.permissions)
                           and (g.all_cities or (cast(:city as uuid) is not null
                                                 and cast(:city as uuid) = any(g.city_scope)))
