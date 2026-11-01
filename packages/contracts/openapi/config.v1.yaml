@@ -18,10 +18,19 @@ paths:
     get:
       operationId: getBootstrap
       summary: Brand, languages, call mode and cities
-      description: Cacheable for a minute. settings_version grows with every change in the admin panel.
+      description: >-
+        Cacheable for a minute. settings_version grows with every change in the admin panel. The cities are those of
+        the app's taxi service (ADR 0016); an unknown or suspended service → 400 VALIDATION_FAILED.
       tags: [Config]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: service
+          in: query
+          required: false
+          description: The code of the app's taxi service; omitted — the first service.
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{1,39}$"
       responses:
         "200":
           description: OK
@@ -29,6 +38,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Bootstrap"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
   /api/config/v1/legal/{audience}/{kind}:

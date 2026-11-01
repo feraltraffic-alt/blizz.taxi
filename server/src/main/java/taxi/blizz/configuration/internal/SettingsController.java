@@ -33,8 +33,11 @@ class SettingsController {
     private final Integrations integrations;
     private final CityOperations operations;
 
+    private final taxi.blizz.identity.Services services;
+
     SettingsController(ServiceSettings settings, CityCatalog cities, StaffAccess staff, Integrations integrations,
-                       CityOperations operations) {
+                       CityOperations operations, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.operations = operations;
         this.settings = settings;
         this.cities = cities;
@@ -96,7 +99,12 @@ class SettingsController {
     }
 
     @GetMapping("/api/config/v1/bootstrap")
-    ResponseEntity<Bootstrap> bootstrap() {
+    ResponseEntity<Bootstrap> bootstrap(@org.springframework.web.bind.annotation.RequestParam(name = "service",
+            required = false) String service) {
+        // The app's taxi service (ADR 0016): its cities only; absent — the first service.
+        UUID serviceId = service == null ? taxi.blizz.identity.Services.DEFAULT_ID
+                : services.active(service).orElseThrow(() -> new taxi.blizz.platform.DomainException(
+                        taxi.blizz.platform.ErrorCode.VALIDATION_FAILED, "Unknown taxi service"));
         ServiceSettings.Version current = settings.current();
         ServiceSettings.Calls calls = current.settings().calls();
         Bootstrap body = new Bootstrap(current.version(), current.settings().brand(), current.settings().languages(),
@@ -106,13 +114,13 @@ class SettingsController {
                         current.settings().preorders().maxDaysAhead()),
                 new PublicMaps(map(Integrations.MAPS_PROVIDER), map(Integrations.MAPS_ANDROID_KEY),
                         map(Integrations.MAPS_IOS_KEY), map(Integrations.MAPS_WEB_KEY)),
-                cityItems(), current.settings().appVersions());
+                cityItems(serviceId), current.settings().appVersions());
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(1)).cachePublic()).body(body);
     }
 
-    private List<CityItem> cityItems() {
+    private List<CityItem> cityItems(UUID serviceId) {
         java.util.Map<UUID, CityOperations.State> states = operations.all();
-        return cities.published().stream().map(c -> {
+        return cities.published(serviceId).stream().map(c -> {
                     CityOperations.State state = states.containsKey(c.id()) ? states.get(c.id()) : operations.of(c.id());
                     return new CityItem(c.id(), c.code(), c.name(), c.currency(), c.timezone(),
                             state.workingHours().stream().map(h -> new PublicHours(new java.util.TreeSet<>(h.daysOfWeek()),

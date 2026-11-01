@@ -30,12 +30,21 @@ class JdbcGeoConfiguration implements GeoConfiguration {
     private final AuditLog audit;
     private final Clock clock;
 
-    JdbcGeoConfiguration(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock, StaffAccess staff) {
+    private final taxi.blizz.identity.Services services;
+
+    JdbcGeoConfiguration(JdbcClient jdbc, IdempotentCommands commands, AuditLog audit, Clock clock, StaffAccess staff,
+                         taxi.blizz.identity.Services services) {
+        this.services = services;
         this.staff = staff;
         this.jdbc = jdbc;
         this.commands = commands;
         this.audit = audit;
         this.clock = clock;
+    }
+
+    /** A city is created in the staff member's own taxi service (ADR 0016). */
+    private UUID serviceOf(taxi.blizz.platform.Actor actor) {
+        return services.of(actor).orElseThrow(() -> error(ErrorCode.ACCESS_DENIED, "Not staff of a taxi service"));
     }
 
     @Override
@@ -54,10 +63,11 @@ class JdbcGeoConfiguration implements GeoConfiguration {
             try {
                 jdbc.sql("""
                         insert into city(id, code, name, currency, timezone, polygon, priority, state, version,
-                                         created_at, updated_at)
+                                         created_at, updated_at, service_id)
                         values (:id, :code, :name, :currency, :timezone, ST_GeomFromEWKT(:polygon), :priority,
-                                'DRAFT', 0, :now, :now)
-                        """).param("id", id).param("code", c.code()).param("name", c.name())
+                                'DRAFT', 0, :now, :now, :service)
+                        """).param("service", serviceOf(c.actor())).param("id", id).param("code", c.code())
+                        .param("name", c.name())
                         .param("currency", c.currency()).param("timezone", c.timezone())
                         .param("polygon", c.polygonEwkt()).param("priority", c.priority()).param("now", now()).update();
             } catch (DuplicateKeyException duplicate) {
@@ -102,6 +112,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
             if (jdbc.sql("""
                     select exists(select 1 from city other
                                   where other.id <> :id and other.state = 'PUBLISHED' and other.priority = :priority
+                                    and other.service_id = (select service_id from city where id = :id)
                                     and ST_Intersects(other.polygon, ST_GeomFromEWKT(:polygon)))
                     """).param("id", c.id()).param("priority", c.priority()).param("polygon", c.polygonEwkt())
                     .query(Boolean.class).single()) {
@@ -219,6 +230,7 @@ class JdbcGeoConfiguration implements GeoConfiguration {
                 if (city && jdbc.sql("""
                         select exists(select 1 from city candidate join city other on other.id <> candidate.id
                         and other.state = 'PUBLISHED' and other.priority = candidate.priority
+                        and other.service_id = candidate.service_id
                         and ST_Intersects(other.polygon, candidate.polygon) where candidate.id = :id)
                         """).param("id", c.id()).query(Boolean.class).single()) {
                     // Intersects includes shared edges/vertices: ST_Covers would otherwise have a tie there.

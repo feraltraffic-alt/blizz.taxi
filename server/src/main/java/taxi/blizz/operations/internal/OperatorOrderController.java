@@ -131,7 +131,7 @@ class OperatorOrderController {
     @PostMapping("/quotes")
     @ResponseStatus(HttpStatus.CREATED)
     QuoteView quote(AccessClaims claims, @Valid @RequestBody QuoteRequest body) {
-        City city = city(body.pickup());
+        City city = city(claims.serviceId(), body.pickup());
         staff.require(claims.actor(), Orders.CREATE_PERMISSION, city.id());
         VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), body.vehicleClass())
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
@@ -304,8 +304,8 @@ class OperatorOrderController {
                 .optional().orElse(null);
     }
 
-    private City city(GeoPoint point) {
-        return cities.resolve(point).orElseThrow(() ->
+    private City city(UUID serviceId, GeoPoint point) {
+        return cities.resolve(serviceId, point).orElseThrow(() ->
                 new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Pickup is outside every service area"));
     }
 }

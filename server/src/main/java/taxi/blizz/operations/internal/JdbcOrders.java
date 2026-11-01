@@ -79,6 +79,7 @@ class JdbcOrders implements Orders {
     private final taxi.blizz.geo.CityCatalog cityCatalog;
     private final taxi.blizz.finance.FareAccounting accounting;
     private final JdbcRiderObligations obligations;
+    private final taxi.blizz.identity.Services services;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
@@ -87,7 +88,9 @@ class JdbcOrders implements Orders {
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
                FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog,
-               taxi.blizz.finance.FareAccounting accounting, JdbcRiderObligations obligations) {
+               taxi.blizz.finance.FareAccounting accounting, JdbcRiderObligations obligations,
+               taxi.blizz.identity.Services services) {
+        this.services = services;
         this.obligations = obligations;
         this.cityCatalog = cityCatalog;
         this.accounting = accounting;
@@ -118,7 +121,10 @@ class JdbcOrders implements Orders {
 
     @Override
     public OrderView create(Actor actor, UUID commandId, CreateOrder order) {
-        City city = cities.resolve(order.pickup())
+        // Only the cities of the actor's taxi service (ADR 0016): a rider of one service never orders in another's.
+        UUID serviceId = services.of(actor)
+                .orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED, "Not allowed to create orders"));
+        City city = cities.resolve(serviceId, order.pickup())
                 .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Pickup is outside every service area"));
         // The contact is the caller of a phone order, or the person a rider orders for (ADR 0012 Q-03).
         if (order.caller() != null && actor.type() != SubjectType.STAFF && actor.type() != SubjectType.CLIENT) {

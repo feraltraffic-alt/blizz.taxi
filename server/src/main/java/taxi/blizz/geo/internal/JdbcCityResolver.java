@@ -16,13 +16,13 @@ class JdbcCityResolver implements CityResolver {
     }
 
     @Override
-    public Optional<City> resolve(GeoPoint point) {
+    public Optional<City> resolve(java.util.UUID serviceId, GeoPoint point) {
         return jdbc.sql("""
                 select id, code, name, currency, timezone, priority, version
-                from city where state = 'PUBLISHED'
+                from city where state = 'PUBLISHED' and service_id = :service
                 and ST_Covers(polygon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))
                 order by priority desc, code asc limit 1
-                """).param("lat", point.lat()).param("lon", point.lon())
+                """).param("service", serviceId).param("lat", point.lat()).param("lon", point.lon())
                 .query((rs, n) -> new City(rs.getObject("id", java.util.UUID.class), rs.getString("code"),
                         rs.getString("name"), rs.getString("currency"), rs.getString("timezone"),
                         rs.getInt("priority"), rs.getLong("version"))).optional();
