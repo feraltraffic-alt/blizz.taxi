@@ -113,7 +113,7 @@ class JdbcDriverEarnings implements DriverEarnings {
                 .filter(b -> b.currency().equals(city.currency()))
                 .mapToLong(b -> b.creditMinor() - b.debitMinor()).sum();
         return new Earnings(driverId, city.id(), city.currency(), city.timezone(), from, to, days, total.figures(),
-                balance);
+                balance, new taxi.blizz.finance.FareAccounting.Pending(0, 0));
     }
 
     /** Sums one way for a day and for the period. */

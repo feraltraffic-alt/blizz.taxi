@@ -14,9 +14,12 @@ public interface FareCorrections {
 
     String CORRECT_PERMISSION = "fares.correct";
 
-    /** {@code refundState}: NONE, or WAITING_FOR_REFUND_FLOW while a refund obligation waits for #140. */
+    /**
+     * {@code refundState}: NONE, or WAITING_FOR_REFUND_FLOW while a refund obligation waits for #140;
+     * {@code accounting}: POSTED or PENDING for a fare to post, else null (REQ-LED-05).
+     */
     record View(UUID orderId, String currency, int currentVersion, List<FinalFares.Version> versions,
-                long refundObligationMinor, String refundState) {
+                long refundObligationMinor, String refundState, String accounting) {
     }
 
     /** The order's fare for the admin card; {@code Orders.VIEW_PERMISSION} in its city. */

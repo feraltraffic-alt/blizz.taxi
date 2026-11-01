@@ -155,7 +155,7 @@ class JdbcFareCorrections implements FareCorrections {
                 .query(String.class).single().strip();
         long refund = deltas.refundObligation(orderId);
         return new View(orderId, currency, versions.getLast().version(), versions, refund,
-                refund > 0 ? WAITING : "NONE");
+                refund > 0 ? WAITING : "NONE", null);
     }
 
     private UUID cityOf(UUID orderId) {
