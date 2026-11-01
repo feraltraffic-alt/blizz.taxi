@@ -2,6 +2,33 @@
 
 Deployment, backup and restore for client instances: single-instance and high-availability profiles (section 26 of the specification).
 
+## Verifying a release
+
+The server jar is reproducible: the same commit builds the same bytes (REQ-ENG-11, AC-22). The jar's entries carry
+the fixed time `project.build.outputTimestamp` from `server/pom.xml`, not the time of the build. The base images are
+pinned by digest (`scripts/pin-images.sh`) and Maven by the wrapper.
+
+- **Check it.** `scripts/reproducible-build.sh` builds the jar twice, each time from a fresh copy of `server/`, the
+  way the image does (`package` without tests). It prints both sha256 and fails, naming the differing entries, if
+  they are not equal. CI runs it on every commit (job "Reproducible build").
+- **The digest of a release.** It is the sha256 that this job prints for the commit of the release tag. Write it in
+  the release notes of the tag.
+- **Rebuild and compare.**
+
+  ```bash
+  git checkout <tag> && scripts/reproducible-build.sh
+  ```
+
+  Then compare it with the jar inside the deployed image:
+
+  ```bash
+  docker run --rm --entrypoint sha256sum <image> /app/server.jar
+  ```
+
+- **The image digest is not reproducible, only its jar.** Two builds of the image from the same commit put the same
+  jar on the same pinned base. The image config and layer metadata still carry the build's creation time and file
+  times, so the image digest differs. Compare the jar, as above.
+
 ## Production profile
 
 A real instance runs with `SPRING_PROFILES_ACTIVE=prod` (REQ-ENG-13). The profile has no default for any secret, and the server refuses to start, before it touches the database, while anything of development or the sandbox is left. It lists every problem at once, by name, never the value:
