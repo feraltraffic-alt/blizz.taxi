@@ -134,6 +134,7 @@ Real cases from pull requests on this repository: what was handed in, what the r
 - **Missed:**
   - **Two of the four controls were green for the wrong reason.** A lost `STATUS` in a subshell failed the dispatch case in every job, so the outbox case never ran and its control "passed".
   - **The registry test's first drift check was a request sweep** ("a missing operation answers 404"). A contract operation with no server handler still answered 401, because the static-resource handler takes an unknown path and the token check runs first. Only a deliberately added fake operation showed that the check could not see what it claimed.
+  - **A concurrency test that never ran its two calls at once** (#193): `CompletableFuture.supplyAsync` without an executor uses the common pool. On a small CI machine that pool has one worker, so the two "simultaneous" starts ran one after the other. The mutation that removed the lock stayed green. The test now runs on two threads of its own.
 - **Habit:** **a negative control passes only for its own reason.** Check the failure's message, not just the colour, and require the cases before it to pass. **Prove every new check red once on purpose** before you rely on its green.
 
 ## The common thread
