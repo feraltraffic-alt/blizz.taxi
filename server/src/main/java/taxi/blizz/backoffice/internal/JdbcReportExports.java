@@ -298,7 +298,8 @@ class JdbcReportExports implements ReportExports {
     private static Export export(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Export(rs.getObject("id", UUID.class), Kind.valueOf(rs.getString("kind")),
                 rs.getObject("city_id", UUID.class), rs.getObject("date_from", LocalDate.class),
-                rs.getObject("date_to", LocalDate.class), rs.getString("state"), rs.getString("file_name"),
+                rs.getObject("date_to", LocalDate.class), null, null, null, rs.getString("state"),
+                rs.getString("file_name"),
                 (Integer) rs.getObject("row_count"), rs.getString("error"),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("ready_at", OffsetDateTime.class),
                 rs.getObject("expires_at", OffsetDateTime.class));

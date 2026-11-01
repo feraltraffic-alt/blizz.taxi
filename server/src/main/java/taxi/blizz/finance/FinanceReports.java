@@ -24,12 +24,17 @@ public interface FinanceReports {
                    long collectedByDriversMinor, long tipsMinor, long riderDebtChangeMinor) {
     }
 
-    record Day(LocalDate date, Figures figures) {
+    /** {@code fromUtc}/{@code toUtc}: the local day's midnights in UTC; 23 or 25 hours on a DST change. */
+    record Day(LocalDate date, java.time.OffsetDateTime fromUtc, java.time.OffsetDateTime toUtc, Figures figures) {
     }
 
-    /** {@code generatedAt}: when the figures were read (REQ-ADM-06). */
-    record Report(UUID cityId, String currency, String timezone, LocalDate from, LocalDate to, List<Day> days,
-                  Figures total, java.time.OffsetDateTime generatedAt) {
+    /**
+     * {@code generatedAt}: when the figures were read (REQ-ADM-06); {@code fromUtc}/{@code toUtc}: the period in UTC,
+     * the end excluded (REQ-LED-09).
+     */
+    record Report(UUID cityId, String currency, String timezone, LocalDate from, LocalDate to,
+                  java.time.OffsetDateTime fromUtc, java.time.OffsetDateTime toUtc, List<Day> days, Figures total,
+                  java.time.OffsetDateTime generatedAt) {
     }
 
     /** At most 92 days, {@code to} included. */

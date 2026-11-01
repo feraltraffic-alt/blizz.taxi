@@ -98,8 +98,8 @@ class JdbcFinanceReports implements FinanceReports {
             total.add(row);
         }
         List<Day> days = new ArrayList<>();
-        byDay.forEach((day, sums) -> days.add(new Day(day, sums.figures())));
-        return new Report(cityId, city.currency(), city.timezone(), from, to, days, total.figures(),
+        byDay.forEach((day, sums) -> days.add(new Day(day, null, null, sums.figures())));
+        return new Report(cityId, city.currency(), city.timezone(), from, to, null, null, days, total.figures(),
                 OffsetDateTime.now(ZoneOffset.UTC));
     }
 

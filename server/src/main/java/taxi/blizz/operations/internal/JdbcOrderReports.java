@@ -91,12 +91,12 @@ class JdbcOrderReports implements OrderReports {
             }
         }
         List<Day> days = new ArrayList<>();
-        byDay.forEach((day, tally) -> days.add(new Day(day, tally.counts())));
+        byDay.forEach((day, tally) -> days.add(new Day(day, null, null, tally.counts())));
         List<Reason> top = reasons.entrySet().stream()
                 .map(e -> new Reason(e.getKey().split("\\|", 2)[0], e.getKey().split("\\|", 2)[1], e.getValue()))
                 .sorted(Comparator.comparingInt(Reason::count).reversed().thenComparing(Reason::code))
                 .toList();
-        return new Report(cityId, city.timezone(), from, to, days, total.counts(), top,
+        return new Report(cityId, city.timezone(), from, to, null, null, days, total.counts(), top,
                 OffsetDateTime.now(ZoneOffset.UTC));
     }
 
