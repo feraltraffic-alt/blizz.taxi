@@ -27,6 +27,8 @@ class FakeProvider extends WayForPayProvider {
         private final Map<String, Map<String, Object>> statementOverrides = new ConcurrentHashMap<>();
         private final Deque<String> script = new ArrayDeque<>();
         private final Map<String, Deque<String>> byToken = new ConcurrentHashMap<>();
+        /** The card a reference was first charged to: its status checks and refunds follow the card's script. */
+        private final Map<String, String> tokenOfReference = new ConcurrentHashMap<>();
         private final Map<String, String> statusOf = new ConcurrentHashMap<>();
         private final List<Map<String, Object>> requests = new ArrayList<>();
 
@@ -179,6 +181,7 @@ class FakeProvider extends WayForPayProvider {
         synchronized void reset() {
             script.clear();
             byToken.clear();
+            tokenOfReference.clear();
             requests.clear();
         }
 
@@ -203,7 +206,14 @@ class FakeProvider extends WayForPayProvider {
             String account = (String) body.get("merchantAccount");
             String type = (String) body.get("transactionType");
             String reference = (String) body.get("orderReference");
-            Deque<String> ofCard = body.get("recToken") instanceof String token ? byToken.get(token) : null;
+            String cardToken = body.get("recToken") instanceof String token ? token : null;
+            String ref = body.get("orderReference") instanceof String r ? r : null;
+            if (cardToken != null && ref != null) {
+                tokenOfReference.putIfAbsent(ref, cardToken);
+            } else if (ref != null) {
+                cardToken = tokenOfReference.get(ref);
+            }
+            Deque<String> ofCard = cardToken != null ? byToken.get(cardToken) : null;
             String scripted = ofCard != null && !ofCard.isEmpty() ? ofCard.poll() : script.poll();
             if ("TIMEOUT".equals(scripted)) {
                 // The request never reached the bank.

@@ -51,6 +51,12 @@ class FakeGatewayJournalTests {
                 .isEqualTo("Declined");
         assertThat(bank.charge(MERCHANT, "mine-2", "card-a", 500, CUSTOMER, "Tip", null).providerStatus())
                 .as("used once").isEqualTo("Approved");
+
+        // A status check of a reference charged to the card follows the card's script too (it carries no token).
+        gateway.nextForToken("card-a", "TIMEOUT");
+        assertThat(bank.checkStatus(MERCHANT, "mine-2").outcome()).as("the card's TIMEOUT")
+                .isEqualTo(PaymentProvider.Outcome.UNKNOWN);
+        assertThat(bank.checkStatus(MERCHANT, "mine-2").providerStatus()).isEqualTo("Approved");
     }
 
     @Test
