@@ -47,7 +47,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new Orders(3),
             new CashNotReceived(true, 100),
             new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false),
-            new StaffTopUps(Map.of()));
+            new StaffTopUps(Map.of()),
+            new RiderDebts(Map.of()));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -208,8 +209,16 @@ class JdbcServiceSettings implements ServiceSettings {
                         + MAX_DAILY_TOP_UP_MINOR + " minor units");
             }
         });
+        RiderDebts debts = s.riderDebts() == null ? DEFAULTS.riderDebts() : s.riderDebts();
+        debts.allowedMinor().forEach((currency, allowed) -> {
+            if (currency == null || !CURRENCY.matcher(currency).matches() || allowed == null || allowed < 0
+                    || allowed > MAX_DAILY_TOP_UP_MINOR) {
+                throw invalid("Rider debts: allowed_minor maps a currency code (e.g. UAH) to 0.."
+                        + MAX_DAILY_TOP_UP_MINOR + " minor units");
+            }
+        });
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps);
+                orders, cash, versions, topUps, debts);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -262,8 +271,9 @@ class JdbcServiceSettings implements ServiceSettings {
         CashNotReceived cash = s.cashNotReceived() == null ? DEFAULTS.cashNotReceived() : s.cashNotReceived();
         AppVersions versions = s.appVersions() == null ? DEFAULTS.appVersions() : s.appVersions();
         StaffTopUps topUps = s.staffTopUps() == null ? DEFAULTS.staffTopUps() : s.staffTopUps();
+        RiderDebts debts = s.riderDebts() == null ? DEFAULTS.riderDebts() : s.riderDebts();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps);
+                topUps, debts);
     }
 
     private static String color(String value, boolean required) {

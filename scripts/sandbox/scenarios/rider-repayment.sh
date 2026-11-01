@@ -2,7 +2,8 @@
 # REQ-PAY-18, E2 of #140: a rider's debt and its repayment by card. A cash ride is completed and paid; staff raise its
 # final fare by 42.00 (a correction), so the rider owes it. The rider sees the obligation, pays part of it on the
 # provider's page (FAKE in the sandbox), cannot open a second page while one is open, then pays the rest: nothing is
-# owed any more, and the journal holds each repayment once.
+# owed any more, and the journal holds each repayment once. While the debt is open a new order is refused with
+# RIDER_HAS_DEBT; once it is paid the rider orders again (ADR 0014, Q-10).
 source "$(dirname "$0")/../lib.sh"
 
 PICKUP_LAT=50.4501; PICKUP_LON=30.5234
@@ -91,6 +92,23 @@ OWED=$(api GET /api/rider/v1/obligations "$RIDER" | jq --arg o "$ORDER" '[.items
 expect 200
 [[ "$(jq -r .remainder_minor <<<"$OWED")" == 4200 ]] || { note "**Expected 4200 owed, got $OWED.**"; exit 1; }
 
+# new_order — a new cash order of the rider from a fresh quote; prints the answer.
+new_order() {
+    local quote
+    quote=$(api POST /api/rider/v1/quotes "$RIDER" "{\"command_id\":\"$(uuid)\",\"vehicle_class\":\"STANDARD\",
+      \"pickup\":{\"lat\":$PICKUP_LAT,\"lon\":$PICKUP_LON},\"dropoff\":{\"lat\":$DROPOFF_LAT,\"lon\":$DROPOFF_LON}}" \
+      | jq -r .id)
+    expect 201
+    api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",\"quote_id\":\"$quote\",
+      \"vehicle_class\":\"STANDARD\",\"pickup\":{\"lat\":$PICKUP_LAT,\"lon\":$PICKUP_LON},\"pickup_label\":\"Майдан\",
+      \"dropoff\":{\"lat\":$DROPOFF_LAT,\"lon\":$DROPOFF_LON},\"dropoff_label\":\"Вокзал\",\"payment_method\":\"CASH\"}"
+}
+
+say "While the rider owes, a new order is refused at once (owner decision 01.11.2026, ADR 0014)"
+REFUSED=$(new_order)
+expect 403
+[[ "$(jq -r .code <<<"$REFUSED")" == RIDER_HAS_DEBT ]] || { note "**Expected RIDER_HAS_DEBT, got $REFUSED.**"; exit 1; }
+
 # pay PAGE — what the app's web view does: post the page's form to the provider (here the FAKE page).
 pay() {
     local form=()
@@ -143,4 +161,13 @@ wait_paid "$(jq -r .id <<<"$PAGE")"
 wait_remainder ""
 api POST "/api/rider/v1/obligations/$ORDER/payment-sessions" "$RIDER" "{\"command_id\":\"$(uuid)\"}" >/dev/null
 expect 404
-note "Done: order $ORDER owed 42.00, repaid in two card payments."
+
+say "Paid: the rider orders again"
+AGAIN=$(new_order)
+expect 201
+AGAIN_ID=$(jq -r .id <<<"$AGAIN")
+VERSION=$(api GET "/api/rider/v1/orders/$AGAIN_ID" "$RIDER" | jq -r .version)
+api POST "/api/rider/v1/orders/$AGAIN_ID/cancel" "$RIDER" \
+  "{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,\"reason_code\":\"CHANGED_MIND\"}" >/dev/null
+expect 200
+note "Done: order $ORDER owed 42.00, a new order was refused until it was repaid in two card payments."

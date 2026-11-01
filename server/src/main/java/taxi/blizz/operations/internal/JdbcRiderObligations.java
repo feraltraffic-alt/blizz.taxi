@@ -1,7 +1,9 @@
 package taxi.blizz.operations.internal;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -44,7 +46,25 @@ class JdbcRiderObligations implements RiderObligations {
     @Override
     public List<Obligation> list(Actor rider) {
         requireRider(rider);
-        List<RiderDebts.Balance> owed = debts.owedBy(rider.id());
+        return owed(rider.id()).stream()
+                .map(b -> new Obligation(b.orderId(), b.currency(), b.owedMinor(), b.paidMinor(), b.remainderMinor(),
+                        cardTopUps.repaymentsOf(b.orderId())))
+                .toList();
+    }
+
+    /**
+     * What the rider owes in each currency, their obligations summed (ADR 0014): the same remainders the rider sees
+     * in {@link #list}; a payment still under way is not a debt.
+     */
+    Map<String, Long> owedByCurrency(UUID clientId) {
+        Map<String, Long> total = new TreeMap<>();
+        owed(clientId).forEach(b -> total.merge(b.currency(), b.remainderMinor(), Long::sum));
+        return total;
+    }
+
+    /** The rider's journal balances on orders of theirs whose payment has ended, with a remainder. */
+    private List<RiderDebts.Balance> owed(UUID clientId) {
+        List<RiderDebts.Balance> owed = debts.owedBy(clientId);
         if (owed.isEmpty()) {
             return List.of();
         }
@@ -52,12 +72,9 @@ class JdbcRiderObligations implements RiderObligations {
                         select id from ride_order
                         where id in (:ids) and payer_client_id = :rider and payment_state in (:ended)""")
                 .param("ids", owed.stream().map(RiderDebts.Balance::orderId).toList())
-                .param("rider", rider.id()).param("ended", ENDED)
+                .param("rider", clientId).param("ended", ENDED)
                 .query(UUID.class).list());
-        return owed.stream().filter(b -> ended.contains(b.orderId()))
-                .map(b -> new Obligation(b.orderId(), b.currency(), b.owedMinor(), b.paidMinor(), b.remainderMinor(),
-                        cardTopUps.repaymentsOf(b.orderId())))
-                .toList();
+        return owed.stream().filter(b -> ended.contains(b.orderId())).toList();
     }
 
     record RepayRequest(UUID orderId, Long amountMinor) {

@@ -5987,6 +5987,27 @@ components:
                 minimum: 1
                 maximum: 1000000000000
               example: {UAH: 30000000, PLN: 3000000}
+        rider_debts:
+          description: >-
+            How much a rider may owe and still order, per currency (owner decision 01.11.2026, ADR 0014, Q-10). The
+            debt is the sum of the rider's obligations in the currency: what the journal leaves them on orders whose
+            payment has ended, as the rider sees it in the app; a payment still under way is not a debt. Above it a new
+            order is refused at once with 403 RIDER_HAS_DEBT, no grace period; the account state does not change. A
+            currency not listed allows no debt (0); omitted when saving: no debt allowed in any currency.
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            allowed_minor:
+              type: object
+              description: Currency code to the debt that still lets a rider order, in minor units.
+              propertyNames:
+                pattern: "^[A-Z]{3}$"
+              additionalProperties:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 1000000000000
+              example: {UAH: 0, PLN: 1000}
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

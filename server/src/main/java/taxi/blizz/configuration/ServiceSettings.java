@@ -107,6 +107,21 @@ public interface ServiceSettings {
         }
     }
 
+    /**
+     * A rider's confirmed debt that still lets them order, per currency (owner decision 01.11.2026, ADR 0014, Q-10).
+     * Above it a new order is refused at once with RIDER_HAS_DEBT; a currency not listed allows no debt (0).
+     */
+    record RiderDebts(java.util.Map<String, Long> allowedMinor) {
+        public RiderDebts {
+            allowedMinor = allowedMinor == null ? java.util.Map.of() : java.util.Map.copyOf(allowedMinor);
+        }
+
+        /** The debt allowed in the currency: 0 when it is not listed. */
+        public long allowed(String currency) {
+            return allowedMinor.getOrDefault(currency, 0L);
+        }
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -118,7 +133,15 @@ public interface ServiceSettings {
 
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
-                    StaffTopUps staffTopUps) {
+                    StaffTopUps staffTopUps, RiderDebts riderDebts) {
+        /** Source compatibility for callers written before the rider debt limit. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    null);
+        }
+
         /** Source compatibility for callers written before the staff top-up limit. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions) {
