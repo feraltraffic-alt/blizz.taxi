@@ -173,6 +173,7 @@ class RiderErasureTests {
             N rider_wallet_hold: currency state
             N rider_wallet_top_up: currency reason source state
             N safety_contacts: emergency_number extra reason support_phone
+            N service: code name state
             N service_settings: reason settings
             O staff_activity: client_ip path resource_ids staff_login
             N staff_activity: audience kind method outcome role

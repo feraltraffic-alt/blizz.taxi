@@ -122,6 +122,16 @@ class AppVersionTests {
         policy(new AppVersions(p, p, p, p, required));
     }
 
+    /** A driver who exists: a session opens only for an account of a service (ADR 0016). */
+    private Actor newDriver() {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into driver (id, phone_normalized, account_state, created_at, updated_at)
+                        values (:id, :phone, 'ACTIVE', now(), now())""")
+                .param("id", id).param("phone", taxi.blizz.TestPhones.unique("+38067", 7)).update();
+        return new Actor(SubjectType.DRIVER, id);
+    }
+
     private String token(Actor actor) {
         return auth.open(new VerifiedSubject(actor, "ACTIVE", false), "phone").accessToken();
     }
@@ -171,7 +181,7 @@ class AppVersionTests {
     @Test
     void anOutdatedDriverIsRefusedGoingOnlineAndAcceptingAnOffer() throws Exception {
         minimum("2.0.0", false);
-        String driver = token(new Actor(SubjectType.DRIVER, UUID.randomUUID()));
+        String driver = token(newDriver());
         String online = """
                 {"command_id":"%s","vehicle_id":"%s","location":{"lat":-39.5,"lon":77.5,"accuracy_m":5,
                  "recorded_at":"%s","sequence":1}}""".formatted(UUID.randomUUID(), UUID.randomUUID(),
@@ -223,7 +233,7 @@ class AppVersionTests {
     void noOtherRiderOrDriverActionLooksAtTheVersion() throws Exception {
         minimum("9.0.0", true);
         String rider = token(rides.client());
-        String driver = token(new Actor(SubjectType.DRIVER, UUID.randomUUID()));
+        String driver = token(newDriver());
         List<String> checkedPaths = new ArrayList<>();
         List<String> seen = new ArrayList<>();
         for (var entry : mappings.getHandlerMethods().entrySet()) {

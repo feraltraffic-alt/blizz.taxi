@@ -317,7 +317,11 @@ class AuthApiTests {
             assertThat(sessions.verifyAccess((String) first.get("access_token"),
                     audience.equals("CLIENT") ? ApiAudience.RIDER : ApiAudience.DRIVER).orElseThrow().serviceId())
                     .isEqualTo(SVC);
-            // Signing in again in either service finds that service's own account.
+            // Signing in again in either service finds that service's own account (past the resend delay and budget).
+            jdbc.sql("""
+                            update otp_challenge set created_at = created_at - interval '2 hours'
+                            where phone_normalized = :p""")
+                    .param("p", phone).update();
             assertThat(subjectId(signIn(audience, code(other)))).isEqualTo(subjectId(second));
         }
     }
@@ -329,7 +333,7 @@ class AuthApiTests {
         for (String code : List.of("no-such-service", code(suspended))) {
             MvcResult refused = postJson("/auth/v1/otp/challenges",
                     Map.of("audience", "CLIENT", "phone", phone, "device_ref", "test-device", "service", code));
-            assertThat(refused.getResponse().getStatus()).as(code).isEqualTo(422);
+            assertThat(refused.getResponse().getStatus()).as(code).isEqualTo(400);
         }
         assertThat(delivery.codes).as("no code sent").isEmpty();
     }
