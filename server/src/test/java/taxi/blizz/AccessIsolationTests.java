@@ -90,6 +90,7 @@ class AccessIsolationTests {
     @Autowired taxi.blizz.finance.FareDeltas fareDeltas;
     @Autowired taxi.blizz.operations.RiderObligations obligations;
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
+    @Autowired taxi.blizz.platform.internal.OutboxRelay relay;
     @Autowired Preorders preorders;
     @Autowired taxi.blizz.geo.CityOperations cityOperations;
     @Autowired taxi.blizz.geo.GeoConfiguration geography;
@@ -570,6 +571,9 @@ class AccessIsolationTests {
         if (path.contains("/obligations/") || path.contains("/payments/{payment_id}")) {
             // REQ-PAY-18 (#140): the completed ride's fare was raised by a correction, so the rider owes it.
             UUID owed = ids.get("order_id");
+            while (relay.runOnce() > 0) {
+                // the trip's fare reaches the journal first
+            }
             UUID correctionDriver = ownerDriver.driver().actor().id();
             tx.executeWithoutResult(status -> fareDeltas.post(new taxi.blizz.finance.FareDeltas.Delta(owed,
                     UUID.randomUUID(), owner.id(), correctionDriver, false, "UAH", 4_200, 630, 3_570)));
