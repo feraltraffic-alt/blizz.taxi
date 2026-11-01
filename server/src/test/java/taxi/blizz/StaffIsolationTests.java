@@ -372,7 +372,7 @@ class StaffIsolationTests {
     void merchantsAreForStaffOfEveryCity() throws Exception {
         UUID merchant = merchantOf(city);
         Map<String, Object> change = Map.of("command_id", UUID.randomUUID(), "password", PASSWORD,
-                "reason", "Staff isolation probe");
+                "domain", "test.blizz.invalid", "reason", "Staff isolation probe");
         String body = json.writeValueAsString(change);
         String ofTheCity = token(staff(city, EVERY_RIGHT), ApiAudience.ADMIN);
         var before = sideEffects();

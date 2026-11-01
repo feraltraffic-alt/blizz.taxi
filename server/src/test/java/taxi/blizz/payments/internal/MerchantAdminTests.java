@@ -41,9 +41,9 @@ class MerchantAdminTests {
     void setUp() {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, password_hash, created_at,
-                                                updated_at)
-                        values (:id, :login, 'Money', 'ADMIN', :permissions, 'ACTIVE', :hash, now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, password_hash,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Money', 'ADMIN', :permissions, true, 'ACTIVE', :hash, now(), now())""")
                 .param("id", id).param("login", "money-" + id)
                 .param("permissions", new String[] {Integrations.MANAGE_PERMISSION})
                 .param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD)).update();

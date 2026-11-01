@@ -73,8 +73,9 @@ class DriverAdmissionTests {
     private Actor newStaff(String state, String... permissions) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Reviewer', 'ADMIN', :permissions, :state, now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Reviewer', 'ADMIN', :permissions, true, :state, now(), now())""")
                 .param("id", id)
                 .param("login", "staff-" + id)
                 .param("permissions", permissions)
