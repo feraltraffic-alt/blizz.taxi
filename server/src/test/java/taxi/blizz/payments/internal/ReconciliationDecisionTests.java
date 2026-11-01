@@ -49,6 +49,13 @@ class ReconciliationDecisionTests {
     @BeforeEach
     void fixture() {
         merchant=UUID.randomUUID();run=UUID.randomUUID();item=UUID.randomUUID();city1=UUID.randomUUID();city2=UUID.randomUUID();
+        // Real cities of the first service: an "all cities" member's scope lists that service's cities (ADR 0016).
+        for (UUID city:List.of(city1,city2)) jdbc.sql("""
+                insert into city(id,code,name,currency,timezone,polygon,priority,state,created_at,updated_at)
+                values (:id,:code,:code,'UAH','UTC',
+                        ST_GeomFromEWKT('SRID=4326;MULTIPOLYGON(((164 70,165 70,165 71,164 71,164 70)))'),1,'DRAFT',
+                        now(),now())
+                """).param("id",city).param("code","reconciliation-"+city).update();
         jdbc.sql("""
                 insert into payment_merchant(id,provider,account,domain,secret_ref,currency,created_at)
                 values (:id,'FAKE',:account,'example.test','test','UAH',now())
