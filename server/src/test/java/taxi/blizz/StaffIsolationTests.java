@@ -454,7 +454,8 @@ class StaffIsolationTests {
     }
 
     /** Spare cities for operations that change a city: each at its own longitude, far from the test cities. */
-    private static final java.util.concurrent.atomic.AtomicInteger SPARE = new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.atomic.AtomicInteger SPARE =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * The object of one operation of the second part of #201, made in {@code city} — or in a spare city of its own when
