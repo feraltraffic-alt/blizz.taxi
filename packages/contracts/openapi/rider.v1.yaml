@@ -1801,7 +1801,8 @@ components:
       type: object
       additionalProperties: false
       required: [id, vehicle_class, city_id, amount_minor, currency, distance_m, duration_s, route_source,
-                 expires_at, waiting, pickup_at, preorder, discount_minor, to_pay_minor, promotions]
+                 expires_at, waiting, pickup_at, preorder, discount_minor, to_pay_minor, promotions, payment_methods,
+                 card_hold_minor]
       properties:
         id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -1854,6 +1855,26 @@ components:
           type: array
           items:
             $ref: "./promotions.yaml#/components/schemas/AppliedPromotion"
+        payment_methods:
+          description: >-
+            How the payer of this quote may pay an order made from it (REQ-PRC-05), sorted: the methods the city
+            offers, of them CASH and CARD for a rider (CARD only while card payments are switched on) and CASH and
+            TERMINAL for an operator's phone order. Vehicle classes have no payment rule of their own, so every class
+            of the city has the same list. Whether the rider has a saved card is not checked here.
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [CASH, CARD, TERMINAL]
+        card_hold_minor:
+          description: >-
+            What a card order made from this quote holds on the card: to_pay_minor, less the bonuses the rider
+            chooses to use at the order. Null when CARD is not in payment_methods.
+          oneOf:
+            - type: integer
+              format: int64
+              minimum: 0
+            - type: "null"
 
     WaitingTerms:
       description: |
