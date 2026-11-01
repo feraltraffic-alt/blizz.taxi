@@ -76,7 +76,8 @@ class StaffExtensions {
         if (number != null && !number.matches("^[0-9]{2,6}$")) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "An extension is 2 to 6 digits");
         }
-        staff.require(actor, PERMISSION);
+        // The operator's cities, every one of them (owner decision 01.11.2026, #201).
+        staff.requireOverStaff(actor, PERMISSION, staffId);
         if (directory.names(List.of(staffId)).isEmpty()) {
             throw new DomainException(ErrorCode.NOT_FOUND, "Staff member not found");
         }

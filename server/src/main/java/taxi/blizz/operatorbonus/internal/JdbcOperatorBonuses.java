@@ -169,7 +169,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     @Override
     @Transactional(readOnly = true)
     public List<Entry> history(Actor actor, UUID staffId, int limit) {
-        staff.require(actor, MANAGE_PERMISSION);
+        // Entries name orders of the operator's cities: every one of them (owner decision 01.11.2026, #201).
+        staff.requireOverStaff(actor, MANAGE_PERMISSION, staffId);
         return entries(staffId, bounded(limit));
     }
 

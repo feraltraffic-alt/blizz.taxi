@@ -43,6 +43,6 @@ public interface DriverEarnings {
     /** The driver's own; at most 92 days, {@code to} included. */
     Earnings mine(Actor driver, UUID cityId, LocalDate from, LocalDate to);
 
-    /** For staff with {@link DriverBalances#MANAGE_PERMISSION}. */
+    /** For staff with {@link DriverBalances#MANAGE_PERMISSION} for {@code cityId}. */
     Earnings of(Actor staff, UUID driverId, UUID cityId, LocalDate from, LocalDate to);
 }

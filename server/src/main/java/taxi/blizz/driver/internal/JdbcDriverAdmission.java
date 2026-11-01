@@ -321,7 +321,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     public DriverProfile decide(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
                                 ReviewDecision decision, String reason, List<String> vehicleClasses,
                                 List<UUID> rejectedDocuments) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         requireReason(reason);
         List<String> classes = vehicleClasses == null ? List.of() : List.copyOf(vehicleClasses);
         List<UUID> rejected = rejectedDocuments == null ? List.of() : List.copyOf(rejectedDocuments);
@@ -402,7 +402,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     @Override
     public DriverProfile suspend(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason,
                                  UUID riskFlagId) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         requireReason(reason);
         if (riskFlagId != null && !riskFlags.concerns(riskFlagId, driverId)) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The risk flag is not this driver's");
@@ -423,7 +423,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
 
     @Override
     public DriverProfile reinstate(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion, String reason) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         requireReason(reason);
         return commands.execute(new CommandKey(reviewer, "driver.review.reinstate", commandId),
                 new SuspendRequest(driverId, expectedVersion, reason), DriverProfile.class, () -> {
@@ -450,7 +450,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     @Override
     public DriverProfile setPaymentTerminal(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
                                             boolean hasTerminal, String reason) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         requireReason(reason);
         return commands.execute(new CommandKey(reviewer, "driver.payment-terminal", commandId),
                 new TerminalRequest(driverId, expectedVersion, hasTerminal, reason), DriverProfile.class, () -> {
@@ -476,13 +476,18 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     @Override
     public DriverProfile setAdmissionCities(Actor reviewer, UUID commandId, UUID driverId, long expectedVersion,
                                             Set<UUID> cityIds, String reason) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         requireReason(reason);
         if (cityIds == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "city_ids is required");
         }
         // Sorted: the request is hashed for idempotency, and a set's order differs between instances.
         List<UUID> wanted = cityIds.stream().sorted().toList();
+        // Before the command (AGENTS.md): the cities the change would touch now; checked again under the lock below.
+        Set<UUID> current = admissionCities(driverId);
+        List<UUID> touchedNow = new ArrayList<>(wanted.stream().filter(c -> !current.contains(c)).toList());
+        current.stream().filter(c -> !wanted.contains(c)).forEach(touchedNow::add);
+        staff.require(reviewer, REVIEW_PERMISSION, touchedNow.toArray(UUID[]::new));
         return commands.execute(new CommandKey(reviewer, "driver.admission-cities", commandId),
                 new CitiesRequest(driverId, expectedVersion, wanted, reason), DriverProfile.class, () -> {
                     lockVersion(driverId, expectedVersion);
@@ -572,17 +577,25 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     public List<ReviewItem> reviewQueue(Actor reviewer, ReviewStatus status, PageCursor after, int limit) {
         requireReviewer(reviewer);
         ReviewStatus wanted = status == null ? ReviewStatus.IN_REVIEW : status;
+        // Drivers of the reviewer's cities and applicants admitted nowhere yet (owner decision 01.11.2026, #201).
+        var scope = staff.scope(reviewer, REVIEW_PERMISSION);
         return jdbc.sql("""
                         select * from (
                             select d.id, d.name, d.phone_normalized, d.review_status, d.version,
                                    coalesce((select max(e.occurred_at) from driver_review_event e
                                              where e.driver_id = d.id and e.to_status = d.review_status),
                                             d.created_at) as since
-                            from driver d where d.review_status = :status) q
+                            from driver d where d.review_status = :status
+                              and (:all
+                                   or not exists (select 1 from driver_admission_city a where a.driver_id = d.id)
+                                   or exists (select 1 from driver_admission_city a
+                                              where a.driver_id = d.id and a.city_id = any(:cities)))) q
                         where cast(:afterAt as timestamptz) is null
                            or (q.since, q.id) > (:afterAt, cast(:afterId as uuid))
                         order by q.since, q.id limit :limit""")
                 .param("status", wanted.name())
+                .param("all", scope.allCities())
+                .param("cities", scope.cityIds().toArray(UUID[]::new))
                 .param("afterAt", after == null ? null : after.time(0))
                 .param("afterId", after == null ? null : after.id(1))
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
@@ -595,7 +608,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     @Override
     @Transactional(readOnly = true)
     public ReviewCase reviewCase(Actor reviewer, UUID driverId) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         DriverProfile profile = profile(driverId);
         String phone = jdbc.sql("select phone_normalized from driver where id = :id").param("id", driverId)
                 .query(String.class).single();
@@ -617,7 +630,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     @Override
     @Transactional
     public FileContent documentFile(Actor reviewer, UUID driverId, UUID documentId) {
-        requireReviewer(reviewer);
+        requireReviewer(reviewer, driverId);
         UUID fileId = jdbc.sql("select file_id from driver_document where id = :doc and driver_id = :driver")
                 .param("doc", documentId).param("driver", driverId)
                 .query(UUID.class).optional()
@@ -808,6 +821,11 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
 
     private void requireReviewer(Actor actor) {
         staff.require(actor, REVIEW_PERMISSION);
+    }
+
+    /** A reviewer of one of the driver's cities, or any reviewer for an applicant (owner decision 01.11.2026, #201). */
+    private void requireReviewer(Actor actor, UUID driverId) {
+        staff.requireForDriver(actor, REVIEW_PERMISSION, driverId);
     }
 
     private static void requireReason(String reason) {

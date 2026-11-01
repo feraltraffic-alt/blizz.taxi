@@ -149,12 +149,25 @@ class DriverEarningsTests {
                 LocalDate.of(2026, 2, 1)), ErrorCode.ACCESS_DENIED);
         UUID finance = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Finance', 'ADMIN', :permissions, 'ACTIVE', now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, city_scope, state, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Finance', 'ADMIN', :permissions, :scope, 'ACTIVE', now(), now())""")
                 .param("id", finance).param("login", "earnings-" + finance)
-                .param("permissions", new String[]{DriverBalances.MANAGE_PERMISSION}).update();
+                .param("permissions", new String[]{DriverBalances.MANAGE_PERMISSION})
+                .param("scope", new UUID[]{city}).update();
         assertThat(earnings.of(new Actor(SubjectType.STAFF, finance), driver.id(), city, LocalDate.of(2026, 2, 1),
                 LocalDate.of(2026, 2, 1)).total().netMinor()).isZero();
+        // Finance staff of another city read nothing of this city's trips (#201).
+        UUID elsewhere = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, city_scope, state, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Elsewhere', 'ADMIN', :permissions, :scope, 'ACTIVE', now(), now())""")
+                .param("id", elsewhere).param("login", "earnings-" + elsewhere)
+                .param("permissions", new String[]{DriverBalances.MANAGE_PERMISSION})
+                .param("scope", new UUID[]{UUID.randomUUID()}).update();
+        assertCode(() -> earnings.of(new Actor(SubjectType.STAFF, elsewhere), driver.id(), city,
+                LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 1)), ErrorCode.ACCESS_DENIED);
     }
 
     /** A balanced posting at a chosen moment, written as the ledger writes it (the journal is append-only). */

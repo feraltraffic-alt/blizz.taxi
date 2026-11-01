@@ -77,7 +77,7 @@ class JdbcDriverBalances implements DriverBalances {
     @Override
     @Transactional(readOnly = true)
     public Statement of(Actor actor, UUID driverId, PageCursor after, int limit) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForDriver(actor, MANAGE_PERMISSION, driverId);
         requireExists(driverId);
         return statement(driverId, after, limit);
     }
@@ -134,7 +134,7 @@ class JdbcDriverBalances implements DriverBalances {
     @Override
     public Statement topUp(Actor actor, UUID commandId, UUID driverId, String currency, long amountMinor,
                            TopUpKind kind, String reference, String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForDriver(actor, MANAGE_PERMISSION, driverId);
         String why = text(reason, 500, "A reason");
         String ref = reference == null || reference.isBlank() ? null : reference.strip();
         if (kind == null) {

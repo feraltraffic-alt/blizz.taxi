@@ -58,7 +58,8 @@ class JdbcDriverEarnings implements DriverEarnings {
     @Override
     @Transactional(readOnly = true)
     public Earnings of(Actor actor, UUID driverId, UUID cityId, LocalDate from, LocalDate to) {
-        staff.require(actor, DriverBalances.MANAGE_PERMISSION);
+        // The figures are the city's trips: staff of another city read nothing of them (#201).
+        staff.require(actor, DriverBalances.MANAGE_PERMISSION, cityId);
         return earnings(driverId, cityId, from, to);
     }
 

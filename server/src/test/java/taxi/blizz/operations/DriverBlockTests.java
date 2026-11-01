@@ -156,15 +156,18 @@ class DriverBlockTests {
                 OrderView order = rides.order(rides.client(), city, PICKUP, DROPOFF);
                 OfferView offer = dispatch.offers(driver.actor()).getFirst();
                 long version = admission.profile(driver.actor().id()).version();
+                // Each side waits in half of the rounds, so both orders happen however fast either call is.
                 long delay = (round % 4) * 10L;
+                boolean blockWaits = round % 8 < 4;
                 java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
                 java.util.concurrent.Future<AssignmentView> accept = pool.submit(() -> {
                     start.await();
+                    Thread.sleep(blockWaits ? 0 : delay);
                     return dispatch.accept(driver.actor(), driver.device(), UUID.randomUUID(), offer.id());
                 });
                 java.util.concurrent.Future<DriverProfile> block = pool.submit(() -> {
                     start.await();
-                    Thread.sleep(delay);
+                    Thread.sleep(blockWaits ? delay : 0);
                     return blocks.block(reviewer, UUID.randomUUID(), driver.actor().id(), version, "Race");
                 });
                 start.countDown();
