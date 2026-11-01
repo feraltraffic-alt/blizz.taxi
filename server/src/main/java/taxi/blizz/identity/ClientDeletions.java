@@ -38,6 +38,9 @@ public interface ClientDeletions {
     /** Pending requests, oldest first (requested_at, then id), after {@code after} when given (REQ-API-09). */
     List<Pending> pending(PageCursor after, int limit);
 
+    /** {@link #pending(PageCursor, int)} of the taxi service of the staff member {@code within} (ADR 0016). */
+    List<Pending> pending(taxi.blizz.platform.Actor within, PageCursor after, int limit);
+
     Optional<Pending> pending(UUID clientId);
 
     /**

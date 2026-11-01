@@ -43,6 +43,12 @@ class JdbcStaffAccess implements StaffAccess {
     }
 
     @Override
+    public void requireForClient(Actor actor, String permission, UUID clientId) {
+        require(actor, permission);
+        requireSameService(actor, "client", clientId);
+    }
+
+    @Override
     public void requireForDriver(Actor actor, String permission, UUID driverId) {
         require(actor, permission);
         requireSameService(actor, "driver", driverId);

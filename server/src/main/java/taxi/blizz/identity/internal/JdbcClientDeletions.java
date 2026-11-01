@@ -122,11 +122,19 @@ class JdbcClientDeletions implements ClientDeletions {
     @Override
     @Transactional(readOnly = true)
     public List<Pending> pending(PageCursor after, int limit) {
+        return pending(null, after, limit);
+    }
+
+    @Override
+    public List<Pending> pending(taxi.blizz.platform.Actor within, PageCursor after, int limit) {
         var query = jdbc.sql("""
                         select id, deletion_previous_state, deletion_requested_at from client
-                        where account_state = 'DELETION_PENDING'"""
+                        where account_state = 'DELETION_PENDING'
+                          and (cast(:staff as uuid) is null
+                               or service_id = (select service_id from staff_user where id = :staff))"""
                         + (after == null ? "" : " and (deletion_requested_at, id) > (:afterAt, :afterId)")
                         + " order by deletion_requested_at, id limit :limit")
+                .param("staff", within == null ? null : within.id())
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
             query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));

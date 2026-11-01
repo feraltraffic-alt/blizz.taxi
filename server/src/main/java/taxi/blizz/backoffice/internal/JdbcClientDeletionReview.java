@@ -50,7 +50,7 @@ class JdbcClientDeletionReview implements ClientDeletionReview {
     @Transactional(readOnly = true)
     public List<Request> pending(Actor actor, PageCursor after, int limit) {
         staff.require(actor, DELETE_PERMISSION);
-        return deletions.pending(after, limit).stream()
+        return deletions.pending(actor, after, limit).stream()
                 .map(p -> new Request(p.clientId(), p.previousState(), p.requestedAt(), blockers(p.clientId())))
                 .toList();
     }
@@ -60,7 +60,7 @@ class JdbcClientDeletionReview implements ClientDeletionReview {
 
     @Override
     public Decision complete(Actor actor, UUID commandId, UUID clientId, String reason) {
-        staff.require(actor, DELETE_PERMISSION);
+        staff.requireForClient(actor, DELETE_PERMISSION, clientId);
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "client_deletion.complete", commandId),
                 new DecisionRequest(clientId, why), Decision.class, () -> {
@@ -80,7 +80,7 @@ class JdbcClientDeletionReview implements ClientDeletionReview {
 
     @Override
     public Decision reject(Actor actor, UUID commandId, UUID clientId, String reason) {
-        staff.require(actor, DELETE_PERMISSION);
+        staff.requireForClient(actor, DELETE_PERMISSION, clientId);
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "client_deletion.reject", commandId),
                 new DecisionRequest(clientId, why), Decision.class, () -> {

@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import taxi.blizz.identity.AccountDirectory;
+import taxi.blizz.identity.ClientAccounts;
 import taxi.blizz.identity.ClientLookup;
 import taxi.blizz.identity.PhoneNumber;
 import taxi.blizz.identity.StaffAccess;
@@ -30,6 +31,7 @@ class ServiceIsolationTests {
     @Autowired AccountDirectory accounts;
     @Autowired ClientLookup lookup;
     @Autowired StaffAccess staff;
+    @Autowired ClientAccounts clients;
 
     private UUID service(String prefix) {
         UUID id = UUID.randomUUID();
@@ -126,5 +128,20 @@ class ServiceIsolationTests {
                 .as("a city of B in A's scope is dropped").containsExactly(cityA);
         // A city-scoped member of A cannot name B's city either, even if it slipped into the scope.
         denied(() -> staff.require(staff(a, "ADMIN", false, cityA, cityB), "orders.view", cityB));
+    }
+
+    @Test
+    void ridersOfAnotherServiceAreNeitherFoundNorReached() {
+        UUID a = service("iso-a");
+        UUID b = service("iso-b");
+        String phone = TestPhones.unique("+48", 9);
+        UUID riderA = person("client", a, phone);
+        UUID riderB = person("client", b, phone);
+        for (Actor member : new Actor[] {staff(a, "ADMIN", true), staff(a, "SUPER_ADMIN", true)}) {
+            staff.requireForClient(member, "clients.manage", riderA);
+            denied(() -> staff.requireForClient(member, "clients.manage", riderB));
+            assertThat(clients.search(member, phone.substring(phone.length() - 9), 50))
+                    .extracting(ClientAccounts.Client::id).contains(riderA).doesNotContain(riderB);
+        }
     }
 }

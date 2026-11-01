@@ -70,15 +70,17 @@ class JdbcClientAccounts implements ClientAccounts {
         return jdbc.sql(SELECT + (byPhone
                         ? "where account_state <> 'ANONYMIZED' and phone_normalized like :pattern\n"
                         : "where account_state <> 'ANONYMIZED' and lower(name) like :pattern escape '\\'\n")
+                        // Riders of the staff member's own taxi service only (ADR 0016).
+                        + "and service_id = (select service_id from staff_user where id = :staff)\n"
                         + "order by created_at desc, id limit :limit")
-                .param("pattern", pattern).param("limit", Math.max(1, Math.min(limit, 50)))
+                .param("staff", actor.id()).param("pattern", pattern).param("limit", Math.max(1, Math.min(limit, 50)))
                 .query((rs, i) -> client(rs)).list();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Client get(Actor actor, UUID clientId) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForClient(actor, MANAGE_PERMISSION, clientId);
         return find(clientId, false);
     }
 
@@ -94,7 +96,7 @@ class JdbcClientAccounts implements ClientAccounts {
     @Override
     public Client block(Actor actor, UUID commandId, UUID clientId, long expectedVersion, String reason,
                         OffsetDateTime until) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForClient(actor, MANAGE_PERMISSION, clientId);
         String why = reason(reason);
         OffsetDateTime end = until == null ? null : until.withOffsetSameInstant(ZoneOffset.UTC);
         if (end != null && !end.isAfter(now())) {
@@ -130,7 +132,7 @@ class JdbcClientAccounts implements ClientAccounts {
 
     @Override
     public Client unblock(Actor actor, UUID commandId, UUID clientId, long expectedVersion, String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForClient(actor, MANAGE_PERMISSION, clientId);
         String why = reason(reason);
         return commands.execute(new CommandKey(actor, "client.unblock", commandId),
                 new UnblockRequest(clientId, expectedVersion, why), Client.class, () -> {

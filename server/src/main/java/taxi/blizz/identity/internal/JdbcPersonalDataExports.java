@@ -171,7 +171,7 @@ class JdbcPersonalDataExports implements PersonalDataExports {
     @Override
     @Transactional(readOnly = true)
     public List<Export> ofClient(Actor actor, UUID clientId) {
-        staff.require(actor, ClientAccounts.MANAGE_PERMISSION);
+        staff.requireForClient(actor, ClientAccounts.MANAGE_PERMISSION, clientId);
         return list(new Actor(SubjectType.CLIENT, clientId));
     }
 

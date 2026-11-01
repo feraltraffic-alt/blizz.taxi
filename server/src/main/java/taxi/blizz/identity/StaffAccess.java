@@ -55,6 +55,12 @@ public interface StaffAccess {
      */
     void requireOverStaff(Actor actor, String permission, UUID staffId);
 
+    /**
+     * {@link #require} for an action on a rider: a rider of the member's own taxi service only (ADR 0016); riders
+     * have no city, so {@code permission} alone decides within the service.
+     */
+    void requireForClient(Actor actor, String permission, UUID clientId);
+
     /** {@link #require} with every city: for objects that serve several cities at once. */
     void requireEveryCity(Actor actor, String permission);
 

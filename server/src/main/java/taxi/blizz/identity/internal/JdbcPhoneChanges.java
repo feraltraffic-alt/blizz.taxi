@@ -102,7 +102,7 @@ class JdbcPhoneChanges implements PhoneChanges {
     private void requireSupport(Actor actor, Actor subject) {
         requirePerson(subject);
         if (subject.type() == SubjectType.CLIENT) {
-            staff.require(actor, ClientAccounts.MANAGE_PERMISSION);
+            staff.requireForClient(actor, ClientAccounts.MANAGE_PERMISSION, subject.id());
         } else {
             // A driver of one of the staff member's cities (owner decision 01.11.2026, #201).
             staff.requireForDriver(actor, DRIVER_PHONE_PERMISSION, subject.id());
