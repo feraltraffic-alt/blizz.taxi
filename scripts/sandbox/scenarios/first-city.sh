@@ -92,7 +92,7 @@ api POST "/api/admin/v1/cities/$CITY/publish" "$ADMIN" \
   >/dev/null
 expect 200
 OPERATIONS=$(api GET "/api/admin/v1/cities/$CITY/operations" "$ADMIN"); expect 200
-api PUT "/api/admin/v1/cities/$CITY/operations" "$ADMIN" "{\"command_id\":\"$(uuid)\",
+api POST "/api/admin/v1/cities/$CITY/operations" "$ADMIN" "{\"command_id\":\"$(uuid)\",
   \"expected_version\":$(jq -r .version <<<"$OPERATIONS"),\"working_hours\":[],
   \"payment_methods\":[\"CASH\",\"TERMINAL\"],
   \"reason\":\"Sandbox: open around the clock, cash and terminal\"}" >/dev/null
@@ -169,7 +169,8 @@ expect 201
 [[ "$(jq -r .city_id <<<"$QUOTE")" == "$CITY" ]]
 APP_ORDER=$(api POST /api/rider/v1/orders "$RIDER" "{\"command_id\":\"$(uuid)\",
   \"quote_id\":\"$(jq -r .id <<<"$QUOTE")\",\"vehicle_class\":\"STANDARD\",\"pickup\":$PICKUP,
-  \"pickup_label\":\"Pier\",\"dropoff\":$DROPOFF,\"dropoff_label\":\"Station\",\"payment_method\":\"CASH\"}" | jq -r .id)
+  \"pickup_label\":\"Pier\",\"dropoff\":$DROPOFF,\"dropoff_label\":\"Station\",
+  \"payment_method\":\"CASH\"}" | jq -r .id)
 expect 201
 ride "$DRIVER" "$SESSION" "$APP_ORDER"
 
