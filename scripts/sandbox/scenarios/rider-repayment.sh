@@ -99,6 +99,21 @@ pay() {
     note "\`POST $(jq -r .url <<<"$1")\` (the provider's page) → **$(curl -sS -o /dev/null -w '%{http_code}' \
         -X POST "$(jq -r .url <<<"$1")" "${form[@]}")**"
 }
+# remainder — what the rider still owes on the order (empty when nothing).
+remainder() {
+    api GET /api/rider/v1/obligations "$RIDER" \
+        | jq -r --arg o "$ORDER" '[.items[] | select(.order_id == $o)][0].remainder_minor // empty'
+}
+# wait_remainder VALUE — the repayment reaches the journal through the outbox a moment after the payment completes.
+wait_remainder() {
+    local left=""
+    for _ in $(seq 1 20); do
+        left=$(remainder)
+        [[ "$left" == "$1" ]] && return 0
+        sleep 1
+    done
+    note "**Expected ${1:-nothing} left, got ${left:-nothing}.**"; exit 1
+}
 wait_paid() {
     local state=""
     for _ in $(seq 1 20); do
@@ -117,8 +132,7 @@ api POST "/api/rider/v1/obligations/$ORDER/payment-sessions" "$RIDER" "{\"comman
 expect 409
 pay "$PAGE"
 wait_paid "$(jq -r .id <<<"$PAGE")"
-REST=$(api GET /api/rider/v1/obligations "$RIDER" | jq -r --arg o "$ORDER" '[.items[] | select(.order_id == $o)][0].remainder_minor')
-[[ "$REST" == 3000 ]] || { note "**Expected 3000 left, got $REST.**"; exit 1; }
+wait_remainder 3000
 
 say "The rider pays the rest; nothing is owed any more"
 PAGE=$(api POST "/api/rider/v1/obligations/$ORDER/payment-sessions" "$RIDER" "{\"command_id\":\"$(uuid)\"}")
@@ -126,8 +140,7 @@ expect 201
 [[ "$(jq -r .amount_minor <<<"$PAGE")" == 3000 ]]
 pay "$PAGE"
 wait_paid "$(jq -r .id <<<"$PAGE")"
-LEFT=$(api GET /api/rider/v1/obligations "$RIDER" | jq --arg o "$ORDER" '[.items[] | select(.order_id == $o)] | length')
-[[ "$LEFT" == 0 ]] || { note "**The obligation is still listed.**"; exit 1; }
+wait_remainder ""
 api POST "/api/rider/v1/obligations/$ORDER/payment-sessions" "$RIDER" "{\"command_id\":\"$(uuid)\"}" >/dev/null
 expect 404
 note "Done: order $ORDER owed 42.00, repaid in two card payments."
