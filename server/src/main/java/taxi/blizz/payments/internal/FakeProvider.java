@@ -193,6 +193,11 @@ class FakeProvider extends WayForPayProvider {
             byToken.computeIfAbsent(token, ignored -> new ArrayDeque<>()).addAll(List.of(answers));
         }
 
+        /** Drops what is left of a card's answers, so its payments go back to the bank's normal behaviour. */
+        synchronized void clearForToken(String token) {
+            byToken.remove(token);
+        }
+
         @Override
         public synchronized Map<String, Object> post(String url, Map<String, Object> body) throws Exception {
             requests.add(Map.copyOf(body));
