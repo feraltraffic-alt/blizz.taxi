@@ -77,6 +77,31 @@ class SupportAttachmentApiTests {
         city = rides.city("test-support-attachments", "UAH", 175.0);
     }
 
+    /**
+     * Issue #201 (found by the staff city sweep): {@code wait_for_requester} is optional in the contract, so a comment
+     * without it is accepted as "not waiting".
+     */
+    @Test
+    void aStaffCommentWithoutTheOptionalWaitForRequesterIsAccepted() throws Exception {
+        TestRides.Ride ride = rides.assigned(city, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        String riderToken = token(ride.payer());
+        Actor agent = staff("OPERATOR", city, SupportCases.MANAGE_PERMISSION);
+        String operatorToken = auth.openStaff(new VerifiedSubject(agent, "ACTIVE", false), ApiAudience.OPERATOR, null)
+                .accessToken();
+        Map<String, Object> opened = jsonBody(postJson("/api/rider/v1/support/cases", riderToken,
+                Map.of("command_id", UUID.randomUUID(), "category", "APP_PROBLEM", "order_id", ride.order().id(),
+                        "subject", "A question", "message", "Where is my receipt?")), 201);
+        String caseId = (String) opened.get("id");
+        long version = ((Number) jsonBody(getAuth("/api/operator/v1/support/cases/" + caseId, operatorToken), 200)
+                .get("version")).longValue();
+
+        Map<String, Object> commented = jsonBody(postJson("/api/operator/v1/support/cases/" + caseId + "/comments",
+                operatorToken, Map.of("command_id", UUID.randomUUID(), "expected_version", version,
+                        "visibility", "PUBLIC", "body", "We are looking into it")), 200);
+        assertThat(commented.toString()).contains("We are looking into it");
+        assertThat(commented.get("state")).as("not waiting for the requester").isNotEqualTo("WAITING_FOR_REQUESTER");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void supportAttachmentsRespectOwnershipVisibilityReuseAndAudit() throws Exception {
