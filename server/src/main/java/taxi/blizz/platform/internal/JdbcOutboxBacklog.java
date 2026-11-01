@@ -11,11 +11,15 @@ import taxi.blizz.platform.OutboxBacklog;
 @Component
 class JdbcOutboxBacklog implements OutboxBacklog {
 
-    /** Kept as a constant so a test can check its plan. */
+    /**
+     * Kept as a constant so a test can check its plan. The two states are written out with OR: the partial indexes on
+     * PENDING and on FAILED events serve that, while {@code state <> 'DONE'} or {@code state in (...)} scan the whole
+     * outbox, DONE events of weeks included (review of #194).
+     */
     static final String WAITING = """
             select o.event_id, o.occurred_at, o.payload::text
             from outbox o
-            where o.event_type = :type and o.state <> 'DONE'
+            where o.event_type = :type and (o.state = 'PENDING' or o.state = 'FAILED')
               and not exists (select 1 from consumer_inbox i
                               where i.consumer_id = :consumer and i.event_id = o.event_id)
             order by o.occurred_at, o.event_id
