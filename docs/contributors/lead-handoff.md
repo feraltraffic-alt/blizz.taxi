@@ -1,4 +1,4 @@
-# Lead handoff (state on 31.10.2026)
+# Lead handoff (state on 01.11.2026)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -28,12 +28,12 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 
 | Who | Queue (in order) |
 |---|---|
-| Codex | #136 web foundation (branch `codex/136-web-foundation`, no PR yet; idle since 30.10, token limit) → #149 retention layout and line-length ratchet → #140 payments (includes the WayForPay breaker semantics) |
-| Second Claude | #142 done (A–D). The `restore` duplicate check (follow-up of #174) → #176 (M1 registry gaps) → #137 rider app (needs `packages/api-client` from #136) |
-| Lead | #146 done with this PR: parts 1 (#157), 2 (#172), 3 (#175), 4 (M1 registry test). Next: an issue for the L1 findings before L2 (pool, heartbeat cost, outbox relay), then the audit's remaining items |
+| Codex | #136 web foundation (branch `codex/136-web-foundation` at 30bc0b3, no PR; idle since 30.10). The owner said Codex had it nearly done locally, so it stays Codex's until the owner says otherwise |
+| Second Claude | #140 item 4 (PR #194, pending accounting) → then nothing unblocked: #137 rider app needs `packages/api-client` from #136. Asked the owner whether to give #136 to claude2 |
+| Lead | #140 is done but for #194 (items 1, 3: #188; 2: #193; 5: #190; 6: #192). Next: the audit's remaining server items, or what the owner names |
 
-Done since 30.10: #124, #135, #139 (parts 1–3), #141, #143, #144, #145, #142.
-If Codex stays idle, the lead may take #149 or #140 and say so in the issue.
+Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
+(L1 findings: heartbeat, relay, pool), #186 (#112 brought up to date; only Q-19 is left there).
 
 Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
 Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
@@ -76,6 +76,24 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (01.11.2026)
+
+- **#140 payments:**
+  - the card hold deadline (`PAYMENT_TIMEOUT`, #188);
+  - currency fraction digits (#188);
+  - rider obligations and their repayment by card (#193: a card top-up aimed at the order's debt, one page at a time under the order's lock);
+  - report UTC bounds (#190);
+  - quote payment constraints (#192).
+- **Sandbox fake bank:**
+  - `POST /sandbox/v1/bank/next-answers` scripts one rider's cards. A status check or refund of a reference follows the card it was charged to (#189).
+  - `DELETE` clears the script (#191).
+  - Leftover answers once broke `zz-reconciliation` on main; clear them when a scenario is done.
+- **Java line-length ratchet** (#185) runs in CI: no file may gain lines over 120 characters.
+- **Questions to the owner from reviews:**
+  - should a staff password reset ask for the admin's password too (#173);
+  - may wrong confirmation passwords lock the only super admin out (#173);
+  - give #136 to claude2?
 
 ## Recent history (31.10.2026)
 
