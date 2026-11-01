@@ -51,4 +51,7 @@ done
     || { note "**Reason $(jq -r .status_reason <<<"$SHOWN"), not PAYMENT_TIMEOUT.**"; exit 1; }
 [[ "$(jq -r .payment_state <<<"$SHOWN")" == HOLD_RELEASED ]] \
     || { note "**Payment state $(jq -r .payment_state <<<"$SHOWN"), not HOLD_RELEASED.**"; exit 1; }
+# The bank answers normally again, so the hold's release reaches it before the day's reconciliation (zz-reconciliation).
+api DELETE "/sandbox/v1/bank/next-answers?phone=$(jq -rn --arg p "$RIDER_PHONE" '$p|@uri')" >/dev/null
+expect 204
 note "Done: order $ORDER ended PAYMENT_TIMEOUT, its hold released."

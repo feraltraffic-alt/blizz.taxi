@@ -46,8 +46,19 @@ class SandboxBankController {
         if (!ANSWERS.containsAll(body.answers())) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Answers are one of " + ANSWERS);
         }
+        tokensOf(body.phone()).forEach(token -> gateway.nextForToken(token, body.answers().toArray(String[]::new)));
+    }
+
+    /** Drops the answers still queued for the rider's cards: their payments are answered normally again. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/sandbox/v1/bank/next-answers")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void clear(@org.springframework.web.bind.annotation.RequestParam String phone) {
+        tokensOf(phone).forEach(gateway::clearForToken);
+    }
+
+    private List<String> tokensOf(String phone) {
         // The rider through identity's own lookup: payments does not read the client table (module boundary).
-        taxi.blizz.identity.ClientLookup.Client client = clients.byPhone(body.phone()).client();
+        taxi.blizz.identity.ClientLookup.Client client = clients.byPhone(phone).client();
         if (client == null) {
             throw new DomainException(ErrorCode.NOT_FOUND, "No rider with this phone");
         }
@@ -58,6 +69,6 @@ class SandboxBankController {
         if (tokens.isEmpty()) {
             throw new DomainException(ErrorCode.NOT_FOUND, "No saved card for this phone");
         }
-        tokens.forEach(token -> gateway.nextForToken(token, body.answers().toArray(String[]::new)));
+        return tokens;
     }
 }
