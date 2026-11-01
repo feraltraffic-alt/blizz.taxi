@@ -74,7 +74,8 @@ class StaffIsolationTests {
             "audit.view", "calls.answer", "calls.listen", "calls.supervise", "clients.delete", "clients.manage",
             "driver.review", "drivers.delete", "drivers.risk", "fares.correct", "finance.manage", "flags.manage",
             "geo.manage", "integrations.manage", "legal.manage", "orders.cancel", "orders.create",
-            "orders.interrupt", "orders.offer", "orders.reassign", "orders.view", "payments.retry", "pricing.manage",
+            "operator-bonuses.manage", "orders.interrupt", "orders.offer", "orders.reassign", "orders.view",
+            "payments.retry", "pricing.manage",
             "promotions.manage", "reports.view", "retention.manage", "settings.manage", "support.manage",
             "trips.correct", "wallets.manage"};
 
@@ -128,13 +129,34 @@ class StaffIsolationTests {
             "GET /api/operator/v1/operators",
             "GET /api/operator/v1/orders",
             "POST /api/operator/v1/calls/{call_id}/answer",
-            "GET /api/operator/v1/calls/{call_id}/recording"));
+            "GET /api/operator/v1/calls/{call_id}/recording",
+            // A driver admitted only in the city (owner decision 01.11.2026, option 2 in #201).
+            "GET /api/admin/v1/drivers/{driver_id}",
+            "GET /api/admin/v1/drivers/{driver_id}/documents/{document_id}/file",
+            "GET /api/admin/v1/drivers/{driver_id}/balance",
+            "POST /api/admin/v1/drivers/{driver_id}/balance/top-ups",
+            "POST /api/admin/v1/drivers/{driver_id}/block",
+            "POST /api/admin/v1/drivers/{driver_id}/unblock",
+            "POST /api/admin/v1/drivers/{driver_id}/decision",
+            "POST /api/admin/v1/drivers/{driver_id}/payment-terminal",
+            "POST /api/admin/v1/drivers/{driver_id}/phone",
+            "POST /api/admin/v1/drivers/{driver_id}/phone/new-code",
+            "POST /api/admin/v1/drivers/{driver_id}/reinstate",
+            "POST /api/admin/v1/drivers/{driver_id}/suspend",
+            "POST /api/admin/v1/driver-deletions/{driver_id}/complete",
+            "POST /api/admin/v1/driver-deletions/{driver_id}/reject",
+            "PUT /api/admin/v1/drivers/{driver_id}/admission-cities",
+            // An operator of the city (owner decision 01.11.2026 in #201).
+            "POST /api/admin/v1/staff-extensions/{staff_id}",
+            "GET /api/admin/v1/operator-bonuses/{staff_id}/history"));
 
     private static final String RIDER_NO_CITY = "A rider has no city: client operations stay global (owner decision "
             + "30.10.2026 in #112, clients.manage)";
     private static final String SUPER_ADMIN = "Super admin only, by role and not by city (contract: \"Super admin "
             + "only\"); a super admin passes every city check";
     private static final String GLOBAL_SETTING = "A setting of the whole service with no city in it";
+    private static final String MERCHANT = "Staff of every city only (owner decision 01.11.2026 in #201): a merchant "
+            + "serves several cities and holds the service's keys; proven by merchantsAreForStaffOfEveryCity";
 
     /**
      * Not city-scoped, each with its reason (a stale or unreasoned entry fails {@link #everyOperationIsAccounted}).
@@ -173,7 +195,9 @@ class StaffIsolationTests {
             Map.entry("POST /api/admin/v1/settings/cancel-reasons/{reason_id}",
                     GLOBAL_SETTING + ": the cancel reason catalogue"),
             Map.entry("POST /api/admin/v1/settings/driver-transfers/{currency}",
-                    GLOBAL_SETTING + ": a transfer rule per currency"));
+                    GLOBAL_SETTING + ": a transfer rule per currency"),
+            Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/change", MERCHANT),
+            Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/check", MERCHANT));
 
     @Autowired Orders orders;
     @Autowired Dispatch dispatch;
@@ -334,38 +358,38 @@ class StaffIsolationTests {
                 + EXCEPTIONS.size() + " + awaiting a decision " + AWAITING_DECISION.size());
     }
 
-    private static final String DRIVER_SCOPE = "Checks the permission only, not the city: whether staff of one city "
-            + "may act on a driver admitted in another is the owner's question (#201, part 2)";
+    /**
+     * Operations that check the permission and not the city although their object has one, waiting for the owner's
+     * decision. Empty since the decisions of 01.11.2026 (#201); the list stays exact so a new gap is named here.
+     */
+    static final Map<String, String> AWAITING_DECISION = Map.of();
 
     /**
-     * Operations that check the permission and not the city although their object has one; they wait for the owner's
-     * decision on how far a city's staff reach (#201, part 2). The list is exact: a fix moves an operation into the
-     * sweep, and a new operation in neither list fails {@link #everyOperationIsAccounted}.
+     * Owner decision 01.11.2026 (#201): a payment merchant serves several cities and holds the service's keys, so only
+     * staff of every city change or check it; staff of one of its cities are refused and write nothing.
      */
-    static final Map<String, String> AWAITING_DECISION = new java.util.TreeMap<>(Map.ofEntries(
-            Map.entry("GET /api/admin/v1/drivers/{driver_id}", DRIVER_SCOPE),
-            Map.entry("GET /api/admin/v1/drivers/{driver_id}/documents/{document_id}/file", DRIVER_SCOPE),
-            Map.entry("GET /api/admin/v1/drivers/{driver_id}/balance", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/balance/top-ups", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/block", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/unblock", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/decision", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/payment-terminal", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/phone", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/phone/new-code", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/reinstate", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/drivers/{driver_id}/suspend", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/driver-deletions/{driver_id}/complete", DRIVER_SCOPE),
-            Map.entry("POST /api/admin/v1/driver-deletions/{driver_id}/reject", DRIVER_SCOPE),
-            Map.entry("PUT /api/admin/v1/drivers/{driver_id}/admission-cities", DRIVER_SCOPE
-                    + "; today only the cities added or removed are checked, after the version check"),
-            Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/change",
-                    "A merchant serves cities but integrations.manage of any city may change its keys and cities"),
-            Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/check", "Same as changing a merchant"),
-            Map.entry("POST /api/admin/v1/staff-extensions/{staff_id}",
-                    "settings.manage of any city moves the phone extension of another city's operator"),
-            Map.entry("GET /api/admin/v1/operator-bonuses/{staff_id}/history",
-                    "An operator's bonus entries name orders of the operator's cities; read by any city's holder")));
+    @Test
+    void merchantsAreForStaffOfEveryCity() throws Exception {
+        UUID merchant = merchantOf(city);
+        Map<String, Object> change = Map.of("command_id", UUID.randomUUID(), "password", PASSWORD,
+                "reason", "Staff isolation probe");
+        String body = json.writeValueAsString(change);
+        String ofTheCity = token(staff(city, EVERY_RIGHT), ApiAudience.ADMIN);
+        var before = sideEffects();
+        assertThat(perform(post("/api/admin/v1/payment-merchants/" + merchant + "/change")
+                .contentType(MediaType.APPLICATION_JSON).content(body), ofTheCity).getResponse().getStatus())
+                .as("staff of one of the merchant's cities change it").isEqualTo(403);
+        assertThat(perform(post("/api/admin/v1/payment-merchants/" + merchant + "/check"), ofTheCity)
+                .getResponse().getStatus()).as("staff of one of the merchant's cities check it").isEqualTo(403);
+        assertThat(sideEffects()).as("refused: nothing written").isEqualTo(before);
+
+        String everyCity = token(staff(null, EVERY_RIGHT), ApiAudience.ADMIN);
+        int changed = perform(post("/api/admin/v1/payment-merchants/" + merchant + "/change")
+                .contentType(MediaType.APPLICATION_JSON).content(body), everyCity).getResponse().getStatus();
+        assertThat(changed).as("staff of every city reach the change").isIn(200, 422);
+        assertThat(perform(post("/api/admin/v1/payment-merchants/" + merchant + "/check"), everyCity)
+                .getResponse().getStatus()).as("staff of every city check it").isEqualTo(200);
+    }
 
     // ------------------------------------------------------------ fixtures
 
@@ -543,6 +567,35 @@ class StaffIsolationTests {
             values.put("expected_version", flag.get("version"));
         } else if (path.contains("/drivers/{driver_id}/earnings")) {
             ids.put("driver_id", rides.driverNear(PICKUP).actor().id());
+        } else if (path.contains("{driver_id}")) {
+            UUID driver = driverOnlyIn(city);
+            ids.put("driver_id", driver);
+            values.put("expected_version", jdbc.sql("select version from driver where id = :id").param("id", driver)
+                    .query(Long.class).single());
+            values.put("decision", "REQUEST_CHANGES");
+            values.put("currency", "UAH");
+            values.put("amount_minor", 100L);
+            values.put("kind", "DEPOSIT");
+            values.put("has_terminal", true);
+            values.put("phone", "+38099" + (1_000_000 + SPARE.incrementAndGet()));
+            values.put("new_challenge_id", UUID.randomUUID());
+            values.put("new_code", "123456");
+            values.put("city_ids", List.of(city));
+            if (path.contains("{document_id}")) {
+                UUID document = UUID.randomUUID();
+                jdbc.sql("""
+                                insert into driver_document (id, driver_id, type, file_id, created_at)
+                                values (:id, :driver, 'IDENTITY', :file, now())""")
+                        .param("id", document).param("driver", driver)
+                        .param("file", safeFile(new Actor(SubjectType.DRIVER, driver), FilePurpose.DRIVER_DOCUMENT))
+                        .update();
+                ids.put("document_id", document);
+            }
+        } else if (path.contains("{staff_id}")) {
+            Actor operator = staff(city, "calls.answer", "orders.create");
+            ids.put("staff_id", operator.id());
+            values.put("expected_version", 0L);
+            values.put("extension", String.valueOf(7000 + SPARE.incrementAndGet()));
         } else if (path.contains("/reports/exports/")) {
             Map<String, Object> export = postJson("/api/admin/v1/reports/exports", admin,
                     Map.of("command_id", UUID.randomUUID(), "kind", "ORDERS", "city_id", city,
@@ -612,6 +665,18 @@ class StaffIsolationTests {
             ids.put("call_id", call);
         }
         return new Fixture(ids, values, owner, home);
+    }
+
+    /** A driver online near the pickup and admitted only in {@code cityId}. */
+    private UUID driverOnlyIn(UUID cityId) {
+        UUID driver = rides.driverNear(PICKUP).actor().id();
+        jdbc.sql("delete from driver_admission_city where driver_id = :d and city_id <> :c")
+                .param("d", driver).param("c", cityId).update();
+        jdbc.sql("""
+                        insert into driver_admission_city (driver_id, city_id, granted_at) values (:d, :c, now())
+                        on conflict do nothing""")
+                .param("d", driver).param("c", cityId).update();
+        return driver;
     }
 
     /** A city of its own, drawn by staff of every city; published unless {@code published} is false. */
