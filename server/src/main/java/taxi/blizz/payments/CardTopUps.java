@@ -34,4 +34,18 @@ public interface CardTopUps {
 
     /** One of the payer's own top-ups. */
     TopUp topUp(Actor payer, UUID topUpId);
+
+    /**
+     * REQ-PAY-18 (issue #140): a top-up that repays the rider's debt on {@code obligationOrderId} instead of crediting
+     * the bonus account; {@link #COMPLETED} then carries {@code obligation_order_id}. Runs in the caller's
+     * transaction, which must hold the order's lock: STATE_CONFLICT while another page of the same obligation is
+     * open (not yet expired and not yet decided). The amount limits are those of a top-up.
+     */
+    TopUp openRepayment(Actor payer, UUID cityId, UUID obligationOrderId, long amountMinor);
+
+    /** The repayments of an obligation, newest first, without the page's form. */
+    java.util.List<TopUp> repaymentsOf(UUID obligationOrderId);
+
+    /** One of the payer's own repayments; NOT_FOUND for a plain top-up or another payer's. */
+    TopUp repayment(Actor payer, UUID repaymentId);
 }

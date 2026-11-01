@@ -127,6 +127,23 @@ class JdbcCardTopUps implements CardTopUps {
                 .optional().orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Top-up not found"));
     }
 
+    @Override
+    public TopUp openRepayment(Actor payer, UUID cityId, UUID obligationOrderId, long amountMinor) {
+        throw new UnsupportedOperationException("issue #140");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TopUp> repaymentsOf(UUID obligationOrderId) {
+        return List.of();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TopUp repayment(Actor payer, UUID repaymentId) {
+        throw new DomainException(ErrorCode.NOT_FOUND, "Payment not found");
+    }
+
     // ---------------------------------------------------------------- results
 
     private record Locked(UUID id, String accountType, UUID accountId, long amountMinor, String currency,

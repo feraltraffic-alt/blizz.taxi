@@ -1381,6 +1381,86 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/rider/v1/obligations:
+    get:
+      operationId: listRiderObligations
+      summary: What the rider still owes, per order (REQ-PAY-18)
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Orders with a remainder, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "./obligations.yaml#/components/schemas/ObligationList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
+  /api/rider/v1/obligations/{order_id}/payment-sessions:
+    post:
+      operationId: startRiderRepayment
+      summary: Pay what is owed on an order by card (REQ-PAY-18)
+      description: >-
+        Opens the provider's payment page for the remainder (or part of it), as a card top-up does: the app POSTs
+        `fields` to `url` in a web view and reads `GET /api/rider/v1/payments/{payment_id}` until it is no longer
+        PENDING. One page at a time per obligation: while one is open, another is refused with 409 STATE_CONFLICT.
+        The journal posts a repayment once, however often the provider reports it.
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./obligations.yaml#/components/schemas/StartRepayment"
+      responses:
+        "201":
+          description: Started.
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/CardTopUp"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/rider/v1/payments/{payment_id}:
+    get:
+      operationId: getRiderPayment
+      summary: The state of one of the rider's card repayments
+      tags: [Payments]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: PENDING until the provider reports; then COMPLETED, FAILED or EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: "./wallets.yaml#/components/schemas/CardTopUp"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/rider/v1/me/phone-change/current-code:
     post:
       operationId: requestRiderCurrentPhoneCode
@@ -1701,6 +1781,8 @@ tags:
     description: Tips for the driver after the trip (ADR 0012)
   - name: Safety
     description: The safety button — support and emergency contacts (REQ-RID-09)
+  - name: Payments
+    description: What the rider owes after a payment ended, and its repayment by card (REQ-PAY-18).
   - name: Wallet
     description: The bonus account (ADR 0009)
   - name: Push
