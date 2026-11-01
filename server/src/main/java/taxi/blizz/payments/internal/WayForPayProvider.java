@@ -419,11 +419,7 @@ class WayForPayProvider implements PaymentProvider {
     }
 
     static int digits(String currency) {
-        int digits = java.util.Currency.getInstance(currency).getDefaultFractionDigits();
-        if (digits < 0) {
-            throw new IllegalArgumentException("Currency " + currency + " has no minor unit");
-        }
-        return digits;
+        return 2; // mutation: a fixed two digits
     }
 
     private static String text(Object value) {
