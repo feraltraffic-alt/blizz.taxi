@@ -217,15 +217,6 @@ class RiderObligationTests {
         assertThatThrownBy(() -> obligations.payment(stranger, page.id())).isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
 
-        // A cash ride paid in full owes nothing: not listed, no page.
-        TestRides.Driver driver = rides.driverNear(PICKUP);
-        TestRides.Ride paid = rides.started(cityId, driver, PICKUP, DROPOFF);
-        rides.complete(paid, true);
-        drain();
-        assertThat(obligation(paid.payer(), paid.order().id())).isNull();
-        assertThatThrownBy(() -> obligations.startRepayment(paid.payer(), UUID.randomUUID(), paid.order().id(), null))
-                .isInstanceOf(DomainException.class).extracting(e -> ((DomainException) e).code())
-                .isEqualTo(ErrorCode.NOT_FOUND);
     }
 
     @Test
@@ -235,5 +226,10 @@ class RiderObligationTests {
         assertThat(obligation(ride.payer(), ride.order().id())).as("in progress").isNull();
         rides.complete(ride, true);
         drain();
+        // A cash ride paid in full owes nothing: not listed, no page.
+        assertThat(obligation(ride.payer(), ride.order().id())).as("paid in full").isNull();
+        assertThatThrownBy(() -> obligations.startRepayment(ride.payer(), UUID.randomUUID(), ride.order().id(), null))
+                .isInstanceOf(DomainException.class).extracting(e -> ((DomainException) e).code())
+                .isEqualTo(ErrorCode.NOT_FOUND);
     }
 }

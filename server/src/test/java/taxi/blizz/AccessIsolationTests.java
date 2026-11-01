@@ -87,6 +87,9 @@ class AccessIsolationTests {
     @Autowired QuoteService quotes;
     @Autowired FileService files;
     @Autowired CardTopUps topUps;
+    @Autowired taxi.blizz.finance.FareDeltas fareDeltas;
+    @Autowired taxi.blizz.operations.RiderObligations obligations;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @Autowired Preorders preorders;
     @Autowired taxi.blizz.geo.CityOperations cityOperations;
     @Autowired taxi.blizz.geo.GeoConfiguration geography;
@@ -563,6 +566,16 @@ class AccessIsolationTests {
         }
         if (path.contains("card-top-ups/")) {
             ids.put("top_up_id", topUps.start(owner, UUID.randomUUID(), city, 10_000).id());
+        }
+        if (path.contains("/obligations/") || path.contains("/payments/{payment_id}")) {
+            // REQ-PAY-18 (#140): the completed ride's fare was raised by a correction, so the rider owes it.
+            UUID owed = ids.get("order_id");
+            UUID correctionDriver = ownerDriver.driver().actor().id();
+            tx.executeWithoutResult(status -> fareDeltas.post(new taxi.blizz.finance.FareDeltas.Delta(owed,
+                    UUID.randomUUID(), owner.id(), correctionDriver, false, "UAH", 4_200, 630, 3_570)));
+            if (path.contains("/payments/{payment_id}")) {
+                ids.put("payment_id", obligations.startRepayment(owner, UUID.randomUUID(), owed, 1_000L).id());
+            }
         }
         if (path.contains("/data-exports/")) {
             UUID export = UUID.randomUUID();
