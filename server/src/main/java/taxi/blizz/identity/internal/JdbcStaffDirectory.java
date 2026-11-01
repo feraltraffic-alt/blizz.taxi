@@ -203,9 +203,14 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember resetPassword(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion,
-                                     String temporaryPassword, String reason) {
+                                     String temporaryPassword, String reason, String password) {
         requireSuperAdmin(superAdmin);
         reason(reason);
+        // A malformed request is refused before the password is asked, so it never counts as a failed one.
+        passwords.check(read(staffId).login(), temporaryPassword);
+        // A reset hands the account over: the acting super admin's own password (owner decision 01.11.2026, #173).
+        rightsPassword.confirm(superAdmin, password, "staff.resetPassword", "staff_user", staffId.toString(), reason,
+                java.util.Map.of("password_reset", true));
         return commands.execute(new CommandKey(superAdmin, "staff.resetPassword", commandId),
                 new ChangeRequest(staffId, expectedVersion, reason), StaffMember.class, () -> {
                     StaffMember before = locked(staffId, expectedVersion);

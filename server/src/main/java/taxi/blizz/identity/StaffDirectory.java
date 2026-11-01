@@ -58,9 +58,12 @@ public interface StaffDirectory {
 
     StaffMember restore(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, String reason);
 
-    /** A temporary password the member must change; signs the member out everywhere. */
+    /**
+     * A temporary password the member must change; signs the member out everywhere. {@code password}: the acting super
+     * admin's own (REQ-ADM-10), since a reset hands the account over.
+     */
     StaffMember resetPassword(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion,
-                              String temporaryPassword, String reason);
+                              String temporaryPassword, String reason, String password);
 
     List<StaffMember> list(Actor superAdmin);
 

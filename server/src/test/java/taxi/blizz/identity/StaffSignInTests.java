@@ -293,9 +293,16 @@ class StaffSignInTests {
                 .getResponse().getStatus()).isEqualTo(200);
         assertThat(directory.get(superAdmin, member.id()).state()).isEqualTo("ACTIVE");
         Map<String, Object> reset = Map.of("command_id", UUID.randomUUID(), "expected_version", version + 2,
-                "temporary_password", "temporary-password-456", "reason", "Reset through HTTP");
+                "temporary_password", "temporary-password-456", "reason", "Reset through HTTP",
+                "password", SUPER_PASSWORD);
         assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/reset-password", observerToken, reset)
                 .getResponse().getStatus()).isEqualTo(403);
+        Map<String, Object> withoutPassword = new java.util.HashMap<>(reset);
+        withoutPassword.remove("password");
+        withoutPassword.put("command_id", UUID.randomUUID());
+        assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/reset-password", root, withoutPassword)
+                .getResponse().getStatus()).as("a reset without the super admin's password").isEqualTo(403);
+        jdbc.sql("update staff_user set failed_sign_ins = 0 where id = :id").param("id", superAdmin.id()).update();
         assertThat(postJson("/api/admin/v1/staff/" + member.id() + "/reset-password", root, reset)
                 .getResponse().getStatus()).isEqualTo(200);
         assertThat(signIn.signIn(member.login(), "temporary-password-456", ApiAudience.ADMIN, null, null)
@@ -424,10 +431,41 @@ class StaffSignInTests {
 
         StaffMember restored = directory.restore(superAdmin, UUID.randomUUID(), member.id(), suspended.version(), "Back");
         StaffMember reset = directory.resetPassword(superAdmin, UUID.randomUUID(), member.id(), restored.version(),
-                "temporary-pass-789", "Forgot the password");
+                "temporary-pass-789", "Forgot the password", SUPER_PASSWORD);
         assertThat(reset.passwordChangeRequired()).isTrue();
         assertThat(signIn.signIn(login, "temporary-pass-789", ApiAudience.OPERATOR, null, null).passwordChangeRequired()).isTrue();
         assertCode(() -> signIn.signIn(login, "susp-password-123", ApiAudience.OPERATOR, null, null), ErrorCode.UNAUTHENTICATED);
+    }
+
+    /** A reset hands the account over: the acting super admin's own password (owner decision 01.11.2026, #173). */
+    @Test
+    void aPasswordResetNeedsTheSuperAdminsOwnPassword() {
+        String login = uniqueLogin("reset");
+        StaffMember member = operator(login, "reset-password-123", "orders.view");
+        jdbc.sql("update staff_user set must_change_password = false where id = :id").param("id", member.id()).update();
+        StaffMember current = directory.get(superAdmin, member.id());
+        StaffSignIn.Result session = signIn.signIn(login, "reset-password-123", ApiAudience.OPERATOR, null, null);
+
+        assertCode(() -> directory.resetPassword(superAdmin, UUID.randomUUID(), member.id(), current.version(),
+                "taken-over-456", "Take it", null), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> directory.resetPassword(superAdmin, UUID.randomUUID(), member.id(), current.version(),
+                "taken-over-456", "Take it", "not-the-password"), ErrorCode.ACCESS_DENIED);
+
+        assertThat(directory.get(superAdmin, member.id())).as("nothing changed").isEqualTo(current);
+        assertThat(sessions.refresh(session.session().refreshToken()).accessToken())
+                .as("the member is not signed out").isNotBlank();
+        assertCode(() -> signIn.signIn(login, "taken-over-456", ApiAudience.OPERATOR, null, null),
+                ErrorCode.UNAUTHENTICATED);
+        assertThat(failedSignIns(superAdmin)).as("both counted like failed sign-ins").isEqualTo(2);
+        assertThat(denied("staff.resetPassword.denied", member.id().toString())).as("audited although refused")
+                .isEqualTo(2);
+
+        StaffMember reset = directory.resetPassword(superAdmin, UUID.randomUUID(), member.id(), current.version(),
+                "temporary-pass-456", "Forgot the password", SUPER_PASSWORD);
+        assertThat(reset.passwordChangeRequired()).isTrue();
+        assertThat(failedSignIns(superAdmin)).as("the right password resets the count").isZero();
+        assertThat(signIn.signIn(login, "temporary-pass-456", ApiAudience.OPERATOR, null, null)
+                .passwordChangeRequired()).isTrue();
     }
 
     // ------------------------------------------------------------ the super admin's rules
