@@ -20,15 +20,20 @@ public interface OrderReports {
                   Map<String, Integer> byPayment, Map<String, Integer> cancelledBy) {
     }
 
-    record Day(LocalDate date, Counts counts) {
+    /** {@code fromUtc}/{@code toUtc}: the local day's midnights in UTC; 23 or 25 hours on a DST change. */
+    record Day(LocalDate date, java.time.OffsetDateTime fromUtc, java.time.OffsetDateTime toUtc, Counts counts) {
     }
 
     /** A cancellation reason and how often it was given in the period, most frequent first. */
     record Reason(String cancelledBy, String code, int count) {
     }
 
-    /** {@code generatedAt}: when the figures were read (REQ-ADM-06). */
-    record Report(UUID cityId, String timezone, LocalDate from, LocalDate to, List<Day> days, Counts total,
+    /**
+     * {@code generatedAt}: when the figures were read (REQ-ADM-06); {@code fromUtc}/{@code toUtc}: the period in UTC,
+     * the end excluded (REQ-LED-09).
+     */
+    record Report(UUID cityId, String timezone, LocalDate from, LocalDate to, java.time.OffsetDateTime fromUtc,
+                  java.time.OffsetDateTime toUtc, List<Day> days, Counts total,
                   List<Reason> cancellationReasons, java.time.OffsetDateTime generatedAt) {
     }
 

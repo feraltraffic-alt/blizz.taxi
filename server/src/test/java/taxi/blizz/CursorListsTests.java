@@ -123,9 +123,11 @@ class CursorListsTests {
         for (int i = 0; i < 3; i++) {
             UUID id = UUID.randomUUID();
             jdbc.sql("""
-                            insert into report_export (id, kind, city_id, date_from, date_to, requested_by, state,
-                                                       created_at)
-                            values (:id, 'ORDERS', :city, date '2026-10-01', date '2026-10-02', :by, 'PENDING', :at)""")
+                            insert into report_export (id, kind, city_id, date_from, date_to, timezone, from_utc,
+                                                       to_utc, requested_by, state, created_at)
+                            values (:id, 'ORDERS', :city, date '2026-10-01', date '2026-10-02', 'UTC',
+                                    timestamptz '2026-10-01 00:00Z', timestamptz '2026-10-03 00:00Z', :by, 'PENDING',
+                                    :at)""")
                     .param("id", id).param("city", UUID.randomUUID()).param("by", clerk.id()).param("at", FUTURE)
                     .update();
             made.add(id);

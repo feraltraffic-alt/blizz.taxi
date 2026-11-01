@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.backoffice.ReportExports;
 import taxi.blizz.finance.FinanceReports;
+import taxi.blizz.geo.CityCatalog;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffPermissions;
 import taxi.blizz.operations.OrderReports;
@@ -50,27 +52,29 @@ class JdbcReportExports implements ReportExports {
     private final AuditLog audit;
     private final OrderReports orderReports;
     private final FinanceReports financeReports;
+    private final CityCatalog cities;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final Duration keep;
 
     JdbcReportExports(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
-                      OrderReports orderReports, FinanceReports financeReports, TransactionTemplate tx, Clock clock,
-                      @Value("${blizz.reports.export-keep:PT24H}") Duration keep) {
+                      OrderReports orderReports, FinanceReports financeReports, CityCatalog cities,
+                      TransactionTemplate tx, Clock clock, @Value("${blizz.reports.export-keep:PT24H}") Duration keep) {
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
         this.audit = audit;
         this.orderReports = orderReports;
         this.financeReports = financeReports;
+        this.cities = cities;
         this.tx = tx;
         this.clock = clock;
         this.keep = keep;
     }
 
     private static final String SELECT = """
-            select id, kind, city_id, date_from, date_to, state, file_name, row_count, error, created_at, ready_at,
-                   expires_at
+            select id, kind, city_id, date_from, date_to, timezone, from_utc, to_utc, state, file_name, row_count,
+                   error, created_at, ready_at, expires_at
             from report_export
             """;
 
@@ -90,12 +94,19 @@ class JdbcReportExports implements ReportExports {
         return commands.execute(new CommandKey(actor, "report.export", commandId),
                 new Request(kind, cityId, from, to), Export.class, () -> {
                     UUID id = UUID.randomUUID();
+                    String timezone = cities.timezone(cityId)
+                            .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "City not found"));
+                    ZoneId zone = ZoneId.of(timezone);
                     jdbc.sql("""
-                                    insert into report_export (id, kind, city_id, date_from, date_to, requested_by,
-                                                               state, created_at)
-                                    values (:id, :kind, :city, :from, :to, :by, 'PENDING', :now)""")
+                                    insert into report_export (id, kind, city_id, date_from, date_to, timezone,
+                                                               from_utc, to_utc, requested_by, state, created_at)
+                                    values (:id, :kind, :city, :from, :to, :timezone, :fromUtc, :toUtc, :by,
+                                            'PENDING', :now)""")
                             .param("id", id).param("kind", kind.name()).param("city", cityId).param("from", from)
-                            .param("to", to).param("by", actor.id()).param("now", now()).update();
+                            .param("to", to).param("timezone", timezone)
+                            .param("fromUtc", from.atStartOfDay(zone).toOffsetDateTime())
+                            .param("toUtc", to.plusDays(1).atStartOfDay(zone).toOffsetDateTime())
+                            .param("by", actor.id()).param("now", now()).update();
                     audit.record(new AuditEntry(actor, "report.export.request", "report_export", id.toString(),
                             null, null, Map.of("kind", kind.name(), "city_id", cityId.toString(),
                             "from", from.toString(), "to", to.toString())));
@@ -240,19 +251,19 @@ class JdbcReportExports implements ReportExports {
     static final List<String> CANCELLERS = List.of("RIDER", "DRIVER", "STAFF");
 
     static Csv orders(OrderReports.Report report) {
-        List<Object> header = new ArrayList<>(List.of("date", "created", "fulfilled", "cancelled", "unfulfilled",
-                "open"));
+        List<Object> header = new ArrayList<>(List.of("date", "from_utc", "to_utc", "created", "fulfilled",
+                "cancelled", "unfulfilled", "open"));
         CHANNELS.forEach(c -> header.add("channel_" + c.toLowerCase()));
         PAYMENTS.forEach(p -> header.add("payment_" + p.toLowerCase()));
         CANCELLERS.forEach(c -> header.add("cancelled_by_" + c.toLowerCase()));
         Csv csv = new Csv().row(header);
-        report.days().forEach(d -> csv.row(orderRow(d.date().toString(), d.counts())));
-        return csv.row(orderRow("total", report.total()));
+        report.days().forEach(d -> csv.row(orderRow(d.date().toString(), d.fromUtc(), d.toUtc(), d.counts())));
+        return csv.row(orderRow("total", report.fromUtc(), report.toUtc(), report.total()));
     }
 
-    private static List<Object> orderRow(String label, OrderReports.Counts c) {
-        List<Object> row = new ArrayList<>(List.of(label, c.created(), c.fulfilled(), c.cancelled(), c.unfulfilled(),
-                c.open()));
+    private static List<Object> orderRow(String label, OffsetDateTime from, OffsetDateTime to, OrderReports.Counts c) {
+        List<Object> row = new ArrayList<>(List.of(label, utc(from), utc(to), c.created(), c.fulfilled(),
+                c.cancelled(), c.unfulfilled(), c.open()));
         CHANNELS.forEach(k -> row.add(c.byChannel().getOrDefault(k, 0)));
         PAYMENTS.forEach(k -> row.add(c.byPayment().getOrDefault(k, 0)));
         CANCELLERS.forEach(k -> row.add(c.cancelledBy().getOrDefault(k, 0)));
@@ -260,20 +271,27 @@ class JdbcReportExports implements ReportExports {
     }
 
     static Csv money(FinanceReports.Report report) {
-        Csv csv = new Csv().row(List.of("date", "currency", "trips", "fares", "service_rides", "commission",
-                "driver_share", "discounts", "bonuses_granted", "paid_by_card", "paid_with_bonuses",
+        Csv csv = new Csv().row(List.of("date", "from_utc", "to_utc", "currency", "trips", "fares", "service_rides",
+                "commission", "driver_share", "discounts", "bonuses_granted", "paid_by_card", "paid_with_bonuses",
                 "collected_by_drivers", "tips", "rider_debt_change"));
-        report.days().forEach(d -> csv.row(moneyRow(d.date().toString(), report.currency(), d.figures())));
-        return csv.row(moneyRow("total", report.currency(), report.total()));
+        report.days().forEach(d -> csv.row(moneyRow(d.date().toString(), d.fromUtc(), d.toUtc(), report.currency(),
+                d.figures())));
+        return csv.row(moneyRow("total", report.fromUtc(), report.toUtc(), report.currency(), report.total()));
     }
 
-    private static List<Object> moneyRow(String label, String currency, FinanceReports.Figures f) {
-        return List.of(label, currency, f.trips(), Csv.major(f.faresMinor(), currency),
+    private static List<Object> moneyRow(String label, OffsetDateTime from, OffsetDateTime to, String currency,
+                                         FinanceReports.Figures f) {
+        return List.of(label, utc(from), utc(to), currency, f.trips(), Csv.major(f.faresMinor(), currency),
                 Csv.major(f.serviceRidesMinor(), currency), Csv.major(f.commissionMinor(), currency),
                 Csv.major(f.driverShareMinor(), currency), Csv.major(f.discountsMinor(), currency),
                 Csv.major(f.bonusesGrantedMinor(), currency), Csv.major(f.paidByCardMinor(), currency),
                 Csv.major(f.paidWithBonusesMinor(), currency), Csv.major(f.collectedByDriversMinor(), currency),
                 Csv.major(f.tipsMinor(), currency), Csv.major(f.riderDebtChangeMinor(), currency));
+    }
+
+    /** ISO-8601 in UTC with seconds, for example 2026-10-24T21:00:00Z. */
+    private static String utc(OffsetDateTime at) {
+        return at.toInstant().toString();
     }
 
     // ---------------------------------------------------------------- helpers
@@ -298,7 +316,9 @@ class JdbcReportExports implements ReportExports {
     private static Export export(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Export(rs.getObject("id", UUID.class), Kind.valueOf(rs.getString("kind")),
                 rs.getObject("city_id", UUID.class), rs.getObject("date_from", LocalDate.class),
-                rs.getObject("date_to", LocalDate.class), rs.getString("state"), rs.getString("file_name"),
+                rs.getObject("date_to", LocalDate.class), rs.getString("timezone"),
+                rs.getObject("from_utc", OffsetDateTime.class), rs.getObject("to_utc", OffsetDateTime.class),
+                rs.getString("state"), rs.getString("file_name"),
                 (Integer) rs.getObject("row_count"), rs.getString("error"),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("ready_at", OffsetDateTime.class),
                 rs.getObject("expires_at", OffsetDateTime.class));

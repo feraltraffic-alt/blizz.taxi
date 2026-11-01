@@ -23,8 +23,11 @@ for _ in $(seq 1 20); do
 done
 [[ "$STATE" == COMPLETED ]] || { note "**The card was not added.**"; exit 1; }
 
-say "The bank will take the hold but its answer never comes"
-api POST /sandbox/v1/bank/next-answers "" "{\"phone\":\"$RIDER_PHONE\",\"answers\":[\"LOST_ANSWER\"]}" >/dev/null
+say "The bank will take the hold, but neither its answer nor its status checks come back"
+# The hold is taken but its answer is lost, and the bank does not answer the status checks either, so the order is
+# still waiting when the deadline comes (otherwise a check that finds the hold lets the search start in time).
+ANSWERS='"LOST_ANSWER","TIMEOUT","TIMEOUT","TIMEOUT","TIMEOUT","TIMEOUT","TIMEOUT","TIMEOUT","TIMEOUT"'
+api POST /sandbox/v1/bank/next-answers "" "{\"phone\":\"$RIDER_PHONE\",\"answers\":[$ANSWERS]}" >/dev/null
 expect 204
 
 say "The rider orders by card: the order waits for the hold"
@@ -48,4 +51,7 @@ done
     || { note "**Reason $(jq -r .status_reason <<<"$SHOWN"), not PAYMENT_TIMEOUT.**"; exit 1; }
 [[ "$(jq -r .payment_state <<<"$SHOWN")" == HOLD_RELEASED ]] \
     || { note "**Payment state $(jq -r .payment_state <<<"$SHOWN"), not HOLD_RELEASED.**"; exit 1; }
+# The bank answers normally again, so the hold's release reaches it before the day's reconciliation (zz-reconciliation).
+api DELETE "/sandbox/v1/bank/next-answers?phone=$(jq -rn --arg p "$RIDER_PHONE" '$p|@uri')" >/dev/null
+expect 204
 note "Done: order $ORDER ended PAYMENT_TIMEOUT, its hold released."

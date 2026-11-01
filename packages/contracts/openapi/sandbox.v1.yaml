@@ -65,6 +65,20 @@ paths:
           description: Invalid request.
         "404":
           description: No rider or no saved card for this phone.
+    delete:
+      operationId: sandboxClearBankAnswers
+      summary: Drop the answers still queued for one rider's saved cards
+      tags: [Sandbox]
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        "204":
+          description: Cleared; the cards' payments are answered normally again.
+        "404":
+          description: No rider or no saved card for this phone.
   /sandbox/v1/sms:
     get:
       operationId: sandboxObserveSms
