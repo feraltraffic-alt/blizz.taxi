@@ -10,7 +10,8 @@ LON=$(( 100 + RANDOM % 60 ))
 LAT_S=-61; LAT_N=-60
 PICKUP="{\"lat\":-60.5,\"lon\":$LON.5}"
 DROPOFF="{\"lat\":-60.45,\"lon\":$LON.55}"
-TODAY=$(date -u +%F)
+# The city's own date (Europe/Kyiv): near midnight UTC the city is already on the next day.
+TODAY=$(TZ=Europe/Kyiv date +%F)
 CITY=""; DRIVER=""
 
 cleanup() {
