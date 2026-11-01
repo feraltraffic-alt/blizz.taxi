@@ -91,10 +91,13 @@ public interface Orders {
         }
     }
 
-    /** One order found; {@code driverId} is the driver of the latest assignment. */
+    /**
+     * One order found; {@code driverId} is the driver of the latest assignment; {@code accounting}: POSTED or PENDING
+     * for a fulfilled order with a fare to post, else null (REQ-LED-05).
+     */
     record Found(UUID id, long shortNumber, UUID cityId, String status, String channel, OffsetDateTime createdAt,
                  UUID payerClientId, UUID driverId, String vehicleClass, String paymentMethod, Long priceMinor,
-                 Long finalPriceMinor, String currency) {
+                 Long finalPriceMinor, String currency, String accounting) {
     }
 
     /**

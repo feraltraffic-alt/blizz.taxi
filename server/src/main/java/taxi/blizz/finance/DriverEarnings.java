@@ -32,9 +32,12 @@ public interface DriverEarnings {
     record Day(LocalDate date, Figures figures) {
     }
 
-    /** {@code balanceMinor}: the balance now, whatever the period; negative — the driver owes the service. */
+    /**
+     * {@code balanceMinor}: the balance now, whatever the period; negative — the driver owes the service.
+     * {@code pending}: trips completed but not in the journal yet, now (REQ-LED-05); their share is not counted yet.
+     */
     record Earnings(UUID driverId, UUID cityId, String currency, String timezone, LocalDate from, LocalDate to,
-                    List<Day> days, Figures total, long balanceMinor) {
+                    List<Day> days, Figures total, long balanceMinor, FareAccounting.Pending pending) {
     }
 
     /** The driver's own; at most 92 days, {@code to} included. */

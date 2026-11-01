@@ -113,6 +113,17 @@ api GET "/api/admin/v1/reports/orders?city_id=5a000000-0000-4000-8000-0000000000
 REPORT=$(api GET "/api/admin/v1/reports/finance?city_id=5a000000-0000-4000-8000-000000000001&from=$TODAY&to=$TODAY" \
   "$ADMIN"); expect 200
 (( $(jq .total.trips <<<"$REPORT") >= 1 ))
+say "The trip's fare is in the journal: POSTED, and nothing waits (REQ-LED-05, #140 E4)"
+for _ in $(seq 1 20); do
+    FARE=$(api GET "/api/admin/v1/orders/$ORDER/fare" "$ADMIN"); expect 200
+    [[ "$(jq -r .accounting <<<"$FARE")" == POSTED ]] && break
+    sleep 1
+done
+note "accounting: \`$(jq -r .accounting <<<"$FARE")\`"
+[[ "$(jq -r .accounting <<<"$FARE")" == POSTED ]]
+WAITING=$(api GET "/api/admin/v1/finance/pending-postings?city_id=5a000000-0000-4000-8000-000000000001" "$ADMIN")
+expect 200
+[[ "$(jq --arg o "$ORDER" '[.trips[] | select(.order_id == $o)] | length' <<<"$WAITING")" == 0 ]]
 OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 api GET "/api/operator/v1/orders/$ORDER/events" "$OPERATOR" >/dev/null; expect 200
 api GET "/api/operator/v1/drivers/live?city_id=5a000000-0000-4000-8000-000000000001" "$OPERATOR" >/dev/null; expect 200

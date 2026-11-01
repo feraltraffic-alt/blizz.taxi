@@ -73,3 +73,24 @@ tests:
       - eval_time: 440m
         alertname: HeldCaptureNearHoldExpiry
         exp_alerts: []
+
+  # A trip's posting waits from minute 0: the gauge counts it from 60 s; past 600 s and two more minutes the alert
+  # fires; the retry posts it at minute 20 and the gauge falls to 0 (issue #140, E4).
+  - interval: 1m
+    input_series:
+      - series: 'blizz_finance_postings_pending_oldest_seconds'
+        values: '0 60+60x18 0x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: TripPostingLate
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: TripPostingLate
+        exp_alerts:
+          - exp_labels: {severity: warning, owner: finance-oncall}
+            exp_annotations:
+              summary: "A completed trip's fare has not been posted to the journal for more than 10 minutes"
+              runbook: docs/runbooks/ledger.md
+      - eval_time: 25m
+        alertname: TripPostingLate
+        exp_alerts: []

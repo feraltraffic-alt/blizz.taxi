@@ -48,9 +48,12 @@ class JdbcFareCorrections implements FareCorrections {
     private final FareDeltas deltas;
     private final OrderCore core;
     private final Clock clock;
+    private final taxi.blizz.finance.FareAccounting accounting;
 
     JdbcFareCorrections(JdbcClient jdbc, StaffAccess staff, StaffSignIn signIn, IdempotentCommands commands,
-                        AuditLog audit, FinalFares fares, FareDeltas deltas, OrderCore core, Clock clock) {
+                        AuditLog audit, FinalFares fares, FareDeltas deltas, OrderCore core, Clock clock,
+                        taxi.blizz.finance.FareAccounting accounting) {
+        this.accounting = accounting;
         this.jdbc = jdbc;
         this.staff = staff;
         this.signIn = signIn;
@@ -151,11 +154,18 @@ class JdbcFareCorrections implements FareCorrections {
         if (versions.isEmpty()) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "The order has no final fare yet");
         }
-        String currency = jdbc.sql("select currency from ride_order where id = :id").param("id", orderId)
-                .query(String.class).single().strip();
+        record Order(String currency, boolean owesPosting) {
+        }
+        Order order = jdbc.sql("""
+                        select currency, status = 'FULFILLED' and coalesce(final_price_minor, 0) > 0
+                        from ride_order where id = :id""")
+                .param("id", orderId).query((rs, i) -> new Order(rs.getString(1).strip(), rs.getBoolean(2))).single();
         long refund = deltas.refundObligation(orderId);
-        return new View(orderId, currency, versions.getLast().version(), versions, refund,
-                refund > 0 ? WAITING : "NONE");
+        // REQ-LED-05: a fare to post is PENDING until the journal has it.
+        String posting = !order.owesPosting() ? null
+                : accounting.posted(List.of(orderId)).isEmpty() ? "PENDING" : "POSTED";
+        return new View(orderId, order.currency(), versions.getLast().version(), versions, refund,
+                refund > 0 ? WAITING : "NONE", posting);
     }
 
     private UUID cityOf(UUID orderId) {
