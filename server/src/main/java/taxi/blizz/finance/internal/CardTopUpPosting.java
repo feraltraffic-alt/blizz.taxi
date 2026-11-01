@@ -16,16 +16,20 @@ class CardTopUpPosting implements OutboxHandler {
 
     private final JdbcRiderWallets wallets;
     private final JdbcDriverBalances balances;
+    private final taxi.blizz.finance.Ledger ledger;
     private final JsonMapper json;
 
-    CardTopUpPosting(JdbcRiderWallets wallets, JdbcDriverBalances balances, JsonMapper json) {
+    CardTopUpPosting(JdbcRiderWallets wallets, JdbcDriverBalances balances, taxi.blizz.finance.Ledger ledger,
+                     JsonMapper json) {
         this.wallets = wallets;
         this.balances = balances;
+        this.ledger = ledger;
         this.json = json;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Completed(UUID topUpId, String accountType, UUID accountId, long amountMinor, String currency) {
+    record Completed(UUID topUpId, String accountType, UUID accountId, long amountMinor, String currency,
+                     UUID obligationOrderId) {
     }
 
     @Override
@@ -41,6 +45,18 @@ class CardTopUpPosting implements OutboxHandler {
     @Override
     public void handle(OutboxMessage message) {
         Completed c = json.readValue(message.payload(), Completed.class);
+        if (c.obligationOrderId() != null) {
+            // A repayment of the rider's debt on an order (REQ-PAY-18, issue #140): the money the provider took pays
+            // their receivable of that order, once per repayment (the business key), not the bonus account.
+            ledger.post(new taxi.blizz.finance.Ledger.Posting("debt-repayment:" + c.topUpId(), "CARD_PAYMENT",
+                    c.obligationOrderId(), c.currency(), "Rider's debt on the order repaid by card",
+                    java.util.List.of(
+                            taxi.blizz.finance.Ledger.Line.debit(taxi.blizz.finance.Ledger.Account.PROVIDER_CLEARING,
+                                    null, c.amountMinor()),
+                            taxi.blizz.finance.Ledger.Line.credit(taxi.blizz.finance.Ledger.Account.RIDER_RECEIVABLE,
+                                    c.accountId(), c.amountMinor()))));
+            return;
+        }
         switch (c.accountType()) {
             case "CLIENT" -> wallets.creditCardTopUp(c.accountId(), c.topUpId(), c.currency(), c.amountMinor());
             case "DRIVER" -> balances.creditCardTopUp(c.accountId(), c.topUpId(), c.currency(), c.amountMinor());

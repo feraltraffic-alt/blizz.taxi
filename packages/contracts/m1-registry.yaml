@@ -58,9 +58,10 @@ rows:
       - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/cards}
       - {contract: rider.v1.yaml, method: post, path: "/api/rider/v1/cards/{card_id}/remove"}
   - row: "Rider | GET /payments/{id}; POST /obligations/{id}/payment-sessions"
-    missing:
-      - {what: "GET /payments/{id}", reason: "The rider cannot yet see a payment or debt; added with the obligation record.", ref: "#140"}
-      - {what: "POST /obligations/{id}/payment-sessions", reason: "Card repayment of a rider debt is not in the contract yet.", ref: "#140"}
+    operations:
+      - {contract: rider.v1.yaml, method: get, path: "/api/rider/v1/payments/{payment_id}"}
+      - {contract: rider.v1.yaml, method: post, path: "/api/rider/v1/obligations/{order_id}/payment-sessions"}
+      - {contract: rider.v1.yaml, method: get, path: /api/rider/v1/obligations}
   - row: "Rider | POST /support-cases"
     operations:
       - {contract: rider.v1.yaml, method: post, path: /api/rider/v1/support/cases}

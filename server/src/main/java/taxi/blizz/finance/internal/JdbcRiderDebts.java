@@ -27,12 +27,27 @@ class JdbcRiderDebts implements RiderDebts {
     @Override
     @Transactional(readOnly = true)
     public List<Balance> owedBy(UUID payerClientId) {
-        return List.of();
+        return jdbc.sql(BALANCES + """
+
+                        group by t.basis_id, t.currency
+                        having sum(l.debit_minor) - sum(l.credit_minor) > 0
+                        order by last_at desc""")
+                .param("payer", payerClientId)
+                .query((rs, i) -> new Balance(rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
+                        rs.getLong(4)))
+                .list();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<Balance> of(UUID payerClientId, UUID orderId) {
-        return Optional.empty();
+        return jdbc.sql(BALANCES + """
+
+                          and t.basis_id = :order
+                        group by t.basis_id, t.currency""")
+                .param("payer", payerClientId).param("order", orderId)
+                .query((rs, i) -> new Balance(rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
+                        rs.getLong(4)))
+                .list().stream().findFirst();
     }
 }
