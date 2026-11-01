@@ -14,8 +14,9 @@ import taxi.blizz.platform.DomainException;
 /**
  * Changes of staff rights, and a reset of another member's password, which hands the account over (#173), ask
  * for the acting staff member's own password (REQ-ADM-10, issue #142), as merchant and integration changes do. A
- * missing or wrong password is counted like a failed sign-in ({@link StaffSignIn}) and the refused attempt is audited as {@code <action>.denied} in a transaction of its own, so the refusal keeps the trace.
- * Call before the command's own transaction.
+ * missing or wrong password is counted like a failed sign-in ({@link StaffSignIn}) and the refused attempt is
+ * audited as {@code <action>.denied} in a transaction of its own, so the refusal keeps the trace. Call before the
+ * command's own transaction.
  */
 @Component
 class RightsPassword {
