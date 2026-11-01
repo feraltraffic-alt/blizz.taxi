@@ -377,7 +377,7 @@ class JdbcOrders implements Orders {
         }
         ServiceSettings.RiderDebts limits = settings.current().settings().riderDebts();
         obligations.owedByCurrency(account).forEach((currency, owed) -> {
-            if (owed > limits.allowed(currency)) {
+            if (owed >= limits.allowed(currency)) { // mutation M2
                 throw new DomainException(ErrorCode.RIDER_HAS_DEBT, "The rider owes " + owed + " " + currency
                         + "; new orders after it is paid");
             }
