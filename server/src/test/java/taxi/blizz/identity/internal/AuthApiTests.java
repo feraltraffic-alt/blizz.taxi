@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import taxi.blizz.TestcontainersConfiguration;
+import taxi.blizz.identity.ApiAudience;
 import taxi.blizz.identity.OtpAudience;
 import taxi.blizz.identity.OtpDelivery;
 import taxi.blizz.identity.PhoneNumber;
@@ -48,6 +49,12 @@ class AuthApiTests {
     CapturingDelivery delivery;
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    AuthProperties properties;
+    @Autowired
+    taxi.blizz.identity.SessionService sessions;
+    @Autowired
+    java.time.Clock clock;
 
     MockMvc mvc;
     String phone;
@@ -106,6 +113,35 @@ class AuthApiTests {
         assertThat(body(me)).containsEntry("subject_type", "CLIENT")
                 .containsEntry("account_state", "ACTIVE")
                 .containsEntry("session_id", session.get("session_id"));
+    }
+
+    /**
+     * Issue #197 (AC-27): a token signed with the server's own key for a real client, but whose session was never
+     * issued or is gone, is refused; the codec alone accepts it, so only the missing session refuses it.
+     */
+    @Test
+    void aCorrectlySignedTokenWithoutItsSessionIsRefused() throws Exception {
+        Map<String, Object> session = signIn("CLIENT");
+        @SuppressWarnings("unchecked")
+        UUID clientId = UUID.fromString((String) ((Map<String, Object>) session.get("subject")).get("id"));
+        taxi.blizz.platform.Actor client = new taxi.blizz.platform.Actor(taxi.blizz.platform.SubjectType.CLIENT,
+                clientId);
+        AccessTokenCodec codec = new AccessTokenCodec(properties.accessTokenSecret(), properties.instanceId(),
+                properties.accessTtl(), clock);
+
+        String neverIssued = codec.sign(client, ApiAudience.RIDER, UUID.randomUUID()).token();
+        assertThat(codec.verify(neverIssued, ApiAudience.RIDER)).as("signed correctly").isPresent();
+        assertThat(sessions.verifyAccess(neverIssued, ApiAudience.RIDER)).isEmpty();
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", neverIssued));
+
+        UUID sessionId = UUID.fromString((String) session.get("session_id"));
+        String ofTheRealSession = codec.sign(client, ApiAudience.RIDER, sessionId).token();
+        assertThat(getWithToken("/api/rider/v1/me", ofTheRealSession).getResponse().getStatus())
+                .as("the control: the same token for the real session works").isEqualTo(200);
+        jdbc.sql("delete from refresh_token where session_id = :id").param("id", sessionId).update();
+        jdbc.sql("delete from device_session where id = :id").param("id", sessionId).update();
+        assertThat(sessions.verifyAccess(ofTheRealSession, ApiAudience.RIDER)).isEmpty();
+        assertUnauthenticated(getWithToken("/api/rider/v1/me", ofTheRealSession));
     }
 
     @Test
