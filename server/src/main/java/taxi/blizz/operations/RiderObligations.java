@@ -9,7 +9,8 @@ import taxi.blizz.platform.Actor;
  * A rider's obligations and their repayment by card (REQ-PAY-18, issue #140). An obligation is an order of the rider
  * whose payment has ended (paid, partly paid, cash or terminal reported) and on which the journal still has a
  * remainder for them. It is paid on the provider's page, like a card top-up; one page at a time per obligation.
- * Whether an open obligation blocks new orders is the owner's question Q-10: it does not.
+ * Owed above the service's rider_debts limit for the currency, the rider gets no new orders until they pay
+ * (owner decision 01.11.2026, ADR 0014, Q-10): 403 RIDER_HAS_DEBT.
  */
 public interface RiderObligations {
 

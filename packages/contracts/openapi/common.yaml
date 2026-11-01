@@ -118,6 +118,10 @@ components:
         sends codes to (Poland and Ukraine by default); nothing is sent and no challenge is stored.
         CHARGEBACK_NOT_ALLOWED (422): a chargeback larger than what is left of the order's card payment (its
         captures, charges and tips, less earlier chargebacks not won back), or on an order not paid by card.
+        RIDER_HAS_DEBT (403): a new order, from the app or by an operator for a caller whose phone has a rider
+        account, while the rider's confirmed debt in a currency is above the settings' rider_debts limit (owner
+        decision 01.11.2026, ADR 0014): nothing is created and the quote is not used. The account stays ACTIVE; the
+        rider sees the debt and pays it in the app, and may order again at once.
         TOP_UP_DAILY_LIMIT (422): a staff top-up of a driver balance or a rider wallet would take the staff member
         over the service's staff_top_ups limit for the currency in the last 24 hours; nothing is credited.
         ACCOUNT_BLOCKED (403): a blocked driver's limited session (REQ-DS-01, issue #141) allows every GET but the
@@ -165,6 +169,7 @@ components:
         - UNAUTHENTICATED
         - ACCESS_DENIED
         - ACCOUNT_NOT_ACTIVE
+        - RIDER_HAS_DEBT
         - ACCOUNT_BLOCKED
         - ACCEPTANCE_REQUIRED
         - DRIVER_HAS_ACTIVE_WORK

@@ -78,6 +78,7 @@ class JdbcOrders implements Orders {
 
     private final taxi.blizz.geo.CityCatalog cityCatalog;
     private final taxi.blizz.finance.FareAccounting accounting;
+    private final JdbcRiderObligations obligations;
 
     JdbcOrders(JdbcClient jdbc, IdempotentCommands commands, CityResolver cities, OrderCore core,
                DispatchEngine engine, VehicleClasses classes, QuoteService quotes, StaffAccess staff,
@@ -86,7 +87,8 @@ class JdbcOrders implements Orders {
                AccountDirectory accounts, Calls calls, LegalDocuments legal,
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
                FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog,
-               taxi.blizz.finance.FareAccounting accounting) {
+               taxi.blizz.finance.FareAccounting accounting, JdbcRiderObligations obligations) {
+        this.obligations = obligations;
         this.cityCatalog = cityCatalog;
         this.accounting = accounting;
 
@@ -173,7 +175,7 @@ class JdbcOrders implements Orders {
                 () -> {
             UUID id = UUID.randomUUID();
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint, id);
-            requireBelowLimit(order);
+            requireNoDebt(requireBelowLimit(order));
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
             // The discount of promotions comes first (ADR 0009); bonuses pay at most what is left.
@@ -321,7 +323,7 @@ class JdbcOrders implements Orders {
      * together; a caller without an account is limited by the phone. App and phone orders of the same person take
      * the same lock to the end of the transaction, so two creations at the limit never both pass.
      */
-    private void requireBelowLimit(CreateOrder order) {
+    private UUID requireBelowLimit(CreateOrder order) {
         UUID account;
         String phone;
         if (order.payerClientId() != null) {
@@ -332,7 +334,7 @@ class JdbcOrders implements Orders {
             phone = caller.e164();
             account = accounts.clientByPhone(caller).orElse(null);
         } else {
-            return;
+            return null;
         }
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
                 .param("key", account != null ? "order-account:" + account : "order-phone:" + phone)
@@ -361,6 +363,25 @@ class JdbcOrders implements Orders {
             throw new DomainException(ErrorCode.ACTIVE_ORDER_LIMIT,
                     "At most " + limit + " active orders at a time, orders for later included");
         }
+        return account;
+    }
+
+    /**
+     * No new order while the rider owes more than the service allows in a currency (owner decision 01.11.2026,
+     * ADR 0014, Q-10): at once, no grace period. The rider is the payer of an app order or the account of a phone
+     * order's caller; a caller without an account owes nothing. The account state is not changed (REQ-USR-17).
+     */
+    private void requireNoDebt(UUID account) {
+        if (account == null) {
+            return;
+        }
+        ServiceSettings.RiderDebts limits = settings.current().settings().riderDebts();
+        obligations.owedByCurrency(account).forEach((currency, owed) -> {
+            if (owed > limits.allowed(currency)) {
+                throw new DomainException(ErrorCode.RIDER_HAS_DEBT, "The rider owes " + owed + " " + currency
+                        + "; new orders after it is paid");
+            }
+        });
     }
 
     /** Decides the channel from who is asking; the requested channel is accepted only where it fits. */

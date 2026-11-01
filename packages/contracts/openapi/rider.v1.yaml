@@ -349,7 +349,9 @@ paths:
         price is the quote's, never the client's. A repeat of the same command returns the same order. A card order
         is 202: it waits in AWAITING_PAYMENT for the bank's hold before the search (ADR 0008, REQ-API-11). At most active_orders_per_payer orders not in a final state, pre-orders
         included, together with phone orders from my phone (ADR 0012) → 409 ACTIVE_ORDER_LIMIT. A rider whose
-        account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE.
+        account is not ACTIVE (e.g. a deletion request is pending) → 403 ACCOUNT_NOT_ACTIVE. A rider who owes more
+        than the settings' rider_debts limit in a currency (their obligations, see /obligations) → 403 RIDER_HAS_DEBT,
+        until it is paid (ADR 0014).
         The pickup city refuses new orders while paused (422 CITY_PAUSED), an order for now outside its working hours or
         one for later whose pickup time is outside them (422 CITY_CLOSED), and a payment method it does not offer
         (422 PAYMENT_METHOD_NOT_OFFERED); see the cities in the bootstrap (REQ-TEN-03/06).

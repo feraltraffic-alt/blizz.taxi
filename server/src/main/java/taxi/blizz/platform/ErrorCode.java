@@ -57,6 +57,8 @@ public enum ErrorCode {
     ACCESS_DENIED(403),
     /** A new order for a rider whose account is not ACTIVE, e.g. with a pending deletion request (issue #56). */
     ACCOUNT_NOT_ACTIVE(403),
+    /** A new order for a rider whose confirmed debt is above the service's rider_debts limit (ADR 0014, Q-10). */
+    RIDER_HAS_DEBT(403),
     /** A command outside the limited session of a blocked driver (REQ-DS-01, issue #141). */
     ACCOUNT_BLOCKED(403),
     /** A legal text in force that must be accepted is not (REQ-PRV-08). */
