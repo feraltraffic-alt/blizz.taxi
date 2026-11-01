@@ -175,7 +175,7 @@ class JdbcOrders implements Orders {
                 () -> {
             UUID id = UUID.randomUUID();
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint, id);
-            requireNoDebt(requireBelowLimit(order));
+            requireBelowLimit(order); // mutation M1: no debt check
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
             // The discount of promotions comes first (ADR 0009); bonuses pay at most what is left.
