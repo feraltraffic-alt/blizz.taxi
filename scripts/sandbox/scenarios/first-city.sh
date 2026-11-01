@@ -4,6 +4,7 @@
 # deferred by the owner). The city is archived at the end. FIRST_CITY_SKIP_APPROVAL=1 is the negative control: the
 # driver is not approved, and going online must be refused.
 source "$(dirname "$0")/../lib.sh"
+FIRST_CITY_SKIP_APPROVAL=1   # NEGATIVE CONTROL for #200, never merged
 
 ADMIN=$(admin_token)
 LON=$(( 100 + RANDOM % 60 ))
