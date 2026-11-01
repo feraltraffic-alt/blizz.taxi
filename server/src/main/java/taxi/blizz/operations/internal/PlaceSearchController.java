@@ -97,7 +97,7 @@ class PlaceSearchController {
         City city = city(claims.serviceId(), near);
         staff.require(operator, Orders.CREATE_PERMISSION, city.id());
         Optional<UUID> caller = callerPhone == null || callerPhone.isBlank() ? Optional.empty()
-                : accounts.clientByPhone(PhoneNumber.parse(callerPhone));
+                : accounts.clientByPhone(claims.serviceId(), PhoneNumber.parse(callerPhone));
         return search(operator.id(), caller, city, query, language, near, limit);
     }
 

@@ -79,7 +79,9 @@ class CallLiveFeed implements OutboxHandler {
         Set<UUID> available = operators.available(holders);
         Set<UUID> to = available.isEmpty() ? holders : available;
         UUID client = call.callerPhone() == null ? null
-                : accounts.clientByPhone(new PhoneNumber(call.callerPhone())).orElse(null);
+                // The caller in the taxi service of the number dialled (its line's city), never another (ADR 0016).
+                : call.serviceId() == null ? null
+                : accounts.clientByPhone(call.serviceId(), new PhoneNumber(call.callerPhone())).orElse(null);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("call_id", call.id().toString());
         payload.put("city_id", call.cityId() == null ? null : call.cityId().toString());

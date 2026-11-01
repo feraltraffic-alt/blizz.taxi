@@ -59,7 +59,7 @@ public interface Calls {
      */
     record Call(UUID id, Direction direction, Party party, State state, String callerPhone, String calledNumber,
                 UUID cityId, UUID answeredBy, List<UUID> orderIds, OffsetDateTime startedAt,
-                OffsetDateTime answeredAt, OffsetDateTime endedAt, Recording recording) {
+                OffsetDateTime answeredAt, OffsetDateTime endedAt, Recording recording, UUID serviceId) {
         public Call {
             orderIds = orderIds == null ? List.of() : List.copyOf(orderIds);
         }

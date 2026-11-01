@@ -47,8 +47,10 @@ class SandboxPushController {
                       OffsetDateTime after) {
         PhoneNumber number = PhoneNumber.parse(phone);
         Set<String> tokens = new HashSet<>();
-        accounts.clientByPhone(number).ifPresent(id -> tokens.addAll(tokens(SubjectType.CLIENT, id)));
-        accounts.driverByPhone(number).ifPresent(id -> tokens.addAll(tokens(SubjectType.DRIVER, id)));
+        // The sandbox's first service (ADR 0016); the scenarios sign in there.
+        java.util.UUID first = taxi.blizz.identity.Services.DEFAULT_ID;
+        accounts.clientByPhone(first, number).ifPresent(id -> tokens.addAll(tokens(SubjectType.CLIENT, id)));
+        accounts.driverByPhone(first, number).ifPresent(id -> tokens.addAll(tokens(SubjectType.DRIVER, id)));
         if (tokens.isEmpty()) {
             return List.of();
         }

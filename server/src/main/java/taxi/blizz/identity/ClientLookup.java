@@ -18,7 +18,10 @@ public interface ClientLookup {
     /**
      * {@code phone} must already be a full E.164 number of a served country, with as many digits as its numbers
      * have: anything else (spaces, a prefix, a missing "+", a name) is VALIDATION_FAILED. An anonymized or deleted
-     * account is not found.
+     * account is not found. Only the account of the taxi service {@code serviceId} (ADR 0016).
      */
-    Lookup byPhone(String phone);
+    Lookup byPhone(java.util.UUID serviceId, String phone);
+
+    /** {@link #byPhone(java.util.UUID, String)} in the taxi service of the staff member {@code within}. */
+    Lookup byPhone(taxi.blizz.platform.Actor within, String phone);
 }

@@ -181,7 +181,7 @@ class JdbcOrders implements Orders {
                 () -> {
             UUID id = UUID.randomUUID();
             QuoteService.Quote quote = quotes.consume(order.quoteId(), actor, fingerprint, id);
-            requireNoDebt(requireBelowLimit(order));
+            requireNoDebt(requireBelowLimit(serviceId, order));
             // Bonuses never pay more than the price; what is left is paid in cash or by card (ADR 0009 p. 3). A card
             // order the bonuses pay in full needs no hold: whatever the trip adds is paid in cash.
             // The discount of promotions comes first (ADR 0009); bonuses pay at most what is left.
@@ -329,7 +329,7 @@ class JdbcOrders implements Orders {
      * together; a caller without an account is limited by the phone. App and phone orders of the same person take
      * the same lock to the end of the transaction, so two creations at the limit never both pass.
      */
-    private UUID requireBelowLimit(CreateOrder order) {
+    private UUID requireBelowLimit(UUID serviceId, CreateOrder order) {
         UUID account;
         String phone;
         if (order.payerClientId() != null) {
@@ -338,21 +338,22 @@ class JdbcOrders implements Orders {
         } else if (order.caller() != null) {
             PhoneNumber caller = PhoneNumber.parse(order.caller().phone());
             phone = caller.e164();
-            account = accounts.clientByPhone(caller).orElse(null);
+            account = accounts.clientByPhone(serviceId, caller).orElse(null);
         } else {
             return null;
         }
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
-                .param("key", account != null ? "order-account:" + account : "order-phone:" + phone)
+                .param("key", account != null ? "order-account:" + account : "order-phone:" + serviceId + ":" + phone)
                 .query().singleRow();
         List<String> who = new java.util.ArrayList<>();
         if (account != null) {
             who.add("o.payer_client_id = :account");
         }
         if (phone != null) {
-            // Phone orders have no payer; their caller is the contact.
+            // Phone orders have no payer; their caller is the contact — in this taxi service only (ADR 0016).
             who.add("""
                     (o.payer_client_id is null
+                     and o.city_id in (select id from city where service_id = :service)
                      and exists (select 1 from order_contact c where c.order_id = o.id and c.phone = :phone))""");
         }
         var count = jdbc.sql("select count(*) from ride_order o where o.status not in "
@@ -361,7 +362,7 @@ class JdbcOrders implements Orders {
             count = count.param("account", account);
         }
         if (phone != null) {
-            count = count.param("phone", phone);
+            count = count.param("phone", phone).param("service", serviceId);
         }
         long open = count.query(Long.class).single();
         int limit = settings.current().settings().orders().activePerPayer();
@@ -413,7 +414,7 @@ class JdbcOrders implements Orders {
                     throw new DomainException(ErrorCode.VALIDATION_FAILED, "Staff orders are phone orders");
                 }
                 requireStaff(actor, CREATE_PERMISSION, city.id());
-                requireCallerMayOrder(order.caller());
+                requireCallerMayOrder(services.of(actor).orElseThrow(), order.caller());
                 return OrderChannel.PHONE.name();
             }
             case PARTNER -> throw new DomainException(ErrorCode.ACCESS_DENIED,
@@ -427,11 +428,11 @@ class JdbcOrders implements Orders {
      * a reason the operator can tell the caller (issue #56). A caller without an account, or with a record staff
      * created for earlier phone orders (UNVERIFIED), is not affected.
      */
-    private void requireCallerMayOrder(CallerContact caller) {
+    private void requireCallerMayOrder(UUID serviceId, CallerContact caller) {
         if (caller == null || caller.phone() == null) {
             return;
         }
-        accounts.clientByPhone(PhoneNumber.parse(caller.phone()))
+        accounts.clientByPhone(serviceId, PhoneNumber.parse(caller.phone()))
                 .flatMap(client -> accounts.accountState(new Actor(SubjectType.CLIENT, client)))
                 .filter(state -> !"ACTIVE".equals(state) && !"UNVERIFIED".equals(state))
                 .ifPresent(state -> {
@@ -751,7 +752,7 @@ class JdbcOrders implements Orders {
         }
         // A phone only filters: resolved to the account, then matched within the cities above.
         if (search.riderPhone() != null) {
-            Optional<UUID> rider = accounts.clientByPhone(PhoneNumber.parse(search.riderPhone()));
+            Optional<UUID> rider = accounts.clientByPhone(staffActor, PhoneNumber.parse(search.riderPhone()));
             if (rider.isEmpty()) {
                 return List.of();
             }
@@ -759,7 +760,7 @@ class JdbcOrders implements Orders {
             params.put("rider", rider.get());
         }
         if (search.driverPhone() != null) {
-            Optional<UUID> driver = accounts.driverByPhone(PhoneNumber.parse(search.driverPhone()));
+            Optional<UUID> driver = accounts.driverByPhone(staffActor, PhoneNumber.parse(search.driverPhone()));
             if (driver.isEmpty()) {
                 return List.of();
             }

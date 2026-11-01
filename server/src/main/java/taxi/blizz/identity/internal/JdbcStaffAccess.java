@@ -25,9 +25,19 @@ class JdbcStaffAccess implements StaffAccess {
         this.driverCities = driverCities;
     }
 
+    /** A driver or staff member of another taxi service is out of reach, whatever the role (ADR 0016). */
+    private void requireSameService(Actor actor, String table, UUID subjectId) {
+        if (subjectId != null && jdbc.sql("select exists(select 1 from " + table + " where id = :subject"
+                        + " and service_id <> (select service_id from staff_user where id = :actor))")
+                .param("subject", subjectId).param("actor", actor.id()).query(Boolean.class).single()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Of another taxi service");
+        }
+    }
+
     @Override
     public void requireForDriver(Actor actor, String permission, UUID driverId) {
         require(actor, permission);
+        requireSameService(actor, "driver", driverId);
         Set<UUID> cities = driverId == null ? Set.of() : driverCities.of(driverId);
         if (cities.isEmpty()) {
             return;
@@ -41,6 +51,7 @@ class JdbcStaffAccess implements StaffAccess {
 
     @Override
     public void requireOverStaff(Actor actor, String permission, UUID staffId) {
+        requireSameService(actor, "staff_user", staffId);
         List<Scope> target = jdbc.sql("""
                         select role = 'SUPER_ADMIN' or all_cities as all_cities, city_scope from staff_user
                         where id = :id""")
@@ -73,7 +84,14 @@ class JdbcStaffAccess implements StaffAccess {
         }
         UUID[] cities = cityIds == null ? new UUID[0]
                 : Arrays.stream(cityIds).filter(Objects::nonNull).distinct().toArray(UUID[]::new);
-        boolean allowed = jdbc.sql("""
+        // Every city asked about must be of the member's own taxi service, whatever the role or grant (ADR 0016):
+        // "all cities" and a super admin mean all cities of that service.
+        boolean allowed = !jdbc.sql("""
+                        select exists(select 1 from city
+                                      where id = any(cast(:cities as uuid[]))
+                                        and service_id <> (select service_id from staff_user where id = :id))""")
+                .param("id", actor.id()).param("cities", cities).query(Boolean.class).single()
+                && jdbc.sql("""
                         select exists(select 1 from staff_user
                                       where id = :id and state = 'ACTIVE' and not must_change_password
                                         and (role = 'SUPER_ADMIN'
@@ -128,6 +146,8 @@ class JdbcStaffAccess implements StaffAccess {
         return new java.util.LinkedHashSet<>(jdbc.sql("""
                         select id from staff_user
                         where state = 'ACTIVE' and not must_change_password
+                          and (cast(:city as uuid) is null
+                               or service_id = (select service_id from city where id = cast(:city as uuid)))
                           and (role = 'SUPER_ADMIN'
                                or (:permission = any(permissions)
                                    and (all_cities or (cast(:city as uuid) is not null
@@ -135,6 +155,8 @@ class JdbcStaffAccess implements StaffAccess {
                         union
                         select g.staff_id from staff_emergency_grant g join staff_user u on u.id = g.staff_id
                         where u.state = 'ACTIVE' and not u.must_change_password
+                          and (cast(:city as uuid) is null
+                               or u.service_id = (select service_id from city where id = cast(:city as uuid)))
                           and g.revoked_at is null and g.expires_at > now() and :permission = any(g.permissions)
                           and (g.all_cities or (cast(:city as uuid) is not null
                                                 and cast(:city as uuid) = any(g.city_scope)))

@@ -48,7 +48,8 @@ class JdbcCalls implements Calls {
                    case when c.order_id is not null then array[c.order_id]
                         else coalesce((select array_agg(o.order_id order by o.linked_at, o.order_id) from call_order o
                                        where o.call_id = c.id), '{}') end as order_ids,
-                   r.state as recording_state, r.duration_seconds, r.stored_at
+                   r.state as recording_state, r.duration_seconds, r.stored_at,
+                   (select service_id from city where id = c.city_id) as service_id
             from call c left join call_recording r on r.call_id = c.id""";
 
     /** Ends a statement that starts "with closed as (update call … returning id, state": the taken calls get a recording. */
@@ -437,7 +438,7 @@ class JdbcCalls implements Calls {
                 rs.getString("caller_phone"), rs.getString("called_number"), rs.getObject("city_id", UUID.class),
                 rs.getObject("answered_by", UUID.class), List.of(orders),
                 rs.getObject("started_at", OffsetDateTime.class), rs.getObject("answered_at", OffsetDateTime.class),
-                rs.getObject("ended_at", OffsetDateTime.class), recording(rs));
+                rs.getObject("ended_at", OffsetDateTime.class), recording(rs), rs.getObject("service_id", UUID.class));
     }
 
     private static Recording recording(ResultSet rs) throws SQLException {

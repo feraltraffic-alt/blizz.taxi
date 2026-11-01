@@ -87,7 +87,7 @@ class JdbcRiderWallets implements RiderWallets {
         } catch (RuntimeException e) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Not a phone number");
         }
-        return accounts.clientByPhone(number)
+        return accounts.clientByPhone(actor, number)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No rider with this phone"));
     }
 

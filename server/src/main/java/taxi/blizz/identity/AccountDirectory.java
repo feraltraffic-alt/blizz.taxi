@@ -18,9 +18,18 @@ public interface AccountDirectory {
     /** The name a client or driver gave; empty when not set or anonymized. */
     Optional<String> name(Actor subject);
 
-    /** The client account with this phone (any state); e.g. for staff who find a rider by the number they called. */
-    Optional<java.util.UUID> clientByPhone(PhoneNumber phone);
+    /**
+     * The client account with this phone in the taxi service {@code serviceId} (any state but anonymized); the same
+     * phone in another service is another person (ADR 0016). E.g. for staff who find a rider by the number they called.
+     */
+    Optional<java.util.UUID> clientByPhone(java.util.UUID serviceId, PhoneNumber phone);
 
-    /** The driver account with this phone (any state); e.g. the recipient of a transfer between drivers. */
-    Optional<java.util.UUID> driverByPhone(PhoneNumber phone);
+    /** The driver account with this phone in the taxi service; e.g. the recipient of a transfer between drivers. */
+    Optional<java.util.UUID> driverByPhone(java.util.UUID serviceId, PhoneNumber phone);
+
+    /** {@link #clientByPhone(java.util.UUID, PhoneNumber)} in the taxi service of {@code within} (staff, a driver). */
+    Optional<java.util.UUID> clientByPhone(Actor within, PhoneNumber phone);
+
+    /** {@link #driverByPhone(java.util.UUID, PhoneNumber)} in the taxi service of {@code within}. */
+    Optional<java.util.UUID> driverByPhone(Actor within, PhoneNumber phone);
 }

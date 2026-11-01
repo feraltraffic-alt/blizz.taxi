@@ -52,7 +52,7 @@ class JdbcCustomerLookup implements CustomerLookup {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Looking up a rider needs " + PERMISSION);
         }
         rateLimits.acquire(RateLimits.CUSTOMER_LOOKUP, actor);
-        ClientLookup.Lookup found = clients.byPhone(phone);
+        ClientLookup.Lookup found = clients.byPhone(actor, phone);
         // The phone only as its keyed digest; the outcome and, on a hit, whom it found.
         Map<String, Object> trace = new LinkedHashMap<>();
         trace.put("phone_digest", found.phoneDigest());
