@@ -21,7 +21,9 @@ public interface ReportExports {
      * {@code state}: PENDING → RUNNING → READY (the file can be downloaded until {@code expiresAt}) or FAILED
      * ({@code error}); READY → EXPIRED.
      */
-    record Export(UUID id, Kind kind, UUID cityId, LocalDate from, LocalDate to, String state, String fileName,
+    /** {@code timezone}, {@code fromUtc}, {@code toUtc}: the local days the export covers (REQ-LED-09). */
+    record Export(UUID id, Kind kind, UUID cityId, LocalDate from, LocalDate to, String timezone,
+                  OffsetDateTime fromUtc, OffsetDateTime toUtc, String state, String fileName,
                   Integer rows, String error, OffsetDateTime createdAt, OffsetDateTime readyAt,
                   OffsetDateTime expiresAt) {
     }

@@ -49,8 +49,9 @@ class ReportExportTests {
         ReportExports.File file = exports.download(owner, asked.id());
         String csv = new String(file.content(), StandardCharsets.UTF_8);
         assertThat(file.name()).isEqualTo("orders_2026-10-20_2026-10-20.csv");
-        assertThat(csv).startsWith("﻿date,created,fulfilled,");
-        assertThat(csv).contains("\r\n2026-10-20,1,1,0,").contains("\r\ntotal,1,1,0,");
+        assertThat(csv).startsWith("﻿date,from_utc,to_utc,created,fulfilled,");
+        assertThat(csv).contains("\r\n2026-10-20,2026-10-19T22:00:00Z,2026-10-20T22:00:00Z,1,1,0,")
+                .contains("\r\ntotal,2026-10-19T22:00:00Z,2026-10-20T22:00:00Z,1,1,0,");
 
         Actor colleague = staff(new String[]{StaffPermissions.REPORTS_VIEW}, city);
         assertCode(() -> exports.get(colleague, asked.id()), ErrorCode.NOT_FOUND);
@@ -72,7 +73,7 @@ class ReportExportTests {
         exports.buildPending(50);
         assertThat(exports.get(owner, id).state()).isEqualTo("READY");
         assertThat(new String(exports.download(owner, id).content(), StandardCharsets.UTF_8))
-                .contains("\r\ntotal,PLN,0,0.00,");
+                .contains("\r\ntotal,2026-10-19T22:00:00Z,2026-10-20T22:00:00Z,PLN,0,0.00,");
 
         jdbc.sql("update report_export set expires_at = now() - interval '1 second' where id = :id")
                 .param("id", id).update();

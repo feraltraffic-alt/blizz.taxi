@@ -162,7 +162,7 @@ class RiderErasureTests {
             N rating: author_type target_type
             N refresh_token: token_hash
             K report_export: content file_name
-            N report_export: error kind state
+            N report_export: error kind state timezone
             N retention_settings: days reason
             R ride_order: comment dropoff_label entrance pickup_label
             N ride_order: cancel_reason_code cancel_reason_labels cancelled_by channel created_by_type currency
