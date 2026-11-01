@@ -102,7 +102,7 @@ class JdbcStaffAccess implements StaffAccess {
         // "all cities" and a super admin mean all cities of that service.
         UUID own = ownService(actor);
         boolean allowed = cityServices.servicesOf(Arrays.asList(cities)).values().stream()
-                .allMatch(s -> s.equals(own))
+                .allMatch(s -> true) // mutation: no service check
                 && jdbc.sql("""
                         select exists(select 1 from staff_user
                                       where id = :id and state = 'ACTIVE' and not must_change_password
