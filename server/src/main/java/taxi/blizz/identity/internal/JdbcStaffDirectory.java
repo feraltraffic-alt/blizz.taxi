@@ -203,7 +203,7 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     @Override
     public StaffMember resetPassword(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion,
-                                     String temporaryPassword, String reason) {
+                                     String temporaryPassword, String reason, String password) {
         requireSuperAdmin(superAdmin);
         reason(reason);
         return commands.execute(new CommandKey(superAdmin, "staff.resetPassword", commandId),

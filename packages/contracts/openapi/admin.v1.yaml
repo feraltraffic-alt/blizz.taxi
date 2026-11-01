@@ -440,6 +440,9 @@ paths:
       summary: Set a temporary password
       description: |
         Unlocks the account and signs it out everywhere; the member must change the password at the next sign-in.
+        A reset hands the account over, so it needs the acting super admin's own password (REQ-ADM-10, owner
+        decision 01.11.2026): missing or wrong → 403 ACCESS_DENIED, counted like a failed sign-in and audited as
+        staff.resetPassword.denied; nothing changes and the member's sessions go on.
       tags: [Staff]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -7660,7 +7663,7 @@ components:
     ResetPassword:
       type: object
       additionalProperties: false
-      required: [command_id, expected_version, temporary_password, reason]
+      required: [command_id, expected_version, temporary_password, reason, password]
       properties:
         command_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
@@ -7669,6 +7672,12 @@ components:
           format: int64
           minimum: 0
         temporary_password:
+          type: string
+          format: password
+          maxLength: 128
+        password:
+          description: >-
+            The acting super admin's own password (REQ-ADM-10). Required. Never stored or logged.
           type: string
           format: password
           maxLength: 128

@@ -53,7 +53,7 @@ class StaffController {
     }
 
     record ResetPassword(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
-                         @NotBlank String temporaryPassword, @NotBlank String reason) {
+                         @NotBlank String temporaryPassword, @NotBlank String reason, String password) {
     }
 
     record StaffList(List<StaffMember> staff) {
@@ -119,6 +119,6 @@ class StaffController {
     @PostMapping("/api/admin/v1/staff/{staffId}/reset-password")
     StaffMember resetPassword(AccessClaims claims, @PathVariable UUID staffId, @Valid @RequestBody ResetPassword body) {
         return directory.resetPassword(claims.actor(), body.commandId(), staffId, body.expectedVersion(),
-                body.temporaryPassword(), body.reason());
+                body.temporaryPassword(), body.reason(), body.password());
     }
 }
