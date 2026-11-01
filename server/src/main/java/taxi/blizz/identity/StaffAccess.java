@@ -20,15 +20,18 @@ public interface StaffAccess {
 
     /**
      * Where a staff member may use {@code permission}: every city ({@code allCities}), the listed ones, or none
-     * (an inactive member, a member without the permission, or not staff at all).
+     * (an inactive member, a member without the permission, or not staff at all). Only cities of the member's own
+     * taxi service (ADR 0016); with {@code allCities}, {@code cityIds} lists every one of them, so a list filtered by
+     * {@code cityIds} alone stays inside the service.
      */
     record Scope(boolean allCities, java.util.Set<UUID> cityIds) {
         public Scope {
             cityIds = cityIds == null ? java.util.Set.of() : java.util.Set.copyOf(cityIds);
         }
 
+        /** A city of the member's service in the scope; a city-less object only with every city. */
         public boolean covers(UUID cityId) {
-            return allCities || (cityId != null && cityIds.contains(cityId));
+            return cityId == null ? allCities : cityIds.contains(cityId);
         }
 
         public static Scope none() {

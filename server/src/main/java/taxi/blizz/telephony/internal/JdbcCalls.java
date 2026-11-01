@@ -48,8 +48,7 @@ class JdbcCalls implements Calls {
                    case when c.order_id is not null then array[c.order_id]
                         else coalesce((select array_agg(o.order_id order by o.linked_at, o.order_id) from call_order o
                                        where o.call_id = c.id), '{}') end as order_ids,
-                   r.state as recording_state, r.duration_seconds, r.stored_at,
-                   (select service_id from city where id = c.city_id) as service_id
+                   r.state as recording_state, r.duration_seconds, r.stored_at
             from call c left join call_recording r on r.call_id = c.id""";
 
     /** Ends a statement that starts "with closed as (update call … returning id, state": the taken calls get a recording. */
@@ -264,13 +263,13 @@ class JdbcCalls implements Calls {
             throw new DomainException(ErrorCode.ACCESS_DENIED,
                     "Missing permission " + ANSWER_PERMISSION + " or " + LISTEN_PERMISSION);
         }
-        var query = jdbc.sql(SELECT + " where (:all or c.city_id = any(cast(:cities as uuid[])))"
+        var query = jdbc.sql(SELECT + " where c.city_id = any(cast(:cities as uuid[]))"
                         + (state == null ? "" : " and c.state = :state")
                         + (orderId == null ? "" : " and (c.order_id = :order or exists (select 1 from call_order o"
                                 + " where o.call_id = c.id and o.order_id = :order))")
                         + (after == null ? "" : " and (c.started_at, c.id) < (:afterAt, :afterId)")
                         + " order by c.started_at desc, c.id desc limit :limit")
-                .param("all", all).param("cities", cities.toArray(UUID[]::new))
+                .param("cities", cities.toArray(UUID[]::new))
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
             query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
@@ -438,7 +437,7 @@ class JdbcCalls implements Calls {
                 rs.getString("caller_phone"), rs.getString("called_number"), rs.getObject("city_id", UUID.class),
                 rs.getObject("answered_by", UUID.class), List.of(orders),
                 rs.getObject("started_at", OffsetDateTime.class), rs.getObject("answered_at", OffsetDateTime.class),
-                rs.getObject("ended_at", OffsetDateTime.class), recording(rs), rs.getObject("service_id", UUID.class));
+                rs.getObject("ended_at", OffsetDateTime.class), recording(rs));
     }
 
     private static Recording recording(ResultSet rs) throws SQLException {

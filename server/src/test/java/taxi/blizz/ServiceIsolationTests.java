@@ -115,6 +115,15 @@ class ServiceIsolationTests {
             Actor staffB = staff(b, "OPERATOR", false, cityB);
             denied(() -> staff.requireOverStaff(member, "driver.review", staffB.id()));
         }
+        // "All cities" lists every city of the member's service and none of another: lists filtered by it stay inside.
+        for (Actor member : new Actor[] {staff(a, "ADMIN", true), staff(a, "SUPER_ADMIN", true)}) {
+            StaffAccess.Scope scope = staff.scope(member, "orders.view");
+            assertThat(scope.cityIds()).contains(cityA).doesNotContain(cityB);
+            assertThat(scope.covers(cityA)).isTrue();
+            assertThat(scope.covers(cityB)).isFalse();
+        }
+        assertThat(staff.scope(staff(a, "ADMIN", false, cityA, cityB), "orders.view").cityIds())
+                .as("a city of B in A's scope is dropped").containsExactly(cityA);
         // A city-scoped member of A cannot name B's city either, even if it slipped into the scope.
         denied(() -> staff.require(staff(a, "ADMIN", false, cityA, cityB), "orders.view", cityB));
     }

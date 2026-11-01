@@ -13,6 +13,9 @@ public interface CityCatalog {
     /** Published cities of the taxi service {@code serviceId} (ADR 0016), by name. */
     List<City> published(UUID serviceId);
 
+    /** The taxi service of a city in any state (ADR 0016), or empty if the city does not exist. */
+    Optional<UUID> serviceOf(UUID cityId);
+
     /** Time zone of a city in any state, or empty if the city does not exist. */
     Optional<String> timezone(UUID cityId);
 }

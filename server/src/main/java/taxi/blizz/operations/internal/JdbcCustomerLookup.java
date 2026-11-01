@@ -70,10 +70,10 @@ class JdbcCustomerLookup implements CustomerLookup {
         List<Order> recent = jdbc.sql("""
                         select id, short_number, status, city_id, pickup_label, dropoff_label, created_at
                         from ride_order
-                        where payer_client_id = :client and (:all or city_id = any(:cities))
+                        where payer_client_id = :client and city_id = any(:cities)
                         order by created_at desc, id desc
                         limit :limit""")
-                .param("client", found.client().id()).param("all", scope.allCities()).param("cities", cities)
+                .param("client", found.client().id()).param("cities", cities)
                 .param("limit", ORDERS)
                 .query((rs, i) -> new Order(rs.getObject(1, UUID.class), rs.getLong(2), rs.getString(3),
                         rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6),

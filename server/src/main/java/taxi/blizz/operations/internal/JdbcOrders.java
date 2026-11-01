@@ -730,9 +730,10 @@ class JdbcOrders implements Orders {
         if (search.cityId() != null) {
             where.append(" and o.city_id = :city");
             params.put("city", search.cityId());
-        } else if (!scope.allCities()) {
-            where.append(" and o.city_id in (:cities)");
-            params.put("cities", List.copyOf(scope.cityIds()));
+        } else {
+            // The scope's cities are those of the staff member's own taxi service, all of them for "all cities".
+            where.append(" and o.city_id = any(:cities)");
+            params.put("cities", scope.cityIds().toArray(UUID[]::new));
         }
         if (!search.statuses().isEmpty()) {
             where.append(" and o.status in (:statuses)");

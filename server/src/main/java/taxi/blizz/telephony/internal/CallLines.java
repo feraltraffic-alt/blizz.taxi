@@ -57,12 +57,8 @@ class CallLines {
         if (!scope.allCities() && scope.cityIds().isEmpty()) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + PERMISSION);
         }
-        // The numbers of the staff member's own taxi service only (ADR 0016): each service has its own directory.
-        return jdbc.sql("""
-                        select l.number, l.city_id, l.label, l.version from call_line l join city c on c.id = l.city_id
-                        where c.service_id = (select service_id from staff_user where id = :actor)
-                        order by l.number""")
-                .param("actor", actor.id())
+        // The numbers of the staff member's own taxi service only (ADR 0016): the scope holds that service's cities.
+        return jdbc.sql("select number, city_id, label, version from call_line order by number")
                 .query((rs, i) -> new Line(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
                         rs.getLong(4)))
                 .list().stream().filter(l -> scope.covers(l.cityId())).toList();

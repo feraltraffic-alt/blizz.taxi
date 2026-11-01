@@ -33,12 +33,14 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
                 order by r.day desc,r.id desc limit :limit
             ) r on true
             where (cast(:merchant as uuid) is null or m.id=:merchant)
-                and (:allCities or (
-                    exists(select 1 from payment_merchant_city c where c.merchant_id=m.id)
-                    and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id
-                                   and c.city_id not in (:cities))))
+                and ((:allCities and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id))
+                     or (exists(select 1 from payment_merchant_city c where c.merchant_id=m.id)
+                         and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id
+                                        and c.city_id not in (:cities))))
             order by r.day desc,r.id desc limit :limit
             """;
+    // A merchant with cities is listed only when all of them are the staff member's (their service's, ADR 0016);
+    // one with no city yet only to staff of every city.
     private final JdbcClient jdbc;
     private final StaffAccess staff;
     private final IdempotentCommands commands;

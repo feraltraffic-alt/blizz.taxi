@@ -67,9 +67,13 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
     private final CityCatalog cities;
     private final Clock clock;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcDriverAdmission(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, Outbox outbox,
                         AuditLog auditLog, FileService files, DriverProperties properties, Clock clock,
-                        StaffAccess staff, DriverRiskFlagCheck riskFlags, CityCatalog cities) {
+                        StaffAccess staff, DriverRiskFlagCheck riskFlags, CityCatalog cities,
+                        taxi.blizz.identity.Services services) {
+        this.services = services;
         this.cities = cities;
         this.staff = staff;
         this.riskFlags = riskFlags;
@@ -586,6 +590,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                                              where e.driver_id = d.id and e.to_status = d.review_status),
                                             d.created_at) as since
                             from driver d where d.review_status = :status
+                              and d.service_id = :service
                               and (:all
                                    or not exists (select 1 from driver_admission_city a where a.driver_id = d.id)
                                    or exists (select 1 from driver_admission_city a
@@ -594,6 +599,7 @@ class JdbcDriverAdmission implements DriverAdmission, taxi.blizz.driver.DriverAc
                            or (q.since, q.id) > (:afterAt, cast(:afterId as uuid))
                         order by q.since, q.id limit :limit""")
                 .param("status", wanted.name())
+                .param("service", services.of(reviewer).orElse(null))
                 .param("all", scope.allCities())
                 .param("cities", scope.cityIds().toArray(UUID[]::new))
                 .param("afterAt", after == null ? null : after.time(0))

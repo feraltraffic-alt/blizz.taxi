@@ -48,8 +48,11 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
     private final JsonMapper json;
     private final Clock clock;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcDriverRiskFlags(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
-                        JsonMapper json, Clock clock) {
+                        JsonMapper json, Clock clock, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -70,7 +73,9 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
         }
         Set<UUID> cities = new HashSet<>(scope.cityIds());
         return jdbc.sql(SELECT + """
-                         where (:all or city_id = any(cast(:cities as uuid[])))
+                         where (city_id = any(cast(:cities as uuid[]))
+                                or (:all and city_id is null and driver_id in (
+                                        select id from driver where service_id = :service)))
                           and (cast(:city as uuid) is null or city_id = :city)
                           and (cast(:state as text) is null or state = :state)
                           and (cast(:driver as uuid) is null or driver_id = :driver)
@@ -78,6 +83,7 @@ class JdbcDriverRiskFlags implements DriverRiskFlags, DriverRiskFlagCheck {
                                or (raised_at, id) < (:afterAt, cast(:afterId as uuid)))
                         order by raised_at desc, id desc limit :limit""")
                 .param("all", scope.allCities()).param("cities", cities.toArray(UUID[]::new))
+                .param("service", services.of(actor).orElse(null))
                 .param("city", cityId).param("state", state == null ? null : state.name())
                 .param("driver", driverId)
                 .param("afterAt", after == null ? null : after.time(0))
