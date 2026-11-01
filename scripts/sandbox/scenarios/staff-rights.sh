@@ -48,4 +48,15 @@ api POST "/api/admin/v1/staff/$MEMBER/update" "$ADMIN" "{\"command_id\":\"$(uuid
   \"expected_version\":$(jq -r .version <<<"$UPDATED"),\"profile\":$(profile '["orders.view","orders.create"]' Kovalenko),
   \"reason\":\"Married name\"}" | jq -e '.profile.last_name == "Kovalenko"' >/dev/null
 expect 200
-note "Done: $LOGIN created and given orders.create only with the password; the surname changed without it."
+
+say "A password reset hands the account over: refused without the super admin's password, done with it (#173)"
+VERSION=$(api GET "/api/admin/v1/staff/$MEMBER" "$ADMIN" | jq -r .version); expect 200
+RESET="{\"command_id\":\"$(uuid)\",\"expected_version\":$VERSION,
+  \"temporary_password\":\"Sandbox-Temporary-2026\",\"reason\":\"Forgot the password\""
+api POST "/api/admin/v1/staff/$MEMBER/reset-password" "$ADMIN" "$RESET}" >/tmp/sandbox-staff.json; expect 403
+jq -e '.code == "ACCESS_DENIED"' /tmp/sandbox-staff.json >/dev/null
+api POST "/api/admin/v1/staff/$MEMBER/reset-password" "$ADMIN" "$RESET,\"password\":\"$ADMIN_PASSWORD\"}" \
+  | jq -e '.password_change_required == true' >/dev/null
+expect 200
+note "Done: $LOGIN created and given orders.create only with the password; the surname changed without it; the \
+password reset needed it too."
