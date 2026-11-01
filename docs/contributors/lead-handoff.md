@@ -1,4 +1,4 @@
-# Lead handoff (state on 01.11.2026)
+# Lead handoff (state on 01.11.2026, evening)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -29,11 +29,12 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 | Who | Queue (in order) |
 |---|---|
 | Codex | #136 web foundation (branch `codex/136-web-foundation` at 30bc0b3, no PR; idle since 30.10). The owner said Codex had it nearly done locally, so it stays Codex's until the owner says otherwise |
-| Second Claude | #140 item 4 (PR #194, pending accounting) → then nothing unblocked: #137 rider app needs `packages/api-client` from #136. Asked the owner whether to give #136 to claude2 |
-| Lead | #140 is done but for #194 (items 1, 3: #188; 2: #193; 5: #190; 6: #192). Next: the audit's remaining server items, or what the owner names |
+| Second Claude | Idle since 01.11 09:16 (last commit on `claude2/201-staff-city-sweep`). Its #201 part 2 was taken by the lead on the owner's word. Only #137 is left, and it needs `packages/api-client` from #136. Asked the owner whether to give #136 to claude2 |
+| Lead | Nothing in flight. Next: what the owner names, or the follow-up below (global settings by staff of one city) |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
-(L1 findings: heartbeat, relay, pool), #186 (#112 brought up to date; only Q-19 is left there).
+(L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
+of the 29.10 audit fixed or decided).
 
 Owner to confirm (in the audit doc): road-ETA dispatch, call queues, bulk operations, webhook path, WayForPay sandbox keys.
 Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the hourly scheduled check reviews contributors and reports idleness.
@@ -46,10 +47,18 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 
 ### Open owner questions
 
-From the review of #173: should a staff password reset ask for the acting admin's password too, and may wrong
-confirmation passwords lock the only super admin out?
+- Give #136 to claude2?
+- **Global settings.** Feature flags, legal texts, cancel reasons and transfer rules are changed with a permission
+  alone, so a holder of one city changes them for the whole service. City creation and retention already require
+  every city. The lead suggested the same rule for these settings; the owner has not answered yet.
+- **Before launch:** a second super admin. The confirmation lockout of the only one stays by the owner's choice
+  (#173).
 
-Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never treat them as decided.
+Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat them as decided.
+- **Decided:**
+  - Q-10, rider debt: ADR 0014.
+  - Q-19, retention terms: ADR 0015. Legal hold and cross-border data are still open.
+  - Q-18: ADR 0012.
 
 ## How the lead works
 
@@ -76,6 +85,30 @@ Q-05, 06, 07, 10, 11, 12, 15, 16, 18 are still open in the specification; never 
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (01.11.2026, evening)
+
+- **Owner decisions of the day:**
+  - **Q-10 (#208, ADR 0014).** A rider owing more than `rider_debts.allowed_minor` in a currency gets no new order,
+    at once: 403 `RIDER_HAS_DEBT`. The limit is 0 when the currency is not listed. Phone orders for a caller with
+    that account are refused too. The account state is unchanged.
+  - **Q-19 (#210, ADR 0015).** Retention terms are set in the admin panel; 0 keeps for ever. Technical records keep
+    their defaults.
+  - **#173 follow-up (#211).** A staff password reset asks for the super admin's own password.
+  - **Staff reach by city (#209, closes #201):**
+    - `StaffAccess.requireForDriver`: a driver of one of the staff member's cities; an applicant with no admission
+      city is open to every holder.
+    - `requireOverStaff`: operator extensions and bonus history.
+    - `requireEveryCity`: payment merchants.
+- **`StaffIsolationTests`** sweeps every admin and operator operation with an id or a `city_id`: 105 swept, 29
+  exceptions with reasons. `AWAITING_DECISION` is an exact list, now empty; a new operation in no list fails the
+  build.
+  - City-changing operations run on spare cities, at longitude 100 and beyond, latitude 60.
+  - Driver fixtures use `driverOnlyIn(city)`. `TestAdmission.inEveryCity` would hide a missing city check.
+- **The `identity` module** gets a driver's cities through the `DriverCities` port, which the `driver` module
+  implements. Keep it that way: no dependency from identity on driver.
+- **Habit that paid off:** push the tests-only commit first and read its red CI before the fix. It proved the 18
+  driver, operator and merchant gaps and the earnings gap.
 
 ## Recent history (01.11.2026)
 
