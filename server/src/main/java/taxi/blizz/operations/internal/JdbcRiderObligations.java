@@ -71,7 +71,16 @@ class JdbcRiderObligations implements RiderObligations {
         }
         return commands.execute(new CommandKey(rider, "obligation.repay", commandId),
                 new RepayRequest(orderId, amountMinor), CardTopUps.TopUp.class, () -> {
-                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    // mutation: the order is read without its lock
+                    OrderCore.LockedOrder order = jdbc.sql("""
+                                    select id, status, version, payer_client_id, city_id, vehicle_class
+                                    from ride_order where id = :id""")
+                            .param("id", orderId)
+                            .query((rs, i) -> new OrderCore.LockedOrder(rs.getObject(1, UUID.class),
+                                    rs.getString(2), rs.getLong(3), rs.getObject(4, UUID.class),
+                                    rs.getObject(5, UUID.class), rs.getString(6)))
+                            .single();
+                    jdbc.sql("select pg_sleep(0.3)").query().singleRow();
                     if (!rider.id().equals(order.payerClientId()) || !ENDED.contains(core.paymentState(orderId))) {
                         throw new DomainException(ErrorCode.NOT_FOUND, "Nothing is owed on this order");
                     }
