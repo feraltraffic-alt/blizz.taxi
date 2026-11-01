@@ -58,8 +58,9 @@ class SupportController {
                       @NotNull SupportCases.Priority priority, String reason) {
     }
 
+    /** {@code waitForRequester} is optional in the contract: left out, the case does not wait (issue #201). */
     record Comment(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
-                   @NotNull SupportCases.Visibility visibility, @NotBlank String body, boolean waitForRequester,
+                   @NotNull SupportCases.Visibility visibility, @NotBlank String body, Boolean waitForRequester,
                    List<UUID> attachmentIds) {
     }
 
@@ -147,7 +148,7 @@ class SupportController {
     SupportAttachments.Case comment(AccessClaims claims, @PathVariable UUID caseId,
                                     @Valid @RequestBody Comment body) {
         return attachments.comment(claims.actor(), body.commandId(), caseId, body.expectedVersion(), body.visibility(),
-                body.body(), body.waitForRequester(), body.attachmentIds());
+                body.body(), Boolean.TRUE.equals(body.waitForRequester()), body.attachmentIds());
     }
 
     @PostMapping({"/api/admin/v1/support/cases/{caseId}/resolve", "/api/operator/v1/support/cases/{caseId}/resolve"})
