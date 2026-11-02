@@ -9,10 +9,12 @@ import {AfterRide} from './After';
 export type Point = {lat: number; lon: number};
 type Place = {label: string; point: Point};
 type VehicleClass = {code: string; name: string};
-type Quote = {id: string; amount_minor: number; currency: string};
+type Quote = {id: string; amount_minor: number; currency: string; payment_methods?: string[];
+  card_hold_minor?: number | null};
+type Card = {id: string; masked_pan: string; card_type: string | null};
 type Driver = {name: string; make: string; model: string; color: string; registration_number: string};
 export type Order = {id: string; status: string; version: number; price_minor?: number | null; currency?: string;
-  driver?: Driver | null; pickup_eta?: {seconds: number} | null};
+  driver?: Driver | null; pickup_eta?: {seconds: number} | null; payment_method?: string; status_reason?: string | null};
 
 const FINAL = new Set(['FULFILLED', 'CANCELLED', 'UNFULFILLED']);
 
@@ -69,6 +71,8 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
   const [classes, setClasses] = useState<VehicleClass[]>([]);
   const [vehicleClass, setVehicleClass] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [card, setCard] = useState<Card | null>(null);
+  const [byCard, setByCard] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** One command per quote: a double tap or a retry is the same order (E4). */
@@ -136,7 +140,13 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
         command_id: newId(), vehicle_class: vehicleClass, pickup: pickup.point, dropoff: dropoff.point
       }})) as Quote;
       setQuote(priced);
+      setByCard(false);
       orderCommand.current = newId();
+      // A card is offered only when the city takes cards for this quote and the rider has saved one (#271).
+      setCard(priced.payment_methods?.includes('CARD')
+        ? await guard(() => client.get('/api/rider/v1/cards')).then(v => (v as {cards: Card[]}).cards[0] ?? null)
+          .catch(() => null)
+        : null);
     } catch (failed) {
       setMessage(failed instanceof ApiError && failed.status === 422 ? t('outsideCities') : failure(failed));
     } finally {
@@ -153,7 +163,7 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       onOrdered(await guard(() => client.post('/api/rider/v1/orders', {body: {
         command_id: orderCommand.current as string, quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
-        payment_method: 'CASH'
+        payment_method: byCard && card ? 'CARD' : 'CASH'
       }} as never)) as Order);
     } catch (failed) {
       if (failed instanceof ApiError && failed.code === 'QUOTE_EXPIRED') {
@@ -194,6 +204,15 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       <Button label={t('getPrice')} onPress={() => void price()} disabled={busy || !pickup || !dropoff || !vehicleClass} />
       {quote ? <Text style={{color: theme.text}}>{t('priceIs', {amount: (quote.amount_minor / 100).toFixed(2),
         currency: quote.currency})}</Text> : null}
+      {quote && card ? (
+        <>
+          <Choice label={(byCard ? '○ ' : '● ') + t('payCash')} onPress={() => setByCard(false)} />
+          <Choice label={(byCard ? '● ' : '○ ') + t('payCard', {card: (card.card_type ? card.card_type + ' ' : '')
+            + card.masked_pan})} onPress={() => setByCard(true)} />
+          {byCard && quote.card_hold_minor != null ? <Text style={{color: theme.muted}}>{t('cardHold', {amount:
+            (quote.card_hold_minor / 100).toFixed(2) + ' ' + quote.currency})}</Text> : null}
+        </>
+      ) : null}
       <Button label={t('orderRide')} onPress={() => void order()} disabled={busy || !quote} />
       <Alert text={message} />
     </Screen>
@@ -251,10 +270,37 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
     }
   }
 
+  const switching = useRef(false);
+  /** A card order not finished may be paid in cash instead (REQ-PAY-20); the hold is then released. */
+  async function payInCash() {
+    if (switching.current) return;
+    switching.current = true;
+    setMessage(null);
+    try {
+      onChange(await guard(() => client.post('/api/rider/v1/orders/{order_id}/switch-to-cash' as never, {
+        params: {order_id: order.id}, body: {command_id: newId(), expected_version: order.version}
+      } as never)) as Order);
+    } catch (failed) {
+      if (failed instanceof ApiError && failed.code === 'PAYMENT_UNKNOWN') setMessage(t('paymentUnknown'));
+      else if (failed instanceof ApiError && failed.status === 409) await refresh().catch(() => undefined);
+      else setMessage(failure(failed));
+    } finally {
+      switching.current = false;
+    }
+  }
+
   const finished = FINAL.has(order.status);
+  const paymentEnd = order.status === 'UNFULFILLED' && (order.status_reason === 'PAYMENT_DECLINED'
+    || order.status_reason === 'PAYMENT_TIMEOUT') ? order.status_reason : null;
   return (
     <Screen title={t('yourRide')}>
       <Text style={{color: theme.text}}>{t('status_' + order.status)}</Text>
+      {paymentEnd ? <Text style={{color: theme.error}}>{t(paymentEnd === 'PAYMENT_DECLINED' ? 'paymentDeclined'
+        : 'paymentTimeout')}</Text> : null}
+      {order.payment_method ? <Text style={{color: theme.muted}}>{t(order.payment_method === 'CARD'
+        ? 'paidByCard' : 'paidInCash')}</Text> : null}
+      {order.payment_method === 'CARD' && !finished
+        ? <Button label={t('switchToCash')} onPress={() => void payInCash()} /> : null}
       {order.driver ? (
         <Text style={{color: theme.text}}>
           {order.driver.name}: {order.driver.color} {order.driver.make} {order.driver.model},{' '}
