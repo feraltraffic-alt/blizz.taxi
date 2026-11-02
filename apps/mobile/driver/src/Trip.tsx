@@ -59,7 +59,7 @@ export function Dispatch(props: Props) {
   );
 }
 
-function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props & {say: (text: string | null) => void;
+function Offers({client, t, guard, failure, newId, now, pollMs, say, accepted}: Props & {say: (text: string | null) => void;
   accepted: () => void}) {
   const [offer, setOffer] = useState<Offer | null>(null);
   const [left, setLeft] = useState(0);
@@ -73,8 +73,8 @@ function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props
     const next = list.find(o => !gone.current.has(o.id) && o.seconds_left > 0) ?? null;
     setOffer(next);
     // The server's seconds, never the device clock (REQ-DRV-07): a phone set minutes off still counts right.
-    if (next) setLeft(next.seconds_left);
-  }, [client, guard]);
+    if (next) setLeft(Math.floor((Date.parse((next as Offer & {expires_at: string}).expires_at) - now()) / 1000));
+  }, [client, guard, now]);
 
   useEffect(() => {
     poll().catch(failed => say(failure(failed)));
