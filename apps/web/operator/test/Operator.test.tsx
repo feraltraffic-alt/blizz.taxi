@@ -1,5 +1,5 @@
 import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
-import {render, screen, waitFor} from '@testing-library/react';
+import {render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {http, HttpResponse, delay} from 'msw';
 import {setupServer} from 'msw/node';
@@ -753,9 +753,10 @@ describe('#311: interrupt and reservation', () => {
     command?: (path: string) => Response | Promise<Response>; reads?: () => unknown} = {}) {
     const sent: Sent[] = [];
     const created = {...order, status, city_id: KYIV.id, payment_method: 'CASH', reservation: opts.reservation ?? null};
-    server.use(...base({...operator, effective_permissions: opts.rights ?? all}),
-      http.get(origin + '/api/operator/v1/cancel-reasons', () => HttpResponse.json({reasons: [
+    // The first matching handler answers: this list goes before the base one.
+    server.use(http.get(origin + '/api/operator/v1/cancel-reasons', () => HttpResponse.json({reasons: [
         {code: 'VEHICLE_BREAKDOWN', labels: {ru: 'Поломка машины'}}]})),
+      ...base({...operator, effective_permissions: opts.rights ?? all}),
       http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
       http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(created, {status: 201})),
       http.get(origin + '/api/operator/v1/reassign-reasons', () => HttpResponse.json({reasons: []})),
@@ -791,7 +792,9 @@ describe('#311: interrupt and reservation', () => {
   it('I2: the reason, the comment and a follow-up by default; the follow-up order is told', async () => {
     const sent = handlers('IN_SERVICE');
     const user = await ordered();
-    await user.selectOptions(await screen.findByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
+    await waitFor(() => expect(within(screen.getByLabelText('Причина прерывания')).getAllByRole('option'))
+      .toHaveLength(2));
+    await user.selectOptions(screen.getByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
     await user.type(screen.getByLabelText('Комментарий к прерыванию'), 'спустило колесо');
     expect(screen.getByRole('checkbox', {name: 'Отправить другую машину'})).toBeChecked();
     await user.click(screen.getByRole('button', {name: 'Прервать поездку'}));
@@ -804,7 +807,9 @@ describe('#311: interrupt and reservation', () => {
     const sent = handlers('IN_SERVICE', {command: () => HttpResponse.json({order: {...order, status: 'CANCELLED'},
       follow_up: null} as never)});
     const user = await ordered();
-    await user.selectOptions(await screen.findByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
+    await waitFor(() => expect(within(screen.getByLabelText('Причина прерывания')).getAllByRole('option'))
+      .toHaveLength(2));
+    await user.selectOptions(screen.getByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
     await user.click(screen.getByRole('checkbox', {name: 'Отправить другую машину'}));
     await user.click(screen.getByRole('button', {name: 'Прервать поездку'}));
     await waitFor(() => expect(sent).toHaveLength(1));
@@ -850,7 +855,9 @@ describe('#311: interrupt and reservation', () => {
     handlers('IN_SERVICE', {command: () => HttpResponse.json(problem(409, 'STATE_CONFLICT'), {status: 409}),
       reads: () => {reads++; return {...order, status: 'FULFILLED', city_id: KYIV.id};}});
     const user = await ordered();
-    await user.selectOptions(await screen.findByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
+    await waitFor(() => expect(within(screen.getByLabelText('Причина прерывания')).getAllByRole('option'))
+      .toHaveLength(2));
+    await user.selectOptions(screen.getByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
     await user.click(screen.getByRole('button', {name: 'Прервать поездку'}));
     expect(await screen.findByText('Заказ изменился, пока вы его меняли. Проверьте его состояние.')).toBeVisible();
     expect(reads).toBe(1);
@@ -862,7 +869,9 @@ describe('#311: interrupt and reservation', () => {
       return HttpResponse.json({order: {...order, status: 'CANCELLED'}, follow_up: null} as never);
     }});
     const user = await ordered();
-    await user.selectOptions(await screen.findByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
+    await waitFor(() => expect(within(screen.getByLabelText('Причина прерывания')).getAllByRole('option'))
+      .toHaveLength(2));
+    await user.selectOptions(screen.getByLabelText('Причина прерывания'), 'VEHICLE_BREAKDOWN');
     const button = screen.getByRole('button', {name: 'Прервать поездку'});
     await Promise.all([user.click(button), user.click(button)]);
     await waitFor(() => expect(sent).toHaveLength(1));

@@ -5,6 +5,11 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    orderTrip: 'Поездка и резерв', interrupt: 'Прервать поездку', interruptReason: 'Причина прерывания',
+    interruptComment: 'Комментарий к прерыванию', followUp: 'Отправить другую машину',
+    interruptNeeds: 'Выберите причину прерывания; комментарий — до 500 символов.',
+    followUpSent: 'Новый заказ №{number} едет за пассажиром.', unreserve: 'Снять резерв',
+    unreserveReason: 'Причина снятия резерва', reservedBy: 'Зарезервировал: {name}',
     orderChanges: 'Изменить заказ', toCash: 'Перевести на наличные', cashReason: 'Причина перевода на наличные',
     reasonNeeded: 'Укажите причину, до 500 символов.', changeDestination: 'Изменить точку назначения',
     newDestination: 'Новая точка назначения', destinationReason: 'Причина изменения точки',
@@ -119,6 +124,11 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    orderTrip: 'Поїздка та резерв', interrupt: 'Перервати поїздку', interruptReason: 'Причина переривання',
+    interruptComment: 'Коментар до переривання', followUp: 'Відправити іншу машину',
+    interruptNeeds: 'Оберіть причину переривання; коментар — до 500 символів.',
+    followUpSent: 'Нове замовлення №{number} їде за пасажиром.', unreserve: 'Зняти резерв',
+    unreserveReason: 'Причина зняття резерву', reservedBy: 'Зарезервував: {name}',
     orderChanges: 'Змінити замовлення', toCash: 'Перевести на готівку', cashReason: 'Причина переведення на готівку',
     reasonNeeded: 'Вкажіть причину, до 500 символів.', changeDestination: 'Змінити точку призначення',
     newDestination: 'Нова точка призначення', destinationReason: 'Причина зміни точки',
@@ -233,6 +243,11 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    orderTrip: 'Przejazd i rezerwacja', interrupt: 'Przerwij przejazd', interruptReason: 'Powód przerwania',
+    interruptComment: 'Komentarz do przerwania', followUp: 'Wyślij inny samochód',
+    interruptNeeds: 'Wybierz powód przerwania; komentarz — do 500 znaków.',
+    followUpSent: 'Nowe zlecenie nr {number} jedzie po pasażera.', unreserve: 'Zdejmij rezerwację',
+    unreserveReason: 'Powód zdjęcia rezerwacji', reservedBy: 'Zarezerwował: {name}',
     orderChanges: 'Zmień zlecenie', toCash: 'Zmień na gotówkę', cashReason: 'Powód zmiany na gotówkę',
     reasonNeeded: 'Podaj powód, do 500 znaków.', changeDestination: 'Zmień cel podróży',
     newDestination: 'Nowy cel podróży', destinationReason: 'Powód zmiany celu',
