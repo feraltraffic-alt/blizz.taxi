@@ -10,6 +10,6 @@ export default defineConfig({
     {name: 'light', use: {colorScheme: 'light'}},
     {name: 'dark', use: {colorScheme: 'dark'}}
   ],
-  webServer: {command: 'node scripts/serve-rider-web.mjs', cwd: '../../..', url: 'http://127.0.0.1:4174',
+  webServer: {command: 'node scripts/serve-mobile-web.mjs rider 4174', cwd: '../../..', url: 'http://127.0.0.1:4174',
     reuseExistingServer: false, timeout: 30_000}
 });

@@ -1,7 +1,7 @@
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 import {createApiClient, type RefreshTokenStore} from '@blizz/api-client';
 import {RiderApp, type AppConfig} from '../src/App';
-import {secureRefreshTokens, type SecureStore} from '../src/secureTokens';
+import {secureRefreshTokens, type SecureStore} from '@blizz/mobile-ui';
 import {translations, validateCatalogs} from '../src/i18n';
 
 const cid = '10000000-0000-4000-8000-000000000001';
@@ -183,7 +183,7 @@ describe('E5: restarting', () => {
     const kept = new Map<string, string>();
     const store: SecureStore = {getItem: k => kept.get(k) ?? null, setItem: (k, v) => {kept.set(k, v);},
       deleteItemAsync: async k => {kept.delete(k);}};
-    const tokens = secureRefreshTokens(store);
+    const tokens = secureRefreshTokens(store, 'blizz.rider.refresh');
     tokens.write('refresh-1');
     expect(tokens.read()).toBe('refresh-1');
     expect([...kept.values()]).toEqual(['refresh-1']);

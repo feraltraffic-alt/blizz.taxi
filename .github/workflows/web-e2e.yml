@@ -9,7 +9,8 @@ on:
       - "apps/web/**"
       - "packages/api-client/**"
       - "apps/mobile/**"
-      - "scripts/serve-rider-web.mjs"
+      - "scripts/serve-mobile-web.mjs"
+      - "packages/mobile-ui/**"
       - ".github/workflows/web-e2e.yml"
 
 permissions:
@@ -67,12 +68,19 @@ jobs:
           (cd apps/mobile/rider && npx expo export --platform web --output-dir dist)
           set -o pipefail
           npx playwright test --config apps/mobile/rider/playwright.config.ts 2>&1 | tee rider-e2e.txt
+      - name: The driver app's web build signs in, accepts the texts, goes online and offline (#237)
+        run: |
+          (cd apps/mobile/driver && npx expo export --platform web --output-dir dist)
+          set -o pipefail
+          npx playwright test --config apps/mobile/driver/playwright.config.ts 2>&1 | tee driver-e2e.txt
       - name: Summary
         if: always()
         run: |
           { echo "## Admin panel against the real server"; echo '```'; tail -n 40 e2e.txt; echo '```'; } \
             >> "$GITHUB_STEP_SUMMARY"
           { echo "## Rider app against the real server"; echo '```'; tail -n 40 rider-e2e.txt; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Driver app against the real server"; echo '```'; tail -n 40 driver-e2e.txt; echo '```'; } \
             >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the trace
         if: always()
@@ -82,7 +90,9 @@ jobs:
           path: |
             apps/web/admin/playwright-report
             apps/mobile/rider/playwright-report
+            apps/mobile/driver/playwright-report
             test-results
             e2e.txt
             rider-e2e.txt
+            driver-e2e.txt
             server.log
