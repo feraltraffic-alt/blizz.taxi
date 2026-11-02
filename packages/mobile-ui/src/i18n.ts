@@ -5,6 +5,16 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    chat: 'Чат',
+    chatMe: 'Вы',
+    chatDriver: 'Водитель',
+    chatRider: 'Пассажир',
+    chatMessage: 'Сообщение',
+    chatSend: 'Отправить',
+    chatLength: 'Сообщение — от 1 до 1000 знаков.',
+    chatClosed: 'Чат закрыт. Напишите в поддержку.',
+    chatRemoved: 'Вы больше не на этом заказе.',
+    chatNotSent: 'Не отправлено.',
     signInTitle: 'Вход',
     phone: 'Номер телефона',
     getCode: 'Получить код',
@@ -32,6 +42,16 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    chat: 'Чат',
+    chatMe: 'Ви',
+    chatDriver: 'Водій',
+    chatRider: 'Пасажир',
+    chatMessage: 'Повідомлення',
+    chatSend: 'Надіслати',
+    chatLength: 'Повідомлення — від 1 до 1000 знаків.',
+    chatClosed: 'Чат закрито. Напишіть у підтримку.',
+    chatRemoved: 'Ви більше не на цьому замовленні.',
+    chatNotSent: 'Не надіслано.',
     signInTitle: 'Вхід',
     phone: 'Номер телефону',
     getCode: 'Отримати код',
@@ -59,6 +79,16 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    chat: 'Czat',
+    chatMe: 'Ty',
+    chatDriver: 'Kierowca',
+    chatRider: 'Pasażer',
+    chatMessage: 'Wiadomość',
+    chatSend: 'Wyślij',
+    chatLength: 'Wiadomość — od 1 do 1000 znaków.',
+    chatClosed: 'Czat zamknięty. Napisz do pomocy.',
+    chatRemoved: 'Nie jesteś już przy tym zleceniu.',
+    chatNotSent: 'Nie wysłano.',
     signInTitle: 'Logowanie',
     phone: 'Numer telefonu',
     getCode: 'Pobierz kod',

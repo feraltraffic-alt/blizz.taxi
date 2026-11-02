@@ -12,7 +12,8 @@ const PLACES: Record<string, {lat: number; lon: number}> = {light: {lat: 50.4501
 type Request = import('@playwright/test').APIRequestContext;
 
 /** A rider of the sandbox orders a cash ride from the driver's spot through the API, as full-ride.sh does. */
-async function riderOrders(request: Request, from: {lat: number; lon: number}): Promise<string> {
+async function riderOrders(request: Request, from: {lat: number; lon: number}):
+  Promise<{order: string; headers: Record<string, string>}> {
   const phone = '+38067' + String(Date.now()).slice(-7);
   const device = 'e2e-rider-' + Date.now();
   const challenge = await request.post('/auth/v1/otp/challenges', {data: {audience: 'CLIENT', phone,
@@ -32,7 +33,7 @@ async function riderOrders(request: Request, from: {lat: number; lon: number}): 
     quote_id: ((await quote.json()) as {id: string}).id, vehicle_class: 'STANDARD', pickup: from,
     pickup_label: 'Точка E2E', dropoff: to, dropoff_label: 'Назначение E2E', payment_method: 'CASH'}});
   expect(order.status()).toBe(201);
-  return ((await order.json()) as {id: string}).id;
+  return {order: ((await order.json()) as {id: string}).id, headers};
 }
 
 test('a sandbox driver signs in by a code, goes online, takes an offer, drives it to the end and goes offline',
@@ -69,11 +70,24 @@ test('a sandbox driver signs in by a code, goes online, takes an offer, drives i
 
   // A ride from the driver's spot, offered to this driver, accepted and driven to the end in cash (#249).
   await expect(page.getByText('Ждём предложений…')).toBeVisible();
-  await riderOrders(request, place);
+  const rider = await riderOrders(request, place);
   await expect(page.getByText('Точка E2E → Назначение E2E')).toBeVisible({timeout: 30_000});
   await page.screenshot({path: info.outputPath('6-offer.png'), fullPage: true});
   await page.getByRole('button', {name: 'Принять', exact: true}).click();
   await expect(page.getByText('Едете к пассажиру')).toBeVisible();
+
+  // The order chat (#262): the rider writes through the API, the driver reads it and answers in the app.
+  const wrote = await request.post('/api/rider/v1/orders/' + rider.order + '/messages', {headers: rider.headers,
+    data: {command_id: crypto.randomUUID(), body: 'Я у входа в метро'}});
+  expect(wrote.status(), await wrote.text()).toBe(201);
+  await expect(page.getByText('Пассажир: Я у входа в метро')).toBeVisible({timeout: 15_000});
+  await page.getByLabel('Сообщение', {exact: true}).fill('Буду через 3 минуты');
+  await page.getByRole('button', {name: 'Отправить', exact: true}).click();
+  await expect(page.getByText('Вы: Буду через 3 минуты')).toBeVisible();
+  const read = await request.get('/api/rider/v1/orders/' + rider.order + '/messages?after=0', {headers: rider.headers});
+  expect(((await read.json()) as {messages: {sender_role: string; body: string}[]}).messages
+    .map(m => m.sender_role + ': ' + m.body)).toEqual(['RIDER: Я у входа в метро', 'DRIVER: Буду через 3 минуты']);
+  await page.screenshot({path: info.outputPath('7a-chat.png'), fullPage: true});
   await page.screenshot({path: info.outputPath('7-to-pickup.png'), fullPage: true});
   await page.getByRole('button', {name: 'Я на месте', exact: true}).click();
   const confirm = page.getByRole('button', {name: 'Подтвердить прибытие', exact: true});
