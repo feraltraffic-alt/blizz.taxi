@@ -45,7 +45,7 @@ export function History(props: Shared & {newId: () => string; pollMs: number; on
     if (!next || reading.current) return;
     reading.current = true;
     try {
-      const page = await read(next);
+      const page = await read(null);
       setItems(list => [...(list ?? []), ...page.items]);
       setNext(page.page.next_cursor);
     } catch (error) {
