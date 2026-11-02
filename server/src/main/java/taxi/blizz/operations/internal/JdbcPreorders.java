@@ -36,7 +36,7 @@ class JdbcPreorders implements Preorders {
 
     private static final String ORDER_COLUMNS = """
             o.id, o.short_number, o.pickup_at, o.vehicle_class, ST_Y(o.pickup) as pickup_lat, ST_X(o.pickup) as pickup_lon,
-            o.pickup_label, o.dropoff_label, o.price_minor, o.currency, o.payment_method""";
+            o.pickup_label, o.dropoff_label, o.price_minor, o.currency, o.payment_method, o.city_id""";
 
     private final JdbcClient jdbc;
     private final IdempotentCommands commands;
@@ -68,7 +68,7 @@ class JdbcPreorders implements Preorders {
     @Transactional(readOnly = true)
     public List<Available> available(Actor driver) {
         requireDriver(driver);
-        if (rules().dispatch() != ServiceSettings.PreorderDispatch.RESERVATION) {
+        if (rules(driver).dispatch() != ServiceSettings.PreorderDispatch.RESERVATION) {
             return List.of();
         }
         DriverAvailability availability = mayReserve(driver);
@@ -124,7 +124,7 @@ class JdbcPreorders implements Preorders {
         requireDriver(driver);
         return commands.execute(new CommandKey(driver, "preorder.reserve", commandId), new OrderRequest(orderId),
                 Reservation.class, () -> {
-                    if (rules().dispatch() != ServiceSettings.PreorderDispatch.RESERVATION) {
+                    if (rules(driver).dispatch() != ServiceSettings.PreorderDispatch.RESERVATION) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Pre-orders are released into the search, not reserved");
                     }
@@ -190,7 +190,8 @@ class JdbcPreorders implements Preorders {
                 new DropRequest(reservationId, reasonCode), Reservation.class, () -> {
                     CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, reasonCode.trim());
                     Locked r = lock(reservationId, driver);
-                    OffsetDateTime dropUntil = r.pickupAt().minusMinutes(rules().driverCancelUntilMinutesBefore());
+                    OffsetDateTime dropUntil = r.pickupAt()
+                            .minusMinutes(rules(driver).driverCancelUntilMinutesBefore());
                     if (!core.now().isBefore(dropUntil)) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Too close to the pickup; only a dispatcher can take the order off you now");
@@ -212,7 +213,7 @@ class JdbcPreorders implements Preorders {
         return commands.execute(new CommandKey(driver, "preorder.confirm", commandId),
                 new ConfirmRequest(reservationId), AssignmentView.class, () -> {
                     Locked r = lock(reservationId, driver);
-                    ServiceSettings.Preorders rules = rules();
+                    ServiceSettings.Preorders rules = rules(driver);
                     OffsetDateTime now = core.now();
                     if (now.isBefore(confirmFrom(r.pickupAt(), rules))) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
@@ -331,8 +332,9 @@ class JdbcPreorders implements Preorders {
         return availability;
     }
 
-    private ServiceSettings.Preorders rules() {
-        return settings.current().settings().preorders();
+    /** The pre-order rules of the driver's own taxi service (ADR 0016). */
+    private ServiceSettings.Preorders rules(Actor driver) {
+        return settings.of(driver).settings().preorders();
     }
 
     private Reservation read(UUID reservationId) {
@@ -344,7 +346,8 @@ class JdbcPreorders implements Preorders {
 
     private Reservation reservation(ResultSet rs) throws SQLException {
         Available order = available(rs);
-        ServiceSettings.Preorders rules = rules();
+        // The rules of the order's taxi service (ADR 0016).
+        ServiceSettings.Preorders rules = settings.ofCity(rs.getObject("city_id", UUID.class)).settings().preorders();
         return new Reservation(rs.getObject("reservation_id", UUID.class), rs.getString("state"), order,
                 rs.getObject("reserved_at", OffsetDateTime.class), confirmFrom(order.pickupAt(), rules),
                 confirmUntil(order.pickupAt(), rules),

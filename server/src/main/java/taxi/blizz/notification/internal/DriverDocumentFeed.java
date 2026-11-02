@@ -63,7 +63,7 @@ class DriverDocumentFeed implements OutboxHandler {
     public void handle(OutboxMessage message) {
         Payload payload = json.readValue(message.payload(), Payload.class);
         Actor driver = new Actor(SubjectType.DRIVER, payload.driverId());
-        String fallback = settings.current().settings().languages().defaultLanguage();
+        String fallback = settings.of(driver).settings().languages().defaultLanguage();
         String chosen = accounts.language(driver).orElse(null);
         String language = PushTemplates.supports(chosen) ? chosen : fallback;
         PushTemplates.Text text = PushTemplates.document(

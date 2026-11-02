@@ -34,7 +34,7 @@ class StaffTopUpLimit {
     /** Refuses {@code amountMinor} when it takes the staff member over the limit for the currency. */
     @Transactional(propagation = Propagation.MANDATORY)
     void check(Actor staff, String currency, long amountMinor, OffsetDateTime now) {
-        OptionalLong max = settings.current().settings().staffTopUps().dailyMax(currency);
+        OptionalLong max = settings.of(staff).settings().staffTopUps().dailyMax(currency);
         if (max.isEmpty()) {
             return;
         }

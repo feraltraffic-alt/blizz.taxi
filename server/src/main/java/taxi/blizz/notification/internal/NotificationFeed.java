@@ -150,7 +150,7 @@ class NotificationFeed implements OutboxHandler {
     }
 
     private void create(OutboxMessage message, Push push) {
-        String fallback = settings.current().settings().languages().defaultLanguage();
+        String fallback = settings.of(push.recipient()).settings().languages().defaultLanguage();
         String language = language(push.recipient(), fallback);
         PushTemplates.Text text = PushTemplates.text(push.template(), language, fallback).orElseThrow();
         Map<String, String> data = new LinkedHashMap<>();

@@ -218,7 +218,9 @@ class JdbcTips implements Tips {
     }
 
     private OffsetDateTime until(Trip trip) {
-        return trip.completedAt().plus(Duration.ofHours(settings.current().settings().tips().windowHours()));
+        // The tip window of the trip's taxi service (ADR 0016), the driver's own.
+        return trip.completedAt().plus(Duration.ofHours(settings.of(new Actor(SubjectType.DRIVER, trip.driverId()))
+                .settings().tips().windowHours()));
     }
 
     /** The rider's own fulfilled order; NOT_FOUND for anyone else's or an unfinished one. */

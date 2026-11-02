@@ -16,6 +16,7 @@ class ConfigurationWebConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new AppVersionInterceptor(settings)).addPathPatterns("/api/**");
+        // After the bearer check, so the policy is the one of the caller's taxi service (ADR 0016).
+        registry.addInterceptor(new AppVersionInterceptor(settings)).addPathPatterns("/api/**").order(100);
     }
 }

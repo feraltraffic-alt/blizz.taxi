@@ -71,7 +71,7 @@ class CallerTexts implements OutboxHandler {
             return;
         }
         String language = n.contactPhone().startsWith("+48") ? "pl" : "uk";
-        String text = text(template, language, n, settings.current().settings().brand().serviceName());
+        String text = text(template, language, n, settings.ofCity(n.cityId()).settings().brand().serviceName());
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         OffsetDateTime from = message.occurredAt() == null ? now
                 : message.occurredAt().toInstant().atOffset(ZoneOffset.UTC);

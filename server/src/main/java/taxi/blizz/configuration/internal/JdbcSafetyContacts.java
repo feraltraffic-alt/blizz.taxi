@@ -65,7 +65,7 @@ class JdbcSafetyContacts implements SafetyContacts {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The city is required");
         }
         Version current = read(cityId, false);
-        String fallback = settings.current().settings().languages().defaultLanguage();
+        String fallback = settings.ofCity(cityId).settings().languages().defaultLanguage();
         List<ExtraView> extra = current.extra().stream()
                 .map(e -> new ExtraView(label(e.label(), language, fallback), e.phone())).toList();
         return new View(cityId, current.emergencyNumber(), current.supportPhone(), extra, NO_AUTO_DISPATCH);
@@ -91,7 +91,7 @@ class JdbcSafetyContacts implements SafetyContacts {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The city is required");
         }
         staff.require(actor, MANAGE_PERMISSION, cityId);
-        Contacts clean = validate(contacts);
+        Contacts clean = validate(contacts, cityId);
         String why = reason == null ? "" : reason.strip();
         if (why.isEmpty() || why.length() > REASON_MAX) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason of at most 500 characters is required");
@@ -155,7 +155,7 @@ class JdbcSafetyContacts implements SafetyContacts {
                 null));
     }
 
-    private Contacts validate(Contacts contacts) {
+    private Contacts validate(Contacts contacts, UUID cityId) {
         if (contacts == null) {
             throw invalid("The contacts are required");
         }
@@ -168,7 +168,7 @@ class JdbcSafetyContacts implements SafetyContacts {
         if (contacts.extra().size() > MAX_EXTRA) {
             throw invalid("At most " + MAX_EXTRA + " extra contacts");
         }
-        String defaultLanguage = settings.current().settings().languages().defaultLanguage();
+        String defaultLanguage = settings.ofCity(cityId).settings().languages().defaultLanguage();
         List<Extra> extra = new ArrayList<>();
         for (Extra e : contacts.extra()) {
             if (e == null || e.phone() == null || e.phone().isBlank()) {

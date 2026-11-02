@@ -266,7 +266,8 @@ class JdbcQuoteService implements QuoteService {
         if (request.pickupAt() == null) {
             return false;
         }
-        ServiceSettings.Preorders rules = settings.current().settings().preorders();
+        // The pre-order rules of the city's taxi service (ADR 0016).
+        ServiceSettings.Preorders rules = settings.ofCity(request.cityId()).settings().preorders();
         Instant now = clock.instant();
         if (request.pickupAt().isBefore(now)) {
             throw error(ErrorCode.VALIDATION_FAILED, "The pickup time is in the past");

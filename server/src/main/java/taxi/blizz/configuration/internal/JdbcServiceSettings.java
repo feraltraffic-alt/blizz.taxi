@@ -63,8 +63,14 @@ class JdbcServiceSettings implements ServiceSettings {
     private final JsonMapper json;
     private final Clock clock;
 
-    JdbcServiceSettings(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit, JsonMapper json,
-                        Clock clock) {
+    private final taxi.blizz.identity.Services services;
+    private final taxi.blizz.geo.CityCatalog cities;
+
+    JdbcServiceSettings(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
+                        JsonMapper json, Clock clock, taxi.blizz.identity.Services services,
+                        taxi.blizz.geo.CityCatalog cities) {
+        this.services = services;
+        this.cities = cities;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -75,14 +81,31 @@ class JdbcServiceSettings implements ServiceSettings {
 
     @Override
     @Transactional(readOnly = true)
-    public Version current() {
+    public Version current(UUID serviceId) {
         return jdbc.sql("""
                         select version, settings::text, changed_by, reason, changed_at
-                        from service_settings order by version desc limit 1""")
+                        from service_settings where service_id = :service order by version desc limit 1""")
+                .param("service", serviceId)
                 .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
                 .optional()
                 .orElse(new Version(0, DEFAULTS, null, null, null));
+    }
+
+    @Override
+    public Version ofCity(UUID cityId) {
+        return current(cityId == null ? taxi.blizz.identity.Services.DEFAULT_ID
+                : cities.serviceOf(cityId).orElse(taxi.blizz.identity.Services.DEFAULT_ID));
+    }
+
+    @Override
+    public Version of(Actor subject) {
+        return current(services.of(subject).orElse(taxi.blizz.identity.Services.DEFAULT_ID));
+    }
+
+    private UUID serviceOfStaff(Actor actor) {
+        return services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Not staff of a taxi service"));
     }
 
     record ChangeRequest(long expectedVersion, Settings settings, String reason) {
@@ -97,17 +120,20 @@ class JdbcServiceSettings implements ServiceSettings {
         }
         return commands.execute(new CommandKey(actor, "settings.change", commandId),
                 new ChangeRequest(expectedVersion, clean, reason), Version.class, () -> {
-                    jdbc.sql("select pg_advisory_xact_lock(hashtext('service-settings'))").query().singleRow();
-                    Version before = current();
+                    UUID service = serviceOfStaff(actor);
+                    jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))").param("key", "service-settings:" + service)
+                            .query().singleRow();
+                    Version before = current(service);
                     if (before.version() != expectedVersion) {
                         throw ConflictException.version(before.version(), "The settings changed");
                     }
                     OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
                     long version = before.version() + 1;
                     jdbc.sql("""
-                                    insert into service_settings (version, settings, changed_by, reason, changed_at)
-                                    values (:version, cast(:settings as jsonb), :by, :reason, :now)""")
-                            .param("version", version).param("settings", json.writeValueAsString(clean))
+                                    insert into service_settings (version, settings, changed_by, reason, changed_at,
+                                                                  service_id)
+                                    values (:version, cast(:settings as jsonb), :by, :reason, :now, :service)""")
+                            .param("service", service).param("version", version).param("settings", json.writeValueAsString(clean))
                             .param("by", actor.id()).param("reason", reason).param("now", now).update();
                     audit.record(new AuditEntry(actor, "settings.change", "service_settings", Long.toString(version),
                             reason, before.settings(), clean));
@@ -121,8 +147,9 @@ class JdbcServiceSettings implements ServiceSettings {
         staff.require(actor, MANAGE_PERMISSION);
         return jdbc.sql("""
                         select version, settings::text, changed_by, reason, changed_at
-                        from service_settings where version < :afterVersion
+                        from service_settings where service_id = :service and version < :afterVersion
                         order by version desc limit :limit""")
+                .param("service", serviceOfStaff(actor))
                 .param("afterVersion", after == null ? Long.MAX_VALUE : after.number(0))
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
                 .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
