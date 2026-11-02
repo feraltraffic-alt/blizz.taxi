@@ -8,3 +8,6 @@ const client = createApiClient({baseUrl: window.location.origin,
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
 createRoot(root).render(<OperatorApp client={client} />);
+
+// Mutation (#253): a server secret that must never ship; the Web job must fail on it.
+(globalThis as Record<string, unknown>).leak = 'sandbox-only-access-token-secret-not-for-real-use';
