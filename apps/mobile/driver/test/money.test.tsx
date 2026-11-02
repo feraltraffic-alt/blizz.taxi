@@ -1,4 +1,17 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+
+/** The provider's page: what the app sends it is recorded, and it "returns" at once, as the sandbox's FAKE page does. */
+const pages: {url: string; fields: Record<string, string>}[] = [];
+jest.mock('../src/ProviderPage', () => {
+  const {useEffect} = jest.requireActual<typeof import('react')>('react');
+  return {ProviderPage: ({url, fields, onDone}: {url: string; fields: Record<string, string>; onDone: () => void}) => {
+    useEffect(() => {
+      pages.push({url, fields});
+      onDone();
+    }, []);
+    return null;
+  }};
+});
 import {createApiClient} from '@blizz/api-client';
 import {DriverApp, type AppConfig} from '../src/App';
 
@@ -48,13 +61,13 @@ const base = {
     session_id: null}}],
 };
 
-async function mount(script: Record<string, Answer[]>, options: {clock?: number} = {}) {
+async function mount(script: Record<string, Answer[]>, options: {clock?: number; pollMs?: number} = {}) {
   const http = server({...base, ...script});
   let id = 0;
   const client = createApiClient({baseUrl: 'https://api.blizz.test', refreshTokens: {read: () => null, write: () => {}},
     fetch: http.fetch, correlationId: () => cid, initialSession: session as never});
   const config: AppConfig = {service: 'default', deviceRef: 'test-driver', now: () => options.clock ?? NOW,
-    heartbeatMs: 60_000, pollMs: 60_000, locate: async () => ({lat: 50.4501, lon: 30.5234, accuracy_m: 8}),
+    heartbeatMs: 60_000, pollMs: options.pollMs ?? 60_000, locate: async () => ({lat: 50.4501, lon: 30.5234, accuracy_m: 8}),
     newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0')};
   await render(<DriverApp client={client} config={config} />);
   return {http};
@@ -84,8 +97,8 @@ const money = (script: Record<string, Answer[]>) => ({
   ...script
 });
 
-async function openMoney(script: Record<string, Answer[]>, clock?: number) {
-  const result = await mount(money(script), {clock});
+async function openMoney(script: Record<string, Answer[]>, clock?: number, pollMs?: number) {
+  const result = await mount(money(script), {clock, pollMs});
   await fireEvent.press(await screen.findByRole('button', {name: 'Деньги'}));
   return result;
 }
@@ -206,5 +219,69 @@ describe('#321: the city\'s days', () => {
     };
     expect(await asked({'GET /api/config/v1/bootstrap': [{status: 503, body: {code: 'UNAVAILABLE',
       correlation_id: cid}}]}, clock)).toEqual([local(clock - 6 * 86_400_000), local(clock)]);
+  });
+});
+
+/** Topping up the balance by card (#326): U1–U5. */
+describe('#326: top-up by card', () => {
+  const TOP = 'a0000000-0000-4000-8000-000000000001';
+  const topUp = (state: string, over: Record<string, unknown> = {}) => ({id: TOP, state, amount_minor: 25050,
+    currency: 'UAH', created_at: '2026-11-02T10:00:00Z', expires_at: '2026-11-02T10:15:00Z', ...over});
+  const started = topUp('PENDING', {url: 'https://secure.wayforpay.test/pay', fields: {merchantAccount: 'test'},
+    return_url: 'https://api.blizz.test/return'});
+  const START = 'POST /api/driver/v1/balance/card-top-ups';
+  const READ = 'GET /api/driver/v1/balance/card-top-ups/' + TOP;
+  beforeEach(() => {pages.length = 0;});
+
+  async function topUpWith(amount: string, script: Record<string, Answer[]>) {
+    const result = await openMoney({[START]: [{status: 201, body: started}],
+      [READ]: [{status: 200, body: topUp('PENDING')}, {status: 200, body: topUp('COMPLETED')}], ...script},
+    undefined, 50);
+    await fireEvent.changeText(await screen.findByLabelText('Сумма пополнения, UAH'), amount);
+    await fireEvent.press(screen.getByRole('button', {name: 'Пополнить картой'}));
+    return result;
+  }
+  const starts = (http: {calls: Call[]}) => http.calls.filter(c => c.method === 'POST'
+    && c.path === '/api/driver/v1/balance/card-top-ups');
+
+  it.each([['', 'пусто'], ['abc', 'не число'], ['10.005', 'три знака'], ['0.99', 'меньше 1'], ['10000.01', 'больше 10 000']])(
+    'U1: "%s" (%s) is refused on the phone', async amount => {
+      const {http} = await topUpWith(amount, {});
+      expect(await screen.findByText('Укажите сумму от 1.00 до 10000.00 UAH.')).toBeTruthy();
+      expect(starts(http)).toEqual([]);
+    });
+
+  it('U2, U3: one start in minor units, the page, then COMPLETED and the balance again', async () => {
+    const {http} = await topUpWith('250.50', {});
+    expect(await screen.findByText('Баланс пополнен на 250.50 UAH.')).toBeTruthy();
+    expect(starts(http).map(c => c.body)).toEqual([{command_id: expect.any(String), city_id: KYIV,
+      amount_minor: 25050}]);
+    expect(pages).toEqual([{url: 'https://secure.wayforpay.test/pay', fields: {merchantAccount: 'test'}}]);
+    expect(http.calls.filter(c => c.path === '/api/driver/v1/balance').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each([
+    [topUp('FAILED', {failure_reason: 'Недостаточно средств'}), 'Оплата не прошла: Недостаточно средств'],
+    [topUp('EXPIRED'), 'Время оплаты истекло.']
+  ])('U3: a %j result is told', async (result, text) => {
+    await topUpWith('100', {[READ]: [{status: 200, body: result}]});
+    expect(await screen.findByText(text)).toBeTruthy();
+  });
+
+  it('U4: a city without cards says so', async () => {
+    await topUpWith('100', {[START]: [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}]});
+    expect(await screen.findByText('В этом городе нельзя пополнить картой.')).toBeTruthy();
+    expect(pages).toEqual([]);
+  });
+
+  it('U5: a double press starts once', async () => {
+    const {http} = await openMoney({[START]: [{status: 201, delayMs: 200, body: started}],
+      [READ]: [{status: 200, body: topUp('COMPLETED')}]}, undefined, 50);
+    await fireEvent.changeText(await screen.findByLabelText('Сумма пополнения, UAH'), '100');
+    const button = screen.getByRole('button', {name: 'Пополнить картой'});
+    await fireEvent.press(button);
+    await fireEvent.press(button);
+    expect(await screen.findByText('Баланс пополнен на 250.50 UAH.')).toBeTruthy();
+    expect(starts(http)).toHaveLength(1);
   });
 });
