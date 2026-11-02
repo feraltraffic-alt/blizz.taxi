@@ -1,10 +1,12 @@
 import {createElement} from 'react';
 import {registerRootComponent} from 'expo';
 import Constants from 'expo-constants';
+import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
 import {RiderApp} from './src/App';
+import type {Point} from './src/Ride';
 import {secureRefreshTokens, webRefreshTokens} from '@blizz/mobile-ui';
 
 const KEY = 'blizz.rider.refresh';
@@ -20,8 +22,15 @@ const client = createApiClient({
 });
 const deviceRef = 'rider-' + globalThis.crypto.randomUUID();
 
+async function locate(): Promise<Point> {
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (permission.status !== 'granted') throw new Error('No location permission');
+  const fix = await Location.getCurrentPositionAsync({accuracy: Location.Accuracy.Balanced});
+  return {lat: fix.coords.latitude, lon: fix.coords.longitude};
+}
+
 function Root() {
-  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef}});
+  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate}});
 }
 
 registerRootComponent(Root);
