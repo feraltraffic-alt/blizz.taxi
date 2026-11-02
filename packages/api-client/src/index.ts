@@ -38,6 +38,8 @@ export interface ClientOptions {
   initialSession?: Session;
   fetch?: typeof globalThis.fetch;
   correlationId?: () => string;
+  /** Headers of every request, e.g. the app's platform and version (REQ-API-10). */
+  headers?: () => Record<string, string>;
 }
 export interface ApiClient {
   get<P extends PathsFor<'get'>>(path: P, ...options: Arguments<P, 'get'>): Promise<Success<Operation<P, 'get'>>>;
@@ -46,6 +48,8 @@ export interface ApiClient {
   changePassword(input: ChangePassword): Promise<void>;
   logout(): Promise<void>;
   restoreSession(): Promise<void>;
+  /** A session the app got itself, e.g. from a one-time code (/auth/v1/otp/verify). */
+  startSession(session: Session): void;
   sessionSnapshot(): SessionSnapshot;
   subscribe(listener: () => void): () => void;
 }
@@ -172,7 +176,9 @@ export function createApiClient(options: ClientOptions): ApiClient {
   /** One HTTP exchange; a network failure becomes an ApiError with this request's correlation id. */
   async function exchange(method: string, path: string, request: RequestOptions, token: string | null) {
     const id = correlation();
-    const headers: Record<string, string> = {'X-Correlation-Id': id, Accept: 'application/json'};
+    const headers: Record<string, string> = {
+      ...(options.headers?.() ?? {}), 'X-Correlation-Id': id, Accept: 'application/json'
+    };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (request.body !== undefined) headers['Content-Type'] = 'application/json';
     let response: Response;
@@ -277,6 +283,11 @@ export function createApiClient(options: ClientOptions): ApiClient {
     async restoreSession() {
       if (access) return;
       await refresh();
+    },
+
+    startSession(session) {
+      generation++;
+      adopt(session);
     },
 
     sessionSnapshot() {

@@ -8,6 +8,8 @@ on:
     paths:
       - "apps/web/**"
       - "packages/api-client/**"
+      - "apps/mobile/**"
+      - "scripts/serve-rider-web.mjs"
       - ".github/workflows/web-e2e.yml"
 
 permissions:
@@ -57,11 +59,20 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
       - name: Sign in, change the password, see the profile, sign out
-        run: npm run e2e 2>&1 | tee e2e.txt
+        run: |
+          set -o pipefail
+          npm run e2e 2>&1 | tee e2e.txt
+      - name: The rider app's web build signs in by a code, accepts the texts and sees the profile (#137)
+        run: |
+          (cd apps/mobile/rider && npx expo export --platform web --output-dir dist)
+          set -o pipefail
+          npx playwright test --config apps/mobile/rider/playwright.config.ts 2>&1 | tee rider-e2e.txt
       - name: Summary
         if: always()
         run: |
           { echo "## Admin panel against the real server"; echo '```'; tail -n 40 e2e.txt; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Rider app against the real server"; echo '```'; tail -n 40 rider-e2e.txt; echo '```'; } \
             >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the trace
         if: always()
@@ -70,5 +81,8 @@ jobs:
           name: web-e2e
           path: |
             apps/web/admin/playwright-report
+            apps/mobile/rider/playwright-report
+            test-results
             e2e.txt
+            rider-e2e.txt
             server.log
