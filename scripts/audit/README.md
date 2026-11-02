@@ -23,3 +23,15 @@ Temporary source/contract mutations proved the checker in both directions for E1
 - A file whose count went down fails too, with "lower the baseline for X to N". The baseline therefore only ever goes down.
 
 Each finding names the file and the line numbers. `--print` prints today's counts in the baseline's format, so a lowered count can be reviewed and committed. Lines are counted in characters, not bytes. Background: issue #149 and lessons case 14.
+
+# No secret in the client bundles (AC-23, #253)
+
+`node scripts/audit/bundle-secrets.mjs <build dir>...` scans every text file of the given builds (scripts, HTML, CSS,
+JSON, source maps). It exits 1 and names the file and the kind for:
+- a PEM private key;
+- a credential of a known shape (AWS, Google, GitHub, Slack, Stripe live, a signed JWT);
+- the name of a server secret variable (from `application*.yml` and the table in `deploy/README.md`);
+- a sandbox value of such a secret.
+
+`scripts/web-check.sh` runs it on the admin and operator builds, and `web-e2e.yml` on the rider and driver web
+exports. The tests in `test/bundle-secrets.test.ts` plant each kind and see it fail.

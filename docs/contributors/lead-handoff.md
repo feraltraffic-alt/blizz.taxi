@@ -1,4 +1,4 @@
-# Lead handoff (state on 02.11.2026, day)
+# Lead handoff (state on 02.11.2026, afternoon)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -30,7 +30,7 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 |---|---|
 | Codex | Idle since 30.10. #136 was finished by the lead (#233) from Codex's tests-first commit |
 | Second Claude | Idle since 01.11 09:16. Its #137 (rider app) was finished by the lead (#236) |
-| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. Clients: web foundation (#233), rider app first slice (#236), driver app first slice (#239). The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next". Next candidates: the operator workstation (`apps/web/operator` is an empty shell), the driver's offers and trips, a rider profile with phone and name (the contract's `/me` has neither) |
+| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. Clients merged: web foundation (#233), rider first slice (#236), driver first slice (#239), operator workstation (#246), rider `/me` phone and name (#242), city center (#244), rider ordering (#250, issue #248). In review on 02.11: driver offers and trips (#252, issue #249), operator vehicle classes (issue #251), no secret in the client bundles (issue #253, AC-23). The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next". Next candidates: the rider's rating and tip after a ride, the driver's ALL tab (broadcast orders), push registration in the apps and stale notifications on screen (AC-19) |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
