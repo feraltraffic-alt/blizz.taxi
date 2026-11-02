@@ -5,6 +5,7 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    addCardIn: 'Добавить карту: {city}',
     myCards: 'Мои карты',
     cards: 'Мои карты',
     noCards: 'Карт пока нет.',
@@ -57,6 +58,7 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    addCardIn: 'Додати картку: {city}',
     myCards: 'Мої картки',
     cards: 'Мої картки',
     noCards: 'Карток ще немає.',
@@ -109,6 +111,7 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    addCardIn: 'Dodaj kartę: {city}',
     myCards: 'Moje karty',
     cards: 'Moje karty',
     noCards: 'Nie ma jeszcze kart.',

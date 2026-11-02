@@ -163,7 +163,7 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
   await page.getByRole('button', {name: 'Мои карты', exact: true}).click();
   await expect(page.getByText('Карт пока нет.')).toBeVisible();
   const providerPage = page.waitForEvent('popup');
-  await page.getByRole('button', {name: 'Добавить карту', exact: true}).click();
+  await page.getByRole('button', {name: 'Добавить карту: Київ', exact: true}).click();
   const popup = await providerPage;
   console.log('PROVIDER PAGE', popup.url());
   await expect(page.getByText('Карта добавлена.')).toBeVisible({timeout: 30_000});
