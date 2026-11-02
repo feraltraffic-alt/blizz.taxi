@@ -84,8 +84,8 @@ const money = (script: Record<string, Answer[]>) => ({
   ...script
 });
 
-async function openMoney(script: Record<string, Answer[]>) {
-  const result = await mount(money(script));
+async function openMoney(script: Record<string, Answer[]>, clock?: number) {
+  const result = await mount(money(script), {clock});
   await fireEvent.press(await screen.findByRole('button', {name: 'Деньги'}));
   return result;
 }
@@ -171,5 +171,40 @@ describe('M7: a failed read', () => {
     await fireEvent.press(screen.getByRole('button', {name: 'Повторить'}));
     expect(await screen.findByText('Баланс: 0.00 UAH')).toBeTruthy();
     expect(http.calls.filter(c => c.path === '/api/driver/v1/balance')).toHaveLength(2);
+  });
+});
+
+/** The days of the city's calendar, not the phone's (#321): Z1–Z4. */
+describe('#321: the city\'s days', () => {
+  const boot = (timezone: string) => ({'GET /api/config/v1/bootstrap': [{status: 200, body: {cities: [
+    {id: KYIV, code: 'kyiv', name: 'Київ', currency: 'UAH', timezone, center: {lat: 50.45, lon: 30.52}}]}}]});
+  async function asked(script: Record<string, Answer[]>, clock: number) {
+    const {http} = await openMoney({...script}, clock);
+    await screen.findByText(/За 7 дней/);
+    const call = http.calls.filter(c => c.path === '/api/driver/v1/earnings').at(-1)!;
+    return [call.query.get('from'), call.query.get('to')];
+  }
+
+  it('Z1: at 22:30 UTC Kyiv is already on the next day', async () => {
+    expect(await asked(boot('Europe/Kyiv'), Date.parse('2026-11-02T22:30:00Z'))).toEqual(['2026-10-28', '2026-11-03']);
+  });
+
+  it('Z2: at 10:00 UTC both calendars agree', async () => {
+    expect(await asked(boot('Europe/Kyiv'), Date.parse('2026-11-02T10:00:00Z'))).toEqual(['2026-10-27', '2026-11-02']);
+  });
+
+  it('Z3: a city behind UTC is still on the day before', async () => {
+    expect(await asked(boot('America/New_York'), Date.parse('2026-11-03T02:00:00Z')))
+      .toEqual(['2026-10-27', '2026-11-02']);
+  });
+
+  it('Z4: without the city\'s time zone the phone\'s calendar is used', async () => {
+    const clock = Date.parse('2026-11-02T22:30:00Z');
+    const local = (at: number) => {
+      const d = new Date(at);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+    expect(await asked({'GET /api/config/v1/bootstrap': [{status: 503, body: {code: 'UNAVAILABLE',
+      correlation_id: cid}}]}, clock)).toEqual([local(clock - 6 * 86_400_000), local(clock)]);
   });
 });
