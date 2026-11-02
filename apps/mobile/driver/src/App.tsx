@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, DRIVER_CATEGORIES, LegalGuard, Loading, Screen, SignIn, Support, UpdateScreen, failureText,
+  Alert, Button, DRIVER_CATEGORIES, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
@@ -78,7 +78,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
-  const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support' | 'preorders'>('work');
+  const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support' | 'preorders' | 'phone'>('work');
   const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   const theme = useTheme();
 
@@ -196,6 +196,10 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       </Screen>
     );
   }
+  if (tab === 'phone') {
+    return <PhoneChange client={client} t={t} guard={guard} failure={failure} newId={newId} api="/api/driver/v1"
+      backLabel={t('home')} onBack={() => setTab('work')} />;
+  }
   if (tab === 'support') {
     return <Support client={client} t={t} guard={guard} failure={failure} newId={newId} side={DRIVER_SIDE}
       pickFile={config.pickFile}
@@ -212,6 +216,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       {online ? <Button label={t('preorders')} onPress={() => setTab('preorders')} /> : null}
       {online ? null : <Button label={t('documents')} onPress={() => setTab('documents')} />}
       <Button label={t('support')} onPress={() => setTab('support')} />
+      {online ? null : <Button label={t('pcChange')} onPress={() => setTab('phone')} />}
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>
