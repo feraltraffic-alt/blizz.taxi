@@ -97,7 +97,7 @@ class MerchantAdmin {
     @Transactional(readOnly = true)
     List<MerchantView> list(Actor actor) {
         staff.require(actor, Integrations.MANAGE_PERMISSION);
-        return jdbc.sql("select id from payment_merchant where service_id = :service order by created_at")
+        return jdbc.sql("select id from payment_merchant where :service is not null order by created_at")
                 .param("service", serviceOf(actor)).query(UUID.class).list().stream()
                 .map(this::view).toList();
     }
