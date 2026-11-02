@@ -321,3 +321,40 @@ describe('binary answers (#302)', () => {
     expect(await client().get('/api/admin/v1/me')).toEqual(me);
   });
 });
+
+describe('socket tokens (#306 W7)', () => {
+  it('socketToken gives the current access token without a refresh', async () => {
+    let refreshes = 0;
+    server.use(http.post(origin + '/auth/v1/token/refresh', () => {refreshes++; return HttpResponse.json(rotated);}));
+    expect(await client().socketToken()).toBe(session.access_token);
+    expect(refreshes).toBe(0);
+  });
+
+  it('renewSocketToken refreshes once, shared with other requests', async () => {
+    let refreshes = 0;
+    server.use(
+      http.post(origin + '/auth/v1/token/refresh', async () => {
+        refreshes++;
+        await delay(50);
+        return HttpResponse.json(rotated);
+      }),
+      http.get(origin + '/api/admin/v1/me', ({request}) =>
+        request.headers.get('Authorization') === 'Bearer ' + rotated.access_token ? HttpResponse.json(me)
+          : HttpResponse.json(problem(401, 'UNAUTHENTICATED'), {status: 401})));
+    const api = client();
+    const [token] = await Promise.all([api.renewSocketToken(), api.get('/api/admin/v1/me')]);
+    expect(token).toBe(rotated.access_token);
+    expect(refreshes).toBe(1);
+    expect(await api.socketToken()).toBe(rotated.access_token);
+  });
+
+  it('after sign-out both give null', async () => {
+    server.use(http.post(origin + '/auth/v1/logout', () => new HttpResponse(null, {status: 204})),
+      http.post(origin + '/auth/v1/token/refresh', () => HttpResponse.json(problem(401, 'UNAUTHENTICATED'),
+        {status: 401})));
+    const api = client();
+    await api.logout();
+    expect(await api.socketToken()).toBeNull();
+    expect(await api.renewSocketToken()).toBeNull();
+  });
+});

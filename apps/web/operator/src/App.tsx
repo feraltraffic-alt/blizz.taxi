@@ -8,6 +8,9 @@ import {OrderHistory} from './OrderHistory.js';
 import {OrderActions} from './OrderActions.js';
 import {Calls, type FromCall} from './Calls.js';
 import {OrderCalls} from './OrderCalls.js';
+import {CardPop, type Live} from './CardPop.js';
+
+export type {LiveSocket} from './CardPop.js';
 
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -20,16 +23,17 @@ type Order = {id: string; short_number: number; status: string; version: number;
   payer_client_id?: string | null};
 
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
-export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000}: {client: ApiClient;
-  newId?: () => string; pollMs?: number}) {
+export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000, live}: {client: ApiClient;
+  newId?: () => string; pollMs?: number; live?: Live}) {
   return (
     <StaffGate client={client} t={t} audience="OPERATOR">
-      <Workstation client={client} newId={newId} pollMs={pollMs} />
+      <Workstation client={client} newId={newId} pollMs={pollMs} live={live} />
     </StaffGate>
   );
 }
 
-function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => string; pollMs: number}) {
+function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: () => string; pollMs: number;
+  live?: Live}) {
   const [cities, setCities] = useState<City[] | null>(null);
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
@@ -64,6 +68,9 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
   const city = cities.find(c => c.id === cityId);
   return (
     <>
+      {/* The card-pop needs calls.answer (#306 W1). */}
+      {live && rights.has('calls.answer') ? <CardPop client={client} t={t} live={live} newId={newId}
+        onOrder={call => {setFromCall(call); setOrder(null); setView('order');}} /> : null}
       <nav>
         {/* The board needs orders.view; without it nothing is offered or asked (#286 L5). */}
         {view !== 'order' ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button> : null}
