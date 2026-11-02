@@ -2,8 +2,14 @@ import {useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 
+type Attachment = {file_id: string; content_type: string; size_bytes: number; name?: string | null};
 type Message = {id: string; sequence: number; author_type: string; visibility: 'PUBLIC' | 'INTERNAL'; body: string;
-  created_at: string};
+  created_at: string; attachments?: Attachment[]};
+type Attached = {id: string; name: string};
+
+const ATTACHABLE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_FILES = 5;
 type Case = {id: string; number: number; category: string; subject: string; priority: string; state: string;
   assigned_staff_id?: string | null; resolution?: string | null; respond_by: string; version: number;
   messages: Message[]};
@@ -115,6 +121,59 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const acting = useRef(false);
+  /** Files to send with the next comment (#317 V3); listed only when the server found them SAFE. */
+  const [files, setFiles] = useState<Attached[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const uploading = useRef(false);
+  /** Opened attachments by file id: each download is audited, so a file is fetched once per case view (V1). */
+  const [opened, setOpened] = useState<Record<string, string>>({});
+  const urls = useRef<string[]>([]);
+
+  useEffect(() => () => urls.current.forEach(url => URL.revokeObjectURL(url)), []);
+
+  async function open(file: Attachment) {
+    if (opened[file.file_id] || acting.current) return;
+    acting.current = true;
+    setError(null);
+    try {
+      const blob = await client.get('/api/operator/v1/support/cases/{case_id}/attachments/{file_id}' as never,
+        {params: {case_id: id, file_id: file.file_id}} as never) as unknown as Blob;
+      const url = URL.createObjectURL(blob);
+      urls.current.push(url);
+      setOpened(all => ({...all, [file.file_id]: url}));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      acting.current = false;
+    }
+  }
+
+  async function attach(file: File | undefined) {
+    setFileNote(null);
+    if (!file || uploading.current) return;
+    if (files.length >= MAX_FILES) return setFileNote(t('tooManyFiles'));
+    if (!ATTACHABLE.includes(file.type)) return setFileNote(t('attachType'));
+    if (file.size > MAX_BYTES) return setFileNote(t('attachTooBig'));
+    uploading.current = true;
+    try {
+      const session = await client.post('/api/operator/v1/support/uploads' as never, {body: {command_id: newId(),
+        content_type: file.type, size_bytes: file.size}} as never) as {file_id: string; upload_path: string};
+      const stored = await client.upload(session.upload_path, file, file.type) as {state: string;
+        reject_reason?: string | null};
+      if (stored.state === 'REJECTED') setFileNote(t('attachRejected', {reason: stored.reject_reason ?? ''}));
+      else if (stored.state === 'QUARANTINE') setFileNote(t('attachQuarantine'));
+      else setFiles(list => [...list, {id: session.file_id, name: file.name}]);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      uploading.current = false;
+    }
+  }
+
+  function attachmentLine(file: Attachment): string {
+    return [file.name ?? t('unnamedFile'), file.content_type, Math.max(1, Math.round(file.size_bytes / 1024)) + ' '
+      + t('kilobytes')].join(' · ');
+  }
 
   async function read() {
     const value = await client.get('/api/operator/v1/support/cases/{case_id}' as never,
@@ -146,6 +205,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
         setText('');
         setWait(false);
       }
+      if (action === 'comments') setFiles([]);
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 409) {
         setMessage(t('caseMoved'));
@@ -158,6 +218,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
 
   if (!item) return error ? <Failure error={error} t={t} /> : <p>{t('loading')}</p>;
   const decided = item.state === 'RESOLVED' || item.state === 'CLOSED';
+  const ids = files.length ? {attachment_ids: files.map(f => f.id)} : {};
   return (
     <section aria-labelledby="case-title">
       <h1 id="case-title">{'№' + item.number + ' · ' + item.subject}</h1>
@@ -169,6 +230,22 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
           <li key={m.id}>
             {(m.visibility === 'INTERNAL' ? t('internal') + ' · ' : '') + t('author_' + m.author_type) + ' · '
               + clock(m.created_at) + ': ' + m.body}
+            {m.attachments?.length ? (
+              <ul aria-label={t('attachmentsOf')}>
+                {m.attachments.map(f => {
+                  const name = f.name ?? t('unnamedFile');
+                  const url = opened[f.file_id];
+                  return (
+                    <li key={f.file_id}>
+                      <span>{attachmentLine(f)}</span>
+                      {!url ? <button type="button" onClick={() => void open(f)}>{t('openFileOf', {name})}</button>
+                        : f.content_type.startsWith('image/') ? <img src={url} alt={name} />
+                          : <a href={url} download={name}>{t('downloadFileOf', {name})}</a>}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -180,6 +257,19 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
         {t('caseText')}
         <textarea value={text} onChange={e => setText(e.target.value)} />
       </label>
+      <label>
+        {t('attachFile')}
+        <input type="file" accept={ATTACHABLE.join(',')}
+          onChange={e => {void attach(e.target.files?.[0]); e.target.value = '';}} />
+      </label>
+      {files.map(f => (
+        <p key={f.id}>
+          <span>{f.name}</span>
+          <button type="button" onClick={() => setFiles(list => list.filter(x => x.id !== f.id))}>
+            {t('removeFileOf', {name: f.name})}</button>
+        </p>
+      ))}
+      {fileNote ? <p role="alert">{fileNote}</p> : null}
       {item.state !== 'CLOSED' ? (
         <>
           <label>
@@ -187,10 +277,10 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
             {t('waitForRequester')}
           </label>
           <button type="button" onClick={() => void command('comments', {visibility: 'PUBLIC', body: text,
-            ...(wait ? {wait_for_requester: true} : {})}, true)}>{t('reply')}</button>
+            ...(wait ? {wait_for_requester: true} : {}), ...ids}, true)}>{t('reply')}</button>
         </>
       ) : null}
-      <button type="button" onClick={() => void command('comments', {visibility: 'INTERNAL', body: text}, true)}>
+      <button type="button" onClick={() => void command('comments', {visibility: 'INTERNAL', body: text, ...ids}, true)}>
         {t('internalComment')}
       </button>
       {!decided ? <button type="button" onClick={() => void command('resolve', {text}, true)}>{t('resolve')}</button>

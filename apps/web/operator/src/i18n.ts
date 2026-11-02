@@ -5,6 +5,11 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    attachFile: 'Приложить файл', removeFileOf: 'Убрать {name}', tooManyFiles: 'Можно приложить не больше 5 файлов.',
+    attachType: 'Подходят только JPEG, PNG, WEBP или PDF.', attachTooBig: 'Файл больше 10 МБ.',
+    attachRejected: 'Файл не принят: {reason}', attachQuarantine: 'Файл ещё проверяется. Приложите его чуть позже.',
+    attachmentsOf: 'Вложения', unnamedFile: 'файл', kilobytes: 'КБ', openFileOf: 'Открыть {name}',
+    downloadFileOf: 'Скачать {name}',
     orderTrip: 'Поездка и резерв', interrupt: 'Прервать поездку', interruptReason: 'Причина прерывания',
     interruptComment: 'Комментарий к прерыванию', followUp: 'Отправить другую машину',
     interruptNeeds: 'Выберите причину прерывания; комментарий — до 500 символов.',
@@ -124,6 +129,11 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    attachFile: 'Додати файл', removeFileOf: 'Прибрати {name}', tooManyFiles: 'Можна додати не більше 5 файлів.',
+    attachType: 'Підходять лише JPEG, PNG, WEBP або PDF.', attachTooBig: 'Файл більший за 10 МБ.',
+    attachRejected: 'Файл не прийнято: {reason}', attachQuarantine: 'Файл ще перевіряється. Додайте його трохи пізніше.',
+    attachmentsOf: 'Вкладення', unnamedFile: 'файл', kilobytes: 'КБ', openFileOf: 'Відкрити {name}',
+    downloadFileOf: 'Завантажити {name}',
     orderTrip: 'Поїздка та резерв', interrupt: 'Перервати поїздку', interruptReason: 'Причина переривання',
     interruptComment: 'Коментар до переривання', followUp: 'Відправити іншу машину',
     interruptNeeds: 'Оберіть причину переривання; коментар — до 500 символів.',
@@ -243,6 +253,11 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    attachFile: 'Dołącz plik', removeFileOf: 'Usuń {name}', tooManyFiles: 'Można dołączyć najwyżej 5 plików.',
+    attachType: 'Pasują tylko JPEG, PNG, WEBP lub PDF.', attachTooBig: 'Plik większy niż 10 MB.',
+    attachRejected: 'Plik nie został przyjęty: {reason}', attachQuarantine: 'Plik jest jeszcze sprawdzany. Dołącz go nieco później.',
+    attachmentsOf: 'Załączniki', unnamedFile: 'plik', kilobytes: 'KB', openFileOf: 'Otwórz {name}',
+    downloadFileOf: 'Pobierz {name}',
     orderTrip: 'Przejazd i rezerwacja', interrupt: 'Przerwij przejazd', interruptReason: 'Powód przerwania',
     interruptComment: 'Komentarz do przerwania', followUp: 'Wyślij inny samochód',
     interruptNeeds: 'Wybierz powód przerwania; komentarz — do 500 znaków.',

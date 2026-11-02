@@ -1,4 +1,4 @@
-import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {http, HttpResponse, delay} from 'msw';
@@ -250,5 +250,139 @@ describe('S9: one action at a time', () => {
     await waitFor(() => expect(commands(sent)).toHaveLength(1));
     await delay(300);
     expect(commands(sent)).toHaveLength(1);
+  });
+});
+
+/** Support attachments for the operator (#317): V1–V5. */
+describe('#317: attachments', () => {
+  const FILE = 'f0000000-0000-4000-8000-000000000001';
+  const att = (id: string, type: string, name: string | null) => ({file_id: id, content_type: type, size_bytes: 2048,
+    name});
+  const withFiles = () => full({messages: [{...message(1, 'PUBLIC', 'Оставил зонт в машине'),
+    attachments: [att('a1', 'image/png', 'photo.png'), att('a2', 'application/pdf', null)]}]});
+  const statics = URL as unknown as {createObjectURL?: (blob: Blob) => string; revokeObjectURL?: (url: string) => void};
+  const urls = {made: 0, revoked: [] as string[]};
+  function stubUrls() {
+    urls.made = 0;
+    urls.revoked = [];
+    statics.createObjectURL = vi.fn(() => 'blob:file-' + ++urls.made);
+    statics.revokeObjectURL = vi.fn((url: string) => {urls.revoked.push(url);});
+  }
+  afterEach(() => {
+    delete statics.createObjectURL;
+    delete statics.revokeObjectURL;
+  });
+
+  function files(opts: {download?: () => Response; stored?: string} = {}) {
+    const asked = {downloads: [] as string[], sessions: [] as unknown[], puts: 0};
+    server.use(
+      http.get(origin + '/api/operator/v1/support/cases/' + CASE + '/attachments/:file', ({params}) => {
+        asked.downloads.push(String(params.file));
+        return opts.download ? opts.download() : new HttpResponse(new Uint8Array([137, 80, 78, 71]),
+          {headers: {'Content-Type': 'image/png'}});
+      }),
+      http.post(origin + '/api/operator/v1/support/uploads', async ({request}) => {
+        asked.sessions.push(await request.json());
+        return HttpResponse.json({file_id: FILE, upload_path: '/api/operator/v1/uploads/' + FILE,
+          expires_at: '2099-01-01T00:00:00Z', max_bytes: 10485760}, {status: 201});
+      }),
+      http.put(origin + '/api/operator/v1/uploads/' + FILE, () => {
+        asked.puts++;
+        return HttpResponse.json({file_id: FILE, state: opts.stored ?? 'SAFE', size_bytes: 4,
+          reject_reason: opts.stored === 'REJECTED' ? 'вирус' : null});
+      }));
+    return asked;
+  }
+
+  it('V1: lists the files; one download each; an image inline, a PDF as a link', async () => {
+    stubUrls();
+    base({one: withFiles});
+    const asked = files();
+    const user = await openCase();
+    expect(screen.getByText('photo.png · image/png · 2 КБ')).toBeVisible();
+    expect(screen.getByText('файл · application/pdf · 2 КБ')).toBeVisible();
+    await user.click(screen.getByRole('button', {name: 'Открыть photo.png'}));
+    expect(await screen.findByRole('img', {name: 'photo.png'})).toHaveAttribute('src', 'blob:file-1');
+    await user.click(screen.getByRole('button', {name: 'Открыть файл'}));
+    expect(await screen.findByRole('link', {name: 'Скачать файл'})).toHaveAttribute('href', 'blob:file-2');
+    expect(screen.queryByRole('button', {name: 'Открыть photo.png'})).not.toBeInTheDocument();
+    expect(asked.downloads).toEqual(['a1', 'a2']);
+  });
+
+  it('V2: a refused download shows the correlation id', async () => {
+    stubUrls();
+    base({one: withFiles});
+    files({download: () => HttpResponse.json(problem(403, 'ACCESS_DENIED'), {status: 403})});
+    const user = await openCase();
+    await user.click(screen.getByRole('button', {name: 'Открыть photo.png'}));
+    expect(await screen.findByText(new RegExp(cid))).toBeVisible();
+    expect(urls.made).toBe(0);
+  });
+
+  it('V3: a file attached to a reply goes as attachment_ids', async () => {
+    const sent = base();
+    const asked = files();
+    const user = await openCase();
+    await user.upload(screen.getByLabelText('Приложить файл'), new File([new Uint8Array(4)], 'answer.png',
+      {type: 'image/png'}));
+    expect(await screen.findByText('answer.png')).toBeVisible();
+    await user.type(screen.getByLabelText('Текст'), 'Вот ответ');
+    await user.click(screen.getByRole('button', {name: 'Ответить'}));
+    await waitFor(() => expect(commands(sent)).toHaveLength(1));
+    expect(asked.sessions).toEqual([{command_id: expect.any(String), content_type: 'image/png', size_bytes: 4}]);
+    expect(commands(sent)[0]!.body).toEqual({command_id: expect.any(String), expected_version: 3,
+      visibility: 'PUBLIC', body: 'Вот ответ', attachment_ids: [FILE]});
+  });
+
+  it.each([
+    ['a gif', new File([new Uint8Array(4)], 'a.gif', {type: 'image/gif'}), 'Подходят только JPEG, PNG, WEBP или PDF.'],
+    ['a file over 10 MB', new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.png', {type: 'image/png'}),
+      'Файл больше 10 МБ.']
+  ])('V3: %s is refused before any request', async (_name, file, text) => {
+    base();
+    const asked = files();
+    const user = userEvent.setup({applyAccept: false});
+    await openCase(user);
+    await user.upload(screen.getByLabelText('Приложить файл'), file);
+    expect(await screen.findByText(text)).toBeVisible();
+    expect(asked.sessions).toEqual([]);
+  });
+
+  it.each([['REJECTED', 'Файл не принят: вирус'], ['QUARANTINE', 'Файл ещё проверяется. Приложите его чуть позже.']])(
+    'V3: %s is told and not attached', async (stored, text) => {
+      const sent = base();
+      files({stored});
+      const user = await openCase();
+      await user.upload(screen.getByLabelText('Приложить файл'), new File([new Uint8Array(4)], 'x.png',
+        {type: 'image/png'}));
+      expect(await screen.findByText(text)).toBeVisible();
+      await user.type(screen.getByLabelText('Текст'), 'Внутреннее');
+      await user.click(screen.getByRole('button', {name: 'Внутренний комментарий'}));
+      await waitFor(() => expect(commands(sent)).toHaveLength(1));
+      expect(commands(sent)[0]!.body).not.toHaveProperty('attachment_ids');
+    });
+
+  it('V4: a removed file is not sent', async () => {
+    const sent = base();
+    files();
+    const user = await openCase();
+    await user.upload(screen.getByLabelText('Приложить файл'), new File([new Uint8Array(4)], 'x.png',
+      {type: 'image/png'}));
+    await user.click(await screen.findByRole('button', {name: 'Убрать x.png'}));
+    await user.type(screen.getByLabelText('Текст'), 'Без файла');
+    await user.click(screen.getByRole('button', {name: 'Ответить'}));
+    await waitFor(() => expect(commands(sent)).toHaveLength(1));
+    expect(commands(sent)[0]!.body).not.toHaveProperty('attachment_ids');
+  });
+
+  it('V5: the object URLs are revoked when the case closes', async () => {
+    stubUrls();
+    base({one: withFiles});
+    files();
+    const user = await openCase();
+    await user.click(screen.getByRole('button', {name: 'Открыть photo.png'}));
+    await screen.findByRole('img', {name: 'photo.png'});
+    await user.click(screen.getByRole('button', {name: 'К очереди'}));
+    await waitFor(() => expect(urls.revoked).toEqual(['blob:file-1']));
   });
 });
