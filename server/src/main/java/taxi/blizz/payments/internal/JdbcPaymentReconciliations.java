@@ -32,7 +32,8 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
                          or (r.day,r.id)<(cast(:afterDay as date),cast(:afterId as uuid)))
                 order by r.day desc,r.id desc limit :limit
             ) r on true
-            where (cast(:merchant as uuid) is null or m.id=:merchant)
+            where m.service_id=:service
+                and (cast(:merchant as uuid) is null or m.id=:merchant)
                 and ((:allCities and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id))
                      or (exists(select 1 from payment_merchant_city c where c.merchant_id=m.id)
                          and not exists(select 1 from payment_merchant_city c where c.merchant_id=m.id
@@ -47,8 +48,18 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
     private final AuditLog audit;
     private final Clock clock;
 
-    JdbcPaymentReconciliations(JdbcClient jdbc, StaffAccess staff, IdempotentCommands commands, AuditLog audit, Clock clock) {
+    private final taxi.blizz.identity.Services services;
+
+    JdbcPaymentReconciliations(JdbcClient jdbc, StaffAccess staff, IdempotentCommands commands, AuditLog audit,
+                               Clock clock, taxi.blizz.identity.Services services) {
         this.jdbc=jdbc; this.staff=staff; this.commands=commands; this.audit=audit; this.clock=clock;
+        this.services=services;
+    }
+
+    /** The staff member's taxi service: a merchant and its reconciliations are seen only there (ADR 0016, #216). */
+    private UUID serviceOf(Actor actor) {
+        return services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Reconciliations belong to a taxi service"));
     }
 
     @Override
@@ -73,7 +84,7 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
         // A merchant's bank statement spans every mapped city; partial city access is insufficient.
         List<UUID> cities = scope.cityIds().isEmpty() ? List.of(new UUID(0,0)) : List.copyOf(scope.cityIds());
         var query=jdbc.sql(LIST_SQL).param("merchant", merchantId).param("afterDay", afterDay).param("afterId", afterId)
-                .param("allCities", scope.allCities())
+                .param("allCities", scope.allCities()).param("service", serviceOf(actor))
                 .param("cities", cities).param("limit", limit+1).query(JdbcPaymentReconciliations::mapRun).list();
         boolean more=query.size()>limit;
         List<Run> page=more?query.subList(0,limit):query;
@@ -142,6 +153,11 @@ class JdbcPaymentReconciliations implements PaymentReconciliations {
 
     void requireMerchant(Actor actor, UUID merchantId) {
         staff.require(actor,RESOLVE_PERMISSION);
+        boolean own = jdbc.sql("select exists(select 1 from payment_merchant where id=:id and service_id=:service)")
+                .param("id", merchantId).param("service", serviceOf(actor)).query(Boolean.class).single();
+        if (!own) {
+            throw missing("Reconciliation not found"); // another service's merchant is not there for this one
+        }
         List<UUID> cities=jdbc.sql("select city_id from payment_merchant_city where merchant_id=:id order by city_id")
                 .param("id",merchantId).query(UUID.class).list();
         if (cities.isEmpty() && !staff.scope(actor,RESOLVE_PERMISSION).allCities()) {
