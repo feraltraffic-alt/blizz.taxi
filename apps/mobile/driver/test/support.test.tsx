@@ -174,3 +174,21 @@ describe('#328 C5: the driver changes the phone through the driver API', () => {
       '/api/driver/v1/me/phone-change']);
   });
 });
+
+describe('#330 X7: the driver asks for a copy through the driver API', () => {
+  it('posts the code and the command to /api/driver/v1/me', async () => {
+    const http = await mountHome({
+      'GET /api/driver/v1/me/data-exports': [{status: 200, body: {exports: []}}],
+      'POST /api/driver/v1/me/data-exports/challenge': [{status: 201, body: {challenge_id: 'ch1',
+        expires_at: '2099-01-01T00:00:00Z', resend_available_at: '2026-11-02T10:01:00Z'}}],
+      'POST /api/driver/v1/me/data-exports': [{status: 202, body: {id: 'e1', state: 'PENDING',
+        created_at: '2026-11-02T10:00:00Z', ready_at: null, expires_at: null, size_bytes: null}}]});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Мои данные'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Запросить копию данных'}));
+    await fireEvent.changeText(await screen.findByLabelText('Код из сообщения'), '123456');
+    await fireEvent.press(screen.getByRole('button', {name: 'Подтвердить запрос'}));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(http.filter(c => c.method === 'POST').map(c => c.path)).toEqual([
+      '/api/driver/v1/me/data-exports/challenge', '/api/driver/v1/me/data-exports']);
+  });
+});
