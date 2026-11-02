@@ -50,7 +50,10 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await page.getByLabel('Город').selectOption({label: 'Київ'});
   await page.getByLabel('Телефон звонящего').fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда').fill('Хрещатик');
+  const answer = page.waitForResponse(r => r.url().includes('/api/operator/v1/places'));
   await page.getByRole('button', {name: 'Найти'}).first().click();
+  const places = await answer;
+  console.log('PLACES', places.status(), places.url(), (await places.text()).slice(0, 600));
   const found = page.locator('fieldset').nth(0).getByRole('listitem').first().getByRole('button');
   if (!await found.isVisible({timeout: 10_000}).catch(() => false)) {
     console.log('PAGE AFTER ADDRESS SEARCH:', await page.locator('body').innerText());
