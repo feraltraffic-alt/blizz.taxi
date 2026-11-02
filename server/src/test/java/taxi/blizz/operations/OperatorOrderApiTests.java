@@ -222,6 +222,17 @@ class OperatorOrderApiTests {
     /** The classes an operator can quote in a city (#251): orderable only, by the quote's access rule. */
     @Test
     void operatorListsTheOrderableClassesOfACityTheyMayOrderIn() throws Exception {
+        try {
+            listsTheOrderableClasses();
+        } finally {
+            // Every test's cities lie on the same squares: these move away so the next test's pickup is in its own.
+            jdbc.sql("update city set polygon = ST_GeomFromEWKT('SRID=4326;MULTIPOLYGON(((0 0,0.001 0,0.001 0.001,"
+                    + "0 0.001,0 0)))') where id in (:a, :b)").param("a", cityA).param("b", cityB).update();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void listsTheOrderableClasses() throws Exception {
         testQuotes.ensureClass(cityA, "COMFORT");
         jdbc.sql("""
                         insert into vehicle_class (id, city_id, code, name, active, created_at, updated_at)
@@ -233,9 +244,10 @@ class OperatorOrderApiTests {
 
         MvcResult listed = getAuth("/api/operator/v1/vehicle-classes?city_id=" + cityA, creator.token());
         assertThat(listed.getResponse().getStatus()).as("C1").isEqualTo(200);
-        assertThat(array(listed)).as("C1: active classes with a tariff in force, in code order")
+        List<Map<String, Object>> classes = json.readValue(listed.getResponse().getContentAsString(), List.class);
+        assertThat(classes).as("C1: active classes with a tariff in force, in code order")
                 .extracting(c -> c.get("code")).containsExactly("COMFORT", "STANDARD");
-        assertThat(array(listed).getFirst()).containsOnlyKeys("code", "name");
+        assertThat(classes.getFirst()).containsOnlyKeys("code", "name");
 
         assertThat(getAuth("/api/operator/v1/vehicle-classes?city_id=" + cityA, viewer.token())
                 .getResponse().getStatus()).as("C2: no orders.create").isEqualTo(403);

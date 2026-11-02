@@ -128,6 +128,7 @@ class StaffIsolationTests {
             "GET /api/operator/v1/drivers/live",
             "GET /api/operator/v1/operators",
             "GET /api/operator/v1/orders",
+            "GET /api/operator/v1/vehicle-classes",
             "POST /api/operator/v1/calls/{call_id}/answer",
             "GET /api/operator/v1/calls/{call_id}/recording",
             // A driver admitted only in the city (owner decision 01.11.2026, option 2 in #201).
