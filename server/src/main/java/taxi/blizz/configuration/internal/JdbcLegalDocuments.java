@@ -267,7 +267,7 @@ class JdbcLegalDocuments implements LegalDocuments {
                         select distinct on (kind) id, audience, kind, number, state, texts::text as texts,
                                acceptance_required, effective_from, published_at, version
                         from legal_document_version
-                        where service_id = :service and audience = :audience and state = 'PUBLISHED'
+                        where cast(:service as uuid) is not null and audience = :audience and state = 'PUBLISHED'
                           and effective_from <= :now
                         order by kind, effective_from desc, number desc""")
                 .param("service", service).param("audience", audience.name()).param("now", now())
