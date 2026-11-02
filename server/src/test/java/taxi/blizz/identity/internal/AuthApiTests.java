@@ -126,6 +126,34 @@ class AuthApiTests {
                 .containsEntry("session_id", session.get("session_id"));
     }
 
+    /** Issue #241: /me gives the person's own phone and name; none given → null, anonymized → no phone. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void meGivesTheOwnPhoneAndNameOrNull() throws Exception {
+        Map<String, Object> rider = signIn("CLIENT");
+        UUID clientId = UUID.fromString((String) ((Map<String, Object>) rider.get("subject")).get("id"));
+        String e164 = jdbc.sql("select phone_normalized from client where id = :id").param("id", clientId)
+                .query(String.class).single();
+        Map<String, Object> me = body(getWithToken("/api/rider/v1/me", rider.get("access_token")));
+        assertThat(me).containsEntry("phone", e164).containsEntry("name", null);
+
+        jdbc.sql("update client set name = '   ' where id = :id").param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).as("a blank name is none")
+                .containsEntry("name", null);
+        jdbc.sql("update client set name = 'Олена' where id = :id").param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).containsEntry("name", "Олена");
+        jdbc.sql("update client set phone_normalized = null where id = :id").param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).as("anonymized: no phone")
+                .containsEntry("phone", null);
+
+        Map<String, Object> driver = signIn("DRIVER");
+        UUID driverId = UUID.fromString((String) ((Map<String, Object>) driver.get("subject")).get("id"));
+        String driverPhone = jdbc.sql("select phone_normalized from driver where id = :id").param("id", driverId)
+                .query(String.class).single();
+        assertThat(body(getWithToken("/api/driver/v1/me", driver.get("access_token")))).as("the driver's own")
+                .containsEntry("phone", driverPhone).containsEntry("subject_id", driverId.toString());
+    }
+
     /**
      * Issue #197 (AC-27): a token signed with the server's own key for a real client, but whose session was never
      * issued or is gone, is refused; the codec alone accepts it, so only the missing session refuses it.

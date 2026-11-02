@@ -38,7 +38,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
 }
 
 function Profile({client, t, guard, failure, newId}: Shared & {newId: () => string}) {
-  const [me, setMe] = useState<{account_state: string} | null>(null);
+  const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
   const [code, setCode] = useState('');
@@ -48,7 +48,7 @@ function Profile({client, t, guard, failure, newId}: Shared & {newId: () => stri
   useEffect(() => {
     let current = true;
     guard(() => client.get('/api/rider/v1/me'))
-      .then(value => {if (current) setMe(value as {account_state: string});})
+      .then(value => {if (current) setMe(value as {account_state: string; phone: string | null; name: string | null});})
       .catch(failed => {if (current) setMessage(failure(failed));});
     return () => {current = false;};
   }, [client, guard]); // the failure text follows the same texts
@@ -68,7 +68,7 @@ function Profile({client, t, guard, failure, newId}: Shared & {newId: () => stri
       const status = await guard(() => client.post('/api/rider/v1/me/deletion-request', {body: {
         command_id: commandId.current, challenge_id: deletion.challenge_id, otp_code: code
       }})) as {account_state: string};
-      setMe(status);
+      setMe(old => ({...old, ...status}));
       setDeletion(null);
       setMessage(t('deletionRequested'));
     } catch (error) {
@@ -78,7 +78,9 @@ function Profile({client, t, guard, failure, newId}: Shared & {newId: () => stri
 
   return (
     <Screen title={t('profile')}>
-      {me ? <Text style={{color: theme.text}}>{t('accountState')}: {me.account_state}</Text>
+      {me?.name ? <Text style={{color: theme.text, fontSize: 20}}>{me.name}</Text> : null}
+      {me?.phone ? <Text style={{color: theme.text}}>{me.phone}</Text> : null}
+      {me ? <Text style={{color: theme.muted}}>{t('accountState')}: {me.account_state}</Text>
         : !message ? <ActivityIndicator accessibilityLabel={t('loading')} /> : null}
       {deletion ? (
         <>

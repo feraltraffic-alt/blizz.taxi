@@ -18,7 +18,11 @@ class MeController {
         this.jdbc = jdbc;
     }
 
-    record Me(String subjectType, UUID subjectId, UUID sessionId, String accountState) {
+    /** {@code phone} and {@code name}: null for an anonymized account and for a name never given (#241). */
+    record Me(String subjectType, UUID subjectId, UUID sessionId, String accountState, String phone, String name) {
+    }
+
+    private record Row(String state, String phone, String name) {
     }
 
     @GetMapping("/api/rider/v1/me")
@@ -32,11 +36,13 @@ class MeController {
     }
 
     private Me me(AccessClaims claims, String table) {
-        String state = jdbc.sql("select account_state from " + table + " where id = :id")
+        Row row = jdbc.sql("select account_state, phone_normalized, name from " + table + " where id = :id")
                 .param("id", claims.actor().id())
-                .query(String.class)
+                .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3)))
                 .optional()
                 .orElseThrow(() -> new DomainException(ErrorCode.UNAUTHENTICATED, "Account not found"));
-        return new Me(claims.actor().type().name(), claims.actor().id(), claims.sessionId(), state);
+        String name = row.name() == null || row.name().isBlank() ? null : row.name();
+        return new Me(claims.actor().type().name(), claims.actor().id(), claims.sessionId(), row.state(), row.phone(),
+                name);
     }
 }

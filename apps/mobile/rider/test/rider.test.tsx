@@ -66,7 +66,7 @@ async function askCode(phone: string) {
 
 const legalNone = {'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}]};
 const meOk = {'GET /api/rider/v1/me': [{status: 200, body: {subject_type: 'CLIENT', subject_id: session.subject.id,
-  session_id: session.session_id, account_state: 'ACTIVE'}}]};
+  session_id: session.session_id, account_state: 'ACTIVE', phone: '+380671234567', name: 'Олена'}}]};
 
 describe('E1: the phone number', () => {
   it('a number outside Poland and Ukraine is the server\'s PHONE_COUNTRY_NOT_SERVED', async () => {
@@ -112,6 +112,8 @@ describe('E2: the code', () => {
     await fireEvent.changeText(await screen.findByLabelText('Код из сообщения'), '123456');
     await fireEvent.press(screen.getByRole('button', {name: 'Подтвердить'}));
     expect(await screen.findByText(/ACTIVE/)).toBeTruthy();
+    expect(screen.getByText('Олена')).toBeTruthy();
+    expect(screen.getByText('+380671234567')).toBeTruthy();
     expect(tokens.read()).toBe(session.refresh_token);
   });
 });

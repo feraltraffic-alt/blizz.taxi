@@ -1814,7 +1814,7 @@ components:
     Me:
       type: object
       additionalProperties: false
-      required: [subject_type, subject_id, session_id, account_state]
+      required: [subject_type, subject_id, session_id, account_state, phone, name]
       properties:
         subject_type:
           type: string
@@ -1825,6 +1825,12 @@ components:
           $ref: "./common.yaml#/components/schemas/Uuid"
         account_state:
           type: string
+        phone:
+          description: The phone of the account in E.164 form; null for an anonymized account.
+          type: [string, "null"]
+        name:
+          description: The name the person gave; null when none was given.
+          type: [string, "null"]
 
     RiderAddress:
       type: object
