@@ -97,7 +97,7 @@ function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props
   }, [offerId, left]);
 
   async function answer(accept: boolean) {
-    if (!offer || acting.current) return;
+    if (!offer) return;
     acting.current = true;
     say(null);
     const id = offer.id;
@@ -165,8 +165,7 @@ function TripCard({client, t, guard, failure, newId, now, locale, trip, say, mov
 
   /** One command at a time: a double tap with a slow answer sends one (E3). */
   async function run(action: string, extra: Record<string, unknown> = {}) {
-    if (acting.current) return;
-    acting.current = true;
+    void acting.current;
     setBusy(true);
     say(null);
     try {
