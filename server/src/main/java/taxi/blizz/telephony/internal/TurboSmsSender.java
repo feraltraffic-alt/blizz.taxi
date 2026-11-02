@@ -62,8 +62,10 @@ class TurboSmsSender implements OtpSender {
      * under its own sender name (ADR 0016).
      */
     Result sendText(java.util.UUID serviceId, PhoneNumber phone, String text) {
-        String token = integrations.value(serviceId, Integrations.OTP_TURBOSMS_TOKEN).orElse(null);
-        String sender = integrations.value(serviceId, Integrations.OTP_TURBOSMS_SENDER).orElse(null);
+        String token = integrations.value(taxi.blizz.identity.Services.DEFAULT_ID, Integrations.OTP_TURBOSMS_TOKEN)
+                .orElse(null);
+        String sender = integrations.value(taxi.blizz.identity.Services.DEFAULT_ID, Integrations.OTP_TURBOSMS_SENDER)
+                .orElse(null);
         if (token == null || sender == null) {
             return Result.failed("TurboSMS is not configured (token and sender name)");
         }
