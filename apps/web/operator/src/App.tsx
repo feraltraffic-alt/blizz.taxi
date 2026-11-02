@@ -3,6 +3,7 @@ import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, StaffGate, translator, type Translate} from '@blizz/web-ui';
 import {translations} from './i18n.js';
 import {LiveDrivers} from './LiveDrivers.js';
+import {Support} from './Support.js';
 
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -28,7 +29,8 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
-  const [view, setView] = useState<'order' | 'live'>('order');
+  const [view, setView] = useState<'order' | 'live' | 'support'>('order');
+  const [myId, setMyId] = useState('');
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -37,8 +39,9 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
       .then(([boot, me]) => {
         if (!current) return;
         // Only the cities of the operator's scope: all of the service's, or the ones granted.
-        const member = me as {effective_permissions: string[]; member: {profile: {all_cities: boolean;
+        const member = me as {effective_permissions: string[]; member: {id: string; profile: {all_cities: boolean;
           city_ids?: string[]}}};
+        setMyId(member.member.id);
         const scope = member.member.profile;
         const list = (boot as {cities: City[]}).cities
           .filter(c => scope.all_cities || (scope.city_ids ?? []).includes(c.id));
@@ -57,13 +60,17 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
     <>
       <nav>
         {/* The board needs orders.view; without it nothing is offered or asked (#286 L5). */}
-        {rights.has('orders.view') ? (view === 'live'
-          ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button>
-          : <button type="button" onClick={() => setView('live')}>{t('liveDrivers')}</button>) : null}
+        {view !== 'order' ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button> : null}
+        {rights.has('orders.view') && view !== 'live'
+          ? <button type="button" onClick={() => setView('live')}>{t('liveDrivers')}</button> : null}
+        {/* The support queue needs support.manage (#288 S8). */}
+        {rights.has('support.manage') && view !== 'support'
+          ? <button type="button" onClick={() => setView('support')}>{t('support')}</button> : null}
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
       {view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
-        pollMs={pollMs} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
+        pollMs={pollMs} /> : view === 'support' && rights.has('support.manage') ? <Support client={client} t={t}
+        cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
         onDone={() => setOrder(null)} /> : (
         <section aria-labelledby="new-order">
           <h1 id="new-order">{t('newOrder')}</h1>
