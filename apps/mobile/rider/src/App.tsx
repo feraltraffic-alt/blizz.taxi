@@ -2,14 +2,14 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {ActivityIndicator, Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, Field, LegalGuard, Loading, Screen, SignIn, UpdateScreen, failureText, translator, useAppSession,
-  usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
+  Alert, Button, Field, LegalGuard, Loading, RIDER_CATEGORIES, Screen, SignIn, Support, UpdateScreen, failureText,
+  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type AboutOrder, type Locale, type PushPort,
+  type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
 import {History} from './History';
 import {Cards} from './Cards';
-import {Support, type AboutOrder} from './Support';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
@@ -50,6 +50,9 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   );
 }
 
+/** The rider's side of support (#296). */
+const RIDER_SIDE = {api: '/api/rider/v1', me: 'CLIENT', categories: RIDER_CATEGORIES} as const;
+
 type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support';
 
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
@@ -67,7 +70,8 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
       onSupport={order => {setAbout(order); setTab('support');}} />;
   }
   if (tab === 'support') {
-    return <Support {...shared} newId={newId} about={about} onBack={() => {setAbout(null); setTab('ride');}} />;
+    return <Support {...shared} newId={newId} side={RIDER_SIDE} about={about} backLabel={t('toRide')}
+      onBack={() => {setAbout(null); setTab('ride');}} />;
   }
   return tab === 'profile' ? (
     <>

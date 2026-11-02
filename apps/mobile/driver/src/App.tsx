@@ -2,8 +2,8 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, LegalGuard, Loading, Screen, SignIn, UpdateScreen, failureText, translator, useAppSession,
-  usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
+  Alert, Button, DRIVER_CATEGORIES, LegalGuard, Loading, Screen, SignIn, Support, UpdateScreen, failureText,
+  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
@@ -59,6 +59,9 @@ export function DriverApp({client, config}: {client: ApiClient; config: AppConfi
   );
 }
 
+/** The driver's side of support (#298); a blocked driver keeps it (#141). */
+const DRIVER_SIDE = {api: '/api/driver/v1', me: 'DRIVER', categories: DRIVER_CATEGORIES} as const;
+
 /** Admitted means: an active account, an approved review, at least one city and an approved vehicle. */
 function admitted(profile: Profile): boolean {
   return profile.account_state === 'ACTIVE' && profile.review_status === 'APPROVED'
@@ -74,7 +77,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
-  const [tab, setTab] = useState<'work' | 'money' | 'documents'>('work');
+  const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support'>('work');
   const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   const theme = useTheme();
 
@@ -187,6 +190,10 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       </Screen>
     );
   }
+  if (tab === 'support') {
+    return <Support client={client} t={t} guard={guard} failure={failure} newId={newId} side={DRIVER_SIDE}
+      about={null} backLabel={t('home')} onBack={() => setTab('work')} />;
+  }
   if (tab === 'documents') {
     return <Documents client={client} t={t} guard={guard} failure={failure} newId={newId} pickFile={config.pickFile}
       profile={profile} onChanged={load} onBack={() => setTab('work')} />;
@@ -195,6 +202,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     <Screen title={t('home')}>
       <Button label={t('money')} onPress={() => setTab('money')} />
       {online ? null : <Button label={t('documents')} onPress={() => setTab('documents')} />}
+      <Button label={t('support')} onPress={() => setTab('support')} />
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>

@@ -1,21 +1,31 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Field, Screen, useTheme, type Shared} from '@blizz/mobile-ui';
+import {Alert, Button, Field, Screen, useTheme} from './ui';
+import type {Shared} from './session';
 
 type Message = {id: string; author_type: string; body: string};
 type Case = {id: string; number: number; subject: string; state: string; messages: Message[]};
 type Page = {cases: Case[]; page: {next_cursor?: string | null}};
 
-/** What a rider may choose; the system-only categories (TRIP_REVIEW, NO_DRIVER, …) are never offered. */
-const CATEGORIES = ['LOST_ITEM', 'PAYMENT', 'CASH_DISPUTE', 'DRIVER_BEHAVIOUR', 'SAFETY', 'APP_PROBLEM', 'OTHER'];
+/** What a requester may choose; the system-only categories (TRIP_REVIEW, NO_DRIVER, …) are never offered. */
+export const RIDER_CATEGORIES = ['LOST_ITEM', 'PAYMENT', 'CASH_DISPUTE', 'DRIVER_BEHAVIOUR', 'SAFETY', 'APP_PROBLEM',
+  'OTHER'];
+export const DRIVER_CATEGORIES = ['LOST_ITEM', 'PAYMENT', 'CASH_DISPUTE', 'RIDER_BEHAVIOUR', 'SAFETY', 'APP_PROBLEM',
+  'OTHER'];
+
+/** Whose support: the API's base path, the requester's own author type and the categories they may choose. */
+export type SupportSide = {api: '/api/rider/v1' | '/api/driver/v1'; me: 'CLIENT' | 'DRIVER'; categories: string[]};
 
 /** An order the new case is about, from the history (#296 P4). */
 export type AboutOrder = {id: string; short_number: number};
 
-/** The rider's support cases (#296): the list, a new case (optionally about an order) and one case. */
-export function Support(props: Shared & {newId: () => string; about: AboutOrder | null; onBack: () => void}) {
-  const {client, t, guard, failure, about, onBack} = props;
+/**
+ * Support cases of a rider (#296) or a driver (#298): the list, a new case (optionally about an order) and one case.
+ */
+export function Support(props: Shared & {newId: () => string; side: SupportSide; about: AboutOrder | null;
+  backLabel: string; onBack: () => void}) {
+  const {client, t, guard, failure, side, about, backLabel, onBack} = props;
   const [view, setView] = useState<'list' | 'new' | string>(about ? 'new' : 'list');
   const [cases, setCases] = useState<Case[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -24,8 +34,8 @@ export function Support(props: Shared & {newId: () => string; about: AboutOrder 
   const theme = useTheme();
 
   const read = useCallback(async (cursor: string | null) =>
-    await guard(() => client.get('/api/rider/v1/support/cases' as never,
-      {query: cursor ? {cursor} : {}} as never)) as Page, [client, guard]);
+    await guard(() => client.get((side.api + '/support/cases') as never,
+      {query: cursor ? {cursor} : {}} as never)) as Page, [client, guard, side.api]);
 
   useEffect(() => {
     if (view !== 'list') return;
@@ -64,13 +74,14 @@ export function Support(props: Shared & {newId: () => string; about: AboutOrder 
       ))}
       {next ? <Button label={t('moreCases')} onPress={() => void more()} /> : null}
       <Alert text={message} />
-      <Button label={t('toRide')} onPress={onBack} />
+      <Button label={backLabel} onPress={onBack} />
     </Screen>
   );
 }
 
-function NewCase({client, t, guard, failure, newId, about, onOpened, onCancel}: Shared & {newId: () => string;
-  about: AboutOrder | null; onOpened: (id: string) => void; onCancel: () => void}) {
+function NewCase({client, t, guard, failure, newId, side, about, onOpened, onCancel}: Shared & {
+  newId: () => string; side: SupportSide; about: AboutOrder | null; onOpened: (id: string) => void;
+  onCancel: () => void}) {
   const [category, setCategory] = useState('');
   const [subject, setSubject] = useState('');
   const [text, setText] = useState('');
@@ -89,7 +100,7 @@ function NewCase({client, t, guard, failure, newId, about, onOpened, onCancel}: 
     sending.current = true;
     setMessage(null);
     try {
-      const created = await guard(() => client.post('/api/rider/v1/support/cases' as never, {body: {
+      const created = await guard(() => client.post((side.api + '/support/cases') as never, {body: {
         command_id: newId(), category, ...(about ? {order_id: about.id} : {}), subject: title, message: body}} as never));
       onOpened((created as Case).id);
     } catch (error) {
@@ -106,19 +117,19 @@ function NewCase({client, t, guard, failure, newId, about, onOpened, onCancel}: 
         {category ? t('chosenCategory', {name: t('category_' + category)}) : t('chooseCategory')}
       </Text>
       <View style={{gap: 4}}>
-        {CATEGORIES.map(c => <Button key={c} label={t('category_' + c)} onPress={() => setCategory(c)} />)}
+        {side.categories.map(c => <Button key={c} label={t('category_' + c)} onPress={() => setCategory(c)} />)}
       </View>
       <Field label={t('caseSubject')} value={subject} onChange={setSubject} />
       <Field label={t('caseMessage')} value={text} onChange={setText} />
       <Button label={t('sendCase')} onPress={() => void send()} />
       <Alert text={message} />
-      <Button label={t('back')} onPress={onCancel} />
+      <Button label={t('toCases')} onPress={onCancel} />
     </Screen>
   );
 }
 
-function CaseView({client, t, guard, failure, newId, id, onBack}: Shared & {newId: () => string; id: string;
-  onBack: () => void}) {
+function CaseView({client, t, guard, failure, newId, side, id, onBack}: Shared & {newId: () => string;
+  side: SupportSide; id: string; onBack: () => void}) {
   const [item, setItem] = useState<Case | null>(null);
   const [answer, setAnswer] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -126,9 +137,9 @@ function CaseView({client, t, guard, failure, newId, id, onBack}: Shared & {newI
   const theme = useTheme();
 
   const read = useCallback(async () => {
-    setItem(await guard(() => client.get('/api/rider/v1/support/cases/{case_id}' as never,
+    setItem(await guard(() => client.get((side.api + '/support/cases/{case_id}') as never,
       {params: {case_id: id}} as never)) as Case);
-  }, [client, guard, id]);
+  }, [client, guard, id, side.api]);
 
   useEffect(() => {
     read().catch(error => setMessage(failure(error)));
@@ -144,7 +155,7 @@ function CaseView({client, t, guard, failure, newId, id, onBack}: Shared & {newI
     sending.current = true;
     setMessage(null);
     try {
-      setItem(await guard(() => client.post('/api/rider/v1/support/cases/{case_id}/messages' as never,
+      setItem(await guard(() => client.post((side.api + '/support/cases/{case_id}/messages') as never,
         {params: {case_id: id}, body: {command_id: newId(), message: body}} as never)) as Case);
       setAnswer('');
     } catch (error) {
@@ -155,13 +166,13 @@ function CaseView({client, t, guard, failure, newId, id, onBack}: Shared & {newI
     }
   }
 
-  if (!item) return <Screen><Alert text={message} /><Button label={t('back')} onPress={onBack} /></Screen>;
+  if (!item) return <Screen><Alert text={message} /><Button label={t('toCases')} onPress={onBack} /></Screen>;
   return (
     <Screen title={'№' + item.number + ' · ' + item.subject}>
       <Text style={{color: theme.muted}}>{t('case_' + item.state)}</Text>
       {item.messages.map(m => (
         <Text key={m.id} style={{color: theme.text}}>
-          {(m.author_type === 'CLIENT' ? t('you') : t('supportTeam')) + ': ' + m.body}
+          {(m.author_type === side.me ? t('you') : t('supportTeam')) + ': ' + m.body}
         </Text>
       ))}
       {item.state === 'CLOSED' ? <Text style={{color: theme.muted}}>{t('caseClosed')}</Text> : (
