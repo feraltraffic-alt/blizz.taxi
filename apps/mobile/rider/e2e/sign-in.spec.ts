@@ -185,11 +185,13 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
   await page.getByRole('button', {name: 'Заказать', exact: true}).click();
   const cardAnswer = await cardOrder;
   console.log('CARD ORDER', cardAnswer.status(), (await cardAnswer.text()).slice(0, 400));
+  // The hold is the bank's (the sandbox's FAKE one answers within seconds); the tracker polls every 5 s. isVisible()
+  // does not wait, so the wait is an expect, with the screen logged if it fails.
   const searching = page.getByText('Ищем водителя');
-  if (!await searching.isVisible({timeout: 30_000}).catch(() => false)) {
+  await expect(searching).toBeVisible({timeout: 60_000}).catch(async (error: unknown) => {
     console.log('PAGE AFTER CARD ORDER:', await page.locator('body').innerText());
-  }
-  await expect(searching).toBeVisible();
+    throw error;
+  });
   await expect(page.getByText('Оплата: картой')).toBeVisible();
   await page.screenshot({path: info.outputPath('11-card-order.png'), fullPage: true});
   const reasonByCard = page.getByRole('button', {name: /^○ /}).first();
