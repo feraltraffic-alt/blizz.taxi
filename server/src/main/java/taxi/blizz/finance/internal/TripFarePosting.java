@@ -128,7 +128,9 @@ class TripFarePosting implements OutboxHandler {
             return 0;
         }
         long shareOfUnpaid = trip.driverShareMinor() * unpaid / amount;
-        var rule = settings.current().settings().cashNotReceived();
+        // The rule of the trip's taxi service, the driver's own (ADR 0016).
+        var rule = settings.of(new taxi.blizz.platform.Actor(taxi.blizz.platform.SubjectType.DRIVER, trip.driverId()))
+                .settings().cashNotReceived();
         return shareOfUnpaid - rule.credited(shareOfUnpaid);
     }
 

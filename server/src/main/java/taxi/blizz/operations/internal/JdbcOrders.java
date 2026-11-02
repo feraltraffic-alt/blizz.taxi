@@ -210,7 +210,7 @@ class JdbcOrders implements Orders {
                             "At most " + MAX_SCHEDULED_PER_PAYER + " orders for later at a time");
                 }
                 OffsetDateTime release = pickupAt.minusMinutes(
-                        settings.current().settings().preorders().releaseMinutesBefore());
+                        settings.current(serviceId).settings().preorders().releaseMinutesBefore());
                 releaseAt = release.isBefore(now) ? now : release;
             }
             jdbc.sql("""
@@ -365,7 +365,7 @@ class JdbcOrders implements Orders {
             count = count.param("phone", phone).param("service", serviceId);
         }
         long open = count.query(Long.class).single();
-        int limit = settings.current().settings().orders().activePerPayer();
+        int limit = settings.current(serviceId).settings().orders().activePerPayer();
         if (open >= limit) {
             throw new DomainException(ErrorCode.ACTIVE_ORDER_LIMIT,
                     "At most " + limit + " active orders at a time, orders for later included");
@@ -382,7 +382,7 @@ class JdbcOrders implements Orders {
         if (account == null) {
             return;
         }
-        ServiceSettings.RiderDebts limits = settings.current().settings().riderDebts();
+        ServiceSettings.RiderDebts limits = settings.of(new Actor(SubjectType.CLIENT, account)).settings().riderDebts();
         obligations.owedByCurrency(account).forEach((currency, owed) -> {
             if (owed > limits.allowed(currency)) {
                 throw new DomainException(ErrorCode.RIDER_HAS_DEBT, "The rider owes " + owed + " " + currency

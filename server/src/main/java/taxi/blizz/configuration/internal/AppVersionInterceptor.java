@@ -49,7 +49,11 @@ class AppVersionInterceptor implements HandlerInterceptor {
         if (app == null) {
             return true;
         }
-        ServiceSettings.AppVersions policy = settings.current().settings().appVersions();
+        // The version policy of the caller's taxi service (ADR 0016); the first service's before sign-in.
+        Object claims = request.getAttribute(taxi.blizz.identity.AccessClaims.class.getName());
+        java.util.UUID service = claims instanceof taxi.blizz.identity.AccessClaims c && c.serviceId() != null
+                ? c.serviceId() : taxi.blizz.identity.Services.DEFAULT_ID;
+        ServiceSettings.AppVersions policy = settings.current(service).settings().appVersions();
         String platform = request.getHeader(PLATFORM);
         String version = request.getHeader(VERSION_HEADER);
         if (platform == null || version == null) {

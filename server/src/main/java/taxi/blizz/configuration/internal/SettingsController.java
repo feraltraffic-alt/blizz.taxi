@@ -81,7 +81,7 @@ class SettingsController {
     @GetMapping("/api/admin/v1/settings")
     ServiceSettings.Version current(AccessClaims claims) {
         staff.require(claims.actor(), ServiceSettings.MANAGE_PERMISSION);
-        return settings.current();
+        return settings.of(claims.actor());
     }
 
     @PostMapping("/api/admin/v1/settings")
@@ -105,7 +105,7 @@ class SettingsController {
         UUID serviceId = service == null ? taxi.blizz.identity.Services.DEFAULT_ID
                 : services.active(service).orElseThrow(() -> new taxi.blizz.platform.DomainException(
                         taxi.blizz.platform.ErrorCode.VALIDATION_FAILED, "Unknown taxi service"));
-        ServiceSettings.Version current = settings.current();
+        ServiceSettings.Version current = settings.current(serviceId);
         ServiceSettings.Calls calls = current.settings().calls();
         Bootstrap body = new Bootstrap(current.version(), current.settings().brand(), current.settings().languages(),
                 new PublicCalls(calls.mode(), calls.mode() == ServiceSettings.CallMode.VIA_SERVICE_NUMBERS

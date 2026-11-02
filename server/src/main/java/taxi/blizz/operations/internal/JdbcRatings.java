@@ -66,7 +66,7 @@ class JdbcRatings implements Ratings {
         Context context = context(orderId, true);
         Target target = target(actor, context);
         OffsetDateTime now = now();
-        int editWindowHours = settings.current().settings().ratings().editWindowHours();
+        int editWindowHours = settings.ofCity(context.cityId()).settings().ratings().editWindowHours();
         if (now.isAfter(context.completedAt().plusHours(editWindowHours))) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "The rating edit window has closed");
         }

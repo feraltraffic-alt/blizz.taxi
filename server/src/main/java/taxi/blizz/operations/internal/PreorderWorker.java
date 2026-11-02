@@ -90,16 +90,26 @@ public class PreorderWorker {
      * (ADR 0006); returns how many reservations expired.
      */
     public int expireReservations() {
-        ServiceSettings.Preorders rules = settings.current().settings().preorders();
+        int expired = 0;
+        // The rules of each taxi service apply to its own pre-orders (ADR 0016).
+        for (UUID service : jdbc.sql("select distinct service_id from city").query(UUID.class).list()) {
+            expired += expireReservations(service);
+        }
+        return expired;
+    }
+
+    private int expireReservations(UUID service) {
+        ServiceSettings.Preorders rules = settings.current(service).settings().preorders();
         OffsetDateTime now = core.now();
         // confirm_until = pickup − confirm_minutes_before + confirm_window_minutes
         long untilMinutes = (long) rules.confirmMinutesBefore() - rules.confirmWindowMinutes();
         List<UUID> due = tx.execute(status -> jdbc.sql("""
                         select r.order_id from preorder_reservation r join ride_order o on o.id = r.order_id
                         where r.state = 'RESERVED' and o.pickup_at - make_interval(mins => :minutes) <= :now
+                          and o.city_id in (select id from city where service_id = :service)
                         order by o.pickup_at limit :limit
                         for update of r skip locked""")
-                .param("minutes", (int) untilMinutes).param("now", now).param("limit", BATCH)
+                .param("service", service).param("minutes", (int) untilMinutes).param("now", now).param("limit", BATCH)
                 .query(UUID.class).list());
         int expired = 0;
         for (UUID orderId : due == null ? List.<UUID>of() : due) {

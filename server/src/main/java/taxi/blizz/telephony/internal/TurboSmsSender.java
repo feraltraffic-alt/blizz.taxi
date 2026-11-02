@@ -83,7 +83,9 @@ class TurboSmsSender implements OtpSender {
      */
     String text(String code, PhoneNumber phone) {
         String word = phone.e164().startsWith("+48") ? "Kod " : "Код ";
-        return word + code + ". " + settings.current().settings().brand().serviceName();
+        // The first service's name until each service sends under its own (ADR 0016, #217).
+        return word + code + ". " + settings.current(taxi.blizz.identity.Services.DEFAULT_ID).settings().brand()
+                .serviceName();
     }
 
     @SuppressWarnings("unchecked")

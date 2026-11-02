@@ -48,7 +48,8 @@ class JdbcOrderCalls implements OrderCalls {
                         where order_id = :order and state = 'COMMITTED'
                         order by created_at desc limit 1""")
                 .param("order", orderId).query(UUID.class).optional().orElseThrow(JdbcOrderCalls::conflict);
-        return target(new Actor(SubjectType.DRIVER, driverId), null);
+        Actor driverActor = new Actor(SubjectType.DRIVER, driverId);
+        return target(driverActor, null, driverActor);
     }
 
     @Override
@@ -76,7 +77,7 @@ class JdbcOrderCalls implements OrderCalls {
         String caller = jdbc.sql("select phone from order_contact where order_id = :order")
                 .param("order", facts.orderId()).query(String.class).optional().orElse(null);
         Actor payer = facts.payerClientId() == null ? null : new Actor(SubjectType.CLIENT, facts.payerClientId());
-        CallTarget target = target(payer, caller);
+        CallTarget target = target(payer, caller, driver);
         // A call request is an attempt to reach the rider; a no-show shows how many there were (REQ-CAN-06).
         jdbc.sql("""
                         insert into order_contact_attempt (id, order_id, trip_id, driver_id, kind, at)
@@ -86,8 +87,9 @@ class JdbcOrderCalls implements OrderCalls {
         return target;
     }
 
-    private CallTarget target(Actor directSubject, String directPhone) {
-        ServiceSettings.Calls calls = settings.current().settings().calls();
+    /** {@code party}: someone of the trip, whose taxi service's call mode applies (ADR 0016). */
+    private CallTarget target(Actor directSubject, String directPhone, Actor party) {
+        ServiceSettings.Calls calls = settings.of(party).settings().calls();
         if (calls.mode() == ServiceSettings.CallMode.VIA_SERVICE_NUMBERS) {
             return new CallTarget(Mode.VIA_SERVICE_NUMBERS, calls.servicePhone());
         }

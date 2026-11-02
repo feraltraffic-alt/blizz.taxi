@@ -81,7 +81,7 @@ class JdbcCancelReasons implements CancelReasons {
     @Override
     public Reason create(Actor actor, UUID commandId, Draft draft, String reason) {
         staff.require(actor, MANAGE_PERMISSION);
-        Draft clean = validate(draft);
+        Draft clean = validate(draft, actor);
         String why = required(reason);
         return commands.execute(new CommandKey(actor, "cancel_reason.create", commandId),
                 new CreateRequest(clean, why), Reason.class, () -> {
@@ -130,7 +130,7 @@ class JdbcCancelReasons implements CancelReasons {
                             || (draft.code() != null && !draft.code().equals(before.code()))) {
                         throw invalid("The side and the code of a reason never change; add a new reason instead");
                     }
-                    Draft clean = validate(new Draft(before.audience(), before.code(), draft.labels(),
+                    Draft clean = validate(actor, new Draft(before.audience(), before.code(), draft.labels(),
                             draft.driverOutcome(), draft.operatorFault(), draft.active(), draft.sortOrder()));
                     jdbc.sql("""
                                     update cancel_reason set labels = cast(:labels as jsonb), driver_outcome = :outcome,
@@ -167,7 +167,12 @@ class JdbcCancelReasons implements CancelReasons {
 
     // ---------------------------------------------------------------- helpers
 
-    private Draft validate(Draft d) {
+    private Draft validate(Actor actor, Draft d) {
+        return validate(d, actor);
+    }
+
+    /** The labels must hold the default language of the staff member's taxi service (ADR 0016). */
+    private Draft validate(Draft d, Actor actor) {
         if (d == null || d.audience() == null) {
             throw invalid("The side (RIDER, DRIVER, STAFF) is required");
         }
@@ -200,7 +205,7 @@ class JdbcCancelReasons implements CancelReasons {
                 labels.put(language, label);
             }
         }
-        String defaultLanguage = settings.current().settings().languages().defaultLanguage();
+        String defaultLanguage = settings.of(actor).settings().languages().defaultLanguage();
         if (!labels.containsKey(defaultLanguage)) {
             throw invalid("A label in the default language (" + defaultLanguage + ") is required");
         }

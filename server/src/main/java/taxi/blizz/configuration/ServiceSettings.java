@@ -180,9 +180,27 @@ public interface ServiceSettings {
     record Version(long version, Settings settings, UUID changedBy, String reason, java.time.OffsetDateTime changedAt) {
     }
 
-    /** The settings in force; version 0 with the defaults when nobody changed anything yet. */
-    Version current();
+    /**
+     * The settings in force in the taxi service {@code serviceId} (ADR 0016); version 0 with the defaults when nobody
+     * changed anything there yet.
+     */
+    Version current(UUID serviceId);
 
+    /** The settings of the service a city belongs to; the first service's for an unknown city. */
+    Version ofCity(UUID cityId);
+
+    /** The settings of the service a rider, driver or staff member belongs to. */
+    Version of(Actor subject);
+
+    /**
+     * The first service's settings (ADR 0016): for tests and the sandbox only. Server code names the service, so a
+     * check in the tests refuses this call outside them.
+     */
+    default Version current() {
+        return current(taxi.blizz.identity.Services.DEFAULT_ID);
+    }
+
+    /** Changes the settings of the staff member's own taxi service. */
     Version change(Actor staff, UUID commandId, long expectedVersion, Settings settings, String reason);
 
     /** Newest version first, after {@code after} (REQ-API-09). */
