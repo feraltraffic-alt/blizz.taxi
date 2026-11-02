@@ -5,14 +5,6 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The driver's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
-    topUpSum: 'Сумма пополнения, UAH',
-    topUp: 'Пополнить картой',
-    topUpAmount: 'Укажите сумму от 1.00 до 10000.00 UAH.',
-    topUpDone: 'Баланс пополнен на {amount}.',
-    topUpFailed: 'Оплата не прошла: {reason}',
-    topUpExpired: 'Время оплаты истекло.',
-    topUpNoCards: 'В этом городе нельзя пополнить картой.',
-    topUpWaiting: 'Ждём подтверждения оплаты…',
     preorders: 'Предзаказы',
     myPreorders: 'Мои предзаказы',
     noMyPreorders: 'Вы пока не взяли ни одного предзаказа.',
@@ -156,14 +148,6 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Терминал'
   },
   uk: {
-    topUpSum: 'Сума поповнення, UAH',
-    topUp: 'Поповнити карткою',
-    topUpAmount: 'Вкажіть суму від 1.00 до 10000.00 UAH.',
-    topUpDone: 'Баланс поповнено на {amount}.',
-    topUpFailed: 'Оплата не пройшла: {reason}',
-    topUpExpired: 'Час оплати минув.',
-    topUpNoCards: 'У цьому місті не можна поповнити карткою.',
-    topUpWaiting: 'Чекаємо підтвердження оплати…',
     preorders: 'Передзамовлення',
     myPreorders: 'Мої передзамовлення',
     noMyPreorders: 'Ви поки не взяли жодного передзамовлення.',
@@ -307,14 +291,6 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Термінал'
   },
   pl: {
-    topUpSum: 'Kwota doładowania, UAH',
-    topUp: 'Doładuj kartą',
-    topUpAmount: 'Podaj kwotę od 1.00 do 10000.00 UAH.',
-    topUpDone: 'Saldo doładowane o {amount}.',
-    topUpFailed: 'Płatność nie przeszła: {reason}',
-    topUpExpired: 'Czas na płatność minął.',
-    topUpNoCards: 'W tym mieście nie można doładować kartą.',
-    topUpWaiting: 'Czekamy na potwierdzenie płatności…',
     preorders: 'Zamówienia z wyprzedzeniem',
     myPreorders: 'Moje zamówienia z wyprzedzeniem',
     noMyPreorders: 'Nie masz jeszcze żadnego zamówienia z wyprzedzeniem.',

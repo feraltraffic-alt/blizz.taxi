@@ -40,8 +40,6 @@ function server(script: Record<string, Answer[]>) {
   });
   return {fetch: fetch as unknown as typeof globalThis.fetch, calls};
 }
-const problem = (status: number, code: string, headers?: Record<string, string>) => ({status, headers,
-  body: {type: 'about:blank', title: code, status, code, correlation_id: cid, retryable: false}});
 
 const KYIV = {id: '50000000-0000-4000-8000-000000000001', code: 'kyiv', name: 'Київ', currency: 'UAH',
   timezone: 'Europe/Kyiv', center: {lat: 50.45, lon: 30.52}};

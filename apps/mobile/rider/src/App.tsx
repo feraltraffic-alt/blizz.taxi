@@ -11,6 +11,7 @@ import {Ride, type Point} from './Ride';
 import {History} from './History';
 import {Cards} from './Cards';
 import {Debts} from './Debts';
+import {WalletScreen} from './Wallet';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
@@ -58,7 +59,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
 /** The rider's side of support (#296). */
 const RIDER_SIDE = {api: '/api/rider/v1', me: 'CLIENT', categories: RIDER_CATEGORIES} as const;
 
-type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone' | 'data' | 'debts';
+type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone' | 'data' | 'debts' | 'wallet';
 
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
 function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
@@ -68,6 +69,10 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   const t = shared.t;
   if (tab === 'cards') {
     return <Cards {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
+      onBack={() => setTab('profile')} />;
+  }
+  if (tab === 'wallet') {
+    return <WalletScreen {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
       onBack={() => setTab('profile')} />;
   }
   if (tab === 'debts') {
@@ -93,7 +98,8 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   return tab === 'profile' ? (
     <>
       <Profile {...shared} newId={newId} signOut={signOut} onCards={() => setTab('cards')}
-        onPhone={() => setTab('phone')} onData={() => setTab('data')} onDebts={() => setTab('debts')} />
+        onPhone={() => setTab('phone')} onData={() => setTab('data')} onDebts={() => setTab('debts')}
+        onWallet={() => setTab('wallet')} />
       <Button label={t('toRide')} onPress={() => setTab('ride')} />
     </>
   ) : (
@@ -108,9 +114,9 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   );
 }
 
-function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, onData, onDebts}: Shared & {
+function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, onData, onDebts, onWallet}: Shared & {
   newId: () => string; signOut: () => Promise<void>; onCards: () => void; onPhone: () => void; onData: () => void;
-  onDebts: () => void}) {
+  onDebts: () => void; onWallet: () => void}) {
   const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
@@ -165,6 +171,7 @@ function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, o
       <Button label={t('pcChange')} onPress={onPhone} />
       <Button label={t('exTitle')} onPress={onData} />
       <Button label={t('debts')} onPress={onDebts} />
+      <Button label={t('wallet')} onPress={onWallet} />
       <Button label={t('signOut')} onPress={() => void signOut()} />
       <Alert text={message} />
     </Screen>

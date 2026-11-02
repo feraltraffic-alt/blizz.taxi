@@ -5,6 +5,14 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    topUpSum: 'Сумма пополнения, UAH',
+    topUp: 'Пополнить картой',
+    topUpAmount: 'Укажите сумму от 1.00 до 10000.00 UAH.',
+    topUpDone: 'Баланс пополнен на {amount}.',
+    topUpFailed: 'Оплата не прошла: {reason}',
+    topUpExpired: 'Время оплаты истекло.',
+    topUpNoCards: 'В этом городе нельзя пополнить картой.',
+    topUpWaiting: 'Ждём подтверждения оплаты…',
     exTitle: 'Мои данные',
     exAbout: 'Копия ваших данных в одном файле. Её можно запросить раз в сутки.',
     exNone: 'Копий пока нет.',
@@ -112,6 +120,14 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    topUpSum: 'Сума поповнення, UAH',
+    topUp: 'Поповнити карткою',
+    topUpAmount: 'Вкажіть суму від 1.00 до 10000.00 UAH.',
+    topUpDone: 'Баланс поповнено на {amount}.',
+    topUpFailed: 'Оплата не пройшла: {reason}',
+    topUpExpired: 'Час оплати минув.',
+    topUpNoCards: 'У цьому місті не можна поповнити карткою.',
+    topUpWaiting: 'Чекаємо підтвердження оплати…',
     exTitle: 'Мої дані',
     exAbout: 'Копія ваших даних в одному файлі. Її можна запитати раз на добу.',
     exNone: 'Копій поки немає.',
@@ -219,6 +235,14 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    topUpSum: 'Kwota doładowania, UAH',
+    topUp: 'Doładuj kartą',
+    topUpAmount: 'Podaj kwotę od 1.00 do 10000.00 UAH.',
+    topUpDone: 'Saldo doładowane o {amount}.',
+    topUpFailed: 'Płatność nie przeszła: {reason}',
+    topUpExpired: 'Czas na płatność minął.',
+    topUpNoCards: 'W tym mieście nie można doładować kartą.',
+    topUpWaiting: 'Czekamy na potwierdzenie płatności…',
     exTitle: 'Moje dane',
     exAbout: 'Kopia twoich danych w jednym pliku. Można o nią prosić raz na dobę.',
     exNone: 'Na razie brak kopii.',

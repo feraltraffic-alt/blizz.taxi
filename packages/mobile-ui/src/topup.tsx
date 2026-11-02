@@ -1,8 +1,13 @@
 import {useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Field, useTheme, type Shared} from '@blizz/mobile-ui';
-import {ProviderPage} from './ProviderPage';
+import type {ComponentType} from 'react';
+import {Alert, Button, Field, useTheme} from './ui';
+import type {Shared} from './session';
+
+/** The provider's page as the app gives it: each app passes its own module, which its tests mock. */
+export type PaymentPage = ComponentType<{url: string; fields: Record<string, string>; returnUrl: string | null;
+  onDone: () => void}>;
 
 type TopUp = {id: string; state: 'PENDING' | 'COMPLETED' | 'FAILED' | 'EXPIRED'; amount_minor: number;
   currency: string; url?: string | null; fields?: Record<string, string> | null; return_url?: string | null;
@@ -17,10 +22,11 @@ function minorOf(text: string): number | null {
 }
 
 /**
- * Topping up the balance by card (#326, ADR 0009/0010): an amount, the provider's page, then the top-up read every
- * pollMs until it settles; a completed one reads the balance again.
+ * Topping up by card (ADR 0009/0010): the driver's balance (#326) or the rider's bonus account (#334). An amount, the
+ * provider's page, then the top-up read every pollMs until it settles; a completed one calls onCompleted.
  */
-export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, onCompleted}: Shared & {
+export function TopUpByCard({client, t, guard, failure, path, Page, cityId, newId, pollMs, onCompleted}: Shared & {
+  path: '/api/driver/v1/balance/card-top-ups' | '/api/rider/v1/wallet/card-top-ups'; Page: PaymentPage;
   cityId: string; newId: () => string; pollMs: number; onCompleted: () => void}) {
   const [text, setText] = useState('');
   const [page, setPage] = useState<TopUp | null>(null);
@@ -33,7 +39,7 @@ export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, o
     if (!waiting) return;
     let current = true;
     const check = () => {
-      guard(() => client.get('/api/driver/v1/balance/card-top-ups/{top_up_id}' as never,
+      guard(() => client.get((path + '/{top_up_id}') as never,
         {params: {top_up_id: waiting}} as never))
         .then(value => {
           const top = value as TopUp;
@@ -53,7 +59,7 @@ export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, o
       current = false;
       clearInterval(timer);
     };
-  }, [waiting, client, guard, pollMs, t, onCompleted]);
+  }, [waiting, client, guard, pollMs, t, onCompleted, path]);
 
   async function start() {
     if (acting.current || waiting) return;
@@ -65,7 +71,7 @@ export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, o
     acting.current = true;
     setMessage(null);
     try {
-      setPage(await guard(() => client.post('/api/driver/v1/balance/card-top-ups' as never, {body: {
+      setPage(await guard(() => client.post(path as never, {body: {
         command_id: newId(), city_id: cityId, amount_minor: minor}} as never)) as TopUp);
     } catch (error) {
       setMessage(error instanceof ApiError && error.status === 404 ? t('topUpNoCards') : failure(error));
@@ -80,7 +86,7 @@ export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, o
       <Button label={t('topUp')} onPress={() => void start()} disabled={Boolean(waiting)} />
       {waiting ? <Text style={{color: theme.muted}}>{t('topUpWaiting')}</Text> : null}
       {page?.url && page.fields ? (
-        <ProviderPage url={page.url} fields={page.fields} returnUrl={page.return_url ?? null} onDone={() => {
+        <Page url={page.url} fields={page.fields} returnUrl={page.return_url ?? null} onDone={() => {
           setWaiting(page.id);
           setPage(null);
         }} />
