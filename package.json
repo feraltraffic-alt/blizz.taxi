@@ -1,0 +1,43 @@
+{
+  "name": "blizz-web-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "apps/web/admin",
+    "apps/web/operator",
+    "packages/api-client"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-api.mjs",
+    "generate:check": "node scripts/generate-api.mjs --check",
+    "lint": "eslint apps/web packages/api-client test scripts/generate-api.mjs vitest.config.ts eslint.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "npm run build --workspace @blizz/api-client && npm run build --workspace @blizz/admin",
+    "e2e": "playwright test --config apps/web/admin/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "jsdom": "30.1.3",
+    "msw": "3.0.3",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "type": "module"
+}
