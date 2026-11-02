@@ -56,9 +56,11 @@ class StaffBootstrap implements ApplicationRunner {
             jdbc.sql("""
                             insert into staff_user (id, login, first_name, last_name, name, role, permissions,
                                                     all_cities, state, password_hash, must_change_password,
-                                                    created_at, updated_at, version)
+                                                    created_at, updated_at, version, service_id)
                             values (:id, :login, 'Super', 'Admin', 'Super Admin', 'SUPER_ADMIN', '{}', true, 'ACTIVE',
-                                    :hash, true, :now, :now, 0)""")
+                                    :hash, true, :now, :now, 0, :service)""")
+                    // The first super admin is the first service's (ADR 0016).
+                    .param("service", taxi.blizz.identity.Services.DEFAULT_ID)
                     .param("id", UUID.randomUUID()).param("login", normalized)
                     .param("hash", passwords.hash(normalized, password))
                     .param("now", clock.instant().atOffset(ZoneOffset.UTC)).update();
