@@ -226,8 +226,10 @@ class OperatorOrderApiTests {
             listsTheOrderableClasses();
         } finally {
             // Every test's cities lie on the same squares: these move away so the next test's pickup is in its own.
-            jdbc.sql("update city set polygon = ST_GeomFromEWKT('SRID=4326;MULTIPOLYGON(((0 0,0.001 0,0.001 0.001,"
-                    + "0 0.001,0 0)))') where id in (:a, :b)").param("a", cityA).param("b", cityB).update();
+            // Not to (0, 0), which other tests use as a point outside every city: to a corner of the Antarctic.
+            jdbc.sql("update city set polygon = ST_GeomFromEWKT('SRID=4326;MULTIPOLYGON(((-170 -80,-169.999 -80,"
+                    + "-169.999 -79.999,-170 -79.999,-170 -80)))') where id in (:a, :b)")
+                    .param("a", cityA).param("b", cityB).update();
         }
     }
 
