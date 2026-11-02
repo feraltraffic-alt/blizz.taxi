@@ -295,3 +295,29 @@ describe('file upload (#284 D9)', () => {
     expect(error.code).toBe('CONFLICT');
   });
 });
+
+describe('binary answers (#302)', () => {
+  const path = '/api/operator/v1/calls/ca000000-0000-4000-8000-000000000001/recording';
+
+  it('B1: keeps every byte and the content type', async () => {
+    server.use(http.get(origin + path, () => new HttpResponse(new Uint8Array([0, 0x7f, 0x80, 0xc3, 0xff]),
+      {headers: {'Content-Type': 'audio/wav'}})));
+    const blob = await client().get('/api/operator/v1/calls/{call_id}/recording' as never,
+      {params: {call_id: 'ca000000-0000-4000-8000-000000000001'}} as never) as unknown as Blob;
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe('audio/wav');
+    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([0, 0x7f, 0x80, 0xc3, 0xff]);
+  });
+
+  it('B1: an empty non-JSON body is undefined', async () => {
+    server.use(http.get(origin + path, () => new HttpResponse(null, {status: 200,
+      headers: {'Content-Type': 'audio/wav'}})));
+    expect(await client().get('/api/operator/v1/calls/{call_id}/recording' as never,
+      {params: {call_id: 'ca000000-0000-4000-8000-000000000001'}} as never)).toBeUndefined();
+  });
+
+  it('B2: JSON is still parsed', async () => {
+    server.use(http.get(origin + '/api/admin/v1/me', () => HttpResponse.json(me)));
+    expect(await client().get('/api/admin/v1/me')).toEqual(me);
+  });
+});

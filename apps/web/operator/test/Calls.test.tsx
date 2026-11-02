@@ -1,4 +1,4 @@
-import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {http, HttpResponse, delay} from 'msw';
@@ -34,9 +34,10 @@ const quote = {id: '80000000-0000-4000-8000-000000000001', vehicle_class: 'STAND
 type Sent = {path: string; body: Record<string, unknown>};
 
 function handlers(opts: {rights?: string[]; calls?: (q: URLSearchParams) => unknown[];
-  answer?: () => Response | Promise<Response>; status?: () => Response | Promise<Response>} = {}) {
+  answer?: () => Response | Promise<Response>; status?: () => Response | Promise<Response>;
+  recording?: () => Response} = {}) {
   const sent: Sent[] = [];
-  const asked = {calls: [] as URLSearchParams[], status: 0};
+  const asked = {calls: [] as URLSearchParams[], status: 0, recording: 0};
   const place = (label: string, lat: number) => ({source: 'OWN', label, street: label, house: '1',
     point: {lat, lon: 30.5}});
   server.use(
@@ -72,6 +73,11 @@ function handlers(opts: {rights?: string[]; calls?: (q: URLSearchParams) => unkn
       asked.calls.push(query);
       return HttpResponse.json({calls: (opts.calls ?? (() => [call()]))(query),
         page: {next_cursor: null, has_more: false}} as never);
+    }),
+    http.get(origin + '/api/operator/v1/calls/' + CALL + '/recording', () => {
+      asked.recording++;
+      return opts.recording ? opts.recording() : new HttpResponse(new Uint8Array([82, 73, 70, 70, 0x80, 0xff]),
+        {headers: {'Content-Type': 'audio/wav'}});
     }),
     http.post(origin + '/api/operator/v1/calls/' + CALL + '/answer', async ({request}) => {
       sent.push({path: 'answer', body: await request.json() as Record<string, unknown>});
@@ -207,5 +213,81 @@ describe('K6: one action at a time', () => {
     await waitFor(() => expect(sent).toHaveLength(1));
     await delay(300);
     expect(sent).toHaveLength(1);
+  });
+});
+
+/** Playing a call's recording (#302): R1–R6. */
+describe('#302: recordings', () => {
+  const stored = (state: string, over: Record<string, unknown> = {}) => call({state: 'ENDED', answered_by: ME,
+    ended_at: '2026-11-02T10:03:00Z', recording: {state, duration_seconds: state === 'STORED' ? 125 : null,
+      stored_at: state === 'STORED' ? '2026-11-02T10:04:00Z' : null}, ...over});
+  const urls = {made: [] as Blob[], revoked: [] as string[]};
+
+  function stubUrls() {
+    urls.made = [];
+    urls.revoked = [];
+    vi.stubGlobal('URL', Object.assign(Object.create(URL), URL, {
+      createObjectURL: (blob: Blob) => {urls.made.push(blob); return 'blob:recording-' + urls.made.length;},
+      revokeObjectURL: (url: string) => {urls.revoked.push(url);}
+    }));
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('R1: a stored recording shows its length and plays with one request', async () => {
+    stubUrls();
+    const {asked} = handlers({calls: () => [stored('STORED')]});
+    const user = await openCalls();
+    expect(await screen.findByText(/запись 2:05/)).toBeVisible();
+    await user.click(screen.getByRole('button', {name: 'Прослушать запись'}));
+    const player = await screen.findByLabelText('Запись звонка');
+    expect(player.getAttribute('src')).toBe('blob:recording-1');
+    expect(asked.recording).toBe(1);
+    expect([...new Uint8Array(await urls.made[0]!.arrayBuffer())]).toEqual([82, 73, 70, 70, 0x80, 0xff]);
+  });
+
+  it('R2: polling and another press do not fetch it again', async () => {
+    stubUrls();
+    const {asked} = handlers({calls: () => [stored('STORED')]});
+    const user = await openCalls(60);
+    await user.click(await screen.findByRole('button', {name: 'Прослушать запись'}));
+    await screen.findByLabelText('Запись звонка');
+    await waitFor(() => expect(asked.calls.length).toBeGreaterThanOrEqual(3));
+    expect(screen.queryByRole('button', {name: 'Прослушать запись'})).not.toBeInTheDocument();
+    expect(asked.recording).toBe(1);
+  });
+
+  it.each([['PENDING', 'запись готовится'], ['NONE', 'записи нет']])('R3: %s says so, no button', async (state, text) => {
+    const {asked} = handlers({calls: () => [stored(state)]});
+    await openCalls();
+    expect(await screen.findByText(new RegExp(text))).toBeVisible();
+    expect(screen.queryByRole('button', {name: 'Прослушать запись'})).not.toBeInTheDocument();
+    expect(asked.recording).toBe(0);
+  });
+
+  it('R4: without calls.listen there is no button', async () => {
+    handlers({rights: ['orders.create', 'calls.answer'], calls: () => [stored('STORED')]});
+    await openCalls();
+    await screen.findByRole('list', {name: 'Звонки'});
+    expect(screen.queryByRole('button', {name: 'Прослушать запись'})).not.toBeInTheDocument();
+  });
+
+  it('R5: a refusal shows the correlation id', async () => {
+    stubUrls();
+    handlers({calls: () => [stored('STORED')],
+      recording: () => HttpResponse.json(problem(404, 'NOT_FOUND'), {status: 404})});
+    const user = await openCalls();
+    await user.click(await screen.findByRole('button', {name: 'Прослушать запись'}));
+    expect(await screen.findByText(new RegExp(cid))).toBeVisible();
+    expect(urls.made).toEqual([]);
+  });
+
+  it('R6: the object URL is revoked when the panel closes', async () => {
+    stubUrls();
+    handlers({calls: () => [stored('STORED')]});
+    const user = await openCalls();
+    await user.click(await screen.findByRole('button', {name: 'Прослушать запись'}));
+    await screen.findByLabelText('Запись звонка');
+    await user.click(screen.getByRole('button', {name: 'Заказы'}));
+    await waitFor(() => expect(urls.revoked).toEqual(['blob:recording-1']));
   });
 });
