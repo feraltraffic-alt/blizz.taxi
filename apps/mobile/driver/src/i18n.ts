@@ -5,6 +5,12 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The driver's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    allOrders: 'Все заказы рядом',
+    takeOrder: 'Взять',
+    alreadyTaken: 'Этот заказ уже взял другой водитель.',
+    claimTooFar: 'Вы слишком далеко от точки подачи этого заказа.',
+    shiftElsewhere: 'Смена открыта на другом телефоне: заказы берутся только с него.',
+    tooOften: 'Слишком часто. Подождите немного.',
     home: 'Работа',
     goOnline: 'Выйти на линию',
     goOffline: 'Уйти с линии',
@@ -64,6 +70,12 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Терминал'
   },
   uk: {
+    allOrders: 'Усі замовлення поруч',
+    takeOrder: 'Взяти',
+    alreadyTaken: 'Це замовлення вже взяв інший водій.',
+    claimTooFar: 'Ви надто далеко від точки подачі цього замовлення.',
+    shiftElsewhere: 'Зміну відкрито на іншому телефоні: замовлення беруться лише з нього.',
+    tooOften: 'Надто часто. Зачекайте трохи.',
     home: 'Робота',
     goOnline: 'Вийти на лінію',
     goOffline: 'Піти з лінії',
@@ -123,6 +135,12 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Термінал'
   },
   pl: {
+    allOrders: 'Wszystkie zlecenia w pobliżu',
+    takeOrder: 'Weź',
+    alreadyTaken: 'To zlecenie wziął już inny kierowca.',
+    claimTooFar: 'Jesteś za daleko od miejsca odbioru tego zlecenia.',
+    shiftElsewhere: 'Zmiana jest otwarta na innym telefonie: zlecenia bierze się tylko z niego.',
+    tooOften: 'Za często. Poczekaj chwilę.',
     home: 'Praca',
     goOnline: 'Rozpocznij pracę',
     goOffline: 'Zakończ pracę',
