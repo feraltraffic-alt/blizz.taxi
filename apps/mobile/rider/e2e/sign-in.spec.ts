@@ -18,7 +18,7 @@ const PLACES: Record<string, Point & {driver: string; vehicle: string}> = {
 };
 
 async function signIn(request: Request, audience: string, phone: string): Promise<Record<string, string>> {
-  const device = 'e2e-' + audience.toLowerCase() + '-' + Date.now();
+  const device = 'e2e-' + audience.toLowerCase() + '-' + crypto.randomUUID();
   const challenge = await request.post('/auth/v1/otp/challenges', {data: {audience, phone, device_ref: device}});
   expect(challenge.status()).toBe(201);
   const code = ((await (await request.get('/sandbox/v1/otp?phone=' + encodeURIComponent(phone))).json()) as
