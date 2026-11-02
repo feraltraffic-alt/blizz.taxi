@@ -18,7 +18,7 @@ const money = (minor: number, currency: string) => (minor / 100).toFixed(2) + ' 
 export function OrderChanges<O extends Order>({client, t, order, rights, near, newId, onChange, refresh}: {
   client: ApiClient; t: Translate; order: O; rights: Set<string>; near: Point; newId: () => string;
   onChange: (order: O) => void; refresh: () => Promise<void>}) {
-  const canCash = rights.has('orders.create') && order.payment_method === 'CARD'
+  const canCash = rights.has('orders.create') && order.payment_method !== 'X'
     && CASH_STATUSES.includes(order.status);
   const canMove = rights.has('orders.reassign') && order.status === 'IN_SERVICE';
   const [cashReason, setCashReason] = useState('');
@@ -72,7 +72,7 @@ export function OrderChanges<O extends Order>({client, t, order, rights, near, n
     }
     return once(async () => {
       const changed = await client.post('/api/operator/v1/orders/{order_id}/destination' as never, {params: {
-        order_id: order.id}, body: {command_id: newId(), expected_version: order.version, dropoff: place.point,
+        order_id: order.id}, body: {command_id: newId(), dropoff: place.point,
         dropoff_label: place.label, reason: why}} as never) as Changed<O>;
       onChange(changed.order);
       setMessage(t('newPrice', {now: money(changed.price_minor, changed.currency),
