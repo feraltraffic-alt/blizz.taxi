@@ -4,7 +4,17 @@ import taxi.blizz.geo.GeoPoint;
 
 /** Routing adapter boundary. No real provider is configured by this slice. */
 public interface RouteEstimator {
+
+    /** The route by the router of no particular service: the panel's estimator gives the straight line here. */
     Estimate estimate(GeoPoint pickup, GeoPoint dropOff);
+
+    /**
+     * The route by the router the taxi service set (ADR 0016, issue #215): its own GraphHopper settings and key. A
+     * router of no service (the straight line, a test's fake) gives the same answer for every service.
+     */
+    default Estimate estimate(java.util.UUID serviceId, GeoPoint pickup, GeoPoint dropOff) {
+        return estimate(pickup, dropOff);
+    }
 
     /**
      * {@code source}: ROUTER — a route on the roads; STRAIGHT_LINE — an estimate from the straight line, when no router

@@ -12,6 +12,10 @@ import taxi.blizz.platform.Actor;
  * written or replaced but never read back through the panel; it is stored encrypted with the instance's master key.
  * A value set here wins over the environment; without one the environment's value (if any) is used. Readers see a
  * change within seconds, without a restart.
+ *
+ * <p>Each taxi service enters its own values (ADR 0016, issue #215); the panel shows and changes those of the staff
+ * member's service. The deployment's environment values stand in for the first service only, so another service's
+ * apps and messages never go out with the first service's keys.
  */
 public interface Integrations {
 
@@ -146,19 +150,35 @@ public interface Integrations {
     /** Read-only (registry 22.2 "GET /integration-health", issue #176); needs {@link #MANAGE_PERMISSION}. */
     Health health(Actor staff);
 
-    /** The value set in the panel (decrypted for a secret); empty when not set. For the modules that use it. */
-    Optional<String> value(String name);
+    /** The value the service set in the panel (decrypted for a secret); empty when not set. For the modules. */
+    Optional<String> value(UUID serviceId, String name);
+
+    /**
+     * The connection to the server's own telephone exchange (Asterisk ARI): one per server, for every service's call
+     * lines and code calls. Set in the first service's panel; another service's panel cannot change it. The number a
+     * code call dials through ({@link #OTP_ASTERISK_ENDPOINT}) is each service's own.
+     */
+    java.util.Set<String> SERVER_FIELDS = java.util.Set.of(OTP_ASTERISK_ARI_URL, OTP_ASTERISK_ARI_USER,
+            OTP_ASTERISK_ARI_PASSWORD);
+
+    /** A value of {@link #SERVER_FIELDS}; any other name is refused. */
+    Optional<String> serverValue(String name);
+
+    /** Whether the deployment's environment values stand in for the service's unset ones: the first service only. */
+    static boolean environmentServes(UUID serviceId) {
+        return taxi.blizz.identity.Services.DEFAULT_ID.equals(serviceId);
+    }
 
     /** Grows with every change; a reader rebuilds its client when it differs from the one it was built at. */
     long revision();
 
     /**
      * A secret of another module, e.g. a merchant's: stored and audited like the fields above, under {@code name}
-     * (lower case, dots and dashes). For use inside that module's own change, after it checked the permission and
-     * the password.
+     * (lower case, dots and dashes), in the staff member's service. For use inside that module's own change, after
+     * it checked the permission and the password.
      */
     void putSecret(Actor staff, String name, String value);
 
-    /** The last characters of a stored secret, for the panel. */
-    Optional<String> secretHint(String name);
+    /** The last characters of a secret the service stored, for the panel. */
+    Optional<String> secretHint(UUID serviceId, String name);
 }

@@ -5,6 +5,6 @@ public interface IntegrationCheck {
 
     String group();
 
-    /** Uses the values in force now; the message names what was checked, never a key. */
-    Integrations.Check check();
+    /** Uses the service's values in force now; the message names what was checked, never a key. */
+    Integrations.Check check(java.util.UUID serviceId);
 }

@@ -62,7 +62,7 @@ class FakeOtpSender implements FakeOtpCodes {
             }
 
             @Override
-            public Result send(PhoneNumber phone, String code, OtpAudience audience) {
+            public Result send(java.util.UUID serviceId, PhoneNumber phone, String code, OtpAudience audience) {
                 return deliver(channel, phone, code, audience);
             }
         };

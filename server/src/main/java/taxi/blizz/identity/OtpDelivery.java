@@ -16,22 +16,23 @@ public interface OtpDelivery {
     void send(PhoneNumber phone, String code, OtpAudience audience);
 
     /**
-     * As {@link #send(PhoneNumber, String, OtpAudience)}, for the challenge {@code challengeId}, by exactly
-     * {@code channel} ({@code null}: the configured channel). A delivery that chooses channels and keeps a record of
-     * attempts overrides this; the others keep their single way.
+     * As {@link #send(PhoneNumber, String, OtpAudience)}, for the challenge {@code challengeId} of the taxi service
+     * {@code serviceId} (its own providers and sender name, ADR 0016), by exactly {@code channel} ({@code null}: the
+     * configured channel). A delivery that chooses channels and keeps a record of attempts overrides this; the others
+     * keep their single way.
      */
-    default void send(java.util.UUID challengeId, PhoneNumber phone, String code, OtpAudience audience,
-                      OtpChannel channel) {
+    default void send(java.util.UUID serviceId, java.util.UUID challengeId, PhoneNumber phone, String code,
+                      OtpAudience audience, OtpChannel channel) {
         send(phone, code, audience);
     }
 
-    /** The channel codes go by when nothing else applies (the admin panel's setting). */
-    default OtpChannel primaryChannel() {
+    /** The channel the service's codes go by when nothing else applies (its admin panel's setting). */
+    default OtpChannel primaryChannel(java.util.UUID serviceId) {
         return OtpChannel.SMS;
     }
 
     /** The channel a resend goes by after the primary one did not get through; empty when there is none. */
-    default Optional<OtpChannel> fallbackChannel() {
+    default Optional<OtpChannel> fallbackChannel(java.util.UUID serviceId) {
         return Optional.empty();
     }
 

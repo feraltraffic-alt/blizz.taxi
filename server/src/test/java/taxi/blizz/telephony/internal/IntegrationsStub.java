@@ -7,7 +7,7 @@ import java.util.UUID;
 import taxi.blizz.configuration.Integrations;
 import taxi.blizz.platform.Actor;
 
-/** Integrations with fixed values, for a provider that must not touch the shared ones; nothing else works. */
+/** Integrations with fixed values for every service, for a provider that must not touch the shared ones. */
 class IntegrationsStub implements Integrations {
 
     private final Map<String, String> values;
@@ -17,7 +17,12 @@ class IntegrationsStub implements Integrations {
     }
 
     @Override
-    public Optional<String> value(String name) {
+    public Optional<String> value(UUID serviceId, String name) {
+        return Optional.ofNullable(values.get(name));
+    }
+
+    @Override
+    public Optional<String> serverValue(String name) {
         return Optional.ofNullable(values.get(name));
     }
 
@@ -52,7 +57,7 @@ class IntegrationsStub implements Integrations {
     }
 
     @Override
-    public Optional<String> secretHint(String name) {
+    public Optional<String> secretHint(UUID serviceId, String name) {
         return Optional.empty();
     }
 }

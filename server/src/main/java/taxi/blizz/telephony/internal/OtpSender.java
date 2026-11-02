@@ -36,5 +36,7 @@ interface OtpSender {
     /** TURBOSMS, ASTERISK or FAKE. */
     String provider();
 
-    Result send(PhoneNumber phone, String code, OtpAudience audience);
+    /** By the providers and sender name of the taxi service {@code serviceId} (ADR 0016). */
+
+    Result send(java.util.UUID serviceId, PhoneNumber phone, String code, OtpAudience audience);
 }

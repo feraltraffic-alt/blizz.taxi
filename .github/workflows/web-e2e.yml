@@ -1,0 +1,74 @@
+# The admin panel against the real server (#136): the server of the sandbox profile, the panel served by
+# `vite preview` on the same origin, and one Playwright run. Runs on a push that changes the web code, or on demand.
+name: Web E2E
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - ".github/workflows/web-e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+        env:
+          POSTGRES_DB: blizz
+          POSTGRES_USER: blizz
+          POSTGRES_PASSWORD: blizz-sandbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U blizz -d blizz" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Build the server
+        run: cd server && ./mvnw -B -q -ntp -DskipTests package
+      - name: Start the server (profile sandbox)
+        run: |
+          cd server
+          nohup java -jar target/server-*[0-9T].jar --spring.profiles.active=sandbox > ../server.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; then echo "up after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          tail -100 ../server.log; exit 1
+      - name: Build the panel
+        run: |
+          npm ci --no-fund --no-audit
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Sign in, change the password, see the profile, sign out
+        run: npm run e2e 2>&1 | tee e2e.txt
+      - name: Summary
+        if: always()
+        run: |
+          { echo "## Admin panel against the real server"; echo '```'; tail -n 40 e2e.txt; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the trace
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-e2e
+          path: |
+            apps/web/admin/playwright-report
+            e2e.txt
+            server.log

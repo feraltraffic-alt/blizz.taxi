@@ -31,7 +31,7 @@ class ConfiguredTextMessages implements TextMessages, FakeTextMessages {
     }
 
     @Override
-    public Result send(PhoneNumber to, String text) {
+    public Result send(java.util.UUID serviceId, PhoneNumber to, String text) {
         if (properties.fake()) {
             if (to.e164().endsWith("0000")) {
                 return new Result(State.FAILED, null, "fake SMS FAILED");
@@ -43,7 +43,7 @@ class ConfiguredTextMessages implements TextMessages, FakeTextMessages {
             }
             return new Result(State.SENT, "fake-" + java.util.UUID.randomUUID(), null);
         }
-        OtpSender.Result r = turboSms.sendText(to, text);
+        OtpSender.Result r = turboSms.sendText(serviceId, to, text);
         return new Result(State.valueOf(r.state().name()), r.providerRef(), r.error());
     }
 

@@ -57,16 +57,18 @@ class ChannelOtpDelivery implements OtpDelivery {
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void send(PhoneNumber phone, String code, OtpAudience audience) {
-        send(null, phone, code, audience, null);
+        // No service named: nothing goes out, so a code never leaves under another service's name and account.
+        log.warn("A code for {} named no taxi service and was not sent", phone.masked());
     }
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void send(UUID challengeId, PhoneNumber phone, String code, OtpAudience audience, OtpChannel channel) {
-        OtpSender sender = sender(channel != null ? channel : primaryChannel());
+    public void send(UUID serviceId, UUID challengeId, PhoneNumber phone, String code, OtpAudience audience,
+                     OtpChannel channel) {
+        OtpSender sender = sender(channel != null ? channel : primaryChannel(serviceId));
         OtpSender.Result result;
         try {
-            result = sender.send(phone, code, audience);
+            result = sender.send(serviceId, phone, code, audience);
         } catch (RuntimeException e) {
             result = OtpSender.Result.unknown(e.getClass().getSimpleName());
         }
@@ -78,13 +80,13 @@ class ChannelOtpDelivery implements OtpDelivery {
     }
 
     @Override
-    public OtpChannel primaryChannel() {
-        return setting(Integrations.OTP_CHANNEL).map(OtpChannel::valueOf).orElse(OtpChannel.SMS);
+    public OtpChannel primaryChannel(UUID serviceId) {
+        return setting(serviceId, Integrations.OTP_CHANNEL).map(OtpChannel::valueOf).orElse(OtpChannel.SMS);
     }
 
     @Override
-    public Optional<OtpChannel> fallbackChannel() {
-        String fallback = setting(Integrations.OTP_FALLBACK).orElse("VOICE");
+    public Optional<OtpChannel> fallbackChannel(UUID serviceId) {
+        String fallback = setting(serviceId, Integrations.OTP_FALLBACK).orElse("VOICE");
         return "NONE".equals(fallback) ? Optional.empty() : Optional.of(OtpChannel.valueOf(fallback));
     }
 
@@ -98,8 +100,9 @@ class ChannelOtpDelivery implements OtpDelivery {
                 .query(Boolean.class).single();
     }
 
-    private java.util.Optional<String> setting(String name) {
-        return integrations.value(name).map(v -> v.strip().toUpperCase(Locale.ROOT)).filter(v -> !v.isEmpty());
+    private java.util.Optional<String> setting(UUID serviceId, String name) {
+        return integrations.value(serviceId, name).map(v -> v.strip().toUpperCase(Locale.ROOT))
+                .filter(v -> !v.isEmpty());
     }
 
     private OtpSender sender(OtpChannel channel) {

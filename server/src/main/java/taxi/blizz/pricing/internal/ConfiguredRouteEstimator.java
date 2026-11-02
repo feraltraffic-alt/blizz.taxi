@@ -31,13 +31,17 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
 
     private static final Logger log = LoggerFactory.getLogger(ConfiguredRouteEstimator.class);
     private static final Set<String> SCHEMES = Set.of("http", "https");
+    /** The hosted API: where a service that set no address of its own would route, once it turns routing on. */
+    private static final String HOSTED = "https://graphhopper.com/api/1";
 
     /** {@code fromPanel}: the address was typed in the admin panel, not set by the deployment. */
     private record Built(long revision, GraphHopperProperties properties, boolean fromPanel,
                          GraphHopperRouteEstimator graphHopper) {
     }
 
-    private volatile Built built;
+    /** By service: each service routes with its own settings (ADR 0016). */
+    private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, Built> built =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     ConfiguredRouteEstimator(Integrations integrations, GraphHopperProperties environment,
                              RouteEstimator straightLine, JsonMapper json,
@@ -50,49 +54,60 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
         this.json = json;
     }
 
-    private Built current() {
+    private Built current(java.util.UUID service) {
         long revision;
         try {
             revision = integrations.revision();
         } catch (RuntimeException e) {
             revision = -1;
         }
-        Built b = built;
+        Built b = built.get(service);
         if (b != null && b.revision() == revision) {
             return b;
         }
-        synchronized (this) {
-            if (built == null || built.revision() != revision) {
-                GraphHopperProperties p = properties();
-                boolean fromPanel = setting(Integrations.GRAPHHOPPER_BASE_URL).isPresent();
-                built = new Built(revision, p, fromPanel,
-                        new GraphHopperRouteEstimator(p, straightLine, json, breakers));
+        long seen = revision;
+        return built.compute(service, (key, old) -> {
+            if (old != null && old.revision() == seen) {
+                return old;
             }
-            return built;
-        }
+            GraphHopperProperties p = properties(key);
+            boolean fromPanel = setting(key, Integrations.GRAPHHOPPER_BASE_URL).isPresent();
+            return new Built(seen, p, fromPanel, new GraphHopperRouteEstimator(p, straightLine, json, breakers));
+        });
     }
 
-    GraphHopperProperties properties() {
-        boolean enabled = setting(Integrations.GRAPHHOPPER_ENABLED).map(Boolean::parseBoolean)
-                .orElse(environment.enabled());
+    /** The service's own values; the environment's stand in for the first service only (ADR 0016). */
+    GraphHopperProperties properties(java.util.UUID service) {
+        boolean env = Integrations.environmentServes(service);
+        boolean enabled = setting(service, Integrations.GRAPHHOPPER_ENABLED).map(Boolean::parseBoolean)
+                .orElse(env && environment.enabled());
         return new GraphHopperProperties(enabled,
-                setting(Integrations.GRAPHHOPPER_BASE_URL).orElse(environment.baseUrl()),
-                setting(Integrations.GRAPHHOPPER_API_KEY).orElse(environment.apiKey()),
-                setting(Integrations.GRAPHHOPPER_PROFILE).orElse(environment.profile()),
+                setting(service, Integrations.GRAPHHOPPER_BASE_URL).orElse(env ? environment.baseUrl() : HOSTED),
+                setting(service, Integrations.GRAPHHOPPER_API_KEY).orElse(env ? environment.apiKey() : null),
+                setting(service, Integrations.GRAPHHOPPER_PROFILE).orElse(environment.profile()),
                 environment.timeout());
     }
 
-    private Optional<String> setting(String name) {
+    private Optional<String> setting(java.util.UUID service, String name) {
         try {
-            return integrations.value(name).filter(v -> !v.isBlank());
+            return integrations.value(service, name).filter(v -> !v.isBlank());
         } catch (RuntimeException e) {
             return Optional.empty(); // e.g. no master key: the environment's value
         }
     }
 
+    /** No service named: the straight line, never one service's router or key. */
     @Override
     public Estimate estimate(GeoPoint pickup, GeoPoint dropOff) {
-        Built b = current();
+        return straightLine.estimate(pickup, dropOff);
+    }
+
+    @Override
+    public Estimate estimate(java.util.UUID serviceId, GeoPoint pickup, GeoPoint dropOff) {
+        if (serviceId == null) {
+            return straightLine.estimate(pickup, dropOff);
+        }
+        Built b = current(serviceId);
         return b.properties().enabled() && addressStillAllowed(b) ? b.graphHopper().estimate(pickup, dropOff)
                 : straightLine.estimate(pickup, dropOff);
     }
@@ -116,8 +131,8 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
     }
 
     @Override
-    public Integrations.Check check() {
-        Built b = current();
+    public Integrations.Check check(java.util.UUID serviceId) {
+        Built b = current(serviceId);
         Integrations.Check check = b.graphHopper().check();
         return b.properties().enabled() ? check : new Integrations.Check(check.group(), check.ok(),
                 check.message() + " (switched off: prices use the straight line)");
