@@ -137,13 +137,14 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
   }
 
   async function order() {
-    if (!quote || !pickup || !dropoff || !vehicleClass || ordering.current) return;
+    if (!quote || !pickup || !dropoff || !vehicleClass) return;
+    void ordering; // mutation: a second tap is not stopped
     ordering.current = true;
     setBusy(true);
     setMessage(null);
     try {
       onOrdered(await guard(() => client.post('/api/rider/v1/orders', {body: {
-        command_id: orderCommand.current as string, quote_id: quote.id, vehicle_class: vehicleClass,
+        command_id: newId(), quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
         payment_method: 'CASH'
       }} as never)) as Order);
@@ -186,7 +187,7 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       <Button label={t('getPrice')} onPress={() => void price()} disabled={busy || !pickup || !dropoff || !vehicleClass} />
       {quote ? <Text style={{color: theme.text}}>{t('priceIs', {amount: (quote.amount_minor / 100).toFixed(2),
         currency: quote.currency})}</Text> : null}
-      <Button label={t('orderRide')} onPress={() => void order()} disabled={busy || !quote} />
+      <Button label={t('orderRide')} onPress={() => void order()} disabled={!quote} />
       <Alert text={message} />
     </Screen>
   );
