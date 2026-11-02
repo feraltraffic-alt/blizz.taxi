@@ -41,8 +41,9 @@ export function Debts({client, t, guard, failure, newId, pollMs, onBack}: Shared
       guard(() => client.get('/api/rider/v1/payments/{payment_id}' as never, {params: {payment_id: waiting}} as never))
         .then(value => {
           const paid = value as Payment;
-          if (!current || paid.state === 'PENDING') return;
+          if (!current) return;
           setWaiting(null);
+          if (paid.state === 'PENDING') return;
           if (paid.state === 'COMPLETED') {
             setMessage(t('debtPaid', {amount: money(paid.amount_minor) + ' ' + paid.currency}));
             void read().catch(() => undefined);
