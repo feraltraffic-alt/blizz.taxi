@@ -5,6 +5,16 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    debts: 'Долги',
+    noDebts: 'Долгов нет.',
+    debtLine: 'Долг {left} (оплачено {paid} из {owed})',
+    payDebt: 'Оплатить {amount}',
+    debtPaid: 'Оплачено {amount}.',
+    payFailed: 'Оплата не прошла: {reason}',
+    payExpired: 'Время оплаты истекло.',
+    payOpen: 'Оплата этого долга уже открыта — завершите её.',
+    payWaiting: 'Ждём подтверждения оплаты…',
+    payTheDebt: 'Оплатить долг',
     writeSupport: 'Написать в поддержку',
     payCash: 'Наличными',
     payCard: 'Картой {card}',
@@ -68,6 +78,16 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    debts: 'Борги',
+    noDebts: 'Боргів немає.',
+    debtLine: 'Борг {left} (сплачено {paid} з {owed})',
+    payDebt: 'Сплатити {amount}',
+    debtPaid: 'Сплачено {amount}.',
+    payFailed: 'Оплата не пройшла: {reason}',
+    payExpired: 'Час оплати минув.',
+    payOpen: 'Оплату цього боргу вже відкрито — завершіть її.',
+    payWaiting: 'Чекаємо підтвердження оплати…',
+    payTheDebt: 'Сплатити борг',
     writeSupport: 'Написати в підтримку',
     payCash: 'Готівкою',
     payCard: 'Карткою {card}',
@@ -131,6 +151,16 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    debts: 'Długi',
+    noDebts: 'Brak długów.',
+    debtLine: 'Dług {left} (zapłacono {paid} z {owed})',
+    payDebt: 'Zapłać {amount}',
+    debtPaid: 'Zapłacono {amount}.',
+    payFailed: 'Płatność nie przeszła: {reason}',
+    payExpired: 'Czas na płatność minął.',
+    payOpen: 'Płatność tego długu jest już otwarta — dokończ ją.',
+    payWaiting: 'Czekamy na potwierdzenie płatności…',
+    payTheDebt: 'Spłać dług',
     writeSupport: 'Napisz do pomocy',
     payCash: 'Gotówką',
     payCard: 'Kartą {card}',

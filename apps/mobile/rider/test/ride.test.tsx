@@ -163,6 +163,15 @@ describe('E6: refusals', () => {
     expect(await screen.findByText('Сначала погасите долг за прошлую поездку.')).toBeTruthy();
   });
 
+  it('#332 D6: a debt offers to pay it, which opens the debts screen', async () => {
+    await mount({...ready, 'POST /api/rider/v1/orders': [problem(403, 'RIDER_HAS_DEBT')],
+      'GET /api/rider/v1/obligations': [{status: 200, body: {items: []}}]});
+    await priced();
+    await fireEvent.press(screen.getByRole('button', {name: 'Заказать'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Оплатить долг'}));
+    expect(await screen.findByText('Долгов нет.')).toBeTruthy();
+  });
+
   it('ACCEPTANCE_REQUIRED shows the legal text to accept', async () => {
     const terms = {version_id: 't1', audience: 'RIDER', kind: 'TERMS', number: 2, acceptance_required: true,
       accepted: false, effective_from: '2026-01-01T00:00:00Z', languages: ['ru']};

@@ -23,7 +23,7 @@ const FINAL = new Set(['FULFILLED', 'CANCELLED', 'UNFULFILLED']);
  * pickup, the drop-off, a vehicle class and its price.
  */
 export function Ride(props: Shared & {newId: () => string; locate: () => Promise<Point>; service: string;
-  pollMs: number; onLegal: () => void; push?: PushPort}) {
+  pollMs: number; onLegal: () => void; onDebts: () => void; push?: PushPort}) {
   const {client, t, guard, failure} = props;
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +59,11 @@ function Choice({label, onPress}: {label: string; onPress: () => void}) {
   );
 }
 
-function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, onOrdered}: Shared & {
-  newId: () => string; locate: () => Promise<Point>; service: string; onLegal: () => void;
+function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, onDebts, onOrdered}: Shared & {
+  newId: () => string; locate: () => Promise<Point>; service: string; onLegal: () => void; onDebts: () => void;
   onOrdered: (order: Order) => void}) {
+  /** RIDER_HAS_DEBT: the way to pay it (#332 D6). */
+  const [debt, setDebt] = useState(false);
   const [near, setNear] = useState<Point | null>(null);
   const [pickup, setPickup] = useState<Place | null>(null);
   const [dropoff, setDropoff] = useState<Place | null>(null);
@@ -170,7 +172,10 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
         setQuote(null);
         setMessage(t('quoteExpired'));
       } else if (failed instanceof ApiError && failed.code === 'ACCEPTANCE_REQUIRED') onLegal();
-      else if (failed instanceof ApiError && failed.code === 'RIDER_HAS_DEBT') setMessage(t('hasDebt'));
+      else if (failed instanceof ApiError && failed.code === 'RIDER_HAS_DEBT') {
+        setMessage(t('hasDebt'));
+        setDebt(true);
+      }
       else setMessage(failure(failed));
     } finally {
       ordering.current = false;
@@ -215,6 +220,7 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       ) : null}
       <Button label={t('orderRide')} onPress={() => void order()} disabled={busy || !quote} />
       <Alert text={message} />
+      {debt ? <Button label={t('payTheDebt')} onPress={onDebts} /> : null}
     </Screen>
   );
 }
