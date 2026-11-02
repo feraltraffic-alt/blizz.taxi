@@ -69,7 +69,7 @@ export function PhoneChange({client, t, guard, failure, newId, api, backLabel, o
     return once(async () => {
       const changed = await guard(() => client.post((api + '/me/phone-change') as never, {body: {
         command_id: command.current, current_challenge_id: current.challenge_id, current_code: currentCode.trim(),
-        new_challenge_id: next.challenge_id, new_code: newCode.trim()}} as never)) as {phone: string};
+        new_challenge_id: next.challenge_id, new_code: currentCode.trim()}} as never)) as {phone: string};
       setDone(changed.phone);
     }, t('pcTaken'));
   }
