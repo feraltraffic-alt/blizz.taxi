@@ -94,6 +94,17 @@ test('a sandbox driver signs in by a code, goes online, takes an offer, drives i
   await page.getByRole('button', {name: /^Наличные получены: /}).click();
   await expect(page.getByText('Ждём предложений…')).toBeVisible();
   await page.screenshot({path: info.outputPath('10-completed.png'), fullPage: true});
+
+  // The trip in the driver's money (#257): the journal posts it from the TripCompleted event within seconds.
+  await page.getByRole('button', {name: 'Деньги', exact: true}).click();
+  await expect.poll(async () => {
+    await page.getByRole('button', {name: 'Обновить', exact: true}).click();
+    return page.getByText(/· Оплата поездки ·/).count();
+  }, {timeout: 30_000}).toBeGreaterThan(0);
+  await expect(page.getByText(/^За 7 дней: поездок [1-9]/)).toBeVisible();
+  await page.screenshot({path: info.outputPath('11-money.png'), fullPage: true});
+  await page.getByRole('button', {name: 'Работа', exact: true}).click();
+  await expect(page.getByText('Ждём предложений…')).toBeVisible();
   await page.getByRole('button', {name: 'Уйти с линии'}).click();
   await expect(page.getByText('Вы не на линии')).toBeVisible();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);

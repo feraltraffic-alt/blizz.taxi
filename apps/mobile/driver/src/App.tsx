@@ -7,6 +7,7 @@ import {
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
+import {Money} from './Money';
 
 export interface Position {
   lat: number;
@@ -67,6 +68,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
+  const [tab, setTab] = useState<'work' | 'money'>('work');
   const theme = useTheme();
 
   /** The server's state, never the app's memory: also after a restart (E5). */
@@ -170,8 +172,17 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     ) : <Loading t={t} />;
   }
   const canWork = admitted(profile);
+  if (tab === 'money') {
+    return (
+      <Screen title={t('money')}>
+        <Button label={t('home')} onPress={() => setTab('work')} />
+        <Money client={client} t={t} guard={guard} failure={failure} cityId={profile.admission_city_ids[0]} now={now} />
+      </Screen>
+    );
+  }
   return (
     <Screen title={t('home')}>
+      <Button label={t('money')} onPress={() => setTab('money')} />
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>
