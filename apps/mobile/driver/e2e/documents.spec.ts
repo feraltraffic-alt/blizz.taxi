@@ -49,7 +49,11 @@ test('a new driver adds a car, uploads the three documents and submits them for 
     ['Страховка', 'insurance.png']] as const) {
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', {name: 'Загрузить: ' + type}).click();
-    await (await chooser).setFiles({name: file, mimeType: 'image/png', buffer: PNG});
+    // MUTATION: a PDF with active content, which the server must refuse.
+    await (await chooser).setFiles({name: file.replace('.png', '.pdf'), mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n1 0 obj << /OpenAction << /S /JavaScript /JS (app.alert(1)) >> >> endobj\n%%EOF\n')});
+    await expect(page.getByText(/Файл не принят/)).toBeVisible({timeout: 20_000});
+    await shot('mutation-refused');
     await expect(page.getByText(type + ': на проверке')).toBeVisible({timeout: 20_000});
   }
   await shot('3-documents');
