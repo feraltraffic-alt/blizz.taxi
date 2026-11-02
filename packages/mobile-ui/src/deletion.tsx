@@ -68,7 +68,7 @@ export function AccountDeletion({client, t, guard, failure, newId, api, state, o
 
   return (
     <View style={{gap: 8}}>
-      {state === 'DELETION_PENDING' ? (
+      {state === 'NEVER' ? (
         <>
           <Text style={{color: theme.error}}>{t('deletionPending')}</Text>
           <Button label={t('cancelDeletion')} onPress={() => void withdraw()} />
