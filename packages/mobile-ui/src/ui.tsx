@@ -12,10 +12,12 @@ export function useTheme() {
   return palette[useColorScheme() === 'dark' ? 'dark' : 'light'];
 }
 
-export function Button({label, onPress, disabled}: {label: string; onPress: () => void; disabled?: boolean}) {
+/** accessibilityLabel: what a screen reader says when the label alone says too little (a bare "5" for a score). */
+export function Button({label, onPress, disabled, accessibilityLabel}: {label: string; onPress: () => void;
+  disabled?: boolean; accessibilityLabel?: string}) {
   const theme = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled: Boolean(disabled)}}
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityState={{disabled: Boolean(disabled)}}
       disabled={disabled} onPress={onPress}
       style={[styles.button, {backgroundColor: theme.accent, opacity: disabled ? 0.5 : 1}]}>
       <Text style={[styles.buttonText, {color: theme.onAccent}]}>{label}</Text>
@@ -24,7 +26,7 @@ export function Button({label, onPress, disabled}: {label: string; onPress: () =
 }
 
 export function Field({label, value, onChange, keyboard, error}: {label: string; value: string;
-  onChange: (value: string) => void; keyboard?: 'phone-pad' | 'number-pad'; error?: string | null}) {
+  onChange: (value: string) => void; keyboard?: 'phone-pad' | 'number-pad' | 'decimal-pad'; error?: string | null}) {
   const theme = useTheme();
   return (
     <View style={styles.field}>
