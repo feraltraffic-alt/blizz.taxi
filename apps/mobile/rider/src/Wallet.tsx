@@ -58,8 +58,8 @@ export function WalletScreen({client, t, guard, failure, newId, service, pollMs,
           ))}
         </View>
       ) : null}
-      {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cityId} newId={newId}
-        path="/api/rider/v1/wallet/card-top-ups" Page={ProviderPage} pollMs={pollMs} onCompleted={reload} /> : null}
+      {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cities[0]?.id ?? cityId}
+        newId={newId} path="/api/rider/v1/wallet/card-top-ups" Page={ProviderPage} pollMs={pollMs} onCompleted={reload} /> : null}
       {(wallet?.entries ?? []).map(e => (
         <Text key={e.id} style={{color: theme.text}}>
           {(e.amount_minor < 0 ? '−' : '+') + amount(e.amount_minor, e.currency) + ' · '
