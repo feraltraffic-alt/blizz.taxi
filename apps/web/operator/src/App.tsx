@@ -6,6 +6,7 @@ import {LiveDrivers} from './LiveDrivers.js';
 import {Support} from './Support.js';
 import {OrderHistory} from './OrderHistory.js';
 import {OrderActions} from './OrderActions.js';
+import {Calls, type FromCall} from './Calls.js';
 
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -31,7 +32,8 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
-  const [view, setView] = useState<'order' | 'live' | 'support'>('order');
+  const [view, setView] = useState<'order' | 'live' | 'support' | 'calls'>('order');
+  const [fromCall, setFromCall] = useState<FromCall | null>(null);
   const [myId, setMyId] = useState('');
   const [error, setError] = useState<unknown>(null);
 
@@ -65,12 +67,18 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
         {view !== 'order' ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button> : null}
         {rights.has('orders.view') && view !== 'live'
           ? <button type="button" onClick={() => setView('live')}>{t('liveDrivers')}</button> : null}
+        {/* The calls panel needs calls.answer or calls.listen (#300 K5). */}
+        {(rights.has('calls.answer') || rights.has('calls.listen')) && view !== 'calls'
+          ? <button type="button" onClick={() => setView('calls')}>{t('calls')}</button> : null}
         {/* The support queue needs support.manage (#288 S8). */}
         {rights.has('support.manage') && view !== 'support'
           ? <button type="button" onClick={() => setView('support')}>{t('support')}</button> : null}
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
-      {view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
+      {view === 'calls' && (rights.has('calls.answer') || rights.has('calls.listen')) ? <Calls client={client} t={t}
+        rights={rights} me={myId} newId={newId} pollMs={pollMs}
+        onOrder={call => {setFromCall(call); setOrder(null); setView('order');}} /> :
+      view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
         pollMs={pollMs} /> : view === 'support' && rights.has('support.manage') ? <Support client={client} t={t}
         cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
         rights={rights}
@@ -84,8 +92,8 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
             </select>
           </label>
           {/* The server checks the city too; the form is shown only to a holder of orders.create (E1). */}
-          {rights.has('orders.create') && city ? <OrderForm key={city.id} client={client} city={city} newId={newId}
-            onCreated={setOrder} /> : <p role="alert">{t('noRight')}</p>}
+          {rights.has('orders.create') && city ? <OrderForm key={city.id + (fromCall?.id ?? '')} client={client}
+            city={city} newId={newId} call={fromCall} onCreated={created => {setFromCall(null); setOrder(created);}} /> : <p role="alert">{t('noRight')}</p>}
         </section>
       )}
     </>
@@ -128,9 +136,9 @@ function PlacePicker({client, label, near, callerPhone, value, onPick}: {client:
   );
 }
 
-function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: City; newId: () => string;
-  onCreated: (order: Order) => void}) {
-  const [phone, setPhone] = useState('');
+function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; city: City; newId: () => string;
+  call: FromCall | null; onCreated: (order: Order) => void}) {
+  const [phone, setPhone] = useState(call?.phone ?? '');
   const [phoneError, setPhoneError] = useState(false);
   const [name, setName] = useState('');
   const [caller, setCaller] = useState<string | null>(null);
@@ -211,7 +219,9 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
         command_id: orderCommand.current, quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
         payment_method: payment, caller: {phone, ...(name.trim() ? {name: name.trim()} : {})},
-        ...(comment.trim() ? {comment: comment.trim()} : {})
+        ...(comment.trim() ? {comment: comment.trim()} : {}),
+        // The call it is made during (#300 K4): the server links the order to it.
+        ...(call ? {call_id: call.id} : {})
       }} as never) as Order);
     } catch (failure) {
       if (failure instanceof ApiError && (failure.code === 'QUOTE_EXPIRED' || failure.code === 'QUOTE_MISMATCH')) {
@@ -229,6 +239,7 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
 
   return (
     <form onSubmit={create}>
+      {call ? <p>{t('orderForCall', {phone: call.phone ?? t('hiddenNumber')})}</p> : null}
       <label>
         {t('callerPhone')}
         <input value={phone} onChange={e => setPhone(e.target.value.trim())} onBlur={() => phone && checkPhone()} />
