@@ -66,7 +66,7 @@ class AriChannels implements ChannelControl {
         String address = "/ari/channels?" + query.entrySet().stream()
                 .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                 .collect(Collectors.joining("&"));
-        HttpResponse<Void> response = send(request(serviceId, address)
+        HttpResponse<Void> response = send(request(taxi.blizz.identity.Services.DEFAULT_ID, address)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("variables", variables))))
                 .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.discarding());
