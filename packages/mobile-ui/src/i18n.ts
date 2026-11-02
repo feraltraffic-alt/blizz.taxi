@@ -5,6 +5,15 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    attachFile: 'Приложить файл',
+    removeFile: 'Убрать',
+    removeFileOf: 'Убрать {name}',
+    tooManyFiles: 'Можно приложить не больше 5 файлов.',
+    attachType: 'Подходят только JPEG, PNG, WEBP или PDF.',
+    attachTooBig: 'Файл больше 10 МБ.',
+    attachRejected: 'Файл не принят: {reason}',
+    attachQuarantine: 'Файл ещё проверяется. Приложите его чуть позже.',
+    attachments: 'вложений: {count}',
     support: 'Поддержка',
     newCase: 'Новое обращение',
     noCases: 'Обращений пока нет.',
@@ -73,6 +82,15 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    attachFile: 'Додати файл',
+    removeFile: 'Прибрати',
+    removeFileOf: 'Прибрати {name}',
+    tooManyFiles: 'Можна додати не більше 5 файлів.',
+    attachType: 'Підходять лише JPEG, PNG, WEBP або PDF.',
+    attachTooBig: 'Файл більший за 10 МБ.',
+    attachRejected: 'Файл не прийнято: {reason}',
+    attachQuarantine: 'Файл ще перевіряється. Додайте його трохи пізніше.',
+    attachments: 'вкладень: {count}',
     support: 'Підтримка',
     newCase: 'Нове звернення',
     noCases: 'Звернень поки немає.',
@@ -141,6 +159,15 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    attachFile: 'Dołącz plik',
+    removeFile: 'Usuń',
+    removeFileOf: 'Usuń {name}',
+    tooManyFiles: 'Można dołączyć najwyżej 5 plików.',
+    attachType: 'Pasują tylko JPEG, PNG, WEBP lub PDF.',
+    attachTooBig: 'Plik większy niż 10 MB.',
+    attachRejected: 'Plik nie został przyjęty: {reason}',
+    attachQuarantine: 'Plik jest jeszcze sprawdzany. Dołącz go nieco później.',
+    attachments: 'załączników: {count}',
     support: 'Pomoc',
     newCase: 'Nowe zgłoszenie',
     noCases: 'Na razie brak zgłoszeń.',

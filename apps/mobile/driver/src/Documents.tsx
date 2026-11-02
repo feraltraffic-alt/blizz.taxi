@@ -1,15 +1,9 @@
 import {useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Field, Screen, useTheme, type Shared} from '@blizz/mobile-ui';
+import {Alert, Button, Field, Screen, useTheme, type PickedFile, type Shared} from '@blizz/mobile-ui';
 
-/** A file the driver picked on the phone (expo-document-picker in the app, a fake in tests). */
-export interface PickedFile {
-  name: string;
-  type: string;
-  size: number;
-  data: Blob;
-}
+export type {PickedFile} from '@blizz/mobile-ui';
 
 export type Vehicle = {id: string; registration_number: string; make: string; model: string; color: string;
   production_year: number; state: string};
