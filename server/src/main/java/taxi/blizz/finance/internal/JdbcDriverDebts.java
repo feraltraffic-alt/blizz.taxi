@@ -196,7 +196,7 @@ class JdbcDriverDebts implements DriverDebts {
         UUID service = services.of(new Actor(taxi.blizz.platform.SubjectType.DRIVER, driverId))
                 .orElse(Services.DEFAULT_ID);
         long sweep = sweepOf(currency);
-        Long limit = limitOf(service, currency).limitMinor();
+        Long limit = limitOf(Services.DEFAULT_ID, currency).limitMinor();
         DebtRefreshWork.applied(jdbc, driverId, currency, sweep);
         boolean blocked = limit != null && owed > limit;
         if (owed == before.owed() && java.util.Objects.equals(limit, before.limit()) && blocked == before.blocked()) {
