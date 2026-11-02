@@ -58,6 +58,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 class FareLedgerTests {
 
+    /** A posting with no person names its service (ADR 0016). */
+    static final java.util.UUID FIRST = taxi.blizz.identity.Services.DEFAULT_ID;
+
     static final String AREA = "SRID=4326;MULTIPOLYGON(((140 -40,141 -40,141 -39,140 -39,140 -40)))";
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 140.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 140.55);
@@ -430,9 +433,11 @@ class FareLedgerTests {
         })).rootCause().hasMessageContaining("does not balance");
 
         assertThat(ledger.post(new Ledger.Posting("test-ok:" + basis, "TEST", basis, "UAH", "balanced",
-                List.of(Line.debit(Account.SUSPENSE, null, 100), Line.credit(Account.SUSPENSE, null, 100))))).isTrue();
+                List.of(Line.debit(Account.SUSPENSE, null, 100), Line.credit(Account.SUSPENSE, null, 100)),
+                FIRST))).isTrue();
         assertThat(ledger.post(new Ledger.Posting("test-ok:" + basis, "TEST", basis, "UAH", "balanced",
-                List.of(Line.debit(Account.SUSPENSE, null, 100), Line.credit(Account.SUSPENSE, null, 100))))).isFalse();
+                List.of(Line.debit(Account.SUSPENSE, null, 100), Line.credit(Account.SUSPENSE, null, 100)),
+                FIRST))).isFalse();
         assertThatThrownBy(() -> jdbc.sql("""
                         update journal_line set debit_minor = 1 where transaction_id =
                             (select id from journal_transaction where business_key = :key) and line_no = 1""")
