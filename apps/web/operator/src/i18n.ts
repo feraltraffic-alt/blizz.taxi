@@ -5,6 +5,14 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    historyAndChat: 'История и переписка', history: 'История заказа', refreshHistory: 'Обновить историю',
+    chatReason: 'Причина просмотра переписки', openChat: 'Открыть переписку', chat: 'Переписка',
+    chatReasonNeeded: 'Укажите причину, до 500 символов: она попадёт в журнал.', noMessages: 'Сообщений нет.',
+    staff: 'Сотрудник', role_SUPER_ADMIN: 'суперадмин', role_ADMIN: 'администратор', role_OPERATOR: 'оператор',
+    actor_CLIENT: 'Пассажир', actor_DRIVER: 'Водитель', actor_PARTNER: 'Партнёр', actor_SYSTEM: 'Система',
+    event_OrderCreated: 'Заказ создан', event_OrderCancelled: 'Заказ отменён',
+    event_PassengerNoShow: 'Пассажир не вышел', event_AssignmentWithdrawn: 'Водитель отказался от заказа',
+    event_TripCompleted: 'Поездка завершена', sender_RIDER: 'Пассажир', sender_DRIVER: 'Водитель',
     support: 'Обращения',
     noCity: 'Без города',
     caseState: 'Состояние',
@@ -79,6 +87,14 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    historyAndChat: 'Історія та листування', history: 'Історія замовлення', refreshHistory: 'Оновити історію',
+    chatReason: 'Причина перегляду листування', openChat: 'Відкрити листування', chat: 'Листування',
+    chatReasonNeeded: 'Вкажіть причину, до 500 символів: вона потрапить до журналу.', noMessages: 'Повідомлень немає.',
+    staff: 'Співробітник', role_SUPER_ADMIN: 'суперадмін', role_ADMIN: 'адміністратор', role_OPERATOR: 'оператор',
+    actor_CLIENT: 'Пасажир', actor_DRIVER: 'Водій', actor_PARTNER: 'Партнер', actor_SYSTEM: 'Система',
+    event_OrderCreated: 'Замовлення створено', event_OrderCancelled: 'Замовлення скасовано',
+    event_PassengerNoShow: 'Пасажир не вийшов', event_AssignmentWithdrawn: 'Водій відмовився від замовлення',
+    event_TripCompleted: 'Поїздку завершено', sender_RIDER: 'Пасажир', sender_DRIVER: 'Водій',
     support: 'Звернення',
     noCity: 'Без міста',
     caseState: 'Стан',
@@ -153,6 +169,14 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    historyAndChat: 'Historia i rozmowa', history: 'Historia zlecenia', refreshHistory: 'Odśwież historię',
+    chatReason: 'Powód wglądu w rozmowę', openChat: 'Otwórz rozmowę', chat: 'Rozmowa',
+    chatReasonNeeded: 'Podaj powód, do 500 znaków: trafi do dziennika.', noMessages: 'Brak wiadomości.',
+    staff: 'Pracownik', role_SUPER_ADMIN: 'superadmin', role_ADMIN: 'administrator', role_OPERATOR: 'operator',
+    actor_CLIENT: 'Pasażer', actor_DRIVER: 'Kierowca', actor_PARTNER: 'Partner', actor_SYSTEM: 'System',
+    event_OrderCreated: 'Zlecenie utworzone', event_OrderCancelled: 'Zlecenie anulowane',
+    event_PassengerNoShow: 'Pasażer nie wyszedł', event_AssignmentWithdrawn: 'Kierowca zrezygnował ze zlecenia',
+    event_TripCompleted: 'Przejazd zakończony', sender_RIDER: 'Pasażer', sender_DRIVER: 'Kierowca',
     support: 'Zgłoszenia',
     noCity: 'Bez miasta',
     caseState: 'Stan',
