@@ -217,7 +217,6 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
   // shown and the order is read at once. Pushes about other orders are none of this screen's business.
   usePushDecider(push, data => {
     if (data.order_id !== order.id) return true;
-    if (!(Number(data.order_version) > order.version)) return false;
     refresh().catch(() => undefined);
     return true;
   });
