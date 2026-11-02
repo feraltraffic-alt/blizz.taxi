@@ -326,7 +326,8 @@ class RecordingRetentionTests {
     @Test
     void anUnsupportedSourceNameIsAFailureInsteadOfAFalseSuccessfulDeletion() {
         var source = new AriRecordingSource(org.mockito.Mockito.mock(Integrations.class));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> source.discard("unsupported/name"))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> source.discard(
+                taxi.blizz.identity.Services.DEFAULT_ID, "unsupported/name"))
                 .isInstanceOf(java.io.IOException.class).hasMessage("Unsupported stored recording name");
     }
 
@@ -335,7 +336,7 @@ class RecordingRetentionTests {
         OffsetDateTime now = OffsetDateTime.now();
         UUID id = recording("NONE", null, now.minusDays(400));
         try (Ari ari = new Ari()) {
-            Path downloaded = ari.source().fetch(id.toString()).orElseThrow();
+            Path downloaded = ari.source().fetch(taxi.blizz.identity.Services.DEFAULT_ID, id.toString()).orElseThrow();
             try {
                 assertThat(Files.exists(downloaded)).isTrue();
                 assertThat(Files.getPosixFilePermissions(downloaded)).containsExactlyInAnyOrder(

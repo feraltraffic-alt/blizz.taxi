@@ -43,4 +43,10 @@ class JdbcServices implements Services {
         return jdbc.sql("select service_id from " + table + " where id = :id").param("id", subject.id())
                 .query(UUID.class).optional();
     }
+
+    @Override
+    public java.util.List<UUID> activeIds() {
+        return jdbc.sql("select id from service where state = 'ACTIVE' order by created_at, id")
+                .query(UUID.class).list();
+    }
 }

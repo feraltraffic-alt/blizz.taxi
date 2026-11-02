@@ -35,7 +35,7 @@ class AriRecordingSource implements RecordingSource {
     }
 
     @Override
-    public Optional<Path> fetch(String channelId) throws IOException {
+    public Optional<Path> fetch(java.util.UUID serviceId, String channelId) throws IOException {
         if (!NAME.matcher(channelId).matches()) {
             return Optional.empty();
         }
@@ -46,7 +46,7 @@ class AriRecordingSource implements RecordingSource {
                 java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")));
         boolean keep = false;
         try {
-            HttpResponse<Path> response = send(request(channelId, "/file").GET()
+            HttpResponse<Path> response = send(request(serviceId, channelId, "/file").GET()
                     .timeout(Duration.ofMinutes(5)).build(), HttpResponse.BodyHandlers.ofFile(file,
                     java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING));
             if (response.statusCode() == 404) {
@@ -65,13 +65,13 @@ class AriRecordingSource implements RecordingSource {
     }
 
     @Override
-    public boolean discard(String channelId) throws IOException {
+    public boolean discard(java.util.UUID serviceId, String channelId) throws IOException {
         if (!NAME.matcher(channelId).matches()) {
             throw new DeletionFailure("Unsupported stored recording name", false, null);
         }
         HttpRequest deletion;
         try {
-            deletion = request(channelId, "").DELETE().timeout(Duration.ofSeconds(30)).build();
+            deletion = request(serviceId, channelId, "").DELETE().timeout(Duration.ofSeconds(30)).build();
         } catch (IOException | RuntimeException ex) {
             throw new DeletionFailure("Could not prepare source deletion", false, ex);
         }
@@ -93,10 +93,10 @@ class AriRecordingSource implements RecordingSource {
         return Path.of(System.getProperty("java.io.tmpdir"), "blizz-call-recording-downloads", name);
     }
 
-    private HttpRequest.Builder request(String channelId, String suffix) throws IOException {
-        String base = AriAccess.baseUrl(integrations)
+    private HttpRequest.Builder request(java.util.UUID serviceId, String channelId, String suffix) throws IOException {
+        String base = AriAccess.baseUrl(integrations, serviceId)
                 .orElseThrow(() -> new IOException("The ARI address is not configured"));
-        String authorization = AriAccess.authorization(integrations)
+        String authorization = AriAccess.authorization(integrations, serviceId)
                 .orElseThrow(() -> new IOException("The ARI user is not configured"));
         return HttpRequest.newBuilder(URI.create(base + "/ari/recordings/stored/"
                         + URLEncoder.encode(channelId, StandardCharsets.UTF_8) + suffix))

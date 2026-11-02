@@ -153,17 +153,6 @@ public interface Integrations {
     /** The value the service set in the panel (decrypted for a secret); empty when not set. For the modules. */
     Optional<String> value(UUID serviceId, String name);
 
-    /**
-     * The connection to the server's own telephone exchange (Asterisk ARI): one per server, for every service's call
-     * lines and code calls. Set in the first service's panel; another service's panel cannot change it. The number a
-     * code call dials through ({@link #OTP_ASTERISK_ENDPOINT}) is each service's own.
-     */
-    java.util.Set<String> SERVER_FIELDS = java.util.Set.of(OTP_ASTERISK_ARI_URL, OTP_ASTERISK_ARI_USER,
-            OTP_ASTERISK_ARI_PASSWORD);
-
-    /** A value of {@link #SERVER_FIELDS}; any other name is refused. */
-    Optional<String> serverValue(String name);
-
     /** Whether the deployment's environment values stand in for the service's unset ones: the first service only. */
     static boolean environmentServes(UUID serviceId) {
         return taxi.blizz.identity.Services.DEFAULT_ID.equals(serviceId);

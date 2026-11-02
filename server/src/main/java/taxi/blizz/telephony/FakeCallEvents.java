@@ -8,8 +8,16 @@ package taxi.blizz.telephony;
  */
 public interface FakeCallEvents {
 
-    /** {@code false} on an instance that listens to a real Asterisk; the event is then ignored. */
-    boolean push(String ariEvent);
+    /** As the first service's exchange would send it. */
+    default boolean push(String ariEvent) {
+        return push(taxi.blizz.identity.Services.DEFAULT_ID, ariEvent);
+    }
+
+    /**
+     * As the exchange of {@code serviceId} would send it (ADR 0016, #275). {@code false} on an instance that listens to
+     * a real Asterisk; the event is then ignored.
+     */
+    boolean push(java.util.UUID serviceId, String ariEvent);
 
     /** The call whose first channel is {@code channelId} has no recording, as when Asterisk recorded nothing. */
     void withoutRecording(String channelId);

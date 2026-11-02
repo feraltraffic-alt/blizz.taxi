@@ -123,6 +123,8 @@ class CallCentreTests {
     @Autowired
     FakeChannels fakeChannels;
     @Autowired
+    taxi.blizz.identity.Services services;
+    @Autowired
     Clock clock;
 
     final HttpClient http = HttpClient.newHttpClient();
@@ -326,7 +328,7 @@ class CallCentreTests {
         Integrations integrations = new IntegrationsStub(Map.of(Integrations.OTP_ASTERISK_ARI_URL, ariUrl,
                 Integrations.OTP_ASTERISK_ARI_USER, "blizz", Integrations.OTP_ASTERISK_ARI_PASSWORD, "test-only"));
         return new JdbcCalls(jdbc, tx, commands, staffAccess, outbox, live(),
-                new AriChannels(integrations, json, breakers), fakeChannels, clock);
+                new AriChannels(integrations, json, breakers), fakeChannels, services, clock);
     }
 
     /**
@@ -630,10 +632,11 @@ class CallCentreTests {
         JdbcCalls live = liveCalls(ari.url());
         Set<String> alive = new AriChannels(new IntegrationsStub(Map.of(Integrations.OTP_ASTERISK_ARI_URL, ari.url(),
                 Integrations.OTP_ASTERISK_ARI_USER, "blizz", Integrations.OTP_ASTERISK_ARI_PASSWORD, "test-only")),
-                json).channels();
+                json).channels(taxi.blizz.identity.Services.DEFAULT_ID);
         assertThat(alive).containsExactly(stillThere);
 
-        live.reconcile(alive, OffsetDateTime.now(clock).plusSeconds(1));
+        live.reconcile(taxi.blizz.identity.Services.DEFAULT_ID, alive,
+                OffsetDateTime.now(clock).plusSeconds(1));
         assertThat(call(gone).state()).isEqualTo(Calls.State.MISSED);
         assertThat(call(goneTaken).state()).isEqualTo(Calls.State.ENDED);
         assertThat(call(goneTaken).recording().state()).isEqualTo(Calls.RecordingState.PENDING);
@@ -644,7 +647,8 @@ class CallCentreTests {
         // A call that started after the snapshot is left alone.
         String newer = channel();
         created(newer, newPhone("+38067"), line, "from-trunk");
-        live.reconcile(Set.of(), OffsetDateTime.now(clock).minusMinutes(1));
+        live.reconcile(taxi.blizz.identity.Services.DEFAULT_ID, Set.of(),
+                OffsetDateTime.now(clock).minusMinutes(1));
         assertThat(call(newer).state()).isEqualTo(Calls.State.RINGING);
         destroyed(newer);
         destroyed(stillThere);

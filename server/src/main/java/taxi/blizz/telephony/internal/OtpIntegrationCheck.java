@@ -50,9 +50,9 @@ class OtpIntegrationCheck implements IntegrationCheck {
                 problems.add("TurboSMS did not accept the token");
             }
         }, () -> problems.add("TurboSMS has no token"));
-        String url = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
-        String user = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
-        String password = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
+        String url = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
+        String user = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
+        String password = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
         if (url == null || user == null || password == null) {
             problems.add("Asterisk is not configured");
         } else if (ok("GET", url.replaceAll("/+$", "") + "/ari/asterisk/info", "Basic " + Base64.getEncoder()

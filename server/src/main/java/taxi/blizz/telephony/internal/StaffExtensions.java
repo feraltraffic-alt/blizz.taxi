@@ -23,6 +23,7 @@ import taxi.blizz.platform.ConflictException;
 import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.IdempotentCommands;
+import taxi.blizz.platform.SubjectType;
 
 /**
  * The staff's internal numbers on the service's Asterisk (issue #67): one extension — one staff member. Asterisk's
@@ -46,9 +47,11 @@ class StaffExtensions {
     private final StaffDirectory directory;
     private final AuditLog audit;
     private final Clock clock;
+    private final taxi.blizz.identity.Services services;
 
-    StaffExtensions(JdbcClient jdbc, IdempotentCommands commands,
-                    StaffAccess staff, StaffDirectory directory, AuditLog audit, Clock clock) {
+    StaffExtensions(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, StaffDirectory directory,
+                    AuditLog audit, taxi.blizz.identity.Services services, Clock clock) {
+        this.services = services;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -60,7 +63,13 @@ class StaffExtensions {
     @Transactional(readOnly = true)
     List<Extension> list(Actor actor) {
         staff.require(actor, PERMISSION);
-        return jdbc.sql("select staff_id, extension, version from staff_extension order by extension")
+        // The extensions of the staff member's own service only: each service its own exchange (ADR 0016, #275).
+        UUID service = services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Not a staff member"));
+        return jdbc.sql("""
+                        select staff_id, extension, version from staff_extension
+                        where service_id = :s order by extension""")
+                .param("s", service)
                 .query((rs, i) -> new Extension(rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3)))
                 .list();
     }
@@ -97,20 +106,24 @@ class StaffExtensions {
                         jdbc.sql("delete from staff_extension where staff_id = :id").param("id", staffId).update();
                         after = current.get();
                     } else {
-                        Optional<UUID> holder = jdbc.sql("select staff_id from staff_extension where extension = :e")
-                                .param("e", number).query(UUID.class).optional();
+                        UUID service = services.of(new Actor(SubjectType.STAFF, staffId)).orElseThrow();
+                        Optional<UUID> holder = jdbc.sql("""
+                                        select staff_id from staff_extension
+                                        where extension = :e and service_id = :s""")
+                                .param("e", number).param("s", service).query(UUID.class).optional();
                         if (holder.isPresent() && !holder.get().equals(staffId)) {
                             throw new DomainException(ErrorCode.STATE_CONFLICT,
                                     "Extension " + number + " belongs to another staff member");
                         }
                         try {
                             jdbc.sql("""
-                                            insert into staff_extension (staff_id, extension, version, updated_at)
-                                            values (:id, :e, 1, :now)
+                                            insert into staff_extension (staff_id, service_id, extension, version,
+                                                                         updated_at)
+                                            values (:id, :s, :e, 1, :now)
                                             on conflict (staff_id) do update
                                             set extension = :e, version = staff_extension.version + 1,
                                                 updated_at = :now""")
-                                    .param("id", staffId).param("e", number)
+                                    .param("id", staffId).param("s", service).param("e", number)
                                     .param("now", OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC))
                                     .update();
                         } catch (DuplicateKeyException taken) { // another member took it at the same moment

@@ -8,13 +8,14 @@ import java.util.Optional;
 interface RecordingSource {
 
     /**
-     * The recording of the call whose first channel is {@code channelId}, as a temporary WAV file the caller deletes;
+     * The recording of the call whose first channel is {@code channelId}, on the exchange of {@code serviceId}
+     * (#275), as a temporary WAV file the caller deletes;
      * empty when the source has none (yet). An unreachable source throws.
      */
-    Optional<Path> fetch(String channelId) throws IOException;
+    Optional<Path> fetch(java.util.UUID serviceId, String channelId) throws IOException;
 
     /** Removes the source's copy once ours is stored; reports whether any bytes were removed. */
-    boolean discard(String channelId) throws IOException;
+    boolean discard(java.util.UUID serviceId, String channelId) throws IOException;
 
     /** A known failure can release a retention fence only if no source or local bytes were removed. */
     final class DeletionFailure extends IOException {

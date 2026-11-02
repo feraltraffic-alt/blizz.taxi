@@ -438,8 +438,10 @@ class CallLogTests {
         UUID cityB = rides.city("test-calls-b", "UAH", 63);
         jdbc.sql("update city set service_id = :b where id = :c").param("b", b).param("c", cityB).update();
         String lineB = newPhone("+38044");
-        jdbc.sql("insert into call_line (number, city_id, version, updated_at) values (:n, :c, 1, now())")
-                .param("n", lineB).param("c", cityB).update();
+        jdbc.sql("""
+                        insert into call_line (number, city_id, service_id, version, updated_at)
+                        values (:n, :c, :b, 1, now())""")
+                .param("n", lineB).param("c", cityB).param("b", b).update();
 
         String onB = channel();
         createdOn(b, onB, newPhone("+38067"), lineB);

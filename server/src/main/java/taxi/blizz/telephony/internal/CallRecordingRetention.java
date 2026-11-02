@@ -52,7 +52,8 @@ class CallRecordingRetention implements RetentionWork {
                 + " order by created_at,call_id limit " + RetentionWork.limit(limit);
     }
 
-    private record Claimed(UUID call, UUID file, String channel, UUID claim, boolean previouslyClaimed, int attempts) {
+    private record Claimed(UUID call, UUID file, UUID service, String channel, UUID claim, boolean previouslyClaimed,
+                           int attempts) {
     }
 
     /** The recordings of a deleted rider's calls (issue #144), whatever the retention term; one batch. */
@@ -82,7 +83,7 @@ class CallRecordingRetention implements RetentionWork {
             }
             boolean changed = item.previouslyClaimed();
             try {
-                changed |= source.discard(item.channel());
+                changed |= source.discard(item.service(), item.channel());
                 if (item.file() != null) {
                     var deletion = files.deleteRecording(item.file());
                     if (!deletion.gone()) {
@@ -122,22 +123,23 @@ class CallRecordingRetention implements RetentionWork {
             var row = jdbc.sql("select call_id,file_id,retention_claim,retention_attempts from call_recording"
                             + " where call_id=:id and " + eligible + " for update skip locked")
                     .params(params).param("id", id).query((rs, i) -> new Claimed(rs.getObject(1, UUID.class),
-                            rs.getObject(2, UUID.class), null, UUID.randomUUID(), rs.getObject(3) != null,
+                            rs.getObject(2, UUID.class), null, null, UUID.randomUUID(), rs.getObject(3) != null,
                             rs.getInt(4) + 1)).optional();
             if (row.isEmpty()) {
                 return null;
             }
             Claimed recording = row.get();
-            String channel = jdbc.sql("select channel_id from call where id=:id").param("id", id)
-                    .query(String.class).single();
+            // The call's exchange is its service's (#275).
+            Map<String, Object> call = jdbc.sql("select service_id, channel_id from call where id=:id").param("id", id)
+                    .query().singleRow();
             jdbc.sql("""
                             update call_recording
                             set retention_claim=:claim,retention_until=:until,retention_attempts=:attempts
                             where call_id=:id""")
                     .param("claim", recording.claim()).param("until", now.plusMinutes(10))
                     .param("attempts", recording.attempts()).param("id", id).update();
-            return new Claimed(id, recording.file(), channel, recording.claim(), recording.previouslyClaimed(),
-                    recording.attempts());
+            return new Claimed(id, recording.file(), (UUID) call.get("service_id"), (String) call.get("channel_id"),
+                    recording.claim(), recording.previouslyClaimed(), recording.attempts());
         });
     }
 }

@@ -74,7 +74,7 @@ class CallRecordings {
         this.clock = clock;
     }
 
-    record Due(UUID callId, String channelId, int attempts, OffsetDateTime createdAt) {
+    record Due(UUID callId, UUID serviceId, String channelId, int attempts, OffsetDateTime createdAt) {
     }
 
     /** Fetches the recordings that are due, at most {@value #PER_RUN}; returns how many were settled. */
@@ -106,10 +106,10 @@ class CallRecordings {
                                              and erase_requested_at is null and next_attempt_at <= :now
                                            order by next_attempt_at, call_id
                                            limit 1 for update skip locked)
-                        returning r.call_id, c.channel_id, r.attempts, r.created_at""")
+                        returning r.call_id, c.service_id, c.channel_id, r.attempts, r.created_at""")
                 .param("now", now).param("lease", now.plus(LEASE))
-                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getString(2), rs.getInt(3),
-                        rs.getObject(4, OffsetDateTime.class)))
+                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
+                        rs.getInt(4), rs.getObject(5, OffsetDateTime.class)))
                 .optional());
     }
 
@@ -117,7 +117,7 @@ class CallRecordings {
     private boolean fetch(Due due) {
         Path file = null;
         try {
-            Optional<Path> fetched = source.fetch(due.channelId());
+            Optional<Path> fetched = source.fetch(due.serviceId(), due.channelId());
             if (fetched.isEmpty()) {
                 if (now().isBefore(due.createdAt().plus(properties.recordingGiveUpAfter()))) {
                     retry(due);
@@ -159,7 +159,7 @@ class CallRecordings {
                 return true;
             }
             try {
-                source.discard(due.channelId());
+                source.discard(due.serviceId(), due.channelId());
             } catch (IOException | RuntimeException e) {
                 log.warn("Asterisk's copy of the recording of call {} was not removed ({})", due.callId(),
                         e.getClass().getSimpleName());

@@ -18,4 +18,7 @@ public interface Services {
 
     /** The service a rider, driver or staff member belongs to; empty for an unknown subject. */
     Optional<UUID> of(Actor subject);
+
+    /** The ACTIVE services, the first one first: e.g. whose Asterisk the server listens to (#275). */
+    java.util.List<UUID> activeIds();
 }

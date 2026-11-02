@@ -21,9 +21,12 @@ class SandboxController {
 
     private final FakeOtpCodes codes;
     private final FakeCallEvents calls;
+    private final taxi.blizz.identity.Services services;
     private final FakeTextMessages texts;
 
-    SandboxController(FakeOtpCodes codes, FakeCallEvents calls, FakeTextMessages texts) {
+    SandboxController(FakeOtpCodes codes, FakeCallEvents calls, FakeTextMessages texts,
+                      taxi.blizz.identity.Services services) {
+        this.services = services;
         this.codes = codes;
         this.calls = calls;
         this.texts = texts;
@@ -43,8 +46,16 @@ class SandboxController {
      * ChannelStateChange, ChannelDestroyed), handled like a real one — there is no Asterisk in the sandbox.
      */
     @PostMapping(value = "/sandbox/v1/calls/events", consumes = "application/json")
-    ResponseEntity<Void> callEvent(@RequestBody String ariEvent) {
-        return calls.push(ariEvent) ? ResponseEntity.accepted().build() : ResponseEntity.notFound().build();
+    ResponseEntity<Void> callEvent(@RequestBody String ariEvent,
+                                   @org.springframework.web.bind.annotation.RequestParam(required = false)
+                                   String service) {
+        // As the exchange of the service with this code would send it (#275); the first service's by default.
+        java.util.UUID serviceId = service == null ? taxi.blizz.identity.Services.DEFAULT_ID
+                : services.active(service).orElse(null);
+        if (serviceId == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return calls.push(serviceId, ariEvent) ? ResponseEntity.accepted().build() : ResponseEntity.notFound().build();
     }
 
     /**

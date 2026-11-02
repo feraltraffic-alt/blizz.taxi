@@ -33,11 +33,11 @@ class FakeCallSource implements FakeCallEvents, RecordingSource {
     }
 
     @Override
-    public boolean push(String ariEvent) {
+    public boolean push(java.util.UUID serviceId, String ariEvent) {
         if (!properties.fake()) {
             return false;
         }
-        events.handle(ariEvent);
+        events.handle(serviceId, ariEvent);
         return true;
     }
 
@@ -47,7 +47,7 @@ class FakeCallSource implements FakeCallEvents, RecordingSource {
     }
 
     @Override
-    public Optional<Path> fetch(String channelId) throws IOException {
+    public Optional<Path> fetch(java.util.UUID serviceId, String channelId) throws IOException {
         if (withoutRecording.contains(channelId)) {
             return Optional.empty();
         }
@@ -57,7 +57,7 @@ class FakeCallSource implements FakeCallEvents, RecordingSource {
     }
 
     @Override
-    public boolean discard(String channelId) {
+    public boolean discard(java.util.UUID serviceId, String channelId) {
         withoutRecording.remove(channelId);
         return false; // No persistent source bytes.
     }

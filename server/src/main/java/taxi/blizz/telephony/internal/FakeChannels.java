@@ -29,7 +29,8 @@ class FakeChannels implements ChannelControl {
     }
 
     @Override
-    public Originated originate(String channelId, String endpoint, String context, Map<String, String> variables) {
+    public Originated originate(java.util.UUID serviceId, String channelId, String endpoint, String context,
+                                Map<String, String> variables) {
         FakeCallEvents.Originated call = new FakeCallEvents.Originated(channelId, endpoint, context,
                 variables.get("BLIZZ_DIAL"), OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC));
         if (byChannel.putIfAbsent(channelId, call) != null) {
@@ -45,7 +46,7 @@ class FakeChannels implements ChannelControl {
     }
 
     @Override
-    public Set<String> channels() {
+    public Set<String> channels(java.util.UUID serviceId) {
         return Set.copyOf(byChannel.keySet());
     }
 

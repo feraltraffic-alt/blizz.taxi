@@ -161,8 +161,16 @@ paths:
     post:
       operationId: sandboxInjectCallEvent
       summary: Inject an ARI event into the fake Asterisk
-      description: Handled like a real Asterisk event. Sandbox profile only.
+      description: >-
+        Handled like a real Asterisk event of the service's own exchange (ADR 0016, #275): the first service's, or the
+        one named by `service`. Sandbox profile only.
       tags: [Sandbox]
+      parameters:
+        - name: service
+          in: query
+          description: The code of an ACTIVE service; an unknown one → 404.
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -174,4 +182,4 @@ paths:
         "202":
           description: Event accepted by the fake provider.
         "404":
-          description: This instance uses a real Asterisk and ignored the event.
+          description: This instance uses a real Asterisk and ignored the event, or no such service.
