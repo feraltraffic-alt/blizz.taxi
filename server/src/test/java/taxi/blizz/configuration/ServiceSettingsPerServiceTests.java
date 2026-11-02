@@ -36,6 +36,8 @@ import tools.jackson.databind.json.JsonMapper;
 class ServiceSettingsPerServiceTests {
 
     @Autowired ServiceSettings settings;
+    @Autowired FeatureFlags flags;
+    @Autowired LegalDocuments legal;
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
@@ -54,8 +56,8 @@ class ServiceSettingsPerServiceTests {
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, all_cities, state, service_id,
                                                 created_at, updated_at)
-                        values (:id, :login, 'Settings', 'ADMIN', '{settings.manage}', true, 'ACTIVE', :service,
-                                now(), now())""")
+                        values (:id, :login, 'Settings', 'ADMIN', '{settings.manage,flags.manage,legal.manage}',
+                                true, 'ACTIVE', :service, now(), now())""")
                 .param("id", id).param("login", "settings-" + id).param("service", service).update();
         return new Actor(SubjectType.STAFF, id);
     }
@@ -100,6 +102,39 @@ class ServiceSettingsPerServiceTests {
 
     private static final java.util.regex.Pattern FIRST_SERVICE =
             java.util.regex.Pattern.compile("\\bsettings\\.current\\(\\)\\.settings\\(\\)");
+
+    @Test
+    void aFeatureFlagSwitchedInOneServiceStaysAsItWasInAnother() {
+        UUID a = service("flags-a");
+        UUID b = service("flags-b");
+        FeatureFlags.Flag card = FeatureFlags.Flag.CARD_PAYMENTS;
+        boolean before = flags.enabled(a, card);
+        Actor adminB = admin(b);
+        FeatureFlags.State state = flags.all(adminB).stream().filter(f -> f.flag() == card).findFirst().orElseThrow();
+        flags.change(adminB, UUID.randomUUID(), card.key(), state.version(), !state.enabled(), "Only B");
+        assertThat(flags.enabled(b, card)).isEqualTo(!state.enabled());
+        assertThat(flags.enabled(a, card)).as("A as it was").isEqualTo(before);
+    }
+
+    @Test
+    void legalTextsArePublishedAndShownPerService() {
+        UUID a = service("legal-a");
+        UUID b = service("legal-b");
+        Actor lawyerB = admin(b);
+        LegalDocuments.Version draft = legal.createDraft(lawyerB, UUID.randomUUID(), LegalDocuments.Audience.RIDER,
+                LegalDocuments.Kind.PRIVACY_NOTICE, new LegalDocuments.Draft(java.util.Map.of("uk", "Тільки B"),
+                        false, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)));
+        assertThat(draft.number()).as("B numbers its own texts").isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> legal.publish(admin(a), UUID.randomUUID(),
+                draft.id(), draft.version())).isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(e -> ((taxi.blizz.platform.DomainException) e).code())
+                .isEqualTo(taxi.blizz.platform.ErrorCode.NOT_FOUND);
+        legal.publish(lawyerB, UUID.randomUUID(), draft.id(), draft.version());
+        assertThat(legal.text(b, LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE, "uk"))
+                .map(LegalDocuments.Text::text).hasValue("Тільки B");
+        assertThat(legal.text(a, LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE, "uk"))
+                .as("not A's").isEmpty();
+    }
 
     /** Server code names the service whose settings it reads: no call of the first service's shortcut. */
     @Test

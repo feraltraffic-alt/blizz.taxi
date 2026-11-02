@@ -87,7 +87,7 @@ class FeatureFlagsTests {
             assertThat(off.enabled()).isFalse();
             assertThat(off.version()).isEqualTo(before.version() + 1);
             assertThat(off.changedBy()).isEqualTo(admin.id());
-            assertThat(flags.enabled(flag)).isFalse();
+            assertThat(flags.enabled(taxi.blizz.identity.Services.DEFAULT_ID, flag)).isFalse();
             assertThat(flags.change(admin, command, flag.key(), before.version(), false, "Provider down"))
                     .as("a repeat of the command").extracting(FeatureFlags.State::version).isEqualTo(off.version());
             assertCode(() -> flags.change(admin, command, flag.key(), before.version(), true, "Provider down"),
@@ -99,7 +99,7 @@ class FeatureFlagsTests {
         } finally {
             flags.change(admin, UUID.randomUUID(), flag.key(), off.version(), true, "Back on");
         }
-        assertThat(flags.enabled(flag)).isTrue();
+        assertThat(flags.enabled(taxi.blizz.identity.Services.DEFAULT_ID, flag)).isTrue();
     }
 
     /** Two admins switching at once with the same version: one wins, the other gets a conflict, never a 500. */

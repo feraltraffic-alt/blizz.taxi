@@ -51,6 +51,14 @@ paths:
       tags: [Config]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: service
+          in: query
+          required: false
+          description: >-
+            The code of the app's taxi service (ADR 0016): its own texts. Omitted — the first service; unknown → 404.
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{1,39}$"
         - name: audience
           in: path
           required: true

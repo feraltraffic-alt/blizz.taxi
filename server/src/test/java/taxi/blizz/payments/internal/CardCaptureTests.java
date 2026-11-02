@@ -609,7 +609,7 @@ class CardCaptureTests {
         assertThat(before.enabled()).isTrue();
         var off = flags.change(admin, UUID.randomUUID(), card.key(), before.version(), false, "Provider incident");
         try {
-            assertThat(flags.enabled(card)).isFalse();
+            assertThat(flags.enabled(taxi.blizz.identity.Services.DEFAULT_ID, card)).isFalse();
             UUID quote = new TestQuotes(jdbc, quotes).quote(rider, cityId, "STANDARD", PICKUP, DROPOFF).id();
             assertCode(() -> orders.create(rider, UUID.randomUUID(), new CreateOrder(rider.id(), "STANDARD", PICKUP,
                     "Home", DROPOFF, "Work", PaymentMethod.CARD, quote)),
@@ -627,7 +627,7 @@ class CardCaptureTests {
         } finally {
             flags.change(admin, UUID.randomUUID(), card.key(), off.version(), true, "Incident over");
         }
-        assertThat(flags.enabled(card)).isTrue();
+        assertThat(flags.enabled(taxi.blizz.identity.Services.DEFAULT_ID, card)).isTrue();
     }
 
     /** REQ-PAY-20, owner decision 28.10.2026: only the rider or an operator switches a card order to cash. */
