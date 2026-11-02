@@ -9,7 +9,6 @@ const session = {
   audience: 'rider', access_token: 'test-only-access', refresh_token: 'test-only-refresh',
   access_expires_at: '2099-01-01T00:00:00Z', refresh_expires_at: '2099-01-01T00:00:00Z', password_change_required: false
 };
-const ID = '90000000-0000-4000-8000-000000000001';
 
 type Call = {method: string; path: string; query: URLSearchParams; body?: unknown};
 type Answer = {status: number; body?: unknown; delayMs?: number};
@@ -147,7 +146,7 @@ describe('P4: from an order', () => {
 
 describe('P5: a case', () => {
   it('shows the messages and answers with a command id', async () => {
-    const {http} = await mount({'POST /api/rider/v1/support/cases/' + CASE + '/messages': [{status: 200,
+    const {http} = await mount({['POST /api/rider/v1/support/cases/' + CASE + '/messages']: [{status: 200,
       body: full({messages: [msg(1, 'CLIENT', 'Оставил зонт в машине'), msg(2, 'STAFF', 'Уточняем у водителя'),
         msg(3, 'CLIENT', 'Спасибо')]})}]});
     await fireEvent.press(await screen.findByRole('button', {name: '№501 · Забыл зонт · в работе'}));
@@ -168,7 +167,7 @@ describe('P5: a case', () => {
   });
 
   it('a 409 says the case is closed and reads it again', async () => {
-    const {http} = await mount({'POST /api/rider/v1/support/cases/' + CASE + '/messages': [problem(409, 'CONFLICT')],
+    const {http} = await mount({['POST /api/rider/v1/support/cases/' + CASE + '/messages']: [problem(409, 'CONFLICT')],
       [ONE]: [{status: 200, body: full()}, {status: 200, body: full({state: 'CLOSED'})}]});
     await fireEvent.press(await screen.findByRole('button', {name: '№501 · Забыл зонт · в работе'}));
     await fireEvent.changeText(await screen.findByLabelText('Ваш ответ'), 'Ещё вопрос');

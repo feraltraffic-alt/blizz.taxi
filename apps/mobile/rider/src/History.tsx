@@ -17,8 +17,9 @@ function when(at: string): string {
 }
 
 /** The rider's orders, newest first, a page at a time (#267); an order opens with its rating, tip and chat. */
-export function History(props: Shared & {newId: () => string; pollMs: number; onBack: () => void}) {
-  const {client, t, guard, failure, onBack} = props;
+export function History(props: Shared & {newId: () => string; pollMs: number; onBack: () => void;
+  onSupport: (order: {id: string; short_number: number}) => void}) {
+  const {client, t, guard, failure, onBack, onSupport} = props;
   const [items, setItems] = useState<Item[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [open, setOpen] = useState<Item | null>(null);
@@ -70,6 +71,7 @@ export function History(props: Shared & {newId: () => string; pollMs: number; on
         {open.status === 'FULFILLED' ? <AfterRide {...props} orderId={open.id} /> : null}
         {open.chat_available ? <Chat {...props} path="/api/rider/v1/orders/{order_id}/messages"
           params={{order_id: open.id}} me="RIDER" /> : null}
+        <Button label={t('writeSupport')} onPress={() => onSupport({id: open.id, short_number: open.short_number})} />
         <Button label={t('back')} onPress={() => setOpen(null)} />
       </Screen>
     );

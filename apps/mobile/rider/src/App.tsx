@@ -9,6 +9,7 @@ import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
 import {History} from './History';
 import {Cards} from './Cards';
+import {Support, type AboutOrder} from './Support';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
@@ -32,7 +33,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   const {session, restored} = useAppSession(client);
   const {upgrade, guard} = useUpgradeGuard();
   const shared: Shared = {client, t, guard, failure: failureText(t)};
-  const [tab, setTab] = useState<'ride' | 'profile' | 'history' | 'cards'>('ride');
+  const [tab, setTab] = useState<Tab>('ride');
   /** A new round of the legal texts after the server said one must be accepted (ACCEPTANCE_REQUIRED, #248 E6). */
   const [legalRound, setLegalRound] = useState(0);
 
@@ -49,11 +50,12 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   );
 }
 
+type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support';
+
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
 function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
-  newId: () => string; locale: Locale; tab: 'ride' | 'profile' | 'history' | 'cards';
-  setTab: (tab: 'ride' | 'profile' | 'history' | 'cards') => void;
-  onLegal: () => void}) {
+  newId: () => string; locale: Locale; tab: Tab; setTab: (tab: Tab) => void; onLegal: () => void}) {
+  const [about, setAbout] = useState<AboutOrder | null>(null);
   const {signOut} = usePushDevice(shared.client, config.push, '/api/rider/v1', newId, locale);
   const t = shared.t;
   if (tab === 'cards') {
@@ -61,7 +63,11 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
       onBack={() => setTab('profile')} />;
   }
   if (tab === 'history') {
-    return <History {...shared} newId={newId} pollMs={config.pollMs ?? 5000} onBack={() => setTab('ride')} />;
+    return <History {...shared} newId={newId} pollMs={config.pollMs ?? 5000} onBack={() => setTab('ride')}
+      onSupport={order => {setAbout(order); setTab('support');}} />;
+  }
+  if (tab === 'support') {
+    return <Support {...shared} newId={newId} about={about} onBack={() => {setAbout(null); setTab('ride');}} />;
   }
   return tab === 'profile' ? (
     <>
@@ -73,6 +79,7 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
       <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000} push={config.push}
         locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal} />
       <Button label={t('toHistory')} onPress={() => setTab('history')} />
+      <Button label={t('support')} onPress={() => setTab('support')} />
       <Button label={t('toProfile')} onPress={() => setTab('profile')} />
     </>
   );
