@@ -1,0 +1,337 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.2)
+
+2026-11-02T00:35:38.621Z  INFO 3236 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : Starting BlizzTaxiApplication v0.1.0-SNAPSHOT using Java 25.0.5 with PID 3236 (/home/runner/work/blizz.taxi/blizz.taxi/server/target/server-0.1.0-SNAPSHOT.jar started by runner in /home/runner/work/blizz.taxi/blizz.taxi/server)
+2026-11-02T00:35:38.631Z  INFO 3236 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : The following 1 profile is active: "sandbox"
+2026-11-02T00:35:40.780Z  INFO 3236 --- [blizz-taxi-server] [           main] [] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-11-02T00:35:40.843Z  INFO 3236 --- [blizz-taxi-server] [           main] [] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 50 ms. Found 0 JPA repository interfaces.
+2026-11-02T00:35:41.721Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-11-02T00:35:41.745Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-02T00:35:41.745Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-11-02T00:35:41.776Z  INFO 3236 --- [blizz-taxi-server] [           main] [] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 3053 ms
+2026-11-02T00:35:42.171Z  INFO 3236 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-11-02T00:35:42.488Z  INFO 3236 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@17034458
+2026-11-02T00:35:42.490Z  INFO 3236 --- [blizz-taxi-server] [           main] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-11-02T00:35:42.508Z  INFO 3236 --- [blizz-taxi-server] [           main] [] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/blizz (PostgreSQL 18.6)
+2026-11-02T00:35:42.624Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-11-02T00:35:42.635Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbValidate     : Successfully validated 120 migrations (execution time 00:00.073s)
+2026-11-02T00:35:42.686Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-11-02T00:35:42.741Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-11-02T00:35:42.751Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - enable postgis"
+2026-11-02T00:35:42.757Z  WARN 3236 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: extension "postgis" already exists, skipping (SQL State: 42710 - Error Code: 0)
+2026-11-02T00:35:42.778Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - command receipt"
+2026-11-02T00:35:42.801Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - outbox"
+2026-11-02T00:35:42.825Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - audit log"
+2026-11-02T00:35:42.848Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - identity subjects and otp"
+2026-11-02T00:35:42.881Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - device sessions"
+2026-11-02T00:35:42.894Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - otp client limits"
+2026-11-02T00:35:42.908Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - cities and zones"
+2026-11-02T00:35:42.949Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - driver admission"
+2026-11-02T00:35:42.974Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - files"
+2026-11-02T00:35:42.995Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - work sessions"
+2026-11-02T00:35:43.016Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - tariffs and quotes"
+2026-11-02T00:35:43.049Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1640 - order core"
+2026-11-02T00:35:43.089Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1700 - trip phases"
+2026-11-02T00:35:43.103Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1710 - trip exceptions"
+2026-11-02T00:35:43.113Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1730 - order quote"
+2026-11-02T00:35:43.124Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1740 - own addresses"
+2026-11-02T00:35:43.165Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1800 - final fare"
+2026-11-02T00:35:43.183Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1805 - ledger"
+2026-11-02T00:35:43.202Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261026.1837 - address search rate limit"
+2026-11-02T00:35:43.210Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0630 - tariff waiting policy"
+2026-11-02T00:35:43.223Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0700 - driver debt"
+2026-11-02T00:35:43.237Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0710 - driver restriction"
+2026-11-02T00:35:43.250Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0800 - order chat"
+2026-11-02T00:35:43.267Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.0900 - staff sign in"
+2026-11-02T00:35:43.280Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1000 - staff activity"
+2026-11-02T00:35:43.295Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1100 - driver track"
+2026-11-02T00:35:43.315Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1200 - tariff zones and outside"
+2026-11-02T00:35:43.330Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1300 - order contact"
+2026-11-02T00:35:43.340Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1400.1 - service settings"
+2026-11-02T00:35:43.358Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1500.1 - support cases"
+2026-11-02T00:35:43.373Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1600.1 - tariff preorder surcharge"
+2026-11-02T00:35:43.385Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1700.1 - cancel reasons"
+2026-11-02T00:35:43.402Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1800.1 - scheduled orders"
+2026-11-02T00:35:43.416Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.1900.1 - preorder reservations"
+2026-11-02T00:35:43.432Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2000.1 - trip interruption"
+2026-11-02T00:35:43.447Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2100.1 - payments cards"
+2026-11-02T00:35:43.467Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2200.1 - card holds"
+2026-11-02T00:35:43.480Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2300.1 - card capture"
+2026-11-02T00:35:43.488Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261027.2359.2 - support attachments"
+2026-11-02T00:35:43.498Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0010.1 - push notifications"
+2026-11-02T00:35:43.513Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0020.1 - integrations"
+2026-11-02T00:35:43.523Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0030.2 - ratings"
+2026-11-02T00:35:43.536Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0100.1 - terminal payment"
+2026-11-02T00:35:43.546Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.2 - operator bonuses"
+2026-11-02T00:35:43.563Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0110.3 - driver document reminders"
+2026-11-02T00:35:43.571Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0200.1 - rider wallet"
+2026-11-02T00:35:43.580Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0210.1 - wallet payment"
+2026-11-02T00:35:43.591Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0220.1 - rider promotions"
+2026-11-02T00:35:43.606Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0230.1 - driver transfers"
+2026-11-02T00:35:43.617Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0240.1 - driver promotions"
+2026-11-02T00:35:43.629Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0250.3 - safety contacts"
+2026-11-02T00:35:43.639Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0300.1 - card top up"
+2026-11-02T00:35:43.649Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0310.3 - payment card token removal"
+2026-11-02T00:35:43.655Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0320.3 - wallet forfeited"
+2026-11-02T00:35:43.660Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0330.3 - client deletion"
+2026-11-02T00:35:43.668Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0340.1 - tips"
+2026-11-02T00:35:43.679Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0350.3 - orders per payer"
+2026-11-02T00:35:43.686Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0400.3 - otp delivery"
+2026-11-02T00:35:43.694Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0410.1 - client blocking"
+2026-11-02T00:35:43.704Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0420.1 - report exports"
+2026-11-02T00:35:43.716Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0430.3 - incoming calls"
+2026-11-02T00:35:43.731Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0440.3 - call recordings"
+2026-11-02T00:35:43.742Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0500.1 - personal data exports"
+2026-11-02T00:35:43.754Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.1 - legal documents"
+2026-11-02T00:35:43.767Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0510.3 - call centre part2"
+2026-11-02T00:35:43.781Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0520.1 - emergency access"
+2026-11-02T00:35:43.790Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0530.1 - rate limits"
+2026-11-02T00:35:43.798Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0540.3 - dispatch journal risk flags"
+2026-11-02T00:35:43.811Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.0550.3 - track retention correlation"
+2026-11-02T00:35:43.823Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1120.1 - city operations"
+2026-11-02T00:35:43.830Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1150.1 - phone change"
+2026-11-02T00:35:43.837Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1200.4 - operator bonus period on entry"
+2026-11-02T00:35:43.843Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1230.1 - caller sms"
+2026-11-02T00:35:43.852Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1252.2 - bonus paid order card"
+2026-11-02T00:35:43.859Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1310.1 - payment retry"
+2026-11-02T00:35:43.868Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1330.1 - merchant previous key"
+2026-11-02T00:35:43.874Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1400.1 - problem queues"
+2026-11-02T00:35:43.882Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1530.1 - feature flags"
+2026-11-02T00:35:43.889Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261028.1900.1 - cash disputes"
+2026-11-02T00:35:43.897Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.0840.1 - staff sign in address index"
+2026-11-02T00:35:43.904Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.0900.2 - invariant reports"
+2026-11-02T00:35:43.912Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.0901.2 - invariant scan indexes"
+2026-11-02T00:35:43.921Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.0902.1 - otp channel"
+2026-11-02T00:35:43.927Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.0930.1 - chargebacks"
+2026-11-02T00:35:43.936Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1028.2 - payment reconciliation"
+2026-11-02T00:35:43.959Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1420.1 - payment intent city"
+2026-11-02T00:35:43.966Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1640.1 - promotion nth claim"
+2026-11-02T00:35:43.974Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1700.1 - track retention received at"
+2026-11-02T00:35:43.982Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1730.1 - reconciliation page by day"
+2026-11-02T00:35:43.989Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261029.1731.2 - hot paths and debt refresh"
+2026-11-02T00:35:44.010Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0751.5 - broadcast rate limits"
+2026-11-02T00:35:44.016Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0846.5 - file rescan"
+2026-11-02T00:35:44.024Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0910.5 - duplicate documents"
+2026-11-02T00:35:44.033Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0932.5 - driver last position"
+2026-11-02T00:35:44.040Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0935.1 - staff top up limit"
+2026-11-02T00:35:44.048Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0958.2 - technical data retention"
+2026-11-02T00:35:44.065Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.0959.2 - track retention staging keys"
+2026-11-02T00:35:44.071Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.1000.2 - reuse otp delivery age index"
+2026-11-02T00:35:44.072Z  WARN 3236 --- [blizz-taxi-server] [           main] [] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: relation "otp_delivery_attempted_idx" already exists, skipping (SQL State: 42P07 - Error Code: 0)
+2026-11-02T00:35:44.077Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.1001.2 - back off retention failures"
+2026-11-02T00:35:44.082Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.1154.5 - documents encrypted"
+2026-11-02T00:35:44.093Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.1444.5 - driver admission cities"
+2026-11-02T00:35:44.104Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.2145.5 - superseded notifications"
+2026-11-02T00:35:44.118Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261030.2343.5 - order note and manual offer"
+2026-11-02T00:35:44.128Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0110.5 - contact attempts"
+2026-11-02T00:35:44.138Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0150.5 - reassign reasons"
+2026-11-02T00:35:44.149Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0345.5 - rider erasure"
+2026-11-02T00:35:44.167Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0610.5 - driver erasure"
+2026-11-02T00:35:44.180Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0700.5 - driver data exports"
+2026-11-02T00:35:44.186Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.0950.5 - admin order search"
+2026-11-02T00:35:44.193Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.1150.5 - fare corrections"
+2026-11-02T00:35:44.201Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.1400.5 - trip corrections"
+2026-11-02T00:35:44.210Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.1600.5 - trip correction deadline release"
+2026-11-02T00:35:44.215Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.1730.5 - dropoff outside city"
+2026-11-02T00:35:44.221Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261031.2032.5 - customer lookup bucket"
+2026-11-02T00:35:44.229Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261101.0200.5 - report export bounds"
+2026-11-02T00:35:44.238Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261101.0300.1 - card top up obligation"
+2026-11-02T00:35:44.245Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261101.2200.1 - services"
+2026-11-02T00:35:44.263Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261101.2210.1 - service sessions"
+2026-11-02T00:35:44.272Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20261102.0010.1 - platform owner"
+2026-11-02T00:35:44.288Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.f.core.internal.command.DbMigrate      : Successfully applied 120 migrations to schema "public", now at version v20261102.0010.1 (execution time 00:00.769s)
+2026-11-02T00:35:44.444Z  INFO 3236 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-11-02T00:35:44.508Z  INFO 3236 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.13.Final
+2026-11-02T00:35:45.013Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-11-02T00:35:45.088Z  INFO 3236 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/blizz]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 18.6
+	Default catalog/schema: blizz/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-11-02T00:35:45.416Z  INFO 3236 --- [blizz-taxi-server] [           main] [] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-11-02T00:35:45.471Z  INFO 3236 --- [blizz-taxi-server] [           main] [] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-11-02T00:35:46.945Z  INFO 3236 --- [blizz-taxi-server] [           main] [] t.b.files.internal.FilesConfiguration    : Uploads are scanned by the FAKE antivirus (EICAR test string only): dev or sandbox profile
+2026-11-02T00:35:48.483Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-11-02T00:35:48.565Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8081 (http)
+2026-11-02T00:35:48.566Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-02T00:35:48.566Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-11-02T00:35:48.568Z  INFO 3236 --- [blizz-taxi-server] [           main] [] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 79 ms
+2026-11-02T00:35:48.587Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-11-02T00:35:48.639Z  INFO 3236 --- [blizz-taxi-server] [           main] [] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8081 (http) with context path '/'
+2026-11-02T00:35:48.669Z  INFO 3236 --- [blizz-taxi-server] [           main] [] taxi.blizz.BlizzTaxiApplication          : Started BlizzTaxiApplication in 11.129 seconds (process running for 11.82)
+2026-11-02T00:35:49.128Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-11-02T00:35:49.128Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-11-02T00:35:49.130Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-11-02T00:35:49.281Z  WARN 3236 --- [blizz-taxi-server] [           main] [] t.b.identity.internal.StaffBootstrap     : Created the platform owner 'owner'; the password must be changed at the first sign-in
+2026-11-02T00:35:49.586Z  WARN 3236 --- [blizz-taxi-server] [           main] [] t.b.identity.internal.StaffBootstrap     : Created the first super admin 'admin'; the password must be changed at the first sign-in
+2026-11-02T00:35:49.602Z  WARN 3236 --- [blizz-taxi-server] [           main] [] taxi.blizz.sandbox.SandboxSeed           : [sandbox] Seed data loaded. This instance is a sandbox: SMS codes are readable at /sandbox/v1/otp.
+2026-11-02T00:36:06.315Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [a8f072c3-cd10-4e02-8dfe-2abd0ba2ad97] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****09: 102504
+2026-11-02T00:36:10.571Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [8b7379ef-b7c0-4749-b8bc-49aa3785e686] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 153095
+2026-11-02T00:36:11.554Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [ab17135c-eabe-45e8-af14-75a23c821b48] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 757498
+2026-11-02T00:36:13.766Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [2442770b-b685-4ab6-a6d9-55dea0c1eb59] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 946461
+2026-11-02T00:36:18.151Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [071e3057-102d-4fbc-8125-091d07504dce] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****35: 713600
+2026-11-02T00:36:27.863Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [8b2c54d7-2ec0-4719-b48c-5b945992d645] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 196430
+2026-11-02T00:36:29.198Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [ab731bcf-c521-4203-8897-8e6e4f573eba] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****60: 935955
+2026-11-02T00:36:37.688Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [3edc1a52-4297-4447-97ae-0c2b41268ced] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****47: 120699
+2026-11-02T00:36:39.364Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [28103eb8-1f34-4d68-894f-7241677cca0d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 426023
+2026-11-02T00:36:50.136Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [309cab34-6642-43ce-8ef6-1cdcc502cd80] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****02: 315645
+2026-11-02T00:36:59.171Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [bb465283-0bdd-4b5e-a263-0ca46ef2b41f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 991680
+2026-11-02T00:37:01.496Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [4275653c-c842-4dea-8595-472c7ad5bf47] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 260500
+2026-11-02T00:37:02.158Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [fb63fa38-8653-4df2-b851-0d1c5278dd17] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****02: 533544
+2026-11-02T00:40:05.820Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [9647cb94-a42d-4282-b319-09aa8991475a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****70: 582033
+2026-11-02T00:40:30.973Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [585c01ca-208a-4942-92f3-baf57c6ff009] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 371025
+2026-11-02T00:40:39.912Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [aedce643-783d-4c28-a7f1-fcaa8c84239d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****07: 027361
+2026-11-02T00:40:40.878Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [cd0b8cbe-7822-4473-8de3-70a7ea5b68d2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 600037
+2026-11-02T00:40:45.414Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [3dd5637c-e059-4def-959d-54891c88059d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 101639
+2026-11-02T00:40:51.052Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [404cda98-027f-4558-9b1b-c8451222227e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****72: 985205
+2026-11-02T00:40:52.897Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [2326276e-c349-4e17-ba31-5c2d117b0b95] t.b.payments.internal.WayForPayProvider  : WayForPay CHARGE for auth-cbed433f-6ead-44b5-899a-ff3d253401c0 did not answer: java.net.SocketTimeoutException: fake gateway: answer lost
+2026-11-02T00:41:13.190Z  WARN 3236 --- [blizz-taxi-server] [ blizz-worker-2] [2326276e-c349-4e17-ba31-5c2d117b0b95] t.b.payments.internal.WayForPayProvider  : WayForPay CHECK_STATUS for auth-cbed433f-6ead-44b5-899a-ff3d253401c0 did not answer: java.net.SocketTimeoutException: fake gateway timeout
+2026-11-02T00:41:13.751Z  WARN 3236 --- [blizz-taxi-server] [ blizz-worker-1] [] t.b.o.internal.CardHoldDeadline          : Card order 5c3b725c-5d64-475b-a3ad-9b474e2a4d1f ended: no answer from the bank within PT20S
+2026-11-02T00:41:15.326Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [ab4de980-6fda-454c-9a87-c6d9db62bb80] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****48: 504315
+2026-11-02T00:41:16.967Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [f820537a-5555-45a6-b375-70255ef64b54] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 430994
+2026-11-02T00:42:01.162Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [b1f0a336-2588-49ab-81fa-c3dae9291939] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****38: 975700
+2026-11-02T00:42:04.454Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [5c463198-9f7b-48d8-a765-0f4621a106a9] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 997740
+2026-11-02T00:42:06.755Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [464a7ae9-4fff-4ed1-b218-d447b74d8ba8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 537232
+2026-11-02T00:42:08.081Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [dccdfa70-e0af-4b0c-83ed-ab8b281215be] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****01: 891481
+2026-11-02T00:42:14.708Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [618a2864-b3b1-4c5f-bc56-b24d9b0fe0f4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****78: 720786
+2026-11-02T00:42:16.059Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [1e9c1875-925a-45d2-a234-42f6e9748263] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 519457
+2026-11-02T00:44:13.620Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [a26a0a08-7850-4ccb-8996-7f98da01234b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****33: 931982
+2026-11-02T00:44:23.400Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [268aeea1-a962-4621-bf96-5fdbb7b8e8c5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 933469
+2026-11-02T00:44:24.699Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [20967d2b-6798-475d-b0b8-8a7f81beac81] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 774902
+2026-11-02T00:44:25.680Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [9b599945-dd40-4bac-89f6-f94d8a62e5ef] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 463226
+2026-11-02T00:44:27.313Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [0bf5ca4e-600b-4d50-9cc0-65fd72c00f1f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 777289
+2026-11-02T00:44:28.286Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [df9c684f-ae70-4ea5-a4b5-6542a21da103] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 591564
+2026-11-02T00:45:26.543Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [7842911d-e6c4-49f6-93b1-56683d1163c9] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 957963
+2026-11-02T00:45:30.120Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [bb2c933a-c64e-43e3-8fce-b6f56d96163f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 035424
+2026-11-02T00:45:32.378Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [29873a9d-0ed0-4a2c-ae26-26268fcb2a24] .s.b.m.m.MaximumAllowableTagsMeterFilter : Reached the maximum number of 'uri' tags for 'http.server.requests'.
+2026-11-02T00:45:35.335Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [31a39fb0-b35f-47a0-a5a4-f611520715c2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 751331
+2026-11-02T00:45:38.675Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [6eeb1510-ea7b-4d54-8e3a-3319105f6e2b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****73: 482722
+2026-11-02T00:45:39.654Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [845c9aee-2dfc-43f1-9325-b28199fa6122] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****30: 482911
+2026-11-02T00:45:43.570Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [decaf252-e693-424c-83c3-57378739499a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****83: 655224
+2026-11-02T00:45:48.741Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [6ddd1fe4-6be9-4dff-b6d2-e316af327b76] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****49: 566535
+2026-11-02T00:45:51.391Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [f4b0e3c4-5c5b-448b-af60-1d3faf90a39e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****49: 751833
+2026-11-02T00:46:00.292Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [0bf7fde9-c847-426a-99de-0f879b582eb2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****19: 737558
+2026-11-02T00:46:02.475Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [608113a0-5b79-480b-83c5-3d2c229cfe6e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 500719
+2026-11-02T00:46:03.437Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [e43af4b9-fb74-4753-92fd-d30690a13e6b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 532983
+2026-11-02T00:46:04.394Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [c00b1879-b25c-4672-aa35-7a3f4a7b007b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 596879
+2026-11-02T00:46:05.358Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [48df2cfd-9304-4e17-828a-7c614c147ce6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 331742
+2026-11-02T00:46:09.672Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [b0bb9e4b-b1a7-430c-a658-8234f01323d4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****52: 481465
+2026-11-02T00:48:27.859Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [c5b5993e-5e82-4d93-8f69-ff15ecce70a8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 935999
+2026-11-02T00:48:28.833Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [91318f68-67b2-43ee-9309-a888d4964df0] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 646138
+2026-11-02T00:50:44.220Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [3e3af146-2c00-4c7d-bb81-8505485010b6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 020047
+2026-11-02T00:50:46.805Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [89f999f0-e180-433d-b36b-412949716128] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****13: 051358
+2026-11-02T00:50:51.744Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [c6f220a0-6cd7-422b-a9c8-df435c9b603c] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 159006
+2026-11-02T00:50:52.873Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [aa90b4f3-5c19-43b4-befc-c8187dfe21cf] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 320826
+2026-11-02T00:50:53.855Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [dc3644cc-12ca-45d9-9d56-8158c403db4d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 676097
+2026-11-02T00:50:56.069Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [d13ac90f-32c5-4759-bdbc-98906e88c1a7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 918723
+2026-11-02T00:50:57.431Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [9d952cb2-e99b-4289-9ef8-41e2ac426690] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****74: 453309
+2026-11-02T00:52:47.637Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [2ae675e7-d6c0-4bc7-8741-0b8ca5ee70ab] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 754782
+2026-11-02T00:52:50.313Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [2b6248e8-a306-4ea3-9e17-2c030837c4ba] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 969276
+2026-11-02T00:53:00.570Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [06c4a01f-1969-4dd8-9bed-7112a0643d43] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 071928
+2026-11-02T00:53:01.563Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [6344f406-9850-436c-832c-69b8dec28dae] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****61: 514345
+2026-11-02T00:53:04.538Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [e9b2bdc7-6826-4014-a68a-f70139425a54] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****61: 098181
+2026-11-02T00:53:07.400Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [a0ab203b-d5a1-487d-a437-c1a9f9ab0ace] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****61: 578683
+2026-11-02T00:53:08.371Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [7ead3829-112e-423b-ae06-6fce78a4e2b4] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 056607
+2026-11-02T00:53:09.351Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [c5f164b6-80ee-4fe4-b9b0-0dbf4a6d8a0f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 173881
+2026-11-02T00:53:10.682Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [eca8f16c-a94c-40e7-afb8-7b318da4fe8d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 859192
+2026-11-02T00:53:13.259Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [bc83429f-1984-4359-a113-c51a8f6e4d69] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****29: 435398
+2026-11-02T00:53:37.976Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [6d9cdace-c028-4fa2-8e84-abb4668a7a46] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 699718
+2026-11-02T00:53:38.996Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [579f1fed-ae81-4589-b6ae-6ece9b3e1192] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 703843
+2026-11-02T00:53:39.975Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [bdfc28bc-433c-40c2-97ff-17c74b2edcc5] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 572659
+2026-11-02T00:53:40.953Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [934a0273-127c-4219-82c3-6108e9163feb] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 857545
+2026-11-02T00:53:42.298Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [e48de967-998c-44e8-92c7-a65a148ab11f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****77: 048583
+2026-11-02T00:54:40.967Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [0db3a94f-d96f-474c-8a7a-b0f8c48083d8] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****98: 495326
+2026-11-02T00:54:45.922Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [4d78e6a5-fddf-4d3b-b4b7-7e0a8cc95af7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****15: 343447
+2026-11-02T00:54:51.133Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [5260f4d8-044b-4b82-af83-232cf6ddc10b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****28: 749471
+2026-11-02T00:55:19.396Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [c3a2d3b1-f809-47cb-89f6-1047b03b5251] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 253081
+2026-11-02T00:55:22.772Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [f4924a9d-42e3-42ec-adad-1ef48746f269] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****70: 302229
+2026-11-02T00:55:28.941Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-8] [] t.b.n.internal.FakePushProvider          : [push] driver.offer — Нове замовлення: Прийміть замовлення, поки пропозиція діє
+2026-11-02T00:55:32.950Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-3] [] t.b.n.internal.FakePushProvider          : [push] rider.driver-assigned — Водитель найден: Машина едет к вам
+2026-11-02T00:55:38.962Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-5] [] t.b.n.internal.FakePushProvider          : [push] rider.driver-arrived — Водитель на месте: Машина ждёт вас
+2026-11-02T00:56:27.031Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-9] [] t.b.n.internal.FakePushProvider          : [push] rider.trip-completed — Поездка завершена: Спасибо, что выбрали нас
+2026-11-02T00:56:37.682Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [76ac75b9-a698-46c3-b537-0a028c60fb50] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 591239
+2026-11-02T00:58:03.300Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [a852261e-4c8a-4eac-ba56-420e1de2dcb2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****10: 773817
+2026-11-02T00:59:05.994Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [3bcf3ac5-9954-4792-996c-88d0abe4d134] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 844901
+2026-11-02T00:59:08.894Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [c606b110-e08f-48a6-a05e-fdc973f6a010] t.b.operations.internal.OrderMetrics     : Unknown label for metric blizz.orders.cancelled: VEHICLE_BREAKDOWN -> OTHER
+2026-11-02T00:59:19.351Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [595c8fcc-32f4-45ef-83a8-260002525753] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****85: 395230
+2026-11-02T00:59:23.641Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [395ae8e3-dafc-4109-a08a-c3742e42eae3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 469921
+2026-11-02T00:59:24.605Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [f440d00e-3441-4cdf-98c1-177cc98a9232] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 930484
+2026-11-02T00:59:25.579Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [facfa2dc-6bc2-47bc-a374-c4dde667360a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 814340
+2026-11-02T00:59:27.743Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [7df4bb7a-b4f3-4f8e-8428-1ccfeb629c38] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****86: 776366
+2026-11-02T00:59:29.452Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [3d6433f1-6e1d-4b7b-b618-5a7afcba86ea] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 313531
+2026-11-02T00:59:34.141Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [a22f9365-2642-4da8-8a74-67bf70ac70ed] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 212692
+2026-11-02T01:00:34.499Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [9ecdcab7-6c64-4e51-8d3e-751a1fdfb732] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****57: 141457
+2026-11-02T01:00:43.406Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [314f5afb-adc8-4434-bede-9c4f55f5b4ab] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 700163
+2026-11-02T01:00:49.738Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [e382b648-a2b6-4b21-91c7-333d5e65b669] t.b.operations.internal.OrderMetrics     : Unknown label for metric blizz.orders.cancelled: OPERATOR_ERROR -> OTHER
+2026-11-02T01:00:54.353Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [da4c9c8e-9e46-4e20-bbf5-f07f49880a8a] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****67: 462062
+2026-11-02T01:00:55.896Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [c4ba7e2a-8796-4df0-9648-cb3572202376] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****32: 441633
+2026-11-02T01:00:57.429Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [4e6cd98e-6940-4038-aaf7-6ca93d38bd76] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****32: 625752
+2026-11-02T01:00:58.968Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [2c052a29-aede-4493-9443-ac3f9e3e82fd] t.b.t.internal.ChannelOtpDelivery        : The code for +380*****00 (challenge ddfbdd0e-9b00-433a-b621-806d629edb5b) did not go out by SMS
+2026-11-02T01:01:00.482Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [c358c6b1-35bb-459b-b817-735dd3801b79] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****00: 639083
+2026-11-02T01:01:02.027Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [e02a04fe-4171-4d28-a69e-de67cc3b6307] t.b.telephony.internal.FakeOtpSender     : [fake VOICE] CLIENT code for +380*****00: 502332
+2026-11-02T01:01:20.923Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [3aa31a34-9776-4abf-9fad-69a5c2f12c62] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****44: 703088
+2026-11-02T01:01:23.898Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [34eec7ff-7b53-4901-9b6c-bf3894387176] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****44: 610427
+2026-11-02T01:01:26.584Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [4f57c25b-5b0a-4f9a-b645-79c7ff15fe3e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****44: 468562
+2026-11-02T01:01:26.927Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [ab1dcd98-d7cd-42b8-b92b-d43d7ff93c73] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****96: 918957
+2026-11-02T01:01:30.555Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [39a11879-5e18-4b94-9304-465318ad1c93] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****96: 127625
+2026-11-02T01:01:32.507Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [976fdcc7-7c93-4902-b896-7f3dbe49b68c] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****22: 872968
+2026-11-02T01:01:34.169Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [0a539d5e-0713-4a2f-8028-ee73f876182d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****22: 352340
+2026-11-02T01:01:35.150Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [ac0372ac-05cf-46bb-8ab2-b8237dd8f908] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****32: 849084
+2026-11-02T01:01:39.037Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [fd0733e2-39e1-457f-92ed-66c654781be3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +486*****19: 627925
+2026-11-02T01:01:40.397Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [43fafaa8-75b7-4510-87c2-279e249565e6] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 948095
+2026-11-02T01:01:44.620Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [6f69f3e4-203d-40f3-8306-c32a6259a622] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 722342
+2026-11-02T01:01:45.973Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [fa582038-3fe9-4fcb-998b-ff711ad33457] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****84: 235089
+2026-11-02T01:02:40.852Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [624c557e-45f9-49bf-9847-efe142a41f48] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 997404
+2026-11-02T01:02:43.707Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [8ba11842-c317-4069-91eb-0a508bc952d3] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 216882
+2026-11-02T01:02:45.026Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [46a588a4-f98d-4dcb-a796-c8823f38eb53] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 976234
+2026-11-02T01:02:46.359Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [58909851-cfaa-4c9e-9745-cf54f0aadbe2] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****26: 392147
+2026-11-02T01:02:53.602Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-9] [] t.b.n.internal.FakePushProvider          : [push] rider.driver-assigned — Водитель найден: Машина едет к вам
+2026-11-02T01:03:00.613Z  INFO 3236 --- [blizz-taxi-server] [ blizz-worker-4] [] t.b.n.internal.FakePushProvider          : [push] rider.order-cancelled — Заказ отменён: Откройте приложение, чтобы узнать подробности
+2026-11-02T01:03:08.708Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [7e1752f2-83d9-4030-9b76-dccf1021406d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 537501
+2026-11-02T01:03:09.643Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [94b75d94-2a18-4d50-8da9-df5ee0182c06] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 200680
+2026-11-02T01:03:10.597Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [f11317b0-c1df-45de-a74a-909735179181] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 864659
+2026-11-02T01:03:11.526Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [2858bf03-0acd-4a7b-af33-c2cc7f7fdc75] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 289295
+2026-11-02T01:03:26.856Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [d03e0c91-3540-4ac7-a99c-15fd22d313ea] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****45: 660177
+2026-11-02T01:04:25.934Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [56f7eb45-6790-4397-bc91-bd4849bd690d] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 720974
+2026-11-02T01:04:36.581Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [0a7d1549-bee8-4aeb-a9e7-470571eae168] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +480*****98: 747170
+2026-11-02T01:04:37.849Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [f560ed08-2012-49c9-968e-120986c2d9b7] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +485*****01: 430528
+2026-11-02T01:04:46.985Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [2d0e2735-2f44-4e75-8741-2088f3e6a27e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****08: 187394
+2026-11-02T01:04:47.953Z  WARN 3236 --- [blizz-taxi-server] [nio-8080-exec-3] [4570e256-af22-477c-9994-0cb7f7d28039] t.blizz.files.internal.JdbcFileService   : File 24cbcb5f-212c-4380-8117-128861013194 rejected by fake: Eicar-Test-Signature
+2026-11-02T01:04:51.644Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [3fe8fdb1-0ec6-4f45-8b09-5e3e58b43eed] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****27: 802685
+2026-11-02T01:04:57.592Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [f69e039d-8c4b-43c5-b162-75c02adfad25] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 692773
+2026-11-02T01:04:59.201Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-8] [24ee4c8c-0f63-4008-913c-d7a034c28557] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 324307
+2026-11-02T01:05:26.022Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-4] [5a32fbf4-78fb-43ba-976b-7bbdb69d81fc] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 691011
+2026-11-02T01:05:26.967Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-2] [caa3ed06-968f-43b9-af24-e6bd029c0dfe] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 584016
+2026-11-02T01:05:27.919Z  INFO 3236 --- [blizz-taxi-server] [io-8080-exec-10] [c96ac260-157f-4b7a-bd89-a08e2b8fef73] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 282752
+2026-11-02T01:05:28.886Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [c8ccba05-a89c-4403-9f98-640bf5614e9f] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 685519
+2026-11-02T01:05:30.214Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-9] [6b1a006f-e5f6-4e99-a21b-d20663f4b937] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****61: 180877
+2026-11-02T01:06:25.470Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [9af01ce0-be11-4400-8730-d13d3e9a6128] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****01: 367273
+2026-11-02T01:06:26.418Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [597d2c03-2fd7-4933-89fd-00e6939e99bb] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****02: 256142
+2026-11-02T01:06:27.378Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-6] [d06fb6d2-1008-48dd-885e-04912b84ba9b] t.b.telephony.internal.FakeOtpSender     : [fake SMS] DRIVER code for +380*****03: 584874
+2026-11-02T01:06:28.323Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-1] [cde967b3-9fe1-4efa-9272-b62be0ae905e] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****23: 146516
+2026-11-02T01:09:31.343Z  INFO 3236 --- [blizz-taxi-server] [nio-8081-exec-1] [] o.a.c.c.C.[Tomcat-1].[localhost].[/]     : Initializing Spring DispatcherServlet 'dispatcherServletRegistration'
+2026-11-02T01:09:31.343Z  INFO 3236 --- [blizz-taxi-server] [nio-8081-exec-1] [] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServletRegistration'
+2026-11-02T01:09:31.344Z  INFO 3236 --- [blizz-taxi-server] [nio-8081-exec-1] [] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-11-02T01:11:42.279Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-5] [333a0c16-e2c1-4572-9bbd-34a1e0cc7302] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****33: 432677
+2026-11-02T01:11:45.805Z  INFO 3236 --- [blizz-taxi-server] [nio-8080-exec-7] [ac602029-1ce6-4bf3-9405-f1edbf633835] t.b.telephony.internal.FakeOtpSender     : [fake SMS] CLIENT code for +380*****33: 143842
+2026-11-02T01:11:50.549Z  INFO 3236 --- [blizz-taxi-server] [ionShutdownHook] [] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-02T01:11:50.558Z  INFO 3236 --- [blizz-taxi-server] [tomcat-shutdown] [] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-11-02T01:11:50.559Z  INFO 3236 --- [blizz-taxi-server] [ionShutdownHook] [] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-02T01:11:50.566Z  INFO 3236 --- [blizz-taxi-server] [tomcat-shutdown] [] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-11-02T01:11:50.613Z  INFO 3236 --- [blizz-taxi-server] [ionShutdownHook] [] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-11-02T01:11:50.628Z  INFO 3236 --- [blizz-taxi-server] [ionShutdownHook] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-11-02T01:11:50.637Z  INFO 3236 --- [blizz-taxi-server] [ionShutdownHook] [] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
