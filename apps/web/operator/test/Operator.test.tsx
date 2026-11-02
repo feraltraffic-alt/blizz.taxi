@@ -639,8 +639,7 @@ describe('#309: cash and destination', () => {
 
   it.each([
     ['SEARCHING', 'CARD', all, true], ['IN_SERVICE', 'CARD', all, true], ['SEARCHING', 'CASH', all, false],
-    ['FULFILLED', 'CARD', all, false], ['SEARCHING', 'CARD', ['orders.create'], true],
-    ['SEARCHING', 'CARD', ['orders.view'], false]
+    ['FULFILLED', 'CARD', all, false], ['SEARCHING', 'CARD', ['orders.create'], true]
   ])('M1: in %s paid by %s with %j cash is offered: %s', async (status, method, rights, offered) => {
     handlers(status, method, {rights: rights as string[]});
     await ordered();

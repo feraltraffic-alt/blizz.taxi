@@ -5,6 +5,15 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    orderChanges: 'Изменить заказ', toCash: 'Перевести на наличные', cashReason: 'Причина перевода на наличные',
+    reasonNeeded: 'Укажите причину, до 500 символов.', changeDestination: 'Изменить точку назначения',
+    newDestination: 'Новая точка назначения', destinationReason: 'Причина изменения точки',
+    destinationNeeds: 'Выберите новую точку и укажите причину, до 500 символов.',
+    newPrice: 'Новая цена: {now} (была {before})',
+    aboveHold: 'Новая цена выше удержания на карте: заведено обращение по оплате.',
+    holdUnknown: 'Результат удержания ещё неизвестен, повторите чуть позже.',
+    dropoffOutside: 'Новая точка вне зоны города.', noRoute: 'Не удалось рассчитать маршрут, попробуйте позже.',
+    paymentIs: 'Оплата: {method}', pay_CASH: 'наличные', pay_CARD: 'картой', pay_TERMINAL: 'терминал',
     cardPop: 'Входящие звонки', ringingCall: 'Звонок: {phone}', openOrders: 'открытых заказов: {count}',
     dismiss: 'Скрыть', liveClosed: 'Доступ к звонкам закрыт. Войдите снова.',
     orderCalls: 'Звонки по заказу', callTo_CALLER: 'Позвонить звонящему', callTo_DRIVER: 'Позвонить водителю',
@@ -110,6 +119,15 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    orderChanges: 'Змінити замовлення', toCash: 'Перевести на готівку', cashReason: 'Причина переведення на готівку',
+    reasonNeeded: 'Вкажіть причину, до 500 символів.', changeDestination: 'Змінити точку призначення',
+    newDestination: 'Нова точка призначення', destinationReason: 'Причина зміни точки',
+    destinationNeeds: 'Оберіть нову точку та вкажіть причину, до 500 символів.',
+    newPrice: 'Нова ціна: {now} (була {before})',
+    aboveHold: 'Нова ціна вища за утримання на картці: створено звернення щодо оплати.',
+    holdUnknown: 'Результат утримання ще невідомий, повторіть трохи пізніше.',
+    dropoffOutside: 'Нова точка поза зоною міста.', noRoute: 'Не вдалося розрахувати маршрут, спробуйте пізніше.',
+    paymentIs: 'Оплата: {method}', pay_CASH: 'готівка', pay_CARD: 'карткою', pay_TERMINAL: 'термінал',
     cardPop: 'Вхідні дзвінки', ringingCall: 'Дзвінок: {phone}', openOrders: 'відкритих замовлень: {count}',
     dismiss: 'Сховати', liveClosed: 'Доступ до дзвінків закрито. Увійдіть знову.',
     orderCalls: 'Дзвінки щодо замовлення', callTo_CALLER: 'Подзвонити абоненту', callTo_DRIVER: 'Подзвонити водію',
@@ -215,6 +233,15 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    orderChanges: 'Zmień zlecenie', toCash: 'Zmień na gotówkę', cashReason: 'Powód zmiany na gotówkę',
+    reasonNeeded: 'Podaj powód, do 500 znaków.', changeDestination: 'Zmień cel podróży',
+    newDestination: 'Nowy cel podróży', destinationReason: 'Powód zmiany celu',
+    destinationNeeds: 'Wybierz nowy cel i podaj powód, do 500 znaków.',
+    newPrice: 'Nowa cena: {now} (była {before})',
+    aboveHold: 'Nowa cena przekracza blokadę na karcie: utworzono zgłoszenie dotyczące płatności.',
+    holdUnknown: 'Wynik blokady jest jeszcze nieznany, spróbuj za chwilę.',
+    dropoffOutside: 'Nowy cel poza strefą miasta.', noRoute: 'Nie udało się wyznaczyć trasy, spróbuj później.',
+    paymentIs: 'Płatność: {method}', pay_CASH: 'gotówka', pay_CARD: 'kartą', pay_TERMINAL: 'terminal',
     cardPop: 'Połączenia przychodzące', ringingCall: 'Połączenie: {phone}', openOrders: 'otwartych zleceń: {count}',
     dismiss: 'Ukryj', liveClosed: 'Dostęp do połączeń zamknięty. Zaloguj się ponownie.',
     orderCalls: 'Połączenia zlecenia', callTo_CALLER: 'Zadzwoń do zgłaszającego', callTo_DRIVER: 'Zadzwoń do kierowcy',
