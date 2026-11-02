@@ -80,10 +80,6 @@ export const translations: Catalogs = withCommon({
     status_UNFULFILLED: 'Водителя не нашлось',
     profile: 'Профиль',
     accountState: 'Состояние аккаунта',
-    deleteAccount: 'Удалить аккаунт',
-    deleteCode: 'Код подтверждения удаления',
-    confirmDeletion: 'Подтвердить удаление',
-    deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
     wallet: 'Бонуси',
@@ -161,10 +157,6 @@ export const translations: Catalogs = withCommon({
     status_UNFULFILLED: 'Водія не знайшлося',
     profile: 'Профіль',
     accountState: 'Стан облікового запису',
-    deleteAccount: 'Видалити обліковий запис',
-    deleteCode: 'Код підтвердження видалення',
-    confirmDeletion: 'Підтвердити видалення',
-    deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
     wallet: 'Bonusy',
@@ -242,10 +234,6 @@ export const translations: Catalogs = withCommon({
     status_UNFULFILLED: 'Nie znaleziono kierowcy',
     profile: 'Profil',
     accountState: 'Stan konta',
-    deleteAccount: 'Usuń konto',
-    deleteCode: 'Kod potwierdzenia usunięcia',
-    confirmDeletion: 'Potwierdź usunięcie',
-    deletionRequested: 'Prośba o usunięcie została przyjęta.'
   }
 });
 

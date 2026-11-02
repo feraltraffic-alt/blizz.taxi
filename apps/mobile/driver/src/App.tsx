@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, DRIVER_CATEGORIES, DataExports, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
+  AccountDeletion, Alert, Button, DRIVER_CATEGORIES, DataExports, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
@@ -222,6 +222,9 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       <Button label={t('support')} onPress={() => setTab('support')} />
       {online ? null : <Button label={t('pcChange')} onPress={() => setTab('phone')} />}
       {online ? null : <Button label={t('exTitle')} onPress={() => setTab('data')} />}
+      {/* Deleting the account while off the line (#336); a pending request is shown and can be withdrawn. */}
+      {online ? null : <AccountDeletion client={client} t={t} guard={guard} failure={failure} newId={newId}
+        api="/api/driver/v1" state={profile.account_state} onState={() => void load().catch(() => undefined)} />}
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>
