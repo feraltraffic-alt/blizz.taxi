@@ -188,7 +188,8 @@ class JdbcPreorders implements Preorders {
         }
         return commands.execute(new CommandKey(driver, "preorder.drop", commandId),
                 new DropRequest(reservationId, reasonCode), Reservation.class, () -> {
-                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, reasonCode.trim());
+                    CancelReasons.Reason reason = reasons.require(driver, CancelReasons.Audience.DRIVER,
+                            reasonCode.trim());
                     Locked r = lock(reservationId, driver);
                     OffsetDateTime dropUntil = r.pickupAt()
                             .minusMinutes(rules(driver).driverCancelUntilMinutesBefore());

@@ -62,25 +62,25 @@ class CancelReasonsController {
 
     @GetMapping("/api/rider/v1/cancel-reasons")
     Items rider(AccessClaims claims) {
-        return items(Audience.RIDER);
+        return items(claims, Audience.RIDER);
     }
 
     @GetMapping("/api/driver/v1/cancel-reasons")
     Items driver(AccessClaims claims) {
-        return items(Audience.DRIVER);
+        return items(claims, Audience.DRIVER);
     }
 
     @GetMapping("/api/operator/v1/cancel-reasons")
     Items operator(AccessClaims claims) {
         staff.require(claims.actor(), STAFF_CANCEL_PERMISSION);
-        return items(Audience.STAFF);
+        return items(claims, Audience.STAFF);
     }
 
     /** The reasons for taking a driver off an order (REQ-CAN-01, issue #143); the right of revoke-assignment. */
     @GetMapping("/api/operator/v1/reassign-reasons")
     Items reassign(AccessClaims claims) {
         staff.require(claims.actor(), "orders.reassign");
-        return items(Audience.REASSIGN);
+        return items(claims, Audience.REASSIGN);
     }
 
     @GetMapping("/api/admin/v1/settings/cancel-reasons")
@@ -104,8 +104,8 @@ class CancelReasonsController {
                         body.active(), body.sortOrder()), body.reason());
     }
 
-    private Items items(Audience audience) {
-        return new Items(reasons.active(audience).stream()
+    private Items items(AccessClaims claims, Audience audience) {
+        return new Items(reasons.active(claims.actor(), audience).stream()
                 .map(r -> new Item(r.code(), r.labels(), r.driverOutcome())).toList());
     }
 }

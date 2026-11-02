@@ -182,7 +182,7 @@ class JdbcTrips implements Trips {
         }
         return commands.execute(new CommandKey(driver, "trip.withdraw", commandId),
                 new WithdrawRequest(tripId, expectedVersion, code, note), TripView.class, () -> {
-                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, code);
+                    CancelReasons.Reason reason = reasons.require(driver, CancelReasons.Audience.DRIVER, code);
                     if (reason.driverOutcome() != CancelReasons.DriverOutcome.RETURN_TO_SEARCH) {
                         throw new DomainException(ErrorCode.VALIDATION_FAILED,
                                 "This reason cancels the order; giving it up needs a RETURN_TO_SEARCH reason");
@@ -216,7 +216,7 @@ class JdbcTrips implements Trips {
         }
         return commands.execute(new CommandKey(driver, "trip.cancel", commandId),
                 new PhaseRequest(tripId, expectedVersion, code), TripView.class, () -> {
-                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.DRIVER, code);
+                    CancelReasons.Reason reason = reasons.require(driver, CancelReasons.Audience.DRIVER, code);
                     Locked trip = lock(driver, tripId, expectedVersion);
                     if (CancelReasons.NO_SHOW.equals(reason.code())) {
                         noShow(trip, driver, reason);
@@ -246,7 +246,7 @@ class JdbcTrips implements Trips {
                     Locked trip = lock(driver, tripId, expectedVersion);
                     // The no-show is a driver's cancellation with the NO_SHOW reason, even if the admin hid it from
                     // the list: the waiting rule, not the list, decides when it is allowed.
-                    noShow(trip, driver, reasons.find(CancelReasons.Audience.DRIVER, CancelReasons.NO_SHOW)
+                    noShow(trip, driver, reasons.find(driver, CancelReasons.Audience.DRIVER, CancelReasons.NO_SHOW)
                             .orElse(new CancelReasons.Reason(null, CancelReasons.Audience.DRIVER, CancelReasons.NO_SHOW,
                                     Map.of(), CancelReasons.DriverOutcome.CANCEL_ORDER, false, 0, 0)));
                     return view(tripId);
