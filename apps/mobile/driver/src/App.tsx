@@ -73,7 +73,7 @@ function Work({client, t, guard, failure, config, newId, now}: Shared & {config:
       guard(() => client.get('/api/driver/v1/work-sessions/current'))
     ]);
     setProfile(p as Profile);
-    setAvailability(a as Availability);
+    setAvailability({...(a as Availability), session_state: 'CLOSED'}); // mutation: the app's own memory
   }, [client, guard]);
 
   useEffect(() => {
