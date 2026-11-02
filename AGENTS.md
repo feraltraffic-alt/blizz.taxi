@@ -44,6 +44,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 11. **Test parsers and protocols on realistic input**: several elements of each kind (two streams, two chunks, two records), every way an element can be damaged, and a peer that hangs. Every network call has a total deadline, writes included (lessons case 13).
 12. **Write in the layout of the surrounding code**: one statement per line, at most 120 characters, SQL in text blocks. `awk 'length>120'` over your Java files prints nothing (lessons case 14).
 13. **A negative control passes only for its own reason.** Prove every new check red once on purpose, read the failure's message (not just the colour), and make sure nothing failed earlier for another reason (lessons case 15).
+14. **Every rule in the issue gets a test, not only the Acceptance bullets.** An access line ("changed only by …") is tested with staff who just miss it, refused for each operation (lessons case 16).
 
 ## Rules that must not be broken
 
@@ -53,7 +54,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 - State changes are named commands with `command_id` and `expected_version`, executed through `IdempotentCommands`; no PATCH of a `status` field.
 - Events go through `Outbox.publish` in the same transaction as the change.
 - Privileged and financial actions are written to `AuditLog`.
-- Staff actions need an `ACTIVE` `staff_user` with an explicit permission (a `*_PERMISSION` constant in the module's API, e.g. `geo.manage`, `driver.review`); staff have no permissions by default (REQ-AUTH-10). Check it with `identity.StaffAccess.require(actor, permission, cityIds…)` — pass the city when the object belongs to one — **before** `IdempotentCommands.execute`, so a stored outcome is never returned to someone who lost access. Never query `staff_user` from another module.
+- Staff actions need an `ACTIVE` `staff_user` with an explicit permission (a `*_PERMISSION` constant in the module's API, e.g. `geo.manage`, `driver.review`); staff have no permissions by default (REQ-AUTH-10). Check it with `identity.StaffAccess.require(actor, permission, cityIds…)` — pass the city when the object belongs to one; a setting of the whole taxi service is changed with `requireEveryCity` (ADR 0016) — **before** `IdempotentCommands.execute`, so a stored outcome is never returned to someone who lost access. Never query `staff_user` from another module.
 - A module writes only its own tables; reading another module's table in SQL is allowed only for the cases listed in [`docs/decisions/0004-module-data-ownership.md`](docs/decisions/0004-module-data-ownership.md). No new foreign keys across modules.
 - When two operations must not interleave, lock rows in one fixed order on every path (e.g. city before zone) and prove it with a concurrency test.
 - Money is `amount_minor` + `currency`; time is UTC; no floating point for money.

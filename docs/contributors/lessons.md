@@ -137,6 +137,19 @@ Real cases from pull requests on this repository: what was handed in, what the r
   - **A concurrency test that never ran its two calls at once** (#193): `CompletableFuture.supplyAsync` without an executor uses the common pool. On a small CI machine that pool has one worker, so the two "simultaneous" starts ran one after the other. The mutation that removed the lock stayed green. The test now runs on two threads of its own.
 - **Habit:** **a negative control passes only for its own reason.** Check the failure's message, not just the colour, and require the cases before it to pass. **Prove every new check red once on purpose** before you rely on its green.
 
+## 16. An access rule in the issue that no change implemented (lead's #215, PRs #223–#228)
+
+- **Task:** move the service-wide settings to per-service storage. The issue's own **Access** line said they are
+  changed only by the service's super admin or by staff holding the permission in every city.
+- **Handed in by the lead:** six green PRs. Each had a per-service test and a red mutation.
+- **Missed:** none of them applied the access line. Each kept `staff.require(actor, permission)`, which a holder of
+  one city passes. The tests checked isolation between services, the issue's acceptance bullets, and nothing
+  checked the access line, because it was not an acceptance bullet. It was caught only when the lead reread the
+  issue before the next item.
+- **Habit:** **turn every rule in the issue into a test, not only the acceptance bullets.** Before each PR, reread the
+  whole issue and tick each sentence against a test name. For an access rule, the test is staff who just miss
+  it (here: every right, one city), refused for each operation.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
