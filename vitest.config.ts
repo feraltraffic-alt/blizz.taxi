@@ -5,7 +5,9 @@ export default defineConfig({
     projects: [
       {test: {name: 'api', include: ['packages/api-client/test/**/*.test.ts'], environment: 'node'}},
       {test: {name: 'admin', include: ['apps/web/admin/test/**/*.test.tsx'], environment: 'jsdom',
-        setupFiles: ['apps/web/admin/test/setup.ts']}}
+        setupFiles: ['apps/web/admin/test/setup.ts']}},
+      {test: {name: 'operator', include: ['apps/web/operator/test/**/*.test.tsx'], environment: 'jsdom',
+        setupFiles: ['apps/web/operator/test/setup.ts']}}
     ]
   }
 });

@@ -1,113 +1,10 @@
-import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
+import {useEffect, useState} from 'react';
 import {Link, Route, Routes} from 'react-router-dom';
-import {ApiError, type AdminMe, type ApiClient, type SessionSnapshot} from '@blizz/api-client';
-import {translate, type Locale} from './i18n.js';
+import {type AdminMe, type ApiClient} from '@blizz/api-client';
+import {Failure, StaffGate, translator} from '@blizz/web-ui';
+import {translations} from './i18n.js';
 
-const LOCALE: Locale = 'ru';
-const t = (key: string, values?: Record<string, string | number>) => translate(LOCALE, key, values);
-
-/** A request that failed in a way the page cannot explain: a generic text with the request's correlation id. */
-function Failure({error}: {error: unknown}) {
-  const id = error instanceof ApiError ? error.correlation_id : undefined;
-  return (
-    <p role="alert">
-      {t('genericError')}
-      {id ? <> {t('correlation', {id})}</> : null}
-    </p>
-  );
-}
-
-function useSession(client: ApiClient): SessionSnapshot {
-  const [snapshot, setSnapshot] = useState(() => client.sessionSnapshot());
-  useEffect(() => client.subscribe(() => setSnapshot(client.sessionSnapshot())), [client]);
-  return snapshot;
-}
-
-function SignIn({client}: {client: ApiClient}) {
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState<ReactNode>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage(null);
-    try {
-      await client.signIn({login, password, audience: 'ADMIN'});
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        // The same words for an unknown login and a wrong password: the panel never tells which logins exist.
-        setMessage(<p role="alert">{t('wrongCredentials')}</p>);
-      } else if (error instanceof ApiError && error.status === 429) {
-        setMessage(<p role="alert">{t('lockedOut', {seconds: error.retryAfterSeconds ?? 60})}</p>);
-      } else if (error instanceof ApiError && error.status === 403) {
-        setMessage(<p role="alert">{t('suspended')}</p>);
-      } else {
-        setMessage(<Failure error={error} />);
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} aria-labelledby="sign-in-title">
-      <h1 id="sign-in-title">{t('signInTitle')}</h1>
-      <label>
-        {t('login')}
-        <input value={login} onChange={e => setLogin(e.target.value)} autoComplete="username" required />
-      </label>
-      <label>
-        {t('password')}
-        <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-          autoComplete="current-password" required />
-      </label>
-      <button type="submit" disabled={busy}>{t('signIn')}</button>
-      {message}
-    </form>
-  );
-}
-
-function PasswordChange({client}: {client: ApiClient}) {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [message, setMessage] = useState<ReactNode>(null);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (next.length < 12) {
-      setMessage(<p role="alert">{t('passwordTooShort')}</p>);
-      return;
-    }
-    setMessage(null);
-    try {
-      await client.changePassword({current_password: current, new_password: next});
-    } catch (error) {
-      setMessage(error instanceof ApiError && error.status === 401
-        ? <p role="alert">{t('wrongCurrentPassword')}</p> : <Failure error={error} />);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} aria-labelledby="password-title">
-      <h1 id="password-title">{t('passwordChange')}</h1>
-      <p>{t('passwordChangeHint')}</p>
-      <label>
-        {t('currentPassword')}
-        <input type="password" value={current} onChange={e => setCurrent(e.target.value)}
-          autoComplete="current-password" required />
-      </label>
-      <label>
-        {t('newPassword')}
-        <input type="password" value={next} onChange={e => setNext(e.target.value)} autoComplete="new-password"
-          required />
-      </label>
-      <button type="submit">{t('savePassword')}</button>
-      {message}
-    </form>
-  );
-}
+const t = translator(translations, 'ru');
 
 /** The sections, each shown to holders of its permission; staff management is the super admin's (by role). */
 const SECTIONS: {path: string; label: string; permission?: string; role?: string}[] = [
@@ -156,7 +53,7 @@ function Panel({client}: {client: ApiClient}) {
     return () => {current = false;};
   }, [client]);
 
-  if (error) return <Failure error={error} />;
+  if (error) return <Failure error={error} t={t} />;
   if (!me) return <p>{t('loading')}</p>;
   const role = me.member.profile.role;
   const permissions = new Set(me.effective_permissions);
@@ -188,20 +85,5 @@ function Panel({client}: {client: ApiClient}) {
  * staff member's profile and the sections their permissions open.
  */
 export function AdminApp({client}: {client: ApiClient}) {
-  const session = useSession(client);
-  const [restored, setRestored] = useState(session.authenticated);
-
-  useEffect(() => {
-    if (restored) return;
-    let current = true;
-    client.restoreSession().catch(() => undefined).finally(() => {if (current) setRestored(true);});
-    return () => {current = false;};
-  }, [client, restored]);
-
-  let content: ReactNode;
-  if (!restored && !session.authenticated) content = <p>{t('loading')}</p>;
-  else if (!session.authenticated) content = <SignIn client={client} />;
-  else if (session.passwordChangeRequired) content = <PasswordChange client={client} />;
-  else content = <Panel client={client} />;
-  return <main>{content}</main>;
+  return <StaffGate client={client} t={t} audience="ADMIN"><Panel client={client} /></StaffGate>;
 }
