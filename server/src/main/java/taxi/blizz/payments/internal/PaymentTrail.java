@@ -19,19 +19,23 @@ class PaymentTrail implements CorrelationTrail {
     }
 
     @Override
-    public List<Found> find(UUID correlationId, int limit) {
+    public List<Found> find(UUID serviceId, UUID correlationId, int limit) {
         List<Found> found = new ArrayList<>(jdbc.sql("""
-                        select id, order_id, created_at from payment_intent where correlation_id = :id
-                        order by created_at, id limit :limit""")
-                .param("id", correlationId).param("limit", limit)
+                        select i.id, i.order_id, i.created_at
+                        from payment_intent i join payment_merchant m on m.id = i.merchant_id
+                        where i.correlation_id = :id and m.service_id = :service
+                        order by i.created_at, i.id limit :limit""")
+                .param("id", correlationId).param("service", serviceId).param("limit", limit)
                 .query((rs, i) -> new Found("PAYMENT_INTENT", rs.getObject(1, UUID.class).toString(),
                         rs.getObject(2, UUID.class), rs.getObject(3, OffsetDateTime.class)))
                 .list());
         found.addAll(jdbc.sql("""
                         select o.id, i.order_id, o.created_at
                         from payment_operation o join payment_intent i on i.id = o.intent_id
-                        where o.correlation_id = :id order by o.created_at, o.id limit :limit""")
-                .param("id", correlationId).param("limit", limit)
+                        join payment_merchant m on m.id = i.merchant_id
+                        where o.correlation_id = :id and m.service_id = :service
+                        order by o.created_at, o.id limit :limit""")
+                .param("id", correlationId).param("service", serviceId).param("limit", limit)
                 .query((rs, i) -> new Found("PAYMENT_OPERATION", rs.getObject(1, UUID.class).toString(),
                         rs.getObject(2, UUID.class), rs.getObject(3, OffsetDateTime.class)))
                 .list());

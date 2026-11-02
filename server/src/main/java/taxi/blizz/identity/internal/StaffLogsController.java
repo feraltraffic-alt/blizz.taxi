@@ -31,7 +31,11 @@ class StaffLogsController {
     private final AuditLog audit;
     private final List<CorrelationTrail> trails;
 
-    StaffLogsController(StaffAccess access, StaffActivityLog activity, AuditLog audit, List<CorrelationTrail> trails) {
+    private final taxi.blizz.identity.Services services;
+
+    StaffLogsController(StaffAccess access, StaffActivityLog activity, AuditLog audit, List<CorrelationTrail> trails,
+                        taxi.blizz.identity.Services services) {
+        this.services = services;
         this.access = access;
         this.activity = activity;
         this.audit = audit;
@@ -45,13 +49,20 @@ class StaffLogsController {
     @GetMapping("/api/admin/v1/logs/correlation/{correlationId}")
     Trail correlation(AccessClaims claims, @PathVariable UUID correlationId) {
         access.require(claims.actor(), StaffPermissions.AUDIT_VIEW);
-        return new Trail(trails.stream().flatMap(t -> t.find(correlationId, LIMIT).stream())
+        UUID service = serviceOf(claims);
+        return new Trail(trails.stream().flatMap(t -> t.find(service, correlationId, LIMIT).stream())
                 .sorted(java.util.Comparator.comparing(CorrelationTrail.Found::at)
                         .thenComparing(CorrelationTrail.Found::type).thenComparing(CorrelationTrail.Found::id))
                 .limit(LIMIT).toList());
     }
 
     private static final int LIMIT = 200;
+
+    /** The logs of the reader's own taxi service (ADR 0016, issue #218). */
+    private UUID serviceOf(AccessClaims claims) {
+        return services.of(claims.actor()).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "The logs belong to a taxi service"));
+    }
 
     /** Pages of the logs (REQ-API-09); {@code page} is new and optional for older clients. */
     record ActivityPage(List<StaffActivityLog.Entry> entries, Page.Info page) {
@@ -77,7 +88,7 @@ class StaffLogsController {
         int size = PageCursor.limit(limit);
         PageCursor after = PageCursor.read(StaffActivityLog.ACTIVITY, cursor, before);
         Page<StaffActivityLog.Entry> page = Page.of(activity.find(new StaffActivityLog.Query(
-                role == null ? null : role.name(), staffId, kind, from, to, after, size + 1)), size,
+                role == null ? null : role.name(), staffId, kind, from, to, after, size + 1, serviceOf(claims))), size,
                 StaffActivityLog::position);
         return new ActivityPage(page.items(), page.page());
     }
@@ -98,7 +109,8 @@ class StaffLogsController {
         int size = PageCursor.limit(limit);
         PageCursor after = PageCursor.read(AuditLog.CHANGES, cursor, before);
         Page<AuditLog.Record> page = Page.of(audit.find(new AuditLog.Query("STAFF", staffId,
-                role == null ? null : role.name(), action, resourceType, resourceId, from, to, after, size + 1)), size,
+                role == null ? null : role.name(), action, resourceType, resourceId, from, to, after, size + 1,
+                serviceOf(claims))), size,
                 AuditLog::position);
         return new ChangesPage(page.items(), page.page());
     }

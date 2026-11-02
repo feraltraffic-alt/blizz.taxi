@@ -22,11 +22,13 @@ public class AuditLog {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final Clock clock;
+    private final ActorServices services;
 
-    AuditLog(JdbcClient jdbc, JsonMapper json, Clock clock) {
+    AuditLog(JdbcClient jdbc, JsonMapper json, Clock clock, ActorServices services) {
         this.jdbc = jdbc;
         this.json = json;
         this.clock = clock;
+        this.services = services;
     }
 
     @Transactional
@@ -34,14 +36,17 @@ public class AuditLog {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into audit_log (id, occurred_at, actor_type, actor_id, actor_role, action,
-                                               resource_type, resource_id, reason, before, after, correlation_id)
+                                               resource_type, resource_id, reason, before, after, correlation_id,
+                                               service_id)
                         values (:id, :now, :actorType, :actorId,
                                 case when :actorType = 'STAFF'
                                      then (select role from staff_user where id = :actorId) end,
                                 :action, :resourceType, :resourceId, :reason, cast(:before as jsonb),
-                                cast(:after as jsonb), :correlationId)
+                                cast(:after as jsonb), :correlationId, :service)
                         """)
                 .param("id", id)
+                // Filed under the service of who acted (ADR 0016); a system action has none.
+                .param("service", services.serviceOf(entry.actor()).orElse(null))
                 .param("now", OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC))
                 .param("actorType", entry.actor().type().name())
                 .param("actorId", entry.actor().id())
@@ -62,9 +67,19 @@ public class AuditLog {
                          String after, UUID correlationId) {
     }
 
-    /** Filters are optional (null); newest first, after {@code after} when given (REQ-API-09). */
+    /**
+     * Filters are optional (null); newest first, after {@code after} when given (REQ-API-09). {@code serviceId}: the
+     * changes of that taxi service only (ADR 0016); a staff reader always passes their own.
+     */
     public record Query(String actorType, UUID actorId, String actorRole, String action, String resourceType,
-                        String resourceId, OffsetDateTime from, OffsetDateTime to, PageCursor after, int limit) {
+                        String resourceId, OffsetDateTime from, OffsetDateTime to, PageCursor after, int limit,
+                        UUID serviceId) {
+
+        /** Every service's changes: for the server's own checks, never for a staff member's view. */
+        public Query(String actorType, UUID actorId, String actorRole, String action, String resourceType,
+                     String resourceId, OffsetDateTime from, OffsetDateTime to, PageCursor after, int limit) {
+            this(actorType, actorId, actorRole, action, resourceType, resourceId, from, to, after, limit, null);
+        }
     }
 
     public static final String CHANGES = "changes";
@@ -97,6 +112,7 @@ public class AuditLog {
             // This fixed scope also proves the partial index's predicate in a generic prepared plan.
             sql.append(" and actor_type = 'STAFF'");
         } else equal(sql, params, "actor_type", q.actorType());
+        equal(sql, params, "service_id", q.serviceId());
         equal(sql, params, "actor_id", q.actorId());
         equal(sql, params, "actor_role", q.actorRole());
         equal(sql, params, "action", q.action());

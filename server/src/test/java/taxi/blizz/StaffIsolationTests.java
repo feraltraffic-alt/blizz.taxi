@@ -222,6 +222,8 @@ class StaffIsolationTests {
     TestRides rides;
     UUID city;
     UUID foreign;
+    /** Another taxi service (ADR 0016, issue #218): its staff reach nothing of this one, whatever their rights. */
+    UUID otherService;
 
     @BeforeAll
     void setUp() {
@@ -231,6 +233,12 @@ class StaffIsolationTests {
         rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
         city = rides.city("test-staff-isolation", "UAH", 19);
         foreign = rides.city("test-staff-isolation-foreign", "UAH", 21);
+        otherService = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Other taxi', now(), now())""")
+                .param("id", otherService).param("code", "isolation-" + otherService.toString().substring(0, 8))
+                .update();
     }
 
     // ------------------------------------------------------------ the sweep
@@ -269,7 +277,10 @@ class StaffIsolationTests {
         ApiAudience audience = operation.contract().startsWith("operator") ? ApiAudience.OPERATOR : ApiAudience.ADMIN;
 
         List<String> problems = new ArrayList<>();
-        for (Actor refused : List.of(staff(foreign, EVERY_RIGHT), staff(fixture.home()))) {
+        // Another city of this service, no right, and two of another service: every right in all its cities, and
+        // its super admin (issue #218).
+        for (Actor refused : List.of(staff(foreign, EVERY_RIGHT), staff(fixture.home()),
+                otherServiceStaff("ADMIN", EVERY_RIGHT), otherServiceStaff("SUPER_ADMIN"))) {
             var before = sideEffects();
             MvcResult result = perform(request(operation, path, payload), token(refused, audience));
             int status = result.getResponse().getStatus();
@@ -802,6 +813,20 @@ class StaffIsolationTests {
                 .param("scope", scope == null ? new UUID[0] : new UUID[] {scope})
                 .param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD))
                 .update();
+        return new Actor(SubjectType.STAFF, id);
+    }
+
+    /** Staff of {@link #otherService} with the role and rights, in every city of that service. */
+    private Actor otherServiceStaff(String role, String... permissions) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
+                                                password_hash, service_id, created_at, updated_at)
+                        values (:id, :login, 'Other service', :role, :permissions, true, '{}', 'ACTIVE', :hash,
+                                :service, now(), now())""")
+                .param("id", id).param("login", "other-service-" + id).param("role", role)
+                .param("permissions", permissions).param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD))
+                .param("service", otherService).update();
         return new Actor(SubjectType.STAFF, id);
     }
 

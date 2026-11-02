@@ -18,11 +18,12 @@ class AuditTrail implements CorrelationTrail {
     }
 
     @Override
-    public List<Found> find(UUID correlationId, int limit) {
+    public List<Found> find(UUID serviceId, UUID correlationId, int limit) {
         return jdbc.sql("""
-                        select id, resource_type, resource_id, occurred_at from audit_log where correlation_id = :id
+                        select id, resource_type, resource_id, occurred_at from audit_log
+                        where correlation_id = :id and service_id = :service
                         order by occurred_at, id limit :limit""")
-                .param("id", correlationId).param("limit", limit)
+                .param("id", correlationId).param("service", serviceId).param("limit", limit)
                 .query((rs, i) -> new Found("AUDIT", rs.getObject(1, UUID.class).toString(),
                         order(rs.getString(2), rs.getString(3)), rs.getObject(4, OffsetDateTime.class)))
                 .list();
