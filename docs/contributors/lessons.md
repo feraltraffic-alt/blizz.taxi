@@ -150,6 +150,22 @@ Real cases from pull requests on this repository: what was handed in, what the r
   whole issue and tick each sentence against a test name. For an access rule, the test is staff who just miss
   it (here: every right, one city), refused for each operation.
 
+## 17. Green unit tests on a mocked server, two bugs at the first real one (lead's #245)
+
+- **Task:** the operator workstation's first slice, with E1–E6 unit tests on a mocked HTTP layer (msw) and one
+  end-to-end run against the real server.
+- **Handed in by the lead:** 12 green unit tests and two mutations red for the right reason.
+- **Missed:**
+  - **The operator's password change went to the admin path** (`/api/admin/v1/me/password`), so the page stayed on
+    the change. The mock answered whatever path the client chose.
+  - **The city list showed every city**, Warsaw first, to an operator of Kyiv only, so the address search found
+    nothing. The mocked `/me` had all cities.
+  - Both were caught only by the end-to-end run. The spec itself also needed fixing: Playwright matches names by
+    substring, so "Найти" clicked "Найти клиента" and "Куда" filled "Откуда".
+- **Habit:** **a client flow is not done before one run against the real server**, and a mock repeats the contract's
+  paths and the real fixtures' scopes, not the shapes the client happens to send. In Playwright, ask for **exact**
+  names whenever one label is a part of another.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

@@ -45,6 +45,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 12. **Write in the layout of the surrounding code**: one statement per line, at most 120 characters, SQL in text blocks. `awk 'length>120'` over your Java files prints nothing (lessons case 14).
 13. **A negative control passes only for its own reason.** Prove every new check red once on purpose, read the failure's message (not just the colour), and make sure nothing failed earlier for another reason (lessons case 15).
 14. **Every rule in the issue gets a test, not only the Acceptance bullets.** An access line ("changed only by …") is tested with staff who just miss it, refused for each operation (lessons case 16).
+15. **A client flow ends with one run against the real server.** A mock answers whatever path the client chose; only the real server tells a wrong path or scope (lessons case 17). In Playwright, use exact names when one label contains another.
 
 ## Rules that must not be broken
 
