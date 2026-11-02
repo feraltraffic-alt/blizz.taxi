@@ -277,6 +277,62 @@ class OtpDeliveryTests {
 
     // ------------------------------------------------------------ TurboSMS
 
+    /**
+     * ADR 0016, issue #217: a code for a rider of service B goes from B's own TurboSMS account, under B's sender name
+     * and with B's name in the text; one for the first service from its own.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void eachServicesCodeGoesFromItsOwnAccountUnderItsOwnName() {
+        UUID b = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Taxi B', now(), now())""")
+                .param("id", b).param("code", "sms-" + b.toString().substring(0, 8)).update();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, password_hash,
+                                                service_id, created_at, updated_at)
+                        values (:id, :login, 'Keys B', 'ADMIN', :permissions, true, 'ACTIVE', :hash, :service,
+                                now(), now())""")
+                .param("id", id).param("login", "otp-b-" + id)
+                .param("permissions", new String[] {Integrations.MANAGE_PERMISSION, ServiceSettings.MANAGE_PERMISSION})
+                .param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD)).param("service", b).update();
+        Actor keeperB = new Actor(SubjectType.STAFF, id);
+        integrations.change(keeperB, UUID.randomUUID(), PASSWORD, List.of(
+                new Integrations.Change(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-b"),
+                new Integrations.Change(Integrations.OTP_TURBOSMS_SENDER, "TaxiB")), "B's own SMS");
+        ServiceSettings.Version ofB = settings.of(keeperB);
+        ServiceSettings.Settings s = ofB.settings();
+        ServiceSettings.Brand brand = s.brand();
+        settings.change(keeperB, UUID.randomUUID(), ofB.version(), new ServiceSettings.Settings(
+                new ServiceSettings.Brand("Taxi B", brand.primaryColor(), brand.onPrimaryColor(),
+                        brand.accentColor(), brand.logoUrl(), brand.supportPhone(), brand.supportEmail(),
+                        brand.supportTelegram(), brand.privacyPolicyUrl(), brand.termsUrl()),
+                s.languages(), s.calls(), s.preorders(), s.ratings(), s.tips(), s.orders(), s.cashNotReceived(),
+                s.appVersions(), s.staffTopUps(), s.riderDebts()), "B's own name");
+        set(Map.of(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-a", Integrations.OTP_TURBOSMS_SENDER, "Blizz"));
+
+        Recording http = new Recording(r -> new HttpTransport.Response(200, """
+                {"response_code":0,"response_status":"OK","response_result":[{"phone":"380631234567",
+                 "response_code":0,"message_id":"m-1","response_status":"OK"}]}"""));
+        TurboSmsSender sms = new TurboSmsSender(integrations, settings, live(), http, json);
+        PhoneNumber phone = new PhoneNumber("+380631234567");
+        assertThat(sms.send(b, phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.SENT);
+        assertThat(sms.send(FIRST, phone, "654321", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.SENT);
+
+        Recording.Request ofTaxiB = http.requests.get(0);
+        assertThat(ofTaxiB.headers()).containsEntry("Authorization", "Bearer turbo-token-b");
+        Map<String, Object> smsB = (Map<String, Object>) json.readValue(ofTaxiB.body(), Map.class).get("sms");
+        assertThat(smsB).containsEntry("sender", "TaxiB");
+        assertThat((String) smsB.get("text")).isEqualTo("Код 123456. Taxi B");
+        Recording.Request ofFirst = http.requests.get(1);
+        assertThat(ofFirst.headers()).containsEntry("Authorization", "Bearer turbo-token-a");
+        Map<String, Object> smsA = (Map<String, Object>) json.readValue(ofFirst.body(), Map.class).get("sms");
+        assertThat(smsA).containsEntry("sender", "Blizz");
+        assertThat((String) smsA.get("text")).doesNotContain("Taxi B");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void turboSmsSendsTheNumberWithoutPlusAndReadsTheMessageId() {
