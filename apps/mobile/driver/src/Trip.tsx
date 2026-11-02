@@ -299,8 +299,6 @@ function AllTab({client, t, guard, failure, newId, pollMs, say, accepted}: Share
 
   /** One claim at a time (A5), one command per order: a repeat after a lost answer is the same claim. */
   async function take(orderId: string) {
-    if (acting.current) return;
-    acting.current = true;
     say(null);
     const command = commands.current.get(orderId) ?? newId();
     commands.current.set(orderId, command);
