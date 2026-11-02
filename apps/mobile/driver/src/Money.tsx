@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {Alert, Button, useTheme, type Shared} from '@blizz/mobile-ui';
+import {TopUpByCard} from './TopUp';
 
 type Balance = {currency: string; balance_minor: number; debt_limit_minor: number | null; blocked: boolean};
 type Figures = {trips: number; fare_minor: number; commission_minor: number; driver_share_minor: number};
@@ -50,8 +51,8 @@ async function zoneOf(client: Shared['client'], service: string, cityId: string)
  * The driver's money (#257), read only: the balance with the service, the last 7 days of the first admission city,
  * and the journal's movements, a page at a time.
  */
-export function Money({client, t, guard, failure, cityId, now, service}: Shared & {cityId: string | undefined;
-  now: () => number; service: string}) {
+export function Money({client, t, guard, failure, cityId, now, service, newId, pollMs}: Shared & {
+  cityId: string | undefined; now: () => number; service: string; newId: () => string; pollMs: number}) {
   const [balances, setBalances] = useState<Balance[] | null>(null);
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -60,6 +61,8 @@ export function Money({client, t, guard, failure, cityId, now, service}: Shared 
   const [attempt, setAttempt] = useState(0);
   const reading = useRef(false);
   const theme = useTheme();
+  /** A completed top-up reads the balance again (#326 U3). */
+  const reload = useCallback(() => setAttempt(a => a + 1), []);
 
   const load = useCallback(async () => {
     const zone = cityId ? await zoneOf(client, service, cityId) : null;
@@ -120,6 +123,8 @@ export function Money({client, t, guard, failure, cityId, now, service}: Shared 
           {b.blocked ? <Text style={{color: theme.error}}>{t('blockedByDebt')}</Text> : null}
         </View>
       ))}
+      {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cityId} newId={newId}
+        pollMs={pollMs} onCompleted={reload} /> : null}
       {earnings ? (
         <>
           <Text style={{color: theme.text}}>{t('week', {trips: earnings.total.trips,

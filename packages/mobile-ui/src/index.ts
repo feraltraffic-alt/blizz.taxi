@@ -4,6 +4,7 @@ export * from './session';
 export {secureRefreshTokens, type SecureStore} from './secureTokens';
 export {webRefreshTokens} from './webTokens';
 export {Chat} from './chat';
+export {ProviderPage} from './provider';
 export {
   DRIVER_CATEGORIES, RIDER_CATEGORIES, Support, type AboutOrder, type PickedFile, type SupportSide
 } from './support';
