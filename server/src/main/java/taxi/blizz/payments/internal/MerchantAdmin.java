@@ -129,9 +129,9 @@ class MerchantAdmin {
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into payment_merchant (id, provider, account, domain, secret_ref, currency,
-                                                                  created_at, service_id)
-                                    values (:id, :provider, :account, :domain, 'panel', :currency, :now, :service)""")
-                            .param("id", id).param("service", service).param("provider", provider).param("account", account)
+                                                                  created_at)
+                                    values (:id, :provider, :account, :domain, 'panel', :currency, :now)""")
+                            .param("id", id).param("provider", provider).param("account", account)
                             .param("domain", domain).param("currency", currency).param("now", now()).update();
                     integrations.putSecret(actor, Merchants.secretName(id), secret);
                     assignCities(id, cities);
