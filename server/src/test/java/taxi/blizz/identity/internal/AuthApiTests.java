@@ -60,6 +60,8 @@ class AuthApiTests {
 
     MockMvc mvc;
     String phone;
+    /** The installation the codes are asked from; shared by default, so a test with more codes takes its own. */
+    String device;
 
     @BeforeEach
     void setUp() {
@@ -67,6 +69,7 @@ class AuthApiTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         phone = taxi.blizz.TestPhones.unique("+38050", 7);
+        device = "test-device";
         delivery.codes.clear();
     }
 
@@ -90,7 +93,7 @@ class AuthApiTests {
     /** {@code service}: the taxi service's code (ADR 0016), or null for the first service. */
     private Map<String, Object> signIn(String audience, String service) throws Exception {
         Map<String, Object> request = new java.util.HashMap<>(
-                Map.of("audience", audience, "phone", phone, "device_ref", "test-device"));
+                Map.of("audience", audience, "phone", phone, "device_ref", device));
         if (service != null) {
             request.put("service", service);
         }
@@ -130,8 +133,10 @@ class AuthApiTests {
     @Test
     @SuppressWarnings("unchecked")
     void meGivesTheOwnPhoneAndNameOrNull() throws Exception {
-        // A number range of its own: the class's other tests share the +38050 range's hourly budget of codes.
+        // A number range and a device of its own: the class's other tests share the hourly budgets of codes of the
+        // +38050 range and of "test-device", and this test asks two more codes.
         phone = taxi.blizz.TestPhones.unique("+38093", 7);
+        device = "test-device-me-" + UUID.randomUUID();
         Map<String, Object> rider = signIn("CLIENT");
         UUID clientId = UUID.fromString((String) ((Map<String, Object>) rider.get("subject")).get("id"));
         String e164 = jdbc.sql("select phone_normalized from client where id = :id").param("id", clientId)
