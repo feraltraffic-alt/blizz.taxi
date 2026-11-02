@@ -72,11 +72,13 @@ jobs:
       - name: The rider app's web build signs in by a code, accepts the texts and sees the profile (#137)
         run: |
           (cd apps/mobile/rider && npx expo export --platform web --output-dir dist)
+          node scripts/audit/bundle-secrets.mjs apps/mobile/rider/dist  # AC-23, #253
           set -o pipefail
           npx playwright test --config apps/mobile/rider/playwright.config.ts 2>&1 | tee rider-e2e.txt
       - name: The driver app's web build signs in, accepts the texts, goes online and offline (#237)
         run: |
           (cd apps/mobile/driver && npx expo export --platform web --output-dir dist)
+          node scripts/audit/bundle-secrets.mjs apps/mobile/driver/dist  # AC-23, #253
           set -o pipefail
           npx playwright test --config apps/mobile/driver/playwright.config.ts 2>&1 | tee driver-e2e.txt
       - name: Summary

@@ -43,7 +43,7 @@ const planted: [string, string, string][] = [
   ['S1', 'PEM private key', '"-----BEGIN ' + 'PRIVATE KEY-----\\nMIIEvQIBADANBg"'],
   ['S1', 'PEM private key', '"-----BEGIN RSA ' + 'PRIVATE KEY-----\\nMIIEpAIBAAKCAQEA"'],
   ['S2', 'AWS access key id', '"AKIA' + 'IOSFODNN7EXAMPLE"'],
-  ['S2', 'Google API key', '"AIza' + 'SyA1234567890abcdefghijklmnopqrstu"'],
+  ['S2', 'Google API key', '"AIza' + 'SyA1234567890abcdefghijklmnopqrstuv"'],
   ['S2', 'GitHub token', '"ghp' + '_0123456789abcdefghijklmnopqrstuvwxyz"'],
   ['S2', 'Slack token', '"xox' + 'b-1234567890-abcdefghijkl"'],
   ['S2', 'Stripe live key', '"sk_' + 'live_0123456789abcdefghijklmn"'],
