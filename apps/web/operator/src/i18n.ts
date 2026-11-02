@@ -5,6 +5,10 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    orderCalls: 'Звонки по заказу', callTo_CALLER: 'Позвонить звонящему', callTo_DRIVER: 'Позвонить водителю',
+    callTo_RIDER: 'Позвонить пассажиру', retryCall: 'Повторить звонок', phoneRinging: 'Звонит ваш телефон…',
+    callFailed: 'Звонок не удался.', callUnsure: 'АТС не ответила. Повторите: второй раз телефон не зазвонит.',
+    cannotCall: 'Нельзя позвонить: нет внутреннего номера или этой стороны у заказа.',
     recordingPending: 'запись готовится', recordingNone: 'записи нет', recordingLength: 'запись {length}',
     listen: 'Прослушать запись', callRecording: 'Запись звонка',
     calls: 'Звонки', myCallStatus: 'Мой статус: {status}', extension: 'внутренний номер {number}',
@@ -104,6 +108,10 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    orderCalls: 'Дзвінки щодо замовлення', callTo_CALLER: 'Подзвонити абоненту', callTo_DRIVER: 'Подзвонити водію',
+    callTo_RIDER: 'Подзвонити пасажиру', retryCall: 'Повторити дзвінок', phoneRinging: 'Дзвонить ваш телефон…',
+    callFailed: 'Дзвінок не вдався.', callUnsure: 'АТС не відповіла. Повторіть: удруге телефон не задзвонить.',
+    cannotCall: 'Не можна подзвонити: немає внутрішнього номера або цієї сторони в замовленні.',
     recordingPending: 'запис готується', recordingNone: 'запису немає', recordingLength: 'запис {length}',
     listen: 'Прослухати запис', callRecording: 'Запис дзвінка',
     calls: 'Дзвінки', myCallStatus: 'Мій статус: {status}', extension: 'внутрішній номер {number}',
@@ -203,6 +211,10 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    orderCalls: 'Połączenia zlecenia', callTo_CALLER: 'Zadzwoń do zgłaszającego', callTo_DRIVER: 'Zadzwoń do kierowcy',
+    callTo_RIDER: 'Zadzwoń do pasażera', retryCall: 'Ponów połączenie', phoneRinging: 'Dzwoni twój telefon…',
+    callFailed: 'Połączenie nie powiodło się.', callUnsure: 'Centrala nie odpowiedziała. Ponów: telefon nie zadzwoni drugi raz.',
+    cannotCall: 'Nie można zadzwonić: brak numeru wewnętrznego lub tej strony w zleceniu.',
     recordingPending: 'nagranie w przygotowaniu', recordingNone: 'brak nagrania', recordingLength: 'nagranie {length}',
     listen: 'Odsłuchaj nagranie', callRecording: 'Nagranie połączenia',
     calls: 'Połączenia', myCallStatus: 'Mój status: {status}', extension: 'numer wewnętrzny {number}',
