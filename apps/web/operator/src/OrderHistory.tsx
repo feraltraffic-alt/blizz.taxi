@@ -52,7 +52,7 @@ export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Transl
     setMessage(null);
     return once(async () => {
       const answer = await client.get('/api/operator/v1/orders/{order_id}/messages' as never,
-        {params: {order_id: orderId}, query: {reason: why}} as never) as {messages: Message[]};
+        {params: {order_id: orderId}, query: {}} as never) as {messages: Message[]};
       setMessages(answer.messages);
     });
   }
@@ -67,7 +67,7 @@ export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Transl
 
   function line(e: Entry): string {
     const what = KNOWN.includes(e.type) ? t('event_' + e.type) : e.type;
-    const why = e.details.reason_labels?.ru ?? e.reason ?? null;
+    const why = e.reason ?? e.details.reason_labels?.ru ?? null;
     return clock(e.occurred_at) + ' · ' + actor(e) + ' · ' + what + (why ? ': ' + why : '');
   }
 
