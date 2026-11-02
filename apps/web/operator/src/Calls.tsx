@@ -88,7 +88,6 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
   });
 
   const listen = (call: Call) => once(async () => {
-    if (players[call.id]) return;
     const blob = await client.get('/api/operator/v1/calls/{call_id}/recording' as never,
       {params: {call_id: call.id}} as never) as unknown as Blob;
     const url = URL.createObjectURL(blob);
@@ -137,8 +136,8 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
               {rights.has('orders.create') && c.state === 'ANSWERED' && c.answered_by === me
                 ? <button type="button" onClick={() => onOrder({id: c.id, phone: c.caller_phone ?? null})}>
                   {t('orderFromCall')}</button> : null}
-              {players[c.id] ? <audio controls src={players[c.id]} aria-label={t('callRecording')} />
-                : rights.has('calls.listen') && c.recording?.state === 'STORED'
+              {players[c.id] ? <audio controls src={players[c.id]} aria-label={t('callRecording')} /> : null}
+              {rights.has('calls.listen') && c.recording?.state === 'STORED'
                   ? <button type="button" onClick={() => void listen(c)}>{t('listen')}</button> : null}
             </li>
           ))}

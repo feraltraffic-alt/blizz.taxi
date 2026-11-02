@@ -211,8 +211,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
     const type = response.headers.get('Content-Type') ?? '';
     if (type.includes('json')) return response.json();
     // The bytes as they came (a recording, an export): text() would turn bytes that are not UTF-8 into U+FFFD.
-    const bytes = await response.arrayBuffer();
-    return bytes.byteLength === 0 ? undefined : new Blob([bytes], {type});
+    const bytes = await response.text();
+    return bytes.length === 0 ? undefined : new Blob([bytes], {type});
   }
 
   /** The single refresh in flight; true when a new access token is in hand. */
