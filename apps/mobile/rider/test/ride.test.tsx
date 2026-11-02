@@ -130,6 +130,21 @@ describe('E5: restarting', () => {
   });
 });
 
+describe('cancelling', () => {
+  it('a cancelled order stays on screen as cancelled until the rider starts a new ride', async () => {
+    const {http} = await mount({...ready, 'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: [order]}}],
+      ['POST /api/rider/v1/orders/' + order.id + '/cancel']: [{status: 200, body: {...order, status: 'CANCELLED',
+        version: 3}}]});
+    await fireEvent.press(await screen.findByRole('button', {name: '○ Передумал'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Отменить поездку'}));
+    expect(await screen.findByText('Заказ отменён')).toBeTruthy();
+    const body = http.calls.find(c => c.path.endsWith('/cancel'))!.body as {expected_version: number; reason_code: string};
+    expect(body).toMatchObject({expected_version: order.version, reason_code: 'CHANGED_MIND'});
+    await fireEvent.press(screen.getByRole('button', {name: 'Новая поездка'}));
+    expect(await screen.findByText('Куда поедем?')).toBeTruthy();
+  });
+});
+
 describe('E6: refusals', () => {
   it('a cancel after the order moved on refreshes it and says so', async () => {
     await mount({...ready, 'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: [order]}}],

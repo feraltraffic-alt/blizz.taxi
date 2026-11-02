@@ -26,14 +26,19 @@ export function Ride(props: Shared & {newId: () => string; locate: () => Promise
   useEffect(() => {
     let current = true;
     guard(() => client.get('/api/rider/v1/orders/current'))
-      .then(value => {if (current) setOrder((value as {orders: Order[]}).orders[0] ?? null);})
+      .then(value => {
+        // An order that ended before the app opened is history: a new ride starts.
+        const first = (value as {orders: Order[]}).orders[0];
+        if (current) setOrder(first && !FINAL.has(first.status) ? first : null);
+      })
       .catch(failed => {if (current) setError(failure(failed));});
     return () => {current = false;};
   }, [client, guard]); // the failure text follows the same texts
 
   if (error) return <Screen><Alert text={error} /></Screen>;
   if (order === undefined) return <Loading t={t} />;
-  if (order && !FINAL.has(order.status)) {
+  // An order that ends while the rider follows it stays on screen (cancelled, finished) until "New ride".
+  if (order) {
     return <Tracker {...props} order={order} onChange={setOrder} onDone={() => setOrder(null)} />;
   }
   return <NewOrder {...props} onOrdered={setOrder} />;
