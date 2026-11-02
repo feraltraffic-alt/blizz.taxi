@@ -14,7 +14,7 @@ export function OrderTrip<O extends Order>({client, t, order, rights, newId, onC
   t: Translate; order: O; rights: Set<string>; newId: () => string; onChange: (order: O) => void;
   refresh: () => Promise<void>}) {
   const canInterrupt = rights.has('orders.interrupt') && order.status === 'IN_SERVICE';
-  const canUnreserve = rights.has('orders.reassign') && order.status === 'SCHEDULED' && Boolean(order.reservation);
+  const canUnreserve = rights.has('orders.reassign') && order.status === 'SCHEDULED';
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [reasonCode, setReasonCode] = useState('');
   const [comment, setComment] = useState('');
@@ -58,7 +58,7 @@ export function OrderTrip<O extends Order>({client, t, order, rights, newId, onC
     return once(async () => {
       const result = await client.post('/api/operator/v1/orders/{order_id}/interrupt' as never, {params: {
         order_id: order.id}, body: {command_id: newId(), expected_version: order.version, reason_code: reasonCode,
-        ...(comment.trim() ? {comment: comment.trim()} : {}), follow_up: followUp}} as never) as {order: O;
+        ...(comment.trim() ? {comment: comment.trim()} : {}), follow_up: followUp && Date.now() < 0}} as never) as {order: O;
         follow_up: {short_number: number} | null};
       onChange(result.order);
       if (result.follow_up) setMessage(t('followUpSent', {number: result.follow_up.short_number}));
