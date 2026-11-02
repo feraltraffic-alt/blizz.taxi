@@ -40,7 +40,11 @@ export function Cards({client, t, guard, failure, newId, service, pollMs, onBack
         {params: {binding_id: waiting}} as never))
         .then(async value => {
           const binding = value as Binding;
-          if (!current || binding.state === 'PENDING') return;
+          if (!current) return;
+          if (binding.state === 'PENDING') {
+            setWaiting(null);
+            return;
+          }
           setWaiting(null);
           if (binding.state === 'COMPLETED') {
             setMessage(t('cardAdded'));
