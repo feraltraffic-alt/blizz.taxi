@@ -32,6 +32,8 @@ class ServiceIsolationTests {
     @Autowired ClientLookup lookup;
     @Autowired StaffAccess staff;
     @Autowired ClientAccounts clients;
+    @Autowired taxi.blizz.identity.StaffDirectory directory;
+    @Autowired taxi.blizz.identity.EmergencyAccess emergency;
 
     private UUID service(String prefix) {
         UUID id = UUID.randomUUID();
@@ -143,5 +145,29 @@ class ServiceIsolationTests {
             assertThat(clients.search(member, phone.substring(phone.length() - 9), 50))
                     .extracting(ClientAccounts.Client::id).contains(riderA).doesNotContain(riderB);
         }
+    }
+
+    @Test
+    void aSuperAdminManagesTheStaffOfTheirOwnServiceOnly() {
+        UUID a = service("iso-a");
+        UUID b = service("iso-b");
+        Actor bossA = staff(a, "SUPER_ADMIN", true);
+        Actor bossB = staff(b, "SUPER_ADMIN", true);
+        Actor operatorB = staff(b, "OPERATOR", false, city(b));
+        assertThat(directory.list(bossA)).extracting(taxi.blizz.identity.StaffDirectory.StaffMember::id)
+                .contains(bossA.id()).doesNotContain(bossB.id(), operatorB.id());
+        assertThatThrownBy(() -> directory.get(bossA, operatorB.id())).isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
+        long version = directory.get(bossB, operatorB.id()).version();
+        assertThatThrownBy(() -> directory.suspend(bossA, UUID.randomUUID(), operatorB.id(), version, "Not mine"))
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
+        assertThat(directory.get(bossB, operatorB.id()).state()).isEqualTo("ACTIVE");
+        // Each service keeps its own last super admin: B's is the only one there, whatever A has.
+        assertThatThrownBy(() -> directory.suspend(bossB, UUID.randomUUID(), bossB.id(),
+                directory.get(bossB, bossB.id()).version(), "Leaving")).isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.STATE_CONFLICT);
+        assertThat(emergency.list(bossA, false)).extracting(taxi.blizz.identity.EmergencyAccess.Grant::staffId)
+                .doesNotContain(operatorB.id(), bossB.id());
     }
 }

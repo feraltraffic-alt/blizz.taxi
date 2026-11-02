@@ -40,6 +40,7 @@ class JdbcStaffDirectory implements StaffDirectory {
             """;
 
     private final JdbcClient jdbc;
+    private final taxi.blizz.identity.CityServices cityServices;
     private final IdempotentCommands commands;
     private final StaffPasswords passwords;
     private final SessionService sessions;
@@ -50,7 +51,9 @@ class JdbcStaffDirectory implements StaffDirectory {
     private final RightsPassword rightsPassword;
 
     JdbcStaffDirectory(JdbcClient jdbc, IdempotentCommands commands, StaffPasswords passwords, SessionService sessions,
-                       AuditLog audit, Outbox outbox, Clock clock, RightsPassword rightsPassword) {
+                       AuditLog audit, Outbox outbox, Clock clock, RightsPassword rightsPassword,
+                       taxi.blizz.identity.CityServices cityServices) {
+        this.cityServices = cityServices;
         this.rightsPassword = rightsPassword;
         this.outbox = outbox;
         this.jdbc = jdbc;
@@ -72,7 +75,7 @@ class JdbcStaffDirectory implements StaffDirectory {
                               String reason, String password) {
         requireSuperAdmin(superAdmin);
         String cleanLogin = login(login);
-        Profile clean = profile(profile);
+        Profile clean = profile(profile, serviceOf(superAdmin));
         reason(reason);
         passwords.check(cleanLogin, initialPassword);
         // A new account is given rights: the acting super admin's own password (REQ-ADM-10).
@@ -87,9 +90,11 @@ class JdbcStaffDirectory implements StaffDirectory {
                                         insert into staff_user (id, login, first_name, last_name, name, phone, email,
                                                                 telegram, role, permissions, all_cities, city_scope,
                                                                 state, password_hash, must_change_password, created_by,
-                                                                created_at, updated_at, version)
+                                                                created_at, updated_at, version, service_id)
                                         values (:id, :login, :first, :last, :name, :phone, :email, :telegram, :role,
-                                                :permissions, :all, :cities, 'ACTIVE', :hash, true, :by, :now, :now, 0)""")
+                                                :permissions, :all, :cities, 'ACTIVE', :hash, true, :by, :now, :now, 0,
+                                                :service)""")
+                                .param("service", serviceOf(superAdmin))
                                 .param("id", id).param("login", cleanLogin)
                                 .param("first", clean.firstName()).param("last", clean.lastName())
                                 .param("name", clean.firstName() + " " + clean.lastName())
@@ -117,8 +122,8 @@ class JdbcStaffDirectory implements StaffDirectory {
     @Override
     public StaffMember update(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, Profile profile,
                               String reason, String password) {
-        requireSuperAdmin(superAdmin);
-        Profile clean = profile(profile);
+        requireSuperAdminOver(superAdmin, staffId);
+        Profile clean = profile(profile, serviceOf(superAdmin));
         reason(reason);
         // The role, the permissions or the cities change: the acting super admin's own password (REQ-ADM-10).
         boolean confirmed = false;
@@ -174,7 +179,7 @@ class JdbcStaffDirectory implements StaffDirectory {
 
     private StaffMember changeState(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion, String reason,
                                     String target) {
-        requireSuperAdmin(superAdmin);
+        requireSuperAdminOver(superAdmin, staffId);
         reason(reason);
         String action = "SUSPENDED".equals(target) ? "staff.suspend" : "staff.restore";
         return commands.execute(new CommandKey(superAdmin, action, commandId),
@@ -204,7 +209,7 @@ class JdbcStaffDirectory implements StaffDirectory {
     @Override
     public StaffMember resetPassword(Actor superAdmin, UUID commandId, UUID staffId, long expectedVersion,
                                      String temporaryPassword, String reason, String password) {
-        requireSuperAdmin(superAdmin);
+        requireSuperAdminOver(superAdmin, staffId);
         reason(reason);
         // A malformed request is refused before the password is asked, so it never counts as a failed one.
         passwords.check(read(staffId).login(), temporaryPassword);
@@ -235,8 +240,10 @@ class JdbcStaffDirectory implements StaffDirectory {
     @Transactional(readOnly = true)
     public List<StaffMember> list(Actor superAdmin) {
         requireSuperAdmin(superAdmin);
-        return jdbc.sql(SELECT + " order by lower(last_name), lower(first_name), lower(login)")
-                .query((rs, i) -> map(rs)).list();
+        // The staff of the super admin's own taxi service (ADR 0016).
+        return jdbc.sql(SELECT + " where service_id = :service order by lower(last_name), lower(first_name),"
+                        + " lower(login)")
+                .param("service", serviceOf(superAdmin)).query((rs, i) -> map(rs)).list();
     }
 
     @Override
@@ -246,7 +253,7 @@ class JdbcStaffDirectory implements StaffDirectory {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Staff only");
         }
         if (!reader.id().equals(staffId)) {
-            requireSuperAdmin(reader);
+            requireSuperAdminOver(reader, staffId);
         }
         return read(staffId);
     }
@@ -271,14 +278,36 @@ class JdbcStaffDirectory implements StaffDirectory {
         }
     }
 
+    private UUID serviceOf(Actor staff) {
+        return jdbc.sql("select service_id from staff_user where id = :id").param("id", staff.id())
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED, "Only a super admin manages staff"));
+    }
+
+    /**
+     * A super admin acting on a member of their own taxi service (ADR 0016); a member of another service is, to them,
+     * a member that does not exist.
+     */
+    private void requireSuperAdminOver(Actor actor, UUID staffId) {
+        requireSuperAdmin(actor);
+        if (jdbc.sql("select exists(select 1 from staff_user where id = :id and service_id <> :service)")
+                .param("id", staffId).param("service", serviceOf(actor)).query(Boolean.class).single()) {
+            throw new DomainException(ErrorCode.NOT_FOUND, "Staff member not found");
+        }
+    }
+
     private void keepOneSuperAdmin(UUID leaving) {
         // One check at a time: two super admins suspending each other at once both counted the other as remaining
         // and left none (audit 29.10.2026). The count runs after the earlier change has committed.
-        jdbc.sql("select pg_advisory_xact_lock(hashtext('staff:last-super-admin'))").query().singleRow();
+        // Every taxi service keeps one of its own (ADR 0016).
+        UUID service = jdbc.sql("select service_id from staff_user where id = :id").param("id", leaving)
+                .query(UUID.class).single();
+        jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))").param("key", "staff:last-super-admin:" + service)
+                .query().singleRow();
         int others = jdbc.sql("""
                         select count(*) from staff_user
-                        where role = 'SUPER_ADMIN' and state = 'ACTIVE' and id <> :id""")
-                .param("id", leaving).query(Integer.class).single();
+                        where role = 'SUPER_ADMIN' and state = 'ACTIVE' and id <> :id and service_id = :service""")
+                .param("id", leaving).param("service", service).query(Integer.class).single();
         if (others == 0) {
             throw new DomainException(ErrorCode.STATE_CONFLICT, "At least one active super admin must remain");
         }
@@ -346,7 +375,7 @@ class JdbcStaffDirectory implements StaffDirectory {
     }
 
     /** Validates and normalizes; a super admin keeps no ticked functions — he has all of them. */
-    private Profile profile(Profile p) {
+    private Profile profile(Profile p, UUID service) {
         if (p == null || p.role() == null || blank(p.firstName()) || blank(p.lastName()) || p.contacts() == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "First name, last name, role and a contact are required");
         }
@@ -365,6 +394,10 @@ class JdbcStaffDirectory implements StaffDirectory {
         if (telegram != null && !telegram.startsWith("@")) {
             telegram = "@" + telegram;
         }
+        if (p.role() == Role.PLATFORM_OWNER) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                    "The platform owner is not a staff member of a service");
+        }
         boolean superAdmin = p.role() == Role.SUPER_ADMIN;
         List<String> permissions = superAdmin ? List.of() : p.permissions().stream().distinct().sorted().toList();
         for (String permission : permissions) {
@@ -373,9 +406,10 @@ class JdbcStaffDirectory implements StaffDirectory {
             }
         }
         List<UUID> cities = superAdmin || p.allCities() ? List.of() : p.cityIds().stream().distinct().toList();
+        // Cities of the member's own taxi service only (ADR 0016), through the geo module's port (ADR 0004).
+        java.util.Map<UUID, UUID> services = cityServices.servicesOf(cities);
         for (UUID city : cities) {
-            if (!jdbc.sql("select exists(select 1 from city where id = :id)").param("id", city)
-                    .query(Boolean.class).single()) {
+            if (!service.equals(services.get(city))) {
                 throw new DomainException(ErrorCode.VALIDATION_FAILED, "Unknown city: " + city);
             }
         }

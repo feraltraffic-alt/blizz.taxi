@@ -100,6 +100,195 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/admin/v1/services:
+    get:
+      operationId: listTaxiServices
+      summary: The taxi services of this server
+      description: Platform owner only (ADR 0016). Every taxi service of the server, by code.
+      tags: [Services]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaxiService"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: createTaxiService
+      summary: A new taxi service with its first super admin
+      description: >-
+        Platform owner only (ADR 0016). The service starts ACTIVE with no city; its first super admin has every city
+        of it and changes the initial password at the first sign-in. Needs the owner's own password (REQ-ADM-10):
+        missing or wrong → 403 ACCESS_DENIED, counted like a failed sign-in and audited as service.create.denied. A
+        taken code or login → 409.
+      tags: [Services]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, code, name, super_admin, reason, password]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                code:
+                  description: What the service's apps send at sign-in and in the bootstrap.
+                  type: string
+                  pattern: "^[a-z0-9][a-z0-9-]{1,39}$"
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                super_admin:
+                  type: object
+                  additionalProperties: false
+                  required: [login, initial_password, first_name, last_name]
+                  properties:
+                    login:
+                      type: string
+                    initial_password:
+                      type: string
+                      format: password
+                      maxLength: 128
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
+                reason:
+                  type: string
+                password:
+                  description: The owner's own password. Never stored or logged.
+                  type: string
+                  format: password
+                  maxLength: 128
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxiService"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+  /api/admin/v1/services/{service_id}/suspend:
+    post:
+      operationId: suspendTaxiService
+      summary: Suspend a taxi service
+      description: >-
+        Platform owner only (ADR 0016). Every session of the service ends at once; its riders, drivers and staff cannot sign in until it is resumed. Audited as service.suspend. A stale version → 409.
+      tags: [Services]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: service_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxiService"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+  /api/admin/v1/services/{service_id}/resume:
+    post:
+      operationId: resumeTaxiService
+      summary: Resume a taxi service
+      description: >-
+        Platform owner only (ADR 0016). The service signs in again. Audited as service.resume. A stale version → 409.
+      tags: [Services]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: service_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxiService"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
   /api/admin/v1/staff:
     get:
       operationId: listStaff
@@ -5518,6 +5707,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
 
 tags:
+  - name: Services
+    description: The taxi services of the server and the platform owner (ADR 0016)
   - name: Legal
     description: Legal texts and their versions (REQ-PRV-08)
   - name: Orders
@@ -7379,7 +7570,7 @@ components:
           type: [string, "null"]
         role:
           type: [string, "null"]
-          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+          enum: [PLATFORM_OWNER, SUPER_ADMIN, ADMIN, OPERATOR, null]
         audience:
           type: string
           enum: [admin, operator]
@@ -7436,7 +7627,7 @@ components:
           format: uuid
         actor_role:
           type: [string, "null"]
-          enum: [SUPER_ADMIN, ADMIN, OPERATOR, null]
+          enum: [PLATFORM_OWNER, SUPER_ADMIN, ADMIN, OPERATOR, null]
         action:
           type: string
         resource_type:
@@ -7471,7 +7662,7 @@ components:
 
     Role:
       type: string
-      enum: [SUPER_ADMIN, ADMIN, OPERATOR]
+      enum: [PLATFORM_OWNER, SUPER_ADMIN, ADMIN, OPERATOR]
 
     Contacts:
       description: At least one of phone, e-mail, Telegram.
@@ -7597,6 +7788,27 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Permission"
+
+    TaxiService:
+      description: A taxi service of this server (ADR 0016).
+      type: object
+      additionalProperties: false
+      required: [id, code, name, state, version, created_at]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        state:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        version:
+          type: integer
+          format: int64
+        created_at:
+          $ref: "./common.yaml#/components/schemas/Timestamp"
 
     CreateStaff:
       type: object

@@ -60,6 +60,7 @@ class JdbcEmergencyAccess implements EmergencyAccess {
     public Grant grant(Actor actor, UUID commandId, UUID staffId, Set<String> permissions, boolean allCities,
                        Set<UUID> cityIds, Duration duration, String reason, String password) {
         requireSuperAdmin(actor);
+        requireOwnService(actor, staffId);
         Set<String> wanted = permissions == null ? Set.of() : new TreeSet<>(permissions);
         Set<UUID> cities = allCities || cityIds == null ? Set.of() : new TreeSet<>(cityIds);
         if (wanted.isEmpty() || !StaffPermissions.CODES.containsAll(wanted)) {
@@ -112,6 +113,7 @@ class JdbcEmergencyAccess implements EmergencyAccess {
     @Override
     public Grant revoke(Actor actor, UUID commandId, UUID grantId, String reason) {
         requireSuperAdmin(actor);
+        requireOwnService(actor, find(grantId).staffId());
         String why = reason == null ? "" : reason.strip();
         if (why.isEmpty() || why.length() > 500) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason of at most 500 characters is required");
@@ -142,9 +144,12 @@ class JdbcEmergencyAccess implements EmergencyAccess {
     @Transactional(readOnly = true)
     public List<Grant> list(Actor actor, boolean activeOnly) {
         requireSuperAdmin(actor);
-        return jdbc.sql(SELECT + (activeOnly ? "where revoked_at is null and expires_at > :now\n" : "")
+        // The grants of the super admin's own taxi service (ADR 0016).
+        return jdbc.sql(SELECT + "where staff_id in (select id from staff_user where service_id = "
+                        + "(select service_id from staff_user where id = :actor))\n"
+                        + (activeOnly ? "and revoked_at is null and expires_at > :now\n" : "")
                         + "order by (revoked_at is null and expires_at > :now) desc, granted_at desc limit 100")
-                .param("now", now()).query((rs, i) -> grant(rs)).list();
+                .param("actor", actor.id()).param("now", now()).query((rs, i) -> grant(rs)).list();
     }
 
     @Override
@@ -152,6 +157,7 @@ class JdbcEmergencyAccess implements EmergencyAccess {
     public List<Activity> activity(Actor actor, UUID grantId) {
         requireSuperAdmin(actor);
         Grant grant = find(grantId);
+        requireOwnService(actor, grant.staffId());
         OffsetDateTime end = grant.revokedAt() != null && grant.revokedAt().isBefore(grant.expiresAt())
                 ? grant.revokedAt() : grant.expiresAt();
         return jdbc.sql("""
@@ -185,6 +191,17 @@ class JdbcEmergencyAccess implements EmergencyAccess {
                 .param("id", actor.id()).query(Boolean.class).single();
         if (!allowed) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Only a super admin manages emergency access");
+        }
+    }
+
+    /** A member of another taxi service does not exist for this super admin (ADR 0016). */
+    private void requireOwnService(Actor actor, UUID staffId) {
+        if (jdbc.sql("""
+                        select exists(select 1 from staff_user
+                                      where id = :staff
+                                        and service_id <> (select service_id from staff_user where id = :actor))""")
+                .param("staff", staffId).param("actor", actor.id()).query(Boolean.class).single()) {
+            throw new DomainException(ErrorCode.NOT_FOUND, "Staff member not found");
         }
     }
 

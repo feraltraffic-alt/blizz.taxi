@@ -88,7 +88,11 @@ class JdbcSessionService implements SessionService {
         }
         Actor actor = subject.actor();
         // The session lives in the subject's service, and so does every token of it (ADR 0016).
-        UUID serviceId = services.of(actor)
+        // The platform owner belongs to no service; their staff session has none (ADR 0016).
+        boolean owner = actor.type() == taxi.blizz.platform.SubjectType.STAFF && jdbc.sql("""
+                        select exists(select 1 from staff_user where id = :id and role = 'PLATFORM_OWNER')""")
+                .param("id", actor.id()).query(Boolean.class).single();
+        UUID serviceId = owner ? null : services.of(actor)
                 .filter(id -> jdbc.sql("select state = 'ACTIVE' from service where id = :id").param("id", id)
                         .query(Boolean.class).single())
                 .orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED, "The account cannot sign in"));
@@ -157,7 +161,7 @@ class JdbcSessionService implements SessionService {
                         rs.getObject("session_expires_at", OffsetDateTime.class),
                         rs.getObject("revoked_at", OffsetDateTime.class),
                         rs.getObject("service_id", UUID.class),
-                        "ACTIVE".equals(rs.getString("service_state"))))
+                        rs.getObject("service_id") == null || "ACTIVE".equals(rs.getString("service_state"))))
                 .optional();
         if (found.isEmpty()) {
             return Refreshed.rejected();
@@ -236,9 +240,10 @@ class JdbcSessionService implements SessionService {
     @Override
     public Optional<AccessClaims> verifyAccess(String accessToken, ApiAudience expectedAudience) {
         return codec.verify(accessToken, expectedAudience).filter(claims -> jdbc.sql("""
-                        select count(*) from device_session s join service v on v.id = s.service_id
+                        select count(*) from device_session s left join service v on v.id = s.service_id
                         where s.id = :id and s.revoked_at is null and s.expires_at > :now
-                          and s.service_id = :service and v.state = 'ACTIVE'
+                          and s.service_id is not distinct from cast(:service as uuid)
+                          and (s.service_id is null or v.state = 'ACTIVE')
                         """)
                 .param("service", claims.serviceId())
                 .param("id", claims.sessionId())

@@ -39,6 +39,7 @@ class StaffBootstrap implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        owner();
         String login = properties.bootstrapLogin();
         String password = properties.bootstrapPassword();
         if (login == null || login.isBlank() || password == null || password.isBlank()) {
@@ -62,6 +63,34 @@ class StaffBootstrap implements ApplicationRunner {
                     .param("hash", passwords.hash(normalized, password))
                     .param("now", clock.instant().atOffset(ZoneOffset.UTC)).update();
             log.warn("Created the first super admin '{}'; the password must be changed at the first sign-in", normalized);
+        });
+    }
+
+    /** The platform owner (ADR 0016) while there is none; no service, and the password is changed at first. */
+    private void owner() {
+        String login = properties.ownerLogin();
+        String password = properties.ownerPassword();
+        if (login == null || login.isBlank() || password == null || password.isBlank()) {
+            return;
+        }
+        tx.executeWithoutResult(status -> {
+            jdbc.sql("select pg_advisory_xact_lock(hashtext('staff-bootstrap'))").query().singleRow();
+            if (jdbc.sql("select exists(select 1 from staff_user where role = 'PLATFORM_OWNER')")
+                    .query(Boolean.class).single()) {
+                return;
+            }
+            String normalized = login.strip().toLowerCase(Locale.ROOT);
+            jdbc.sql("""
+                            insert into staff_user (id, login, first_name, last_name, name, role, permissions,
+                                                    all_cities, state, password_hash, must_change_password,
+                                                    created_at, updated_at, version, service_id)
+                            values (:id, :login, 'Platform', 'Owner', 'Platform Owner', 'PLATFORM_OWNER', '{}', false,
+                                    'ACTIVE', :hash, true, :now, :now, 0, null)""")
+                    .param("id", UUID.randomUUID()).param("login", normalized)
+                    .param("hash", passwords.hash(normalized, password))
+                    .param("now", clock.instant().atOffset(ZoneOffset.UTC)).update();
+            log.warn("Created the platform owner '{}'; the password must be changed at the first sign-in",
+                    normalized);
         });
     }
 }
