@@ -53,7 +53,7 @@ export function Chat({client, t, guard, failure, path, params, me, newId, pollMs
       return;
     }
     // The same text after a lost answer is the same command (C3); another text is a new one.
-    if (!pending.current || pending.current.body !== body) pending.current = {body, command: newId()};
+    pending.current = {body, command: newId()};
     const {command} = pending.current;
     sending.current = true;
     setMessage(null);
