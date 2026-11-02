@@ -8,6 +8,7 @@ import {
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
 import {Money} from './Money';
+import {Preorders} from './Preorders';
 import {Documents, type AdmissionProfile, type PickedFile} from './Documents';
 
 export type {PickedFile} from './Documents';
@@ -77,7 +78,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
-  const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support'>('work');
+  const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support' | 'preorders'>('work');
   const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   const theme = useTheme();
 
@@ -182,6 +183,10 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     ) : <Loading t={t} />;
   }
   const canWork = admitted(profile);
+  if (tab === 'preorders' && online) {
+    return <Preorders client={client} t={t} guard={guard} failure={failure} newId={newId} locale={locale}
+      onTrip={() => setTab('work')} onBack={() => setTab('work')} />;
+  }
   if (tab === 'money') {
     return (
       <Screen title={t('money')}>
@@ -203,6 +208,8 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   return (
     <Screen title={t('home')}>
       <Button label={t('money')} onPress={() => setTab('money')} />
+      {/* Pre-orders need an open work session (#324 P6). */}
+      {online ? <Button label={t('preorders')} onPress={() => setTab('preorders')} /> : null}
       {online ? null : <Button label={t('documents')} onPress={() => setTab('documents')} />}
       <Button label={t('support')} onPress={() => setTab('support')} />
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
