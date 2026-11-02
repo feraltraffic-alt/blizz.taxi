@@ -1,6 +1,6 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 import {createApiClient} from '@blizz/api-client';
-import {RiderApp, type AppConfig} from '../src/App';
+import {RiderApp, type AppConfig, type PickedFile} from '../src/App';
 
 /** The rider's support cases (#296): P1–P6 of the issue. */
 const cid = '10000000-0000-4000-8000-000000000001';
@@ -19,7 +19,10 @@ function server(script: Record<string, Answer[]>) {
     const parsed = new URL(url);
     const path = parsed.pathname;
     const method = String(init.method);
-    calls.push({method, path, query: parsed.searchParams, body: init.body ? JSON.parse(String(init.body)) : undefined});
+    // File bytes (#313) are kept as their size and type; everything else is JSON.
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    calls.push({method, path, query: parsed.searchParams, body: init.body instanceof Blob
+      ? {bytes: init.body.size, type: headers['Content-Type']} : init.body ? JSON.parse(String(init.body)) : undefined});
     const answers = script[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
     if (answer.delayMs) await new Promise(resolve => setTimeout(resolve, answer.delayMs));
@@ -46,7 +49,8 @@ const list = (cases: unknown[], next: string | null = null) => ({status: 200, bo
 const CASES = 'GET /api/rider/v1/support/cases';
 const ONE = 'GET /api/rider/v1/support/cases/' + CASE;
 
-async function mount(script: Record<string, Answer[]>, entry = 'Поддержка') {
+async function mount(script: Record<string, Answer[]>, entry = 'Поддержка',
+  pickFile?: () => Promise<PickedFile | null>) {
   const http = server({
     'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}],
     'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: []}}],
@@ -58,7 +62,8 @@ async function mount(script: Record<string, Answer[]>, entry = 'Поддержк
   const client = createApiClient({baseUrl: 'https://api.blizz.test', refreshTokens: {read: () => null, write: () => {}},
     fetch: http.fetch, correlationId: () => cid, initialSession: session as never});
   const config: AppConfig = {service: 'default', deviceRef: 'test', pollMs: 60_000, locate: async () => ({lat: 50.45,
-    lon: 30.52}), newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0')};
+    lon: 30.52}), newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0'),
+    ...(pickFile ? {pickFile} : {})};
   await render(<RiderApp client={client} config={config} />);
   await fireEvent.press(await screen.findByRole('button', {name: entry}));
   return {http};
@@ -187,5 +192,119 @@ describe('P6: one action at a time', () => {
     await fireEvent.press(send);
     expect(await screen.findByText('Поддержка: Уточняем у водителя')).toBeTruthy();
     expect(posts(http)).toHaveLength(1);
+  });
+});
+
+/** Attachments (#313): A1–A5 of the issue. */
+describe('#313: attachments', () => {
+  const FILE = 'f0000000-0000-4000-8000-000000000001';
+  const UPLOAD = '/api/rider/v1/uploads/' + FILE;
+  const file = (name = 'photo.png', type = 'image/png', size = 4): PickedFile => ({name, type, size,
+    data: new Blob([new Uint8Array(Math.min(size, 8))], {type})});
+  const uploads = (state = 'SAFE', reason: string | null = null) => ({
+    'POST /api/rider/v1/support/uploads': [{status: 201, body: {file_id: FILE, upload_path: UPLOAD,
+      expires_at: '2099-01-01T00:00:00Z', max_bytes: 10485760}}],
+    ['PUT ' + UPLOAD]: [{status: 200, body: {file_id: FILE, state, content_type: 'image/png', size_bytes: 4,
+      reject_reason: reason}}]});
+  const nonGet = (http: {calls: Call[]}) => http.calls.filter(c => c.method !== 'GET');
+
+  it('A1: a new case with a file: session, bytes, then attachment_ids', async () => {
+    const {http} = await mount({...uploads(), 'POST /api/rider/v1/support/cases': [{status: 200, body: full()}]},
+      'Поддержка', async () => file());
+    await fillCase();
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    expect(await screen.findByText('photo.png')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', {name: 'Отправить обращение'}));
+    await waitFor(() => expect(nonGet(http)).toHaveLength(3));
+    expect(nonGet(http).map(c => [c.method + ' ' + c.path, c.body])).toEqual([
+      ['POST /api/rider/v1/support/uploads', {command_id: expect.any(String), content_type: 'image/png', size_bytes: 4}],
+      ['PUT ' + UPLOAD, {bytes: 4, type: 'image/png'}],
+      ['POST /api/rider/v1/support/cases', {command_id: expect.any(String), category: 'LOST_ITEM',
+        subject: 'Забыл зонт', message: 'Оставил зонт в машине', attachment_ids: [FILE]}]]);
+  });
+
+  it('A1: an answer with a file', async () => {
+    const {http} = await mount({...uploads(), ['POST /api/rider/v1/support/cases/' + CASE + '/messages']: [
+      {status: 200, body: full()}]}, 'Поддержка', async () => file('receipt.pdf', 'application/pdf'));
+    await fireEvent.press(await screen.findByRole('button', {name: '№501 · Забыл зонт · в работе'}));
+    await fireEvent.changeText(await screen.findByLabelText('Ваш ответ'), 'Вот чек');
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    expect(await screen.findByText('receipt.pdf')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', {name: 'Ответить'}));
+    await waitFor(() => expect(nonGet(http).at(-1)!.path).toBe('/api/rider/v1/support/cases/' + CASE + '/messages'));
+    expect(nonGet(http).at(-1)!.body).toEqual({command_id: expect.any(String), message: 'Вот чек',
+      attachment_ids: [FILE]});
+  });
+
+  it.each([
+    ['a gif', file('a.gif', 'image/gif'), 'Подходят только JPEG, PNG, WEBP или PDF.'],
+    ['a file over 10 MB', file('big.png', 'image/png', 10 * 1024 * 1024 + 1), 'Файл больше 10 МБ.']
+  ])('A2: %s opens no session', async (_name, picked, text) => {
+    const {http} = await mount(uploads(), 'Поддержка', async () => picked);
+    await fillCase();
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(nonGet(http)).toEqual([]);
+  });
+
+  it('A2: a sixth file is refused before picking; a cancelled picker sends nothing', async () => {
+    let n = 0;
+    const {http} = await mount({
+      'POST /api/rider/v1/support/uploads': [1, 2, 3, 4, 5].map(i => ({status: 201, body: {
+        file_id: 'f000000' + i + '-0000-4000-8000-000000000001', upload_path: '/api/rider/v1/uploads/u' + i,
+        expires_at: '2099-01-01T00:00:00Z', max_bytes: 10485760}})),
+      ...Object.fromEntries([1, 2, 3, 4, 5].map(i => ['PUT /api/rider/v1/uploads/u' + i, [{status: 200, body: {
+        file_id: 'f000000' + i + '-0000-4000-8000-000000000001', state: 'SAFE', size_bytes: 4}}]]))},
+    'Поддержка', async () => ++n === 6 ? null : file('p' + n + '.png'));
+    await fillCase();
+    for (let i = 1; i <= 5; i++) {
+      await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+      expect(await screen.findByText('p' + i + '.png')).toBeTruthy();
+    }
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    expect(await screen.findByText('Можно приложить не больше 5 файлов.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', {name: 'Убрать p5.png'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    await waitFor(() => expect(n).toBe(6));
+    expect(nonGet(http).filter(c => c.path === '/api/rider/v1/support/uploads')).toHaveLength(5);
+  });
+
+  it.each([['REJECTED', 'Файл не принят: вирус'], ['QUARANTINE', 'Файл ещё проверяется. Приложите его чуть позже.']])(
+    'A3: %s is told and not attached', async (state, text) => {
+      const {http} = await mount({...uploads(state, state === 'REJECTED' ? 'вирус' : null),
+        'POST /api/rider/v1/support/cases': [{status: 200, body: full()}]}, 'Поддержка', async () => file());
+      await fillCase();
+      await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+      expect(await screen.findByText(text)).toBeTruthy();
+      expect(screen.queryByText('photo.png')).toBeNull();
+      await fireEvent.press(screen.getByRole('button', {name: 'Отправить обращение'}));
+      await waitFor(() => expect(nonGet(http).at(-1)!.path).toBe('/api/rider/v1/support/cases'));
+      expect(nonGet(http).at(-1)!.body).not.toHaveProperty('attachment_ids');
+    });
+
+  it('A4: a removed file is not sent', async () => {
+    const {http} = await mount({...uploads(), 'POST /api/rider/v1/support/cases': [{status: 200, body: full()}]},
+      'Поддержка', async () => file());
+    await fillCase();
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Убрать photo.png'}));
+    expect(screen.queryByText('photo.png')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', {name: 'Отправить обращение'}));
+    await waitFor(() => expect(nonGet(http).at(-1)!.path).toBe('/api/rider/v1/support/cases'));
+    expect(nonGet(http).at(-1)!.body).not.toHaveProperty('attachment_ids');
+  });
+
+  it('A5: a message tells how many files it has', async () => {
+    const att = (n: number) => ({file_id: 'f' + n, content_type: 'image/png', size_bytes: 4, name: null});
+    await mount({[ONE]: [{status: 200, body: full({messages: [{...msg(1, 'CLIENT', 'Вот фото'),
+      attachments: [att(1), att(2)]}]})}]});
+    await fireEvent.press(await screen.findByRole('button', {name: '№501 · Забыл зонт · в работе'}));
+    expect(await screen.findByText('Вы: Вот фото · вложений: 2')).toBeTruthy();
+  });
+
+  it('A6: without a picker there is no attach button', async () => {
+    await mount({});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Новое обращение'}));
+    expect(screen.queryByRole('button', {name: 'Приложить файл'})).toBeNull();
   });
 });

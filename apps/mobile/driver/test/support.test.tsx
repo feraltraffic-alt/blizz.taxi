@@ -1,6 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react-native';
 import {createApiClient} from '@blizz/api-client';
-import {DriverApp, type AppConfig} from '../src/App';
+import {DriverApp, type AppConfig, type PickedFile} from '../src/App';
 
 /** The driver's support cases (#298): S2–S5 of the issue. */
 const cid = '10000000-0000-4000-8000-000000000001';
@@ -26,7 +26,8 @@ const full = (over: Record<string, unknown> = {}) => ({id: CASE, number: 77, cit
 type Call = {method: string; path: string; body?: unknown};
 type Answer = {status: number; body?: unknown};
 
-async function mount(script: Record<string, Answer[]>, profile: unknown = admitted) {
+async function mount(script: Record<string, Answer[]>, profile: unknown = admitted,
+  pickFile?: () => Promise<PickedFile | null>) {
   const calls: Call[] = [];
   const all: Record<string, Answer[]> = {
     'GET /api/driver/v1/legal': [{status: 200, body: {documents: []}}],
@@ -40,7 +41,8 @@ async function mount(script: Record<string, Answer[]>, profile: unknown = admitt
   const fetch = jest.fn(async (url: string, init: RequestInit) => {
     const path = new URL(url).pathname;
     const method = String(init.method);
-    calls.push({method, path, body: init.body ? JSON.parse(String(init.body)) : undefined});
+    calls.push({method, path, body: init.body instanceof Blob ? {bytes: init.body.size}
+      : init.body ? JSON.parse(String(init.body)) : undefined});
     const answers = all[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body),
@@ -51,7 +53,7 @@ async function mount(script: Record<string, Answer[]>, profile: unknown = admitt
     fetch: fetch as unknown as typeof globalThis.fetch, correlationId: () => cid, initialSession: session as never});
   const config: AppConfig = {service: 'default', deviceRef: 'test-driver', now: () => Date.parse('2026-11-02T10:00:00Z'),
     heartbeatMs: 60_000, pollMs: 60_000, locate: async () => ({lat: 50.45, lon: 30.52, accuracy_m: 8}),
-    newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0')};
+    newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0'), ...(pickFile ? {pickFile} : {})};
   await render(<DriverApp client={client} config={config} />);
   await fireEvent.press(await screen.findByRole('button', {name: 'Поддержка'}));
   return {calls};
@@ -102,5 +104,28 @@ describe('S5: a blocked driver', () => {
   it('still has support', async () => {
     await mount({}, {...admitted, account_state: 'BLOCKED', review_status: 'SUSPENDED'});
     expect(await screen.findByRole('button', {name: '№77 · Не доплатил · открыто'})).toBeTruthy();
+  });
+});
+
+describe('#313 A6: the driver attaches through the driver API', () => {
+  it('uploads to /api/driver/v1/support/uploads and sends the id', async () => {
+    const FILE = 'f0000000-0000-4000-8000-000000000001';
+    const {calls} = await mount({
+      'POST /api/driver/v1/support/uploads': [{status: 201, body: {file_id: FILE,
+        upload_path: '/api/driver/v1/uploads/' + FILE, expires_at: '2099-01-01T00:00:00Z', max_bytes: 10485760}}],
+      ['PUT /api/driver/v1/uploads/' + FILE]: [{status: 200, body: {file_id: FILE, state: 'SAFE', size_bytes: 4}}],
+      'POST /api/driver/v1/support/cases': [{status: 200, body: full()}]}, admitted,
+    async () => ({name: 'check.jpg', type: 'image/jpeg', size: 4, data: new Blob([new Uint8Array(4)])}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Новое обращение'}));
+    await fireEvent.press(screen.getByRole('button', {name: 'Оплата'}));
+    await fireEvent.changeText(screen.getByLabelText('Тема'), 'Чек');
+    await fireEvent.changeText(screen.getByLabelText('Сообщение'), 'Прикладываю чек');
+    await fireEvent.press(screen.getByRole('button', {name: 'Приложить файл'}));
+    expect(await screen.findByText('check.jpg')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', {name: 'Отправить обращение'}));
+    expect(await screen.findByText('Вы: Пассажир не доплатил')).toBeTruthy();
+    expect(calls.filter(c => c.method !== 'GET').map(c => c.method + ' ' + c.path)).toEqual([
+      'POST /api/driver/v1/support/uploads', 'PUT /api/driver/v1/uploads/' + FILE, 'POST /api/driver/v1/support/cases']);
+    expect(calls.filter(c => c.method === 'POST').at(-1)!.body).toMatchObject({attachment_ids: [FILE]});
   });
 });
