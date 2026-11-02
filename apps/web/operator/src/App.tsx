@@ -179,8 +179,7 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
     } catch (failure) {
       if (failure instanceof ApiError && (failure.code === 'QUOTE_EXPIRED' || failure.code === 'QUOTE_MISMATCH')) {
         // Never the old price: a new quote, with a new command for its order (E3).
-        setQuote(null);
-        setMessage(t('quoteExpired'));
+        setMessage(t('quoteExpired')); // mutation: the old price stays and can be ordered again
       } else if (failure instanceof ApiError && failure.code === 'CITY_PAUSED') setMessage(t('cityPaused'));
       else if (failure instanceof ApiError && failure.code === 'CITY_CLOSED') setMessage(t('cityClosed'));
       else setError(failure);
