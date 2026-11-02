@@ -16,19 +16,42 @@ const KINDS = new Set(['TRIP_FARE', 'CASH_COLLECTED', 'TERMINAL_COLLECTED', 'DEP
 const amount = (minor: number, currency: string) => (Math.abs(minor) / 100).toFixed(2) + ' ' + currency;
 const signed = (minor: number, currency: string) => (minor < 0 ? '−' : '+') + amount(minor, currency);
 
-/** The device's calendar date, days back from now. */
-function day(now: number, back: number): string {
-  const date = new Date(now - back * 86_400_000);
-  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-'
-    + String(date.getDate()).padStart(2, '0');
+/**
+ * A date days back from now in the city's calendar, as the server counts the days (REQ-DRV-12, #321); the device's
+ * own calendar only when the city's time zone is not known.
+ */
+function day(now: number, back: number, timeZone: string | null): string {
+  const at = new Date(now - back * 86_400_000);
+  if (timeZone) {
+    try {
+      // en-CA writes dates as YYYY-MM-DD.
+      return new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'})
+        .format(at);
+    } catch {
+      // An unknown zone: the device's calendar below.
+    }
+  }
+  return at.getFullYear() + '-' + String(at.getMonth() + 1).padStart(2, '0') + '-'
+    + String(at.getDate()).padStart(2, '0');
+}
+
+/** The city's time zone from the bootstrap; null when it cannot be read. */
+async function zoneOf(client: Shared['client'], service: string, cityId: string): Promise<string | null> {
+  try {
+    const boot = await client.get('/api/config/v1/bootstrap' as never, {query: {service}} as never) as
+      {cities?: {id: string; timezone?: string}[]};
+    return boot.cities?.find(c => c.id === cityId)?.timezone ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * The driver's money (#257), read only: the balance with the service, the last 7 days of the first admission city,
  * and the journal's movements, a page at a time.
  */
-export function Money({client, t, guard, failure, cityId, now}: Shared & {cityId: string | undefined;
-  now: () => number}) {
+export function Money({client, t, guard, failure, cityId, now, service}: Shared & {cityId: string | undefined;
+  now: () => number; service: string}) {
   const [balances, setBalances] = useState<Balance[] | null>(null);
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -39,17 +62,18 @@ export function Money({client, t, guard, failure, cityId, now}: Shared & {cityId
   const theme = useTheme();
 
   const load = useCallback(async () => {
+    const zone = cityId ? await zoneOf(client, service, cityId) : null;
     const [b, e, h] = await Promise.all([
       guard(() => client.get('/api/driver/v1/balance')),
       cityId ? guard(() => client.get('/api/driver/v1/earnings' as never, {query: {city_id: cityId,
-        from: day(now(), 6), to: day(now(), 0)}} as never)) : Promise.resolve(null),
+        from: day(now(), 6, zone), to: day(now(), 0, zone)}} as never)) : Promise.resolve(null),
       guard(() => client.get('/api/driver/v1/balance/history' as never, {query: {}} as never))
     ]);
     setBalances((b as {balances: Balance[]}).balances);
     setEarnings(e as Earnings | null);
     setEntries((h as Statement).entries);
     setNext((h as Statement).page?.next_cursor ?? null);
-  }, [client, guard, cityId]); // the clock only names the days
+  }, [client, guard, cityId, service]); // the clock only names the days
 
   useEffect(() => {
     setMessage(null);
