@@ -10,6 +10,7 @@ import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
 import {History} from './History';
 import {Cards} from './Cards';
+import {Debts} from './Debts';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
@@ -57,7 +58,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
 /** The rider's side of support (#296). */
 const RIDER_SIDE = {api: '/api/rider/v1', me: 'CLIENT', categories: RIDER_CATEGORIES} as const;
 
-type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone' | 'data';
+type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone' | 'data' | 'debts';
 
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
 function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
@@ -68,6 +69,9 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   if (tab === 'cards') {
     return <Cards {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
       onBack={() => setTab('profile')} />;
+  }
+  if (tab === 'debts') {
+    return <Debts {...shared} newId={newId} pollMs={config.pollMs ?? 5000} onBack={() => setTab('profile')} />;
   }
   if (tab === 'data') {
     return <DataExports {...shared} newId={newId} api="/api/rider/v1" pollMs={config.pollMs ?? 5000}
@@ -89,13 +93,14 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   return tab === 'profile' ? (
     <>
       <Profile {...shared} newId={newId} signOut={signOut} onCards={() => setTab('cards')}
-        onPhone={() => setTab('phone')} onData={() => setTab('data')} />
+        onPhone={() => setTab('phone')} onData={() => setTab('data')} onDebts={() => setTab('debts')} />
       <Button label={t('toRide')} onPress={() => setTab('ride')} />
     </>
   ) : (
     <>
       <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000} push={config.push}
-        locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal} />
+        locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal}
+        onDebts={() => setTab('debts')} />
       <Button label={t('toHistory')} onPress={() => setTab('history')} />
       <Button label={t('support')} onPress={() => setTab('support')} />
       <Button label={t('toProfile')} onPress={() => setTab('profile')} />
@@ -103,8 +108,9 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   );
 }
 
-function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, onData}: Shared & {
-  newId: () => string; signOut: () => Promise<void>; onCards: () => void; onPhone: () => void; onData: () => void}) {
+function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, onData, onDebts}: Shared & {
+  newId: () => string; signOut: () => Promise<void>; onCards: () => void; onPhone: () => void; onData: () => void;
+  onDebts: () => void}) {
   const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
@@ -158,6 +164,7 @@ function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, o
       <Button label={t('myCards')} onPress={onCards} />
       <Button label={t('pcChange')} onPress={onPhone} />
       <Button label={t('exTitle')} onPress={onData} />
+      <Button label={t('debts')} onPress={onDebts} />
       <Button label={t('signOut')} onPress={() => void signOut()} />
       <Alert text={message} />
     </Screen>
