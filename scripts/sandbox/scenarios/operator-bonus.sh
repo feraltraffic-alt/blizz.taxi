@@ -11,6 +11,11 @@ OPERATOR=$(staff_sign_in OPERATOR "$ADMIN_LOGIN" "$ADMIN_PASSWORD")
 DRIVER=$(sign_in DRIVER "$DRIVER_PHONE")
 SESSION=$(go_online "$DRIVER" "$DRIVER_VEHICLE" 50.4510 30.5234)
 
+say "The operator sees the classes of Kyiv (#251)"
+CLASSES=$(api GET "/api/operator/v1/vehicle-classes?city_id=5a000000-0000-4000-8000-000000000001" "$OPERATOR")
+expect 200
+jq -e 'map(.code) | index("STANDARD") != null' <<<"$CLASSES" >/dev/null
+
 say "Admin sets operator bonus m=2, g=3"
 CURRENT=$(api GET /api/admin/v1/settings/operator-bonuses "$ADMIN"); expect 200
 VERSION=$(jq -r .version <<<"$CURRENT")

@@ -34,7 +34,11 @@ function base(rights = operator) {
         q === 'вокзал' ? 50.44 : 50.45)]});
     }),
     http.get(origin + '/api/operator/v1/cancel-reasons', () => HttpResponse.json({reasons: [
-      {code: 'CALLER_CHANGED_MIND', labels: {ru: 'Клиент передумал'}}]}))
+      {code: 'CALLER_CHANGED_MIND', labels: {ru: 'Клиент передумал'}}]})),
+    http.get(origin + '/api/operator/v1/vehicle-classes', ({request}) =>
+      HttpResponse.json(new URL(request.url).searchParams.get('city_id') === KYIV.id
+        ? [{code: 'STANDARD', name: 'Стандарт'}, {code: 'COMFORT', name: 'Комфорт'}]
+        : [{code: 'ECONOMY', name: 'Ekonomia'}]))
   ];
 }
 
@@ -97,6 +101,31 @@ describe('the city list', () => {
     mount();
     const select = await screen.findByLabelText('Город');
     expect([...(select as HTMLSelectElement).options].map(o => o.text)).toEqual(['Київ']);
+  });
+});
+
+describe('C5: vehicle classes (#251)', () => {
+  it('lists the city\'s classes, reloads them for another city and quotes the chosen one', async () => {
+    const warsaw = {...KYIV, id: '5a000000-0000-4000-8000-000000000002', code: 'warsaw', name: 'Warszawa'};
+    let quoted: unknown = null;
+    server.use(http.get(origin + '/api/config/v1/bootstrap', () => HttpResponse.json({cities: [KYIV, warsaw]})),
+      http.post(origin + '/api/operator/v1/quotes', async ({request}) => {
+        quoted = await request.json();
+        return HttpResponse.json(quote, {status: 201});
+      }), ...base());
+    mount();
+    const classes = await screen.findByLabelText('Класс авто');
+    await waitFor(() => expect([...(classes as HTMLSelectElement).options].map(o => o.text))
+      .toEqual(['Стандарт', 'Комфорт']));
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Город'), 'Warszawa');
+    await waitFor(() => expect([...(screen.getByLabelText('Класс авто') as HTMLSelectElement).options]
+      .map(o => o.text)).toEqual(['Ekonomia']));
+    await user.selectOptions(screen.getByLabelText('Город'), 'Київ');
+    await waitFor(() => expect((screen.getByLabelText('Класс авто') as HTMLSelectElement).options).toHaveLength(2));
+    await user.selectOptions(screen.getByLabelText('Класс авто'), 'Комфорт');
+    await priced(user);
+    expect(quoted).toMatchObject({vehicle_class: 'COMFORT'});
   });
 });
 

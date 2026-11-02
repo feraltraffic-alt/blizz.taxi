@@ -62,7 +62,13 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await page.getByLabel('Куда', {exact: true}).fill('Вокзал');
   await page.getByRole('button', {name: 'Найти', exact: true}).nth(1).click();
   await page.locator('fieldset').nth(1).getByRole('listitem').first().getByRole('button').click();
+  // The class from the city's list (#251): the selects are the city, the class and the payment, in that order.
+  const classes = page.locator('select').nth(1);
+  await expect(classes.locator('option')).toHaveText(['Комфорт', 'Стандарт']);
+  await classes.selectOption({label: 'Комфорт'});
+  const priced = page.waitForResponse(r => r.url().endsWith('/api/operator/v1/quotes'));
   await page.getByRole('button', {name: 'Рассчитать цену'}).click();
+  expect(((await (await priced).json()) as {vehicle_class: string}).vehicle_class).toBe('COMFORT');
   await expect(page.getByText(/^Цена: /)).toBeVisible();
   await page.screenshot({path: info.outputPath('1-priced.png'), fullPage: true});
   await page.getByRole('button', {name: 'Создать заказ'}).click();

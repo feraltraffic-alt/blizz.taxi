@@ -119,7 +119,8 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
   const [caller, setCaller] = useState<string | null>(null);
   const [pickup, setPickup] = useState<Place | null>(null);
   const [dropoff, setDropoff] = useState<Place | null>(null);
-  const [vehicleClass, setVehicleClass] = useState('STANDARD');
+  const [classes, setClasses] = useState<{code: string; name: string}[] | null>(null);
+  const [vehicleClass, setVehicleClass] = useState('');
   const [payment, setPayment] = useState<'CASH' | 'TERMINAL'>('CASH');
   const [comment, setComment] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -129,6 +130,20 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
   /** One command per quote: a double click or a retry is the same order (E4). */
   const orderCommand = useRef<string | null>(null);
   const creating = useRef(false);
+
+  // The city's orderable classes (#251); the form is mounted again for another city.
+  useEffect(() => {
+    let current = true;
+    client.get('/api/operator/v1/vehicle-classes', {query: {city_id: city.id}} as never)
+      .then(list => {
+        if (!current) return;
+        const options = list as {code: string; name: string}[];
+        setClasses(options);
+        setVehicleClass(options[0]?.code ?? '');
+      })
+      .catch(failure => {if (current) setError(failure);});
+    return () => {current = false;};
+  }, [client, city.id]);
 
   const checkPhone = () => {
     const ok = E164.test(phone);
@@ -214,8 +229,11 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
         onPick={p => {setDropoff(p); setQuote(null);}} />
       <label>
         {t('vehicleClass')}
-        <input value={vehicleClass} onChange={e => {setVehicleClass(e.target.value); setQuote(null);}} />
+        <select value={vehicleClass} onChange={e => {setVehicleClass(e.target.value); setQuote(null);}}>
+          {(classes ?? []).map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+        </select>
       </label>
+      {classes && classes.length === 0 ? <p role="alert">{t('noClasses')}</p> : null}
       <label>
         {t('payment')}
         <select value={payment} onChange={e => setPayment(e.target.value as 'CASH' | 'TERMINAL')}>
@@ -227,7 +245,7 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
         {t('comment')}
         <input value={comment} onChange={e => setComment(e.target.value)} />
       </label>
-      <button type="button" onClick={() => void price()} disabled={busy || !pickup || !dropoff}>{t('price')}</button>
+      <button type="button" onClick={() => void price()} disabled={busy || !pickup || !dropoff || !vehicleClass}>{t('price')}</button>
       {quote ? <p>{t('priceIs', {amount: (quote.amount_minor / 100).toFixed(2), currency: quote.currency})}</p> : null}
       <button type="submit" disabled={busy || !quote}>{t('create')}</button>
       {message ? <p role="alert">{message}</p> : null}
