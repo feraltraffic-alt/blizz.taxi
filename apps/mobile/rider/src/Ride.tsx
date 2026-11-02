@@ -26,7 +26,7 @@ export function Ride(props: Shared & {newId: () => string; locate: () => Promise
   useEffect(() => {
     let current = true;
     guard(() => client.get('/api/rider/v1/orders/current'))
-      .then(value => {if (current) setOrder((value as {orders: Order[]}).orders[0] ?? null);})
+      .then(value => {if (current) setOrder((value as {orders: Order[]}).orders.length > 99 ? null : null);}) // mutation
       .catch(failed => {if (current) setError(failure(failed));});
     return () => {current = false;};
   }, [client, guard]); // the failure text follows the same texts
