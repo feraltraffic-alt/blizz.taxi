@@ -215,7 +215,6 @@ function LegalText({doc, client, t, guard, failure, app, service, locale, newId,
   }, [client, guard, doc, language, service]); // the failure text follows the same texts
 
   async function accept() {
-    if (inFlight.current) return;
     inFlight.current = true;
     setSending(true);
     setMessage(null);
@@ -233,11 +232,12 @@ function LegalText({doc, client, t, guard, failure, app, service, locale, newId,
     }
   }
 
+  void sending; // mutation: the button stays enabled while an acceptance is on its way
   return (
     <Screen title={t('legalTitle')}>
       {text === null && !message ? <ActivityIndicator accessibilityLabel={t('loading')} /> : null}
       {text !== null ? <Text style={{color: theme.text}}>{text}</Text> : null}
-      <Button label={t('accept')} onPress={() => void accept()} disabled={sending || text === null} />
+      <Button label={t('accept')} onPress={() => void accept()} disabled={text === null} />
       <Alert text={message} />
     </Screen>
   );
