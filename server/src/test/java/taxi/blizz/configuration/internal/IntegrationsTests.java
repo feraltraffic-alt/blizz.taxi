@@ -34,6 +34,8 @@ import taxi.blizz.platform.SubjectType;
 @Import(TestcontainersConfiguration.class)
 class IntegrationsTests {
 
+    static final java.util.UUID FIRST = taxi.blizz.identity.Services.DEFAULT_ID;
+
     static final String PASSWORD = "Integrations-Test-2026";
     static final String PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nTUlJRXZnSUJBREFOQmdrcWhraUc5dzBC\n"
             + "-----END PRIVATE KEY-----\n";
@@ -100,7 +102,7 @@ class IntegrationsTests {
         assertThat(field(fields, Integrations.FCM_PROJECT_ID).value()).isEqualTo("blizz-kyiv");
         assertThat(field(fields, Integrations.MAPS_PROVIDER).value()).isEqualTo("GOOGLE");
         assertThat(integrations.revision()).isGreaterThan(revision);
-        assertThat(integrations.value(Integrations.FCM_CREDENTIALS)).contains(CREDENTIALS);
+        assertThat(integrations.value(FIRST, Integrations.FCM_CREDENTIALS)).contains(CREDENTIALS);
 
         byte[] stored = jdbc.sql("select secret_value from integration_value where name = :n")
                 .param("n", Integrations.FCM_CREDENTIALS).query(byte[].class).single();
@@ -125,7 +127,7 @@ class IntegrationsTests {
         List<FieldState> removed = integrations.change(admin, UUID.randomUUID(), PASSWORD,
                 List.of(new Change(Integrations.FCM_CREDENTIALS, "")), "Key revoked");
         assertThat(field(removed, Integrations.FCM_CREDENTIALS).set()).isFalse();
-        assertThat(integrations.value(Integrations.FCM_CREDENTIALS)).isEmpty();
+        assertThat(integrations.value(FIRST, Integrations.FCM_CREDENTIALS)).isEmpty();
     }
 
     /**
@@ -152,7 +154,7 @@ class IntegrationsTests {
     void theWrongPasswordNoRightOrBadValuesChangeNothing() {
         assertCode(() -> integrations.change(admin, UUID.randomUUID(), "wrong", List.of(
                 new Change(Integrations.FCM_PROJECT_ID, "intruder")), "x"), ErrorCode.ACCESS_DENIED);
-        assertThat(integrations.value(Integrations.FCM_PROJECT_ID)).isEmpty();
+        assertThat(integrations.value(FIRST, Integrations.FCM_PROJECT_ID)).isEmpty();
         assertThat(jdbc.sql("select failed_sign_ins from staff_user where id = :id").param("id", admin.id())
                 .query(Integer.class).single()).as("counted like a failed sign-in").isEqualTo(1);
 

@@ -53,14 +53,17 @@ class TurboSmsSender implements OtpSender {
     }
 
     @Override
-    public Result send(PhoneNumber phone, String code, OtpAudience audience) {
-        return sendText(phone, text(code, phone));
+    public Result send(java.util.UUID serviceId, PhoneNumber phone, String code, OtpAudience audience) {
+        return sendText(serviceId, phone, text(serviceId, code, phone));
     }
 
-    /** Any text: a code, or a notice to a phone order's caller (REQ-NTF-08). */
-    Result sendText(PhoneNumber phone, String text) {
-        String token = integrations.value(Integrations.OTP_TURBOSMS_TOKEN).orElse(null);
-        String sender = integrations.value(Integrations.OTP_TURBOSMS_SENDER).orElse(null);
+    /**
+     * Any text: a code, or a notice to a phone order's caller (REQ-NTF-08), from the service's own TurboSMS account
+     * under its own sender name (ADR 0016).
+     */
+    Result sendText(java.util.UUID serviceId, PhoneNumber phone, String text) {
+        String token = integrations.value(serviceId, Integrations.OTP_TURBOSMS_TOKEN).orElse(null);
+        String sender = integrations.value(serviceId, Integrations.OTP_TURBOSMS_SENDER).orElse(null);
         if (token == null || sender == null) {
             return Result.failed("TurboSMS is not configured (token and sender name)");
         }
@@ -81,11 +84,10 @@ class TurboSmsSender implements OtpSender {
      * Short, in the language of the number's country: "Kod 123456. <service>" for Poland, "Код 123456. <service>"
      * otherwise (the same word in Ukrainian and Russian).
      */
-    String text(String code, PhoneNumber phone) {
+    String text(java.util.UUID serviceId, String code, PhoneNumber phone) {
         String word = phone.e164().startsWith("+48") ? "Kod " : "Код ";
-        // The first service's name until each service sends under its own (ADR 0016, #217).
-        return word + code + ". " + settings.current(taxi.blizz.identity.Services.DEFAULT_ID).settings().brand()
-                .serviceName();
+        // The name of the service the code is for (ADR 0016).
+        return word + code + ". " + settings.current(serviceId).settings().brand().serviceName();
     }
 
     @SuppressWarnings("unchecked")

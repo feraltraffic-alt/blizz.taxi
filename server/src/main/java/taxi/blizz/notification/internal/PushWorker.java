@@ -54,8 +54,12 @@ class PushWorker {
     private final JsonMapper json;
     private final Clock clock;
 
+    private final taxi.blizz.identity.Services services;
+
     PushWorker(JdbcClient jdbc, TransactionTemplate tx, PushDevices devices, PushProvider provider,
-               SessionService sessions, JsonMapper json, Clock clock, taxi.blizz.operations.Orders orders) {
+               SessionService sessions, JsonMapper json, Clock clock, taxi.blizz.operations.Orders orders,
+               taxi.blizz.identity.Services services) {
+        this.services = services;
         this.orders = orders;
         this.jdbc = jdbc;
         this.tx = tx;
@@ -125,6 +129,9 @@ class PushWorker {
             return;
         }
         Duration ttl = Duration.between(now, n.deadline());
+        // The recipient's own service's push keys (ADR 0016).
+        UUID service = services.of(new taxi.blizz.platform.Actor(
+                taxi.blizz.platform.SubjectType.valueOf(n.recipientType()), n.recipientId())).orElse(null);
         int sent = 0;
         int retry = 0;
         String lastError = null;
@@ -133,8 +140,8 @@ class PushWorker {
                 devices.revoke(device.id()); // logged out or revoked: the phone is not theirs any more
                 continue;
             }
-            PushProvider.Result result = provider.send(device.token(), device.platform(), n.title(), n.body(), data,
-                    ttl);
+            PushProvider.Result result = provider.send(service, device.token(), device.platform(), n.title(),
+                    n.body(), data, ttl);
             switch (result.outcome()) {
                 case SENT -> sent++;
                 case INVALID_TOKEN -> devices.revoke(device.id());

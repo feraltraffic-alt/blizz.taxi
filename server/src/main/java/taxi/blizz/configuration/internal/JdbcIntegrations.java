@@ -24,6 +24,7 @@ import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.IntegrationCheck;
 import taxi.blizz.configuration.Integrations;
+import taxi.blizz.identity.Services;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffSignIn;
 import taxi.blizz.platform.Actor;
@@ -60,11 +61,17 @@ class JdbcIntegrations implements Integrations {
     private final JsonMapper json;
     private final Clock clock;
     private final SecretCipher cipher;
+    private final Services services;
 
     private record Row(String plain, byte[] secret, String hint, UUID changedBy, OffsetDateTime changedAt) {
     }
 
-    private record Snapshot(long revision, Map<String, Row> rows, Instant loadedAt) {
+    /** {@code rows}: by service, then by name. */
+    private record Snapshot(long revision, Map<UUID, Map<String, Row>> rows, Instant loadedAt) {
+
+        Map<String, Row> of(UUID service) {
+            return rows.getOrDefault(service, Map.of());
+        }
     }
 
     private volatile Snapshot snapshot;
@@ -72,7 +79,8 @@ class JdbcIntegrations implements Integrations {
     JdbcIntegrations(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, StaffSignIn signIn,
                      AuditLog audit, ObjectProvider<IntegrationCheck> checks, JsonMapper json, Clock clock,
                      SecretsProperties properties, OutboundAddresses addresses,
-                     taxi.blizz.platform.ProviderBreakers breakers) {
+                     taxi.blizz.platform.ProviderBreakers breakers, Services services) {
+        this.services = services;
         this.breakers = breakers;
         this.addresses = addresses;
         this.jdbc = jdbc;
@@ -98,20 +106,25 @@ class JdbcIntegrations implements Integrations {
     }
 
     private Snapshot load() {
-        Map<String, Row> rows = new HashMap<>();
+        Map<UUID, Map<String, Row>> rows = new HashMap<>();
         long[] revision = {0};
-        jdbc.sql("select name, plain_value, secret_value, hint, changed_by, changed_at, seq from integration_value")
+        jdbc.sql("""
+                        select name, plain_value, secret_value, hint, changed_by, changed_at, seq, service_id
+                        from integration_value""")
                 .query(rs -> {
-                    rows.put(rs.getString(1), new Row(rs.getString(2), rs.getBytes(3), rs.getString(4),
-                            rs.getObject(5, UUID.class), rs.getObject(6, OffsetDateTime.class)));
+                    rows.computeIfAbsent(rs.getObject(8, UUID.class), s -> new HashMap<>()).put(rs.getString(1),
+                            new Row(rs.getString(2), rs.getBytes(3), rs.getString(4), rs.getObject(5, UUID.class),
+                                    rs.getObject(6, OffsetDateTime.class)));
                     revision[0] = Math.max(revision[0], rs.getLong(7));
                 });
-        return new Snapshot(revision[0], Map.copyOf(rows), clock.instant());
+        Map<UUID, Map<String, Row>> frozen = new HashMap<>();
+        rows.forEach((service, byName) -> frozen.put(service, Map.copyOf(byName)));
+        return new Snapshot(revision[0], Map.copyOf(frozen), clock.instant());
     }
 
     @Override
-    public Optional<String> value(String name) {
-        Row row = snapshot().rows().get(name);
+    public Optional<String> value(UUID serviceId, String name) {
+        Row row = snapshot().of(serviceId).get(name);
         if (row == null) {
             return Optional.empty();
         }
@@ -137,26 +150,41 @@ class JdbcIntegrations implements Integrations {
     }
 
     @Override
+    public Optional<String> serverValue(String name) {
+        if (!SERVER_FIELDS.contains(name)) {
+            throw new IllegalArgumentException(name + " is a setting of each service, not of the server");
+        }
+        return value(Services.DEFAULT_ID, name);
+    }
+
+    @Override
     public long revision() {
         return snapshot().revision();
     }
 
     @Override
-    public Optional<String> secretHint(String name) {
-        return Optional.ofNullable(snapshot().rows().get(name)).filter(r -> r.secret() != null).map(Row::hint);
+    public Optional<String> secretHint(UUID serviceId, String name) {
+        return Optional.ofNullable(snapshot().of(serviceId).get(name)).filter(r -> r.secret() != null)
+                .map(Row::hint);
     }
 
     @Override
     public List<FieldState> list(Actor actor) {
         staff.require(actor, MANAGE_PERMISSION);
+        UUID service = serviceOf(actor);
         snapshot = load();
-        return states(snapshot);
+        return states(snapshot.of(service));
     }
 
-    private List<FieldState> states(Snapshot snap) {
+    private UUID serviceOf(Actor actor) {
+        return services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Integrations belong to a taxi service"));
+    }
+
+    private List<FieldState> states(Map<String, Row> rows) {
         List<FieldState> states = new ArrayList<>();
         for (Field field : FIELDS) {
-            Row row = snap.rows().get(field.name());
+            Row row = rows.get(field.name());
             boolean set = row != null && (row.plain() != null || row.secret() != null);
             states.add(new FieldState(field.name(), field.group(), field.kind(), field.label(), field.description(),
                     field.forApps(), set, field.kind() == Kind.SECRET || row == null ? null : row.plain(),
@@ -192,30 +220,34 @@ class JdbcIntegrations implements Integrations {
             if (normalized.containsKey(field.name())) {
                 throw invalid(field.name() + " is given twice");
             }
+            if (SERVER_FIELDS.contains(field.name()) && !Services.DEFAULT_ID.equals(serviceOf(actor))) {
+                throw invalid(field.name() + " is the server's telephone exchange, set in the first service's panel");
+            }
             normalized.put(field.name(), validate(field, change.value()));
         }
         signIn.confirmPassword(actor, password);
+        UUID service = serviceOf(actor);
         Request request = new Request(List.copyOf(normalized.keySet()), fingerprint(normalized), reason.strip());
         Changed changed = commands.execute(new CommandKey(actor, "integrations.change", commandId), request,
                 Changed.class, () -> {
                     Map<String, Object> before = new LinkedHashMap<>();
                     Map<String, Object> after = new LinkedHashMap<>();
-                    Map<String, Row> old = load().rows();
+                    Map<String, Row> old = load().of(service);
                     for (Map.Entry<String, String> e : normalized.entrySet()) {
                         Field field = FIELDS.stream().filter(f -> f.name().equals(e.getKey())).findFirst()
                                 .orElseThrow();
                         before.put(e.getKey(), describe(field.kind(), old.get(e.getKey())));
-                        store(actor, e.getKey(), field.kind() == Kind.SECRET, e.getValue());
+                        store(actor, service, e.getKey(), field.kind() == Kind.SECRET, e.getValue());
                     }
                     Snapshot fresh = load();
                     for (String name : normalized.keySet()) {
                         Field field = FIELDS.stream().filter(f -> f.name().equals(name)).findFirst().orElseThrow();
-                        after.put(name, describe(field.kind(), fresh.rows().get(name)));
+                        after.put(name, describe(field.kind(), fresh.of(service).get(name)));
                     }
                     audit.record(new AuditEntry(actor, "integrations.change", "integration_value",
                             String.join(",", normalized.keySet()), reason.strip(), before, after));
                     snapshot = fresh;
-                    return new Changed(states(fresh));
+                    return new Changed(states(fresh.of(service)));
                 });
         snapshot = load();
         return changed.fields();
@@ -229,14 +261,15 @@ class JdbcIntegrations implements Integrations {
         if (value == null || value.isBlank() || value.length() > MAX_VALUE_LENGTH) {
             throw invalid("The secret is required (at most " + MAX_VALUE_LENGTH + " characters)");
         }
-        Row old = load().rows().get(name);
-        store(actor, name, true, value.strip());
+        UUID service = serviceOf(actor);
+        Row old = load().of(service).get(name);
+        store(actor, service, name, true, value.strip());
         audit.record(new AuditEntry(actor, "integrations.putSecret", "integration_value", name, null,
-                describe(Kind.SECRET, old), describe(Kind.SECRET, load().rows().get(name))));
+                describe(Kind.SECRET, old), describe(Kind.SECRET, load().of(service).get(name))));
         snapshot = null;
     }
 
-    private void store(Actor actor, String name, boolean secret, String value) {
+    private void store(Actor actor, UUID service, String name, boolean secret, String value) {
         byte[] sealed = null;
         String plain = null;
         String hint = null;
@@ -253,14 +286,15 @@ class JdbcIntegrations implements Integrations {
             }
         }
         jdbc.sql("""
-                        insert into integration_value (name, plain_value, secret_value, key_version, hint, seq,
-                                                       changed_by, changed_at)
-                        values (:name, :plain, :secret, :keyVersion, :hint, nextval('integration_value_seq'), :by, :now)
-                        on conflict (name) do update set plain_value = excluded.plain_value,
+                        insert into integration_value (service_id, name, plain_value, secret_value, key_version,
+                                                       hint, seq, changed_by, changed_at)
+                        values (:service, :name, :plain, :secret, :keyVersion, :hint,
+                                nextval('integration_value_seq'), :by, :now)
+                        on conflict (service_id, name) do update set plain_value = excluded.plain_value,
                             secret_value = excluded.secret_value, key_version = excluded.key_version,
                             hint = excluded.hint, seq = excluded.seq, changed_by = excluded.changed_by,
                             changed_at = excluded.changed_at""")
-                .param("name", name).param("plain", plain).param("secret", sealed)
+                .param("service", service).param("name", name).param("plain", plain).param("secret", sealed)
                 .param("keyVersion", sealed == null ? null : SecretCipher.KEY_VERSION).param("hint", hint)
                 .param("by", actor.id()).param("now", now()).update();
     }
@@ -399,11 +433,12 @@ class JdbcIntegrations implements Integrations {
     @Override
     public Check check(Actor actor, String group) {
         staff.requireEveryCity(actor, MANAGE_PERMISSION);
+        UUID service = serviceOf(actor);
         snapshot = load();
         IntegrationCheck check = checks.orderedStream().filter(c -> c.group().equals(group)).findFirst()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Nothing to check for " + group));
         try {
-            return check.check();
+            return check.check(service);
         } catch (RuntimeException e) {
             return new Check(group, false, "Failed: " + e.getClass().getSimpleName());
         }

@@ -34,7 +34,11 @@ class PickupEtas {
     private final Clock clock;
     private final Map<Key, RouteEstimator.Estimate> remembered = new ConcurrentHashMap<>();
 
-    PickupEtas(JdbcClient jdbc, RouteEstimator routes, PresenceProperties presence, Clock clock) {
+    private final taxi.blizz.geo.CityCatalog cities;
+
+    PickupEtas(JdbcClient jdbc, RouteEstimator routes, PresenceProperties presence, Clock clock,
+               taxi.blizz.geo.CityCatalog cities) {
+        this.cities = cities;
         this.jdbc = jdbc;
         this.routes = routes;
         this.presence = presence;
@@ -62,7 +66,8 @@ class PickupEtas {
         RouteEstimator.Estimate estimate = remembered.get(key);
         if (estimate == null) {
             try {
-                estimate = routes.estimate(p.point(), order.pickup());
+                estimate = routes.estimate(cities.serviceOf(order.cityId()).orElse(null), p.point(),
+                        order.pickup());
             } catch (RuntimeException failed) {
                 log.warn("No pickup ETA for assignment {}: {}", assignment.id(), failed.getClass().getSimpleName());
                 return order;

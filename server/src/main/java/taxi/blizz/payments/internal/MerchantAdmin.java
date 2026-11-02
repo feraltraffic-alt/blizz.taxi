@@ -256,21 +256,22 @@ class MerchantAdmin {
 
     private MerchantView view(UUID id) {
         record Row(String provider, String account, String domain, String currency, String secretRef,
-                   OffsetDateTime createdAt) {
+                   OffsetDateTime createdAt, UUID service) {
         }
         Row row = jdbc.sql("""
-                        select provider, account, domain, currency, secret_ref, created_at from payment_merchant
-                        where id = :id""")
+                        select provider, account, domain, currency, secret_ref, created_at, service_id
+                        from payment_merchant where id = :id""")
                 .param("id", id)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
-                        rs.getString(5), rs.getObject(6, OffsetDateTime.class)))
+                        rs.getString(5), rs.getObject(6, OffsetDateTime.class), rs.getObject(7, UUID.class)))
                 .single();
         List<UUID> cities = jdbc.sql(
                         "select city_id from payment_merchant_city where merchant_id = :id order by city_id")
                 .param("id", id).query(UUID.class).list();
-        String source = merchants.secretSource(id, row.secretRef());
+        String source = merchants.secretSource(id, row.service(), row.secretRef());
         return new MerchantView(id, row.provider(), row.account(), row.domain(), row.currency(), cities, source,
-                "PANEL".equals(source) ? integrations.secretHint(Merchants.secretName(id)).orElse(null) : null,
+                "PANEL".equals(source) ? integrations.secretHint(row.service(), Merchants.secretName(id)).orElse(null)
+                        : null,
                 row.createdAt());
     }
 

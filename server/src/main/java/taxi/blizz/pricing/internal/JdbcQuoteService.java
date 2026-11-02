@@ -46,6 +46,7 @@ class JdbcQuoteService implements QuoteService {
     private final ServiceSettings settings;
     private final taxi.blizz.promotions.RiderPromotions promotions;
     private final taxi.blizz.geo.CityOperations cityOperations;
+    private final taxi.blizz.geo.CityCatalog cities;
     private final taxi.blizz.configuration.FeatureFlags flags;
 
     JdbcQuoteService(JdbcClient jdbc, IdempotentCommands commands, JsonMapper json,
@@ -53,7 +54,9 @@ class JdbcQuoteService implements QuoteService {
                      taxi.blizz.promotions.RiderPromotions promotions, taxi.blizz.platform.RateLimits rateLimits,
                      ObjectProvider<MeterRegistry> meters,
                      @Value("${blizz.pricing.straight-line-quotes:true}") boolean straightLineQuotes,
-                     taxi.blizz.geo.CityOperations cityOperations, taxi.blizz.configuration.FeatureFlags flags) {
+                     taxi.blizz.geo.CityOperations cityOperations, taxi.blizz.configuration.FeatureFlags flags,
+                     taxi.blizz.geo.CityCatalog cities) {
+        this.cities = cities;
         this.cityOperations = cityOperations;
         this.flags = flags;
         this.rateLimits = rateLimits;
@@ -85,7 +88,9 @@ class JdbcQuoteService implements QuoteService {
         if (estimator == null) {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
         }
-        RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
+        // The pickup city's service routes with its own settings (ADR 0016).
+        RouteEstimator.Estimate route = estimator.estimate(cities.serviceOf(request.cityId()).orElse(null),
+                request.pickup(), request.dropOff());
         meters.ifAvailable(m -> m.counter("blizz.quotes", "route_source", route.source().name()).increment());
         if (route.source() == RouteEstimator.Source.STRAIGHT_LINE && !straightLineQuotes) {
             // REQ-GEO-08: without a road route the service may refuse a fixed price instead of guessing one.
@@ -179,7 +184,9 @@ class JdbcQuoteService implements QuoteService {
         if (estimator == null) {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "Route estimator is not configured");
         }
-        RouteEstimator.Estimate route = estimator.estimate(request.pickup(), request.dropOff());
+        // The pickup city's service routes with its own settings (ADR 0016).
+        RouteEstimator.Estimate route = estimator.estimate(cities.serviceOf(request.cityId()).orElse(null),
+                request.pickup(), request.dropOff());
         meters.ifAvailable(m -> m.counter("blizz.quotes", "route_source", route.source().name()).increment());
         if (route.source() == RouteEstimator.Source.STRAIGHT_LINE && !straightLineQuotes) {
             throw error(ErrorCode.PROVIDER_UNAVAILABLE, "No road route right now; a price cannot be fixed");

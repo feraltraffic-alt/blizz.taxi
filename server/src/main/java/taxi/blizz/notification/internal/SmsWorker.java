@@ -40,8 +40,11 @@ class SmsWorker {
     private final CommittedMetrics metrics;
     private final JsonMapper json;
 
+    private final taxi.blizz.geo.CityCatalog cities;
+
     SmsWorker(JdbcClient jdbc, TransactionTemplate tx, TextMessages texts, Orders orders, Outbox outbox,
-              Clock clock, CommittedMetrics metrics, JsonMapper json) {
+              Clock clock, CommittedMetrics metrics, JsonMapper json, taxi.blizz.geo.CityCatalog cities) {
+        this.cities = cities;
         this.json = json;
         this.metrics = metrics;
         this.jdbc = jdbc;
@@ -113,7 +116,11 @@ class SmsWorker {
             giveUp(sms, "FAILED", "The order has no caller's number");
             return;
         }
-        TextMessages.Result result = texts.send(new PhoneNumber(phone), sms.body());
+        // From the account of the order city's service, under its sender name (ADR 0016).
+        UUID service = orders.origin(sms.orderId()).flatMap(o -> cities.serviceOf(o.cityId())).orElse(null);
+        TextMessages.Result result = service == null
+                ? new TextMessages.Result(TextMessages.State.FAILED, null, "The order's taxi service is not known")
+                : texts.send(service, new PhoneNumber(phone), sms.body());
         tx.executeWithoutResult(status -> {
             metrics.counter("blizz.sms.sent", "purpose", "CALLER", "state", result.state().name());
             switch (result.state()) {

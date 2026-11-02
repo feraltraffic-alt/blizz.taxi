@@ -49,16 +49,22 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
     private record Built(long revision, String provider, Optional<GeocoderProvider> adapter) {
     }
 
-    private volatile Built built;
+    /** By service: each service searches with its own provider and key (ADR 0016). */
+    private final ConcurrentHashMap<UUID, Built> built = new ConcurrentHashMap<>();
+    private final taxi.blizz.geo.CityCatalog cities;
 
     @org.springframework.beans.factory.annotation.Autowired
     ConfiguredGeocoding(Integrations integrations, GeocodingProperties environment, AddressBook addresses,
-                        JsonMapper json, Clock clock, taxi.blizz.platform.ProviderBreakers breakers) {
-        this(integrations, environment, addresses, json, clock, new HttpTransport(environment.timeout(), breakers));
+                        JsonMapper json, Clock clock, taxi.blizz.platform.ProviderBreakers breakers,
+                        taxi.blizz.geo.CityCatalog cities) {
+        this(integrations, environment, addresses, json, clock, new HttpTransport(environment.timeout(), breakers),
+                cities);
     }
 
     ConfiguredGeocoding(Integrations integrations, GeocodingProperties environment, AddressBook addresses,
-                        JsonMapper json, Clock clock, GeocoderProvider.Transport transport) {
+                        JsonMapper json, Clock clock, GeocoderProvider.Transport transport,
+                        taxi.blizz.geo.CityCatalog cities) {
+        this.cities = cities;
         this.integrations = integrations;
         this.environment = environment;
         this.addresses = addresses;
@@ -68,8 +74,13 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
     }
 
     @Override
-    public String provider() {
-        return current().provider();
+    public String provider(UUID cityId) {
+        return current(serviceOf(cityId)).provider();
+    }
+
+    /** The city's service; a city of no known service searches only its own addresses. */
+    private UUID serviceOf(UUID cityId) {
+        return cityId == null ? null : cities.serviceOf(cityId).orElse(null);
     }
 
     @Override
@@ -79,7 +90,7 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
         String text = query == null ? "" : query.strip();
         List<Place> places = new ArrayList<>(addresses.search(cityId, text, language, near, max).stream()
                 .map(ConfiguredGeocoding::own).toList());
-        Built b = current();
+        Built b = current(serviceOf(cityId));
         if (places.size() >= max || text.length() < 3 || b.adapter().isEmpty() || !spend(requesterId)) {
             return places;
         }
@@ -106,7 +117,7 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
         if (own.isPresent()) {
             return own;
         }
-        Built b = current();
+        Built b = current(serviceOf(cityId));
         if (b.adapter().isEmpty() || !spend(requesterId)) {
             return Optional.empty();
         }
@@ -126,8 +137,8 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
     }
 
     @Override
-    public Integrations.Check check() {
-        Built b = current();
+    public Integrations.Check check(UUID serviceId) {
+        Built b = current(serviceId);
         if (b.adapter().isEmpty()) {
             return new Integrations.Check(group(), !"GOOGLE".equals(b.provider()) && !"VISICOM".equals(b.provider()),
                     "BUILT_IN".equals(b.provider()) ? "Only the service's own addresses are searched"
@@ -143,33 +154,35 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
 
     // ---------------------------------------------------------------- helpers
 
-    private Built current() {
+    private Built current(UUID service) {
+        if (service == null) {
+            return new Built(-1, "BUILT_IN", Optional.empty());
+        }
         long revision;
         try {
             revision = integrations.revision();
         } catch (RuntimeException e) {
             revision = -1;
         }
-        Built b = built;
+        Built b = built.get(service);
         if (b != null && b.revision() == revision) {
             return b;
         }
-        synchronized (this) {
-            if (built == null || built.revision() != revision) {
-                built = build(revision);
-            }
-            return built;
-        }
+        long seen = revision;
+        return built.compute(service, (key, old) -> old != null && old.revision() == seen ? old : build(key, seen));
     }
 
-    private Built build(long revision) {
-        String provider = setting(Integrations.GEOCODING_PROVIDER).orElse(environment.provider())
-                .toUpperCase(Locale.ROOT);
+    /** The service's own values; the environment's stand in for the first service only (ADR 0016). */
+    private Built build(UUID service, long revision) {
+        boolean env = Integrations.environmentServes(service);
+        String provider = setting(service, Integrations.GEOCODING_PROVIDER)
+                .orElse(env ? environment.provider() : "BUILT_IN").toUpperCase(Locale.ROOT);
         Optional<GeocoderProvider> adapter = switch (provider) {
-            case "GOOGLE" -> setting(Integrations.GEOCODING_GOOGLE_KEY).or(() -> nonBlank(environment.googleApiKey()))
+            case "GOOGLE" -> setting(service, Integrations.GEOCODING_GOOGLE_KEY)
+                    .or(() -> env ? nonBlank(environment.googleApiKey()) : Optional.empty())
                     .map(key -> new GoogleGeocoder(transport, json, key));
-            case "VISICOM" -> setting(Integrations.GEOCODING_VISICOM_KEY)
-                    .or(() -> nonBlank(environment.visicomApiKey()))
+            case "VISICOM" -> setting(service, Integrations.GEOCODING_VISICOM_KEY)
+                    .or(() -> env ? nonBlank(environment.visicomApiKey()) : Optional.empty())
                     .map(key -> new VisicomGeocoder(transport, json, key));
             case "FAKE" -> Optional.of(new FakeGeocoder());
             default -> Optional.empty();
@@ -177,9 +190,9 @@ class ConfiguredGeocoding implements Geocoding, IntegrationCheck {
         return new Built(revision, provider, adapter);
     }
 
-    private Optional<String> setting(String name) {
+    private Optional<String> setting(UUID service, String name) {
         try {
-            return integrations.value(name).filter(v -> !v.isBlank());
+            return integrations.value(service, name).filter(v -> !v.isBlank());
         } catch (RuntimeException e) {
             return Optional.empty(); // e.g. no master key: the environment's value
         }
