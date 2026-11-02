@@ -62,6 +62,8 @@ export interface components {
                 service_phone?: string | null;
             };
             cities: {
+                /** @description A point inside the city's area, where an address search or a map starts before there is a location (issue #243). Inside the polygon even for a bent city; not its geometric centre. */
+                center: components["schemas"]["GeoPoint"];
                 code: string;
                 currency: string;
                 id: components["schemas"]["Uuid"];
@@ -152,6 +154,11 @@ export interface components {
             /** @description JSON pointer or dotted path of the offending field. */
             field: string;
             message?: string;
+        };
+        /** @description WGS84 coordinates (REQ-GEO-01). */
+        GeoPoint: {
+            lat: number;
+            lon: number;
         };
         Languages: {
             /** @enum {string} */

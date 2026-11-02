@@ -16,6 +16,12 @@ public interface CityCatalog {
     /** The taxi service of a city in any state (ADR 0016), or empty if the city does not exist. */
     Optional<UUID> serviceOf(UUID cityId);
 
+    /**
+     * A point inside each published city of the service, by city: where an operator's address search and an app's
+     * map start before anyone has a location (issue #243). Inside the polygon even for a bent city.
+     */
+    java.util.Map<UUID, GeoPoint> centers(UUID serviceId);
+
     /** Time zone of a city in any state, or empty if the city does not exist. */
     Optional<String> timezone(UUID cityId);
 }

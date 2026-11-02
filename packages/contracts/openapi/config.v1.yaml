@@ -175,7 +175,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [id, code, name, currency, timezone, working_hours, payment_methods, orders_paused]
+            required: [id, code, name, currency, timezone, working_hours, payment_methods, orders_paused, center]
             properties:
               id:
                 $ref: "./common.yaml#/components/schemas/Uuid"
@@ -202,6 +202,11 @@ components:
               orders_paused:
                 description: New orders are refused with CITY_PAUSED for now (REQ-TEN-06).
                 type: boolean
+              center:
+                description: >-
+                  A point inside the city's area, where an address search or a map starts before there is a location
+                  (issue #243). Inside the polygon even for a bent city; not its geometric centre.
+                $ref: "./common.yaml#/components/schemas/GeoPoint"
 
     Brand:
       description: Shown by the apps; never changes business rules (REQ-TEN-07).
