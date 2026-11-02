@@ -196,6 +196,15 @@ Real cases from pull requests on this repository: what was handed in, what the r
   - A guard against leaked data looks for the **whole shape of the secret** (`4111[ -]?1111`), never for a short
     substring that dates, ids or amounts can contain.
 
+## 20. The phone's calendar against the city's (lead's #257, found by #320's Web E2E, fixed in #321)
+
+- **Task:** the driver's money screen asks `GET /earnings` for today and six days back.
+- **Missed:**
+  - **The app named the days by the phone's calendar.** The server counts them in the city's calendar (REQ-DRV-12).
+  - **Every unit test used 10:00 UTC**, when Kyiv and UTC are on the same date.
+  - **The first Web E2E after 22:00 UTC failed on an unrelated PR.** It was 00:10 in Kyiv, so the trip just driven fell outside the asked period, and the screen said "0 trips".
+- **Habit:** a date or a "today" sent to the server is computed in the **city's time zone**. Tests take the clock across a midnight that differs between the device and the city: at 22:30 UTC Kyiv is on the next day, and New York at 02:00 UTC is on the day before.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

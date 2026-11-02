@@ -83,6 +83,23 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
 
+## Recent history (02.11.2026, late night)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #310 | #309 | Operator: switch a card order to cash; change the destination of a trip in progress. `PlacePicker` is in `Places.tsx` |
+  | #312 | #311 | Operator: interrupt a trip (with a follow-up car), remove a pre-order reservation |
+  | #314 | #313 | Rider and driver: attach files to support cases. `PickedFile` is in `mobile-ui`; the rider has `expo-document-picker` |
+  | #316 | #315 | Driver: end-to-end run of the documents screen against the sandbox. A new number, real PNGs, the fake antivirus |
+  | #318 | #317 | Operator: open (one audited download) and attach support files |
+  | #322 | #321 | Driver money: the city's days, not the phone's (lessons, case 20) |
+- **Open:** #320 (#319), rider and driver open support attachments. Its Web E2E failed on the money bug before #322; main has been merged in and it waits for a re-run.
+- **Owner question:**
+  - The operator's live map needs a decision on the map tiles: public OpenStreetMap (usage limits), a paid provider, or our own tile server.
+  - Until then the operator has the list of cars on the line (#287).
+
 ## Recent history (02.11.2026, night)
 
 - **Merged:**
