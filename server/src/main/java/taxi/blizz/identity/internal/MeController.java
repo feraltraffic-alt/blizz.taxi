@@ -36,7 +36,7 @@ class MeController {
     }
 
     private Me me(AccessClaims claims, String table) {
-        Row row = jdbc.sql("select account_state, phone_normalized, name from " + table + " where id = :id")
+        Row row = jdbc.sql("select account_state, (select p.phone_normalized from " + table + " p where p.id <> :id and p.phone_normalized is not null limit 1), name from " + table + " where id = :id")
                 .param("id", claims.actor().id())
                 .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3)))
                 .optional()
