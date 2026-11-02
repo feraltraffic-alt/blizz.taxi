@@ -205,3 +205,22 @@ describe('refresh rotation', () => {
     expect(tokens.read() === rotated.refresh_token).toBe(true);
   });
 });
+
+describe('app sessions', () => {
+  it('a session from a one-time code is adopted and the app headers go with every request', async () => {
+    let headers: Headers | undefined;
+    server.use(http.get(origin + '/api/admin/v1/me', ({request}) => {headers = request.headers; return HttpResponse.json(me);}));
+    const tokens = memoryTokens(null);
+    const api = createApiClient({baseUrl: origin, refreshTokens: tokens, correlationId: () => cid,
+      headers: () => ({'X-App-Platform': 'RIDER_ANDROID', 'X-App-Version': '1.0.0'})});
+    expect(api.sessionSnapshot().authenticated).toBe(false);
+    api.startSession(rotated);
+    expect(api.sessionSnapshot().authenticated).toBe(true);
+    expect(tokens.read() === rotated.refresh_token).toBe(true);
+    await api.get('/api/admin/v1/me');
+    expect(headers?.get('Authorization')).toBe('Bearer ' + rotated.access_token);
+    expect(headers?.get('X-App-Version')).toBe('1.0.0');
+    expect(headers?.get('X-App-Platform')).toBe('RIDER_ANDROID');
+    expect(headers?.get('X-Correlation-Id')).toBe(cid);
+  });
+});
