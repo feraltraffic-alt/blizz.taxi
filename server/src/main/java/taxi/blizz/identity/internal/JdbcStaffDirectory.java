@@ -394,6 +394,10 @@ class JdbcStaffDirectory implements StaffDirectory {
         if (telegram != null && !telegram.startsWith("@")) {
             telegram = "@" + telegram;
         }
+        if (p.role() == Role.PLATFORM_OWNER) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                    "The platform owner is not a staff member of a service");
+        }
         boolean superAdmin = p.role() == Role.SUPER_ADMIN;
         List<String> permissions = superAdmin ? List.of() : p.permissions().stream().distinct().sorted().toList();
         for (String permission : permissions) {

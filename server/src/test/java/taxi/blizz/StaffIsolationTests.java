@@ -154,6 +154,8 @@ class StaffIsolationTests {
             + "30.10.2026 in #112, clients.manage)";
     private static final String SUPER_ADMIN = "Super admin only, by role and not by city (contract: \"Super admin "
             + "only\"); a super admin passes every city check";
+    private static final String OWNER = "The platform owner's only (ADR 0016): above every service and city; "
+            + "proven by PlatformOwnerTests";
     private static final String GLOBAL_SETTING = "A setting of the whole service with no city in it";
     private static final String MERCHANT = "Staff of every city only (owner decision 01.11.2026 in #201): a merchant "
             + "serves several cities and holds the service's keys; proven by merchantsAreForStaffOfEveryCity";
@@ -196,6 +198,8 @@ class StaffIsolationTests {
                     GLOBAL_SETTING + ": the cancel reason catalogue"),
             Map.entry("POST /api/admin/v1/settings/driver-transfers/{currency}",
                     GLOBAL_SETTING + ": a transfer rule per currency"),
+            Map.entry("POST /api/admin/v1/services/{service_id}/suspend", OWNER),
+            Map.entry("POST /api/admin/v1/services/{service_id}/resume", OWNER),
             Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/change", MERCHANT),
             Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/check", MERCHANT));
 

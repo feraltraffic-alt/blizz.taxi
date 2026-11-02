@@ -15,6 +15,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                           environment, never in a file in the repository
  * @param maxFailedSignInsPerAddress wrong sign-ins from one network address within {@code lockout}, any login,
  *                           before that address is refused for a while (threat model A3)
+ * @param ownerLogin         the platform owner (ADR 0016), created at start only while there is none
+ * @param ownerPassword      its initial password, through the environment like the super admin's
  */
 @ConfigurationProperties("blizz.staff")
 record StaffProperties(
@@ -23,7 +25,16 @@ record StaffProperties(
         @DefaultValue("12") int minPasswordLength,
         String bootstrapLogin,
         String bootstrapPassword,
-        @DefaultValue("30") int maxFailedSignInsPerAddress) {
+        @DefaultValue("30") int maxFailedSignInsPerAddress,
+        String ownerLogin,
+        String ownerPassword) {
+
+    /** Without a platform owner (tests and servers that set none). */
+    StaffProperties(int maxFailedSignIns, Duration lockout, int minPasswordLength, String bootstrapLogin,
+                    String bootstrapPassword, int maxFailedSignInsPerAddress) {
+        this(maxFailedSignIns, lockout, minPasswordLength, bootstrapLogin, bootstrapPassword,
+                maxFailedSignInsPerAddress, null, null);
+    }
 
     StaffProperties {
         if (maxFailedSignInsPerAddress < 1) {

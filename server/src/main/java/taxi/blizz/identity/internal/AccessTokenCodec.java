@@ -60,7 +60,7 @@ class AccessTokenCodec {
                 .claim("sub_type", actor.type().name())
                 .claim("sid", sessionId.toString())
                 .claim("iid", instanceId.toString())
-                .claim("svc", serviceId.toString())
+                .claim("svc", serviceId == null ? null : serviceId.toString())
                 .build();
         try {
             SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
@@ -92,10 +92,11 @@ class AccessTokenCodec {
             }
             SubjectType type = SubjectType.valueOf(claims.getStringClaim("sub_type"));
             Actor actor = new Actor(type, UUID.fromString(claims.getSubject()));
-            // A token without its service (issued before services existed) is not accepted (ADR 0016).
+            // Only the platform owner's staff session has no service (ADR 0016); the session row decides which.
+            String service = claims.getStringClaim("svc");
             return Optional.of(new AccessClaims(actor, expectedAudience,
                     UUID.fromString(claims.getStringClaim("sid")), instanceId, expiresAt,
-                    UUID.fromString(claims.getStringClaim("svc"))));
+                    service == null ? null : UUID.fromString(service)));
         } catch (ParseException | JOSEException | IllegalArgumentException | NullPointerException e) {
             return Optional.empty();
         }

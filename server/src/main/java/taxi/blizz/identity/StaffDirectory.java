@@ -13,8 +13,9 @@ import taxi.blizz.platform.Actor;
  */
 public interface StaffDirectory {
 
+    /** {@code PLATFORM_OWNER}: above the taxi services (ADR 0016); never created or given through this directory. */
     enum Role {
-        SUPER_ADMIN, ADMIN, OPERATOR
+        PLATFORM_OWNER, SUPER_ADMIN, ADMIN, OPERATOR
     }
 
     /** At least one of phone, e-mail, Telegram. */
