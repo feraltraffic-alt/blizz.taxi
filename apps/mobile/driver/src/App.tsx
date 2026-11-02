@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, DRIVER_CATEGORIES, LegalGuard, Loading, Screen, SignIn, Support, UpdateScreen, failureText,
+  Alert, Button, RIDER_CATEGORIES, LegalGuard, Loading, Screen, SignIn, Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
@@ -60,7 +60,7 @@ export function DriverApp({client, config}: {client: ApiClient; config: AppConfi
 }
 
 /** The driver's side of support (#298); a blocked driver keeps it (#141). */
-const DRIVER_SIDE = {api: '/api/driver/v1', me: 'DRIVER', categories: DRIVER_CATEGORIES} as const;
+const DRIVER_SIDE = {api: '/api/driver/v1', me: 'DRIVER', categories: RIDER_CATEGORIES} as const;
 
 /** Admitted means: an active account, an approved review, at least one city and an approved vehicle. */
 function admitted(profile: Profile): boolean {
