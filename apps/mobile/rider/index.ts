@@ -2,12 +2,13 @@ import {createElement} from 'react';
 import {registerRootComponent} from 'expo';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
 import {RiderApp} from './src/App';
 import type {Point} from './src/Ride';
-import {secureRefreshTokens, webRefreshTokens} from '@blizz/mobile-ui';
+import {expoPush, secureRefreshTokens, webRefreshTokens, type Notifications as Port} from '@blizz/mobile-ui';
 
 const KEY = 'blizz.rider.refresh';
 const extra = (Constants.expoConfig?.extra ?? {}) as {service?: string; apiUrl?: string};
@@ -29,8 +30,11 @@ async function locate(): Promise<Point> {
   return {lat: fix.coords.latitude, lon: fix.coords.longitude};
 }
 
+// Pushes on the phone only: the web build (end-to-end runs) has none (#264).
+const push = Platform.OS === 'web' ? undefined : expoPush(Notifications as unknown as Port, Platform.OS);
+
 function Root() {
-  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate}});
+  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push}});
 }
 
 registerRootComponent(Root);

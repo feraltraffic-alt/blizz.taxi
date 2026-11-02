@@ -1,7 +1,9 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Chat, Field, useTheme, type Locale, type Shared} from '@blizz/mobile-ui';
+import {
+  Alert, Button, Chat, Field, usePushDecider, useTheme, type Locale, type PushPort, type Shared
+} from '@blizz/mobile-ui';
 
 type Point = {lat: number; lon: number};
 export type Offer = {id: string; order_id: string; seconds_left: number; vehicle_class: string; pickup_label: string;
@@ -17,7 +19,7 @@ type BroadcastOrder = {order_id: string; vehicle_class: string; pickup_label: st
 const ENDED = new Set(['COMPLETED', 'ABORTED']);
 const money = (minor: number, currency?: string | null) => (minor / 100).toFixed(2) + (currency ? ' ' + currency : '');
 
-type Props = Shared & {newId: () => string; now: () => number; pollMs: number; locale: Locale};
+type Props = Shared & {newId: () => string; now: () => number; pollMs: number; locale: Locale; push?: PushPort};
 
 /**
  * The driver's work while online (#249): the current trip from the server, also after a restart, or else the open
@@ -61,7 +63,7 @@ export function Dispatch(props: Props) {
   );
 }
 
-function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props & {say: (text: string | null) => void;
+function Offers({client, t, guard, failure, newId, pollMs, push, say, accepted}: Props & {say: (text: string | null) => void;
   accepted: () => void}) {
   const [offer, setOffer] = useState<Offer | null>(null);
   const [polled, setPolled] = useState(false);
@@ -85,6 +87,13 @@ function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props
     const timer = setInterval(() => {poll().catch(() => undefined);}, pollMs);
     return () => clearInterval(timer);
   }, [poll, pollMs]); // the failure text follows the same texts
+
+  // An offer push while the app is open is not shown: the offers are asked at once and the screen shows it (#264).
+  usePushDecider(push, data => {
+    if (data.type !== 'driver.offer') return true;
+    poll().catch(() => undefined);
+    return false;
+  });
 
   const offerId = offer?.id;
   useEffect(() => {
