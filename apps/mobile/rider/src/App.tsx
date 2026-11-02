@@ -260,7 +260,6 @@ function LegalGate({doc, client, t, guard, failure, newId, locale, service, onAc
   }, [client, guard, doc, language]);
 
   async function accept() {
-    if (inFlight.current) return;
     inFlight.current = true;
     setSending(true);
     setMessage(null);
@@ -282,7 +281,7 @@ function LegalGate({doc, client, t, guard, failure, newId, locale, service, onAc
     <Screen title={t('legalTitle')}>
       {text === null && !message ? <ActivityIndicator accessibilityLabel={t('loading')} /> : null}
       {text !== null ? <Text style={{color: theme.text}}>{text}</Text> : null}
-      <Button label={t('accept')} onPress={() => void accept()} disabled={sending || text === null} />
+      <Button label={t('accept')} onPress={() => void accept()} disabled={text === null} />
       {message ? <Text accessibilityRole="alert" style={{color: theme.error}}>{message}</Text> : null}
     </Screen>
   );
