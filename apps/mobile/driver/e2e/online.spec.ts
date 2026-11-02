@@ -14,8 +14,9 @@ type Request = import('@playwright/test').APIRequestContext;
 /** A rider of the sandbox orders a cash ride from the driver's spot through the API, as full-ride.sh does. */
 async function riderOrders(request: Request, from: {lat: number; lon: number}):
   Promise<{order: string; headers: Record<string, string>}> {
-  const phone = '+38067' + String(Date.now()).slice(-7);
-  const device = 'e2e-rider-' + Date.now();
+  // Random, not the clock: the light and dark runs start together and would ask a code for the same number (a 429).
+  const phone = '+38067' + String(crypto.getRandomValues(new Uint32Array(1))[0]! % 10_000_000).padStart(7, '0');
+  const device = 'e2e-rider-' + crypto.randomUUID();
   const challenge = await request.post('/auth/v1/otp/challenges', {data: {audience: 'CLIENT', phone,
     device_ref: device}});
   expect(challenge.status()).toBe(201);
