@@ -33,6 +33,7 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
     private final Map<Provider, RetryBudget> budgets = new EnumMap<>(Provider.class);
     private final Map<Provider, LongAdder> fullBulkhead = new EnumMap<>(Provider.class);
     private final Map<Provider, LongAdder> spentBudget = new EnumMap<>(Provider.class);
+    private final Map<String, InMemoryProviderBreakers> keyed = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** The same settings for every provider: for one provider client's tests (through {@link ProviderBreakers#of}). */
     public InMemoryProviderBreakers(int failureThreshold, java.time.Duration openFor, Clock clock) {
@@ -196,6 +197,12 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
     @Override
     public State state(Provider provider) {
         return breakers.get(provider).state();
+    }
+
+    /** Kept for the life of the instance: one set per key (a taxi service), created at its first call. */
+    @Override
+    public ProviderBreakers keyed(String key) {
+        return keyed.computeIfAbsent(key, k -> new InMemoryProviderBreakers(properties, clock));
     }
 
     @Override

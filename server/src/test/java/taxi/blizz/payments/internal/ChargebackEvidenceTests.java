@@ -269,7 +269,8 @@ class ChargebackEvidenceTests {
         String all = response.body();
         assertThat(all).doesNotContain("internal-only-note")
                 .doesNotContain("41****1111").doesNotContain("tok-")
-                .doesNotContain("4111").doesNotContain("0671234567").doesNotContain("123 45 67")
+                .doesNotContainPattern("4111[ -]?1111") // the typed card, not any "4111" (a timestamp had .741119)
+                .doesNotContain("0671234567").doesNotContain("123 45 67")
                 .doesNotContain(phoneOf("client", ride.rider().id()))
                 .doesNotContain(phoneOf("client", ride.rider().id()).substring(1))
                 .doesNotContain(phoneOf("driver", ride.driver().actor().id()))

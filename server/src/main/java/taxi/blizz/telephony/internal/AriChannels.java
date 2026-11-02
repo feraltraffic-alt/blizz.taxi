@@ -69,7 +69,8 @@ class AriChannels implements ChannelControl {
         HttpResponse<Void> response = send(request(serviceId, address)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("variables", variables))))
-                .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.discarding());
+                .timeout(breakers.keyed(serviceId.toString()).timeout(Provider.ASTERISK)).build(),
+                HttpResponse.BodyHandlers.discarding(), serviceId);
         return switch (response.statusCode()) {
             case 200 -> Originated.STARTED;
             case 409 -> Originated.ALREADY_EXISTS;
@@ -81,7 +82,8 @@ class AriChannels implements ChannelControl {
     @SuppressWarnings("unchecked")
     public Set<String> channels(java.util.UUID serviceId) throws IOException {
         HttpResponse<String> response = send(request(serviceId, "/ari/channels").GET()
-                .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.ofString());
+                .timeout(breakers.keyed(serviceId.toString()).timeout(Provider.ASTERISK)).build(),
+                HttpResponse.BodyHandlers.ofString(), serviceId);
         if (response.statusCode() != 200) {
             throw new IOException("Asterisk answered " + response.statusCode() + " to the list of channels");
         }
@@ -106,8 +108,11 @@ class AriChannels implements ChannelControl {
     }
 
     /** A 5xx counts against the breaker; any other answer is Asterisk's, a business "no" at most. */
-    private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> body) throws IOException {
-        Sent<T> sent = breakers.call(Provider.ASTERISK, () -> new Sent<>(client.send(request, body), null),
+    private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> body, java.util.UUID serviceId)
+            throws IOException {
+        // Each service's exchange its own breaker and bulkhead (#278).
+        Sent<T> sent = breakers.keyed(serviceId.toString()).call(Provider.ASTERISK,
+                () -> new Sent<>(client.send(request, body), null),
                 s -> s.response() != null && s.response().statusCode() >= 500,
                 e -> new Sent<>(null, e instanceof IOException io ? io : new IOException("Interrupted", e)),
                 () -> new Sent<>(null, new Refused("Asterisk is not taking calls right now")));

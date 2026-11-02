@@ -8,6 +8,9 @@ import {
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
 import {Money} from './Money';
+import {Documents, type AdmissionProfile, type PickedFile} from './Documents';
+
+export type {PickedFile} from './Documents';
 
 export interface Position {
   lat: number;
@@ -28,10 +31,11 @@ export interface AppConfig {
   now?: () => number;
   /** The phone's pushes (#264); none in the web build. */
   push?: PushPort;
+  /** Picks a document file on the phone (#284); none: no upload offered. */
+  pickFile?: () => Promise<PickedFile | null>;
 }
 
-type Profile = {account_state: string; review_status: string; admission_city_ids: string[];
-  vehicles: {id: string; state: string}[]; documents: {type: string; decision: string; decision_reason?: string}[]};
+type Profile = AdmissionProfile & {account_state: string; admission_city_ids: string[]};
 type Availability = {session_id?: string | null; session_version: number; session_state: string};
 
 export function DriverApp({client, config}: {client: ApiClient; config: AppConfig}) {
@@ -70,7 +74,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
-  const [tab, setTab] = useState<'work' | 'money'>('work');
+  const [tab, setTab] = useState<'work' | 'money' | 'documents'>('work');
   const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   const theme = useTheme();
 
@@ -183,9 +187,14 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       </Screen>
     );
   }
+  if (tab === 'documents') {
+    return <Documents client={client} t={t} guard={guard} failure={failure} newId={newId} pickFile={config.pickFile}
+      profile={profile} onChanged={load} onBack={() => setTab('work')} />;
+  }
   return (
     <Screen title={t('home')}>
       <Button label={t('money')} onPress={() => setTab('money')} />
+      {online ? null : <Button label={t('documents')} onPress={() => setTab('documents')} />}
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>

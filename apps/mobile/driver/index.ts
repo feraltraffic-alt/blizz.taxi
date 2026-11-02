@@ -1,13 +1,14 @@
 import {createElement} from 'react';
 import {registerRootComponent} from 'expo';
 import Constants from 'expo-constants';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
 import {expoPush, secureRefreshTokens, webRefreshTokens, type Notifications as Port} from '@blizz/mobile-ui';
-import {DriverApp, type Position} from './src/App';
+import {DriverApp, type PickedFile, type Position} from './src/App';
 
 const KEY = 'blizz.driver.refresh';
 const extra = (Constants.expoConfig?.extra ?? {}) as {service?: string; apiUrl?: string};
@@ -32,8 +33,19 @@ async function locate(): Promise<Position> {
 // Pushes on the phone only: the web build (end-to-end runs) has none (#264).
 const push = Platform.OS === 'web' ? undefined : expoPush(Notifications as unknown as Port, Platform.OS);
 
+/** A document file from the phone (or the browser in the web build), its bytes read from the local copy (#284). */
+async function pickFile(): Promise<PickedFile | null> {
+  const result = await DocumentPicker.getDocumentAsync({type: ['image/jpeg', 'image/png', 'application/pdf'],
+    copyToCacheDirectory: true, multiple: false});
+  const asset = result.canceled ? undefined : result.assets[0];
+  if (!asset) return null;
+  const data = asset.file ?? await (await fetch(asset.uri)).blob();
+  return {name: asset.name, type: asset.mimeType ?? data.type, size: asset.size ?? data.size, data};
+}
+
 function Root() {
-  return createElement(DriverApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push}});
+  return createElement(DriverApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push,
+    pickFile}});
 }
 
 registerRootComponent(Root);

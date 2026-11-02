@@ -5,6 +5,11 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    liveDrivers: 'Машины на линии', toOrders: 'Заказы', liveStatus: 'Статус', anyClass: 'Любой класс',
+    freshOnly: 'Только со свежей позицией', noCars: 'Нет машин на линии.', total: 'Всего: {count}',
+    noCar: 'без автомобиля', noName: 'без имени', terminalMark: 'терминал', noSignal: 'нет связи',
+    noSignalFor: 'нет связи {minutes} мин', live_FREE: 'свободен', live_ON_ORDER: 'на заказе', live_PAUSED: 'на паузе',
+    live_CLOSING: 'завершает смену', live_NO_SIGNAL: 'нет связи',
     signIn: 'Войти', signInTitle: 'Вход оператора', login: 'Логин', password: 'Пароль',
     wrongCredentials: 'Неверный логин или пароль.', lockedOut: 'Слишком много попыток. Повторите через {seconds} с.',
     suspended: 'Учётная запись приостановлена.', genericError: 'Не удалось выполнить запрос.',
@@ -24,6 +29,11 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    liveDrivers: 'Машини на лінії', toOrders: 'Замовлення', liveStatus: 'Статус', anyClass: 'Будь-який клас',
+    freshOnly: 'Лише зі свіжою позицією', noCars: 'Немає машин на лінії.', total: 'Усього: {count}',
+    noCar: 'без автомобіля', noName: 'без імені', terminalMark: 'термінал', noSignal: 'немає звʼязку',
+    noSignalFor: 'немає звʼязку {minutes} хв', live_FREE: 'вільний', live_ON_ORDER: 'на замовленні',
+    live_PAUSED: 'на паузі', live_CLOSING: 'завершує зміну', live_NO_SIGNAL: 'немає звʼязку',
     signIn: 'Увійти', signInTitle: 'Вхід оператора', login: 'Логін', password: 'Пароль',
     wrongCredentials: 'Невірний логін або пароль.', lockedOut: 'Забагато спроб. Повторіть через {seconds} с.',
     suspended: 'Обліковий запис призупинено.', genericError: 'Не вдалося виконати запит.',
@@ -43,6 +53,11 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    liveDrivers: 'Auta na linii', toOrders: 'Zlecenia', liveStatus: 'Status', anyClass: 'Dowolna klasa',
+    freshOnly: 'Tylko ze świeżą pozycją', noCars: 'Brak aut na linii.', total: 'Razem: {count}',
+    noCar: 'bez auta', noName: 'bez imienia', terminalMark: 'terminal', noSignal: 'brak łączności',
+    noSignalFor: 'brak łączności {minutes} min', live_FREE: 'wolny', live_ON_ORDER: 'na zleceniu',
+    live_PAUSED: 'pauza', live_CLOSING: 'kończy zmianę', live_NO_SIGNAL: 'brak łączności',
     signIn: 'Zaloguj', signInTitle: 'Logowanie operatora', login: 'Login', password: 'Hasło',
     wrongCredentials: 'Nieprawidłowy login lub hasło.', lockedOut: 'Zbyt wiele prób. Spróbuj ponownie za {seconds} s.',
     suspended: 'Konto jest zawieszone.', genericError: 'Nie udało się wykonać żądania.',
