@@ -5,6 +5,17 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    myCards: 'Мои карты',
+    cards: 'Мои карты',
+    noCards: 'Карт пока нет.',
+    addCard: 'Добавить карту',
+    removeCard: 'Удалить',
+    removeCardOf: 'Удалить {pan}',
+    cardAdded: 'Карта добавлена.',
+    cardFailed: 'Карту не добавили: {reason}',
+    cardExpired: 'Время на добавление карты вышло. Попробуйте ещё раз.',
+    noCardsHere: 'В этом городе карты пока не принимают.',
+    cardWaiting: 'Ждём ответа банка…',
     toHistory: 'Мои поездки',
     history: 'Мои поездки',
     noHistory: 'Поездок пока не было.',
@@ -46,6 +57,17 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    myCards: 'Мої картки',
+    cards: 'Мої картки',
+    noCards: 'Карток ще немає.',
+    addCard: 'Додати картку',
+    removeCard: 'Видалити',
+    removeCardOf: 'Видалити {pan}',
+    cardAdded: 'Картку додано.',
+    cardFailed: 'Картку не додано: {reason}',
+    cardExpired: 'Час на додавання картки вийшов. Спробуйте ще раз.',
+    noCardsHere: 'У цьому місті картки поки не приймають.',
+    cardWaiting: 'Чекаємо на відповідь банку…',
     toHistory: 'Мої поїздки',
     history: 'Мої поїздки',
     noHistory: 'Поїздок ще не було.',
@@ -87,6 +109,17 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    myCards: 'Moje karty',
+    cards: 'Moje karty',
+    noCards: 'Nie ma jeszcze kart.',
+    addCard: 'Dodaj kartę',
+    removeCard: 'Usuń',
+    removeCardOf: 'Usuń {pan}',
+    cardAdded: 'Karta dodana.',
+    cardFailed: 'Nie dodano karty: {reason}',
+    cardExpired: 'Czas na dodanie karty minął. Spróbuj ponownie.',
+    noCardsHere: 'W tym mieście karty nie są jeszcze przyjmowane.',
+    cardWaiting: 'Czekamy na odpowiedź banku…',
     toHistory: 'Moje przejazdy',
     history: 'Moje przejazdy',
     noHistory: 'Nie było jeszcze przejazdów.',

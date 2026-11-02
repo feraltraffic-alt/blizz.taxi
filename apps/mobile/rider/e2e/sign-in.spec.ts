@@ -158,6 +158,20 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
   await page.getByRole('button', {name: 'Поездка', exact: true}).click();
   await page.getByRole('button', {name: 'Профиль', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
+
+  // A card (#269): the sandbox's FAKE provider page opens in a new tab, completes the binding and the card is listed.
+  await page.getByRole('button', {name: 'Мои карты', exact: true}).click();
+  await expect(page.getByText('Карт пока нет.')).toBeVisible();
+  const providerPage = page.waitForEvent('popup');
+  await page.getByRole('button', {name: 'Добавить карту', exact: true}).click();
+  const popup = await providerPage;
+  console.log('PROVIDER PAGE', popup.url());
+  await expect(page.getByText('Карта добавлена.')).toBeVisible({timeout: 30_000});
+  await expect(page.getByText(/\*{2,}\d{4}/)).toBeVisible();
+  await page.screenshot({path: info.outputPath('10-cards.png'), fullPage: true});
+  await popup.close();
+  await page.getByRole('button', {name: 'Назад', exact: true}).click();
+  await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
   await page.screenshot({path: info.outputPath('4-profile.png'), fullPage: true});
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
 
