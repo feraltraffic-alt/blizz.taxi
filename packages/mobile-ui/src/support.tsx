@@ -230,7 +230,7 @@ function CaseView({client, t, guard, failure, newId, side, id, onBack, pickFile}
   const opening = useRef(false);
 
   async function open(file: Attachment) {
-    if (opened[file.file_id] || opening.current) return;
+    if (opening.current) return;
     opening.current = true;
     setMessage(null);
     try {
@@ -298,7 +298,7 @@ function CaseView({client, t, guard, failure, newId, side, id, onBack, pickFile}
                 <Text style={{color: theme.muted}}>
                   {name + ' · ' + Math.max(1, Math.round(f.size_bytes / 1024)) + ' ' + t('kilobytes')}
                 </Text>
-                {opened[f.file_id] ? <Image accessibilityLabel={name} source={{uri: opened[f.file_id]}}
+                {opened[f.file_id] && !image ? <Image accessibilityLabel={name} source={{uri: opened[f.file_id]}}
                   style={{width: 240, height: 240}} resizeMode="contain" />
                   : image ? <Button label={t('openFileOf', {name})} onPress={() => void open(f)} />
                     : <Text style={{color: theme.muted}}>{t('pdfElsewhere')}</Text>}
