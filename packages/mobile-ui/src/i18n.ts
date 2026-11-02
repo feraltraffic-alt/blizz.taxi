@@ -5,6 +5,14 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    deleteAccount: 'Удалить аккаунт',
+    deleteCode: 'Код подтверждения удаления',
+    confirmDeletion: 'Подтвердить удаление',
+    deletionRequested: 'Запрос на удаление принят. Аккаунт удалят после проверки.',
+    deletionPending: 'Аккаунт будет удалён после проверки.',
+    cancelDeletion: 'Отменить удаление',
+    deletionCancelled: 'Удаление отменено.',
+    deletionConflict: 'Запрос уже подан или аккаунт сейчас нельзя удалить.',
     topUpSum: 'Сумма пополнения, UAH',
     topUp: 'Пополнить картой',
     topUpAmount: 'Укажите сумму от 1.00 до 10000.00 UAH.',
@@ -120,6 +128,14 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    deleteAccount: 'Видалити обліковий запис',
+    deleteCode: 'Код підтвердження видалення',
+    confirmDeletion: 'Підтвердити видалення',
+    deletionRequested: 'Запит на видалення прийнято. Обліковий запис видалять після перевірки.',
+    deletionPending: 'Обліковий запис буде видалено після перевірки.',
+    cancelDeletion: 'Скасувати видалення',
+    deletionCancelled: 'Видалення скасовано.',
+    deletionConflict: 'Запит уже подано або обліковий запис зараз не можна видалити.',
     topUpSum: 'Сума поповнення, UAH',
     topUp: 'Поповнити карткою',
     topUpAmount: 'Вкажіть суму від 1.00 до 10000.00 UAH.',
@@ -235,6 +251,14 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    deleteAccount: 'Usuń konto',
+    deleteCode: 'Kod potwierdzenia usunięcia',
+    confirmDeletion: 'Potwierdź usunięcie',
+    deletionRequested: 'Prośba o usunięcie została przyjęta. Konto zostanie usunięte po sprawdzeniu.',
+    deletionPending: 'Konto zostanie usunięte po sprawdzeniu.',
+    cancelDeletion: 'Anuluj usunięcie',
+    deletionCancelled: 'Usunięcie anulowane.',
+    deletionConflict: 'Prośba już złożona albo konta nie można teraz usunąć.',
     topUpSum: 'Kwota doładowania, UAH',
     topUp: 'Doładuj kartą',
     topUpAmount: 'Podaj kwotę od 1.00 do 10000.00 UAH.',

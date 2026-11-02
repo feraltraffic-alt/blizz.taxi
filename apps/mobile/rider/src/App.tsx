@@ -1,8 +1,9 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {ActivityIndicator, Text} from 'react-native';
-import {ApiError, type ApiClient} from '@blizz/api-client';
+import type {ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, DataExports, Field, LegalGuard, Loading, PhoneChange, RIDER_CATEGORIES, Screen, SignIn, Support, UpdateScreen, failureText,
+  AccountDeletion, Alert, Button, DataExports, LegalGuard, Loading, PhoneChange, RIDER_CATEGORIES, Screen, SignIn,
+  Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type AboutOrder, type Locale, type PickedFile,
   type PushPort, type Shared
 } from '@blizz/mobile-ui';
@@ -119,9 +120,6 @@ function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, o
   onDebts: () => void; onWallet: () => void}) {
   const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
-  const [code, setCode] = useState('');
-  const commandId = useRef(newId());
   const theme = useTheme();
 
   useEffect(() => {
@@ -132,41 +130,14 @@ function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, o
     return () => {current = false;};
   }, [client, guard]); // the failure text follows the same texts
 
-  async function askDeletion() {
-    try {
-      setDeletion(await guard(() => client.post('/api/rider/v1/me/deletion-request/challenge')) as
-        {challenge_id: string});
-    } catch (error) {
-      setMessage(failure(error));
-    }
-  }
-
-  async function confirmDeletion() {
-    if (!deletion) return;
-    try {
-      const status = await guard(() => client.post('/api/rider/v1/me/deletion-request', {body: {
-        command_id: commandId.current, challenge_id: deletion.challenge_id, otp_code: code
-      }})) as {account_state: string};
-      setMe(old => ({...old, ...status}));
-      setDeletion(null);
-      setMessage(t('deletionRequested'));
-    } catch (error) {
-      setMessage(error instanceof ApiError && error.code === 'OTP_INVALID' ? t('wrongCode') : failure(error));
-    }
-  }
-
   return (
     <Screen title={t('profile')}>
       {me?.name ? <Text style={{color: theme.text, fontSize: 20}}>{me.name}</Text> : null}
       {me?.phone ? <Text style={{color: theme.text}}>{me.phone}</Text> : null}
       {me ? <Text style={{color: theme.muted}}>{t('accountState')}: {me.account_state}</Text>
         : !message ? <ActivityIndicator accessibilityLabel={t('loading')} /> : null}
-      {deletion ? (
-        <>
-          <Field label={t('deleteCode')} value={code} onChange={setCode} keyboard="number-pad" />
-          <Button label={t('confirmDeletion')} onPress={() => void confirmDeletion()} disabled={code.length < 4} />
-        </>
-      ) : <Button label={t('deleteAccount')} onPress={() => void askDeletion()} />}
+      {me ? <AccountDeletion client={client} t={t} guard={guard} failure={failure} newId={newId} api="/api/rider/v1"
+        state={me.account_state} onState={state => setMe(old => old ? {...old, account_state: state} : old)} /> : null}
       <Button label={t('myCards')} onPress={onCards} />
       <Button label={t('pcChange')} onPress={onPhone} />
       <Button label={t('exTitle')} onPress={onData} />
