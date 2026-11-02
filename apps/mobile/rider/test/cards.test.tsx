@@ -61,6 +61,10 @@ const START = 'POST /api/rider/v1/card-bindings';
 const READ = 'GET /api/rider/v1/card-bindings/' + BINDING;
 
 async function mount(script: Record<string, Answer[]>) {
+  return mountWith(script);
+}
+
+async function mountWith(script: Record<string, Answer[]>) {
   pages.length = 0;
   const http = server({
     'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}],
@@ -153,5 +157,20 @@ describe('K6: a failed read', () => {
     expect(await screen.findByText(new RegExp(cid))).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', {name: 'Повторить'}));
     expect(await screen.findByText('VISA 41****1111')).toBeTruthy();
+  });
+});
+
+describe('K7: a service with several cities', () => {
+  it('asks which city the card is for, and binds it there', async () => {
+    const WARSAW = '5a000000-0000-4000-8000-000000000002';
+    const {http} = await mountWith({[CARDS]: [{status: 200, body: {cards: []}}], [START]: [started],
+      [READ]: [{status: 200, body: binding('COMPLETED', {card: card(2, '52****4444')})}],
+      'GET /api/config/v1/bootstrap': [{status: 200, body: {cities: [{id: WARSAW, name: 'Warszawa',
+        center: {lat: 52.23, lon: 21.01}}, {id: KYIV, name: 'Київ', center: {lat: 50.45, lon: 30.52}}]}}]});
+    expect(await screen.findByRole('button', {name: 'Добавить карту: Warszawa'})).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', {name: 'Добавить карту: Київ'}));
+    expect(await screen.findByText('Карта добавлена.')).toBeTruthy();
+    const start = http.calls.find(c => c.path === '/api/rider/v1/card-bindings')!.body as {city_id: string};
+    expect(start.city_id).toBe(KYIV);
   });
 });
