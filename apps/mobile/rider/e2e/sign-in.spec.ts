@@ -5,9 +5,79 @@ function phone(theme: string): string {
   return '+38067' + (theme === 'dark' ? '9' : '8') + String(Date.now()).slice(-6);
 }
 
-test('a rider signs in by a code, accepts the texts in force and sees the profile', async ({page, request},
-  info) => {
+type Request = import('@playwright/test').APIRequestContext;
+type Point = {lat: number; lon: number};
+
+/**
+ * Where each theme's rider stands, with a sandbox driver (seed.sql) of its own: 9 km apart, beyond the 5 km search
+ * radius, so each order reaches the driver of its own run only.
+ */
+const PLACES: Record<string, Point & {driver: string; vehicle: string}> = {
+  light: {lat: 50.4501, lon: 30.5234, driver: '+380500000001', vehicle: '5a000000-0000-4000-8000-000000000501'},
+  dark: {lat: 50.4300, lon: 30.6400, driver: '+380500000003', vehicle: '5a000000-0000-4000-8000-000000000503'}
+};
+
+async function signIn(request: Request, audience: string, phone: string): Promise<Record<string, string>> {
+  const device = 'e2e-' + audience.toLowerCase() + '-' + Date.now();
+  const challenge = await request.post('/auth/v1/otp/challenges', {data: {audience, phone, device_ref: device}});
+  expect(challenge.status()).toBe(201);
+  const code = ((await (await request.get('/sandbox/v1/otp?phone=' + encodeURIComponent(phone))).json()) as
+    {code: string}).code;
+  const verified = await request.post('/auth/v1/otp/verify', {data: {challenge_id: (await challenge.json()).challenge_id,
+    code, device_ref: device}});
+  expect(verified.status()).toBe(200);
+  return {Authorization: 'Bearer ' + ((await verified.json()) as {access_token: string}).access_token};
+}
+
+/** A sandbox driver online at the rider's spot (through the API, as full-ride.sh does); offline again at the end. */
+async function driverOnline(request: Request, place: Point & {driver: string; vehicle: string}) {
+  const headers = await signIn(request, 'DRIVER', place.driver);
+  let sequence = Date.now();
+  const location = () => ({lat: place.lat, lon: place.lon, accuracy_m: 5, recorded_at: new Date().toISOString(),
+    sequence: ++sequence});
+  const opened = await request.post('/api/driver/v1/work-sessions', {headers, data: {command_id: crypto.randomUUID(),
+    vehicle_id: place.vehicle, location: location()}});
+  expect(opened.status(), await opened.text()).toBe(201);
+  const session = (await opened.json()) as {session_id: string};
+  return {
+    /** Takes the offer, arrives, starts and completes in cash. */
+    async drive() {
+      let offer = '';
+      await expect.poll(async () => {
+        const list = (await (await request.get('/api/driver/v1/offers', {headers})).json()) as {id: string}[];
+        offer = list[0]?.id ?? '';
+        return offer;
+      }, {timeout: 30_000}).not.toBe('');
+      const accepted = await request.post('/api/driver/v1/offers/' + offer + '/accept', {headers,
+        data: {command_id: crypto.randomUUID()}});
+      expect(accepted.status(), await accepted.text()).toBe(200);
+      let trip = (await (await request.get('/api/driver/v1/trips/current', {headers})).json()) as
+        {id: string; version: number};
+      const step = async (action: string, extra: Record<string, unknown> = {}) => {
+        const answer = await request.post('/api/driver/v1/trips/' + trip.id + '/' + action, {headers,
+          data: {command_id: crypto.randomUUID(), expected_version: trip.version, ...extra}});
+        expect(answer.status(), action + ': ' + await answer.text()).toBe(200);
+        trip = (await answer.json()) as {id: string; version: number};
+      };
+      await step('arrive', {exception_reason: 'Проверка E2E'});
+      await step('start');
+      await step('complete', {reported_at: new Date().toISOString(), cash_received: true});
+    },
+    async offline() {
+      const current = (await (await request.get('/api/driver/v1/work-sessions/current', {headers})).json()) as
+        {session_version: number};
+      const closed = await request.post('/api/driver/v1/work-sessions/' + session.session_id + '/close', {headers,
+        data: {command_id: crypto.randomUUID(), expected_version: current.session_version}});
+      expect(closed.status(), await closed.text()).toBe(200);
+    }
+  };
+}
+
+test('a rider signs in, orders and cancels, rides to the end, rates and tips, and sees the profile', async ({page, context,
+  request}, info) => {
   const number = phone(info.project.name);
+  const place = PLACES[info.project.name] ?? PLACES.light!;
+  await context.setGeolocation({latitude: place.lat, longitude: place.lon, accuracy: 10});
   await page.goto('/');
   await page.getByLabel('Номер телефона').fill(number);
   await page.screenshot({path: info.outputPath('1-phone.png'), fullPage: true});
@@ -54,6 +124,27 @@ test('a rider signs in by a code, accepts the texts in force and sees the profil
     await expect(cancelled.or(page.getByText(/^Заказ изменился/))).toBeVisible();
   }
   await expect(cancelled).toBeVisible();
+  await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
+
+  // A second ride, which a sandbox driver drives to the end; then the rating and a tip in cash (#254).
+  const driver = await driverOnline(request, place);
+  try {
+    await page.getByLabel('Поиск адреса назначения', {exact: true}).fill('Вокзал');
+    await page.getByRole('button', {name: 'Найти', exact: true}).click();
+    await page.getByRole('button', {name: /^Вокзал/}).first().click();
+    await page.getByRole('button', {name: 'Узнать цену', exact: true}).click();
+    await page.getByRole('button', {name: 'Заказать', exact: true}).click();
+    await driver.drive();
+    await expect(page.getByText('Поездка завершена')).toBeVisible({timeout: 30_000});
+    await page.screenshot({path: info.outputPath('7-fulfilled.png'), fullPage: true});
+    await page.getByRole('button', {name: 'Оценка 5', exact: true}).click();
+    await expect(page.getByText('Спасибо за оценку: 5')).toBeVisible();
+    await page.getByRole('button', {name: /^10 % — /}).click();
+    await expect(page.getByText(/передайте их водителю наличными/)).toBeVisible();
+    await page.screenshot({path: info.outputPath('8-rated-and-tipped.png'), fullPage: true});
+  } finally {
+    await driver.offline();
+  }
   await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
   await page.getByRole('button', {name: 'Профиль', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();

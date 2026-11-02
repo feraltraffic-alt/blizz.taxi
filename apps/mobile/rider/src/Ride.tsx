@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {Alert, Button, Field, Loading, Screen, useTheme, type Shared} from '@blizz/mobile-ui';
+import {AfterRide} from './After';
 
 export type Point = {lat: number; lon: number};
 type Place = {label: string; point: Point};
@@ -209,10 +210,13 @@ function Tracker({client, t, guard, failure, newId, pollMs, order, onChange, onD
       {params: {order_id: order.id}} as never)) as Order);
   }, [client, guard, order.id, onChange]);
 
+  // An ended order changes no more: the server is no longer asked.
+  const ended = FINAL.has(order.status);
   useEffect(() => {
+    if (ended) return;
     const timer = setInterval(() => {refresh().catch(failed => setMessage(failure(failed)));}, pollMs);
     return () => clearInterval(timer);
-  }, [refresh, pollMs]); // the failure text follows the same texts
+  }, [refresh, pollMs, ended]); // the failure text follows the same texts
 
   useEffect(() => {
     guard(() => client.get('/api/rider/v1/cancel-reasons' as never, {} as never))
@@ -247,6 +251,8 @@ function Tracker({client, t, guard, failure, newId, pollMs, order, onChange, onD
       ) : null}
       {order.pickup_eta ? <Text style={{color: theme.muted}}>{t('eta', {minutes: Math.max(1,
         Math.round(order.pickup_eta.seconds / 60))})}</Text> : null}
+      {order.status === 'FULFILLED' ? <AfterRide client={client} t={t} guard={guard} failure={failure}
+        orderId={order.id} newId={newId} pollMs={pollMs} /> : null}
       {finished ? <Button label={t('newRideAgain')} onPress={onDone} /> : (
         <>
           {reasons.map(r => (
