@@ -17,7 +17,7 @@ const terms = {version_id: '30000000-0000-4000-8000-000000000001', audience: 'RI
   acceptance_required: true, accepted: false, effective_from: '2026-01-01T00:00:00Z', languages: ['ru', 'uk']};
 
 type Call = {method: string; path: string; body?: unknown; headers: Record<string, string>};
-type Answer = {status: number; body?: unknown; headers?: Record<string, string>} | 'network';
+type Answer = {status: number; body?: unknown; headers?: Record<string, string>; delayMs?: number} | 'network';
 
 /** A scripted server: each path gets its answers in turn (the last one repeats); every request is recorded. */
 function server(script: Record<string, Answer[]>) {
@@ -30,6 +30,7 @@ function server(script: Record<string, Answer[]>) {
     const answers = script[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
     if (answer === 'network') throw new TypeError('Network request failed');
+    if (answer.delayMs) await new Promise(resolve => setTimeout(resolve, answer.delayMs));
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
       status: answer.status, headers: {'Content-Type': 'application/json', ...(answer.headers ?? {})}
     });
@@ -143,8 +144,9 @@ describe('E4: legal texts', () => {
     const {http} = await mount({
       'GET /api/rider/v1/legal': [{status: 200, body: {documents: [terms]}}],
       'GET /api/config/v1/legal/rider/terms': [{status: 200, body: {...terms, language: 'ru', text: 'Условия'}}],
-      'POST /api/rider/v1/legal/acceptances': [{status: 200, body: {version_id: terms.version_id, kind: 'TERMS',
-        number: 1, language: 'ru', accepted_at: '2026-11-02T10:00:00Z'}}],
+      // Slow, so the second tap lands while the first acceptance is still on its way.
+      'POST /api/rider/v1/legal/acceptances': [{status: 200, delayMs: 300, body: {version_id: terms.version_id,
+        kind: 'TERMS', number: 1, language: 'ru', accepted_at: '2026-11-02T10:00:00Z'}}],
       ...meOk
     }, {signedIn: true});
     expect(await screen.findByText('Условия')).toBeTruthy();
@@ -152,6 +154,7 @@ describe('E4: legal texts', () => {
     const accept = screen.getByRole('button', {name: 'Принимаю'});
     await fireEvent.press(accept);
     await fireEvent.press(accept);
+    expect(http.calls.filter(c => c.path === '/api/rider/v1/legal/acceptances').length).toBeLessThanOrEqual(1);
     expect(await screen.findByText(/ACTIVE/)).toBeTruthy();
     const acceptances = http.calls.filter(c => c.path === '/api/rider/v1/legal/acceptances');
     expect(acceptances).toHaveLength(1);
