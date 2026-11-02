@@ -364,3 +364,143 @@ describe('#292: history and conversation', () => {
     expect(await screen.findByText(new RegExp(cid))).toBeVisible();
   });
 });
+
+/** Take a driver off, offer to a chosen driver (#294): O1–O7. */
+describe('#294: driver actions on an order', () => {
+  const all = ['orders.create', 'orders.view', 'orders.cancel', 'orders.reassign', 'orders.offer'];
+  const free = (n: number) => ({driver_id: 'd000000' + n + '-0000-4000-8000-000000000001', name: 'Водитель ' + n,
+    car: {registration_number: 'AA000' + n + 'BB', make: 'Skoda', model: 'Octavia', color: 'белый', classes: []},
+    has_payment_terminal: false, status: 'FREE', occupancy: 'FREE', connection: 'CONNECTED', geolocation: 'FRESH',
+    location: null, last_location_at: null, last_heartbeat_at: null, order_id: null});
+  type Sent = {path: string; body: Record<string, unknown>};
+
+  function handlers(status: string, opts: {rights?: string[]; command?: (path: string) => Response | Promise<Response>;
+    reads?: () => unknown} = {}) {
+    const sent: Sent[] = [];
+    const asked = {reasons: 0, live: [] as URLSearchParams[]};
+    const created = {...order, status, city_id: KYIV.id};
+    server.use(...base({...operator, effective_permissions: opts.rights ?? all}),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(created, {status: 201})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id, () =>
+        HttpResponse.json((opts.reads ? opts.reads() : created) as never)),
+      http.get(origin + '/api/operator/v1/reassign-reasons', () => {
+        asked.reasons++;
+        return HttpResponse.json({reasons: [{code: 'DRIVER_LATE', labels: {ru: 'Водитель опаздывает'}}]});
+      }),
+      http.get(origin + '/api/operator/v1/drivers/live', ({request}) => {
+        asked.live.push(new URL(request.url).searchParams);
+        return HttpResponse.json({city_id: KYIV.id, at: '2026-11-02T10:00:00Z', drivers: [free(1), free(2)]});
+      }),
+      http.post(origin + '/api/operator/v1/orders/' + order.id + '/:action', async ({request, params}) => {
+        sent.push({path: String(params.action), body: await request.json() as Record<string, unknown>});
+        return opts.command ? opts.command(String(params.action))
+          : HttpResponse.json({...created, status: 'SEARCHING', version: 2} as never);
+      }));
+    return {sent, asked};
+  }
+
+  async function ordered() {
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    return user;
+  }
+
+  it('O1: takes the driver off with the reason, the comment and the version', async () => {
+    const {sent} = handlers('ASSIGNED');
+    const user = await ordered();
+    await user.selectOptions(await screen.findByLabelText('Причина снятия водителя'), 'DRIVER_LATE');
+    await user.type(screen.getByLabelText('Комментарий к снятию'), 'стоит в пробке');
+    await user.click(screen.getByRole('button', {name: 'Снять водителя'}));
+    expect(await screen.findByText('Статус: SEARCHING')).toBeVisible();
+    expect(sent).toEqual([{path: 'revoke-assignment', body: {command_id: expect.any(String), expected_version: 1,
+      reason_code: 'DRIVER_LATE', comment: 'стоит в пробке'}}]);
+  });
+
+  it('O2: no reason or a comment over 500 characters sends nothing', async () => {
+    const {sent} = handlers('ASSIGNED');
+    const user = await ordered();
+    await screen.findByLabelText('Причина снятия водителя');
+    await user.click(screen.getByRole('button', {name: 'Снять водителя'}));
+    expect(await screen.findByText('Выберите причину; комментарий — до 500 символов.')).toBeVisible();
+    await user.selectOptions(screen.getByLabelText('Причина снятия водителя'), 'DRIVER_LATE');
+    await user.click(screen.getByLabelText('Комментарий к снятию'));
+    await user.paste('я'.repeat(501));
+    await user.click(screen.getByRole('button', {name: 'Снять водителя'}));
+    expect(sent).toEqual([]);
+  });
+
+  it('O3: offers to a free driver of the order\'s city with a reason', async () => {
+    const {sent, asked} = handlers('SEARCHING');
+    const user = await ordered();
+    await user.selectOptions(await screen.findByLabelText('Водитель для предложения'), 'Водитель 2 · AA0002BB');
+    await user.type(screen.getByLabelText('Причина предложения'), 'клиент просил этого водителя');
+    await user.click(screen.getByRole('button', {name: 'Предложить заказ'}));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toEqual({path: 'manual-offers', body: {command_id: expect.any(String),
+      driver_id: 'd0000002-0000-4000-8000-000000000001', reason: 'клиент просил этого водителя'}});
+    expect([asked.live[0]!.get('city_id'), asked.live[0]!.getAll('status')]).toEqual([KYIV.id, ['FREE']]);
+  });
+
+  it('O3: not offered unless SEARCHING, the take-off only when ASSIGNED', async () => {
+    const {asked} = handlers('IN_SERVICE');
+    await ordered();
+    expect(screen.queryByRole('button', {name: 'Предложить заказ'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Снять водителя'})).not.toBeInTheDocument();
+    expect(asked.live).toEqual([]);
+  });
+
+  it('O4: no driver or no reason sends nothing', async () => {
+    const {sent} = handlers('SEARCHING');
+    const user = await ordered();
+    await screen.findByLabelText('Водитель для предложения');
+    await user.type(screen.getByLabelText('Причина предложения'), 'просьба клиента');
+    await user.click(screen.getByRole('button', {name: 'Предложить заказ'}));
+    expect(await screen.findByText('Выберите водителя и укажите причину, до 500 символов.')).toBeVisible();
+    await user.selectOptions(screen.getByLabelText('Водитель для предложения'), 'Водитель 1 · AA0001BB');
+    await user.clear(screen.getByLabelText('Причина предложения'));
+    await user.click(screen.getByRole('button', {name: 'Предложить заказ'}));
+    expect(sent).toEqual([]);
+  });
+
+  it.each([
+    ['DRIVER_NOT_ELIGIBLE', 'Этот водитель сейчас не подходит для заказа.', 0],
+    ['DRIVER_BUSY', 'Водитель занят.', 0],
+    ['CONFLICT', 'Заказ изменился, пока вы его меняли. Проверьте его состояние.', 1]
+  ])('O5: a 409 %s is told in words', async (code, text, rereads) => {
+    let reads = 0;
+    handlers('SEARCHING', {command: () => HttpResponse.json(problem(409, code), {status: 409}),
+      reads: () => {reads++; return {...order, status: 'SEARCHING', city_id: KYIV.id};}});
+    const user = await ordered();
+    await user.selectOptions(await screen.findByLabelText('Водитель для предложения'), 'Водитель 1 · AA0001BB');
+    await user.type(screen.getByLabelText('Причина предложения'), 'просьба клиента');
+    await user.click(screen.getByRole('button', {name: 'Предложить заказ'}));
+    expect(await screen.findByText(text)).toBeVisible();
+    expect(reads).toBe(rereads);
+  });
+
+  it('O6: without the rights neither is offered and nothing is asked', async () => {
+    const {asked} = handlers('SEARCHING', {rights: ['orders.create', 'orders.view', 'orders.cancel']});
+    await ordered();
+    expect(screen.queryByRole('button', {name: 'Предложить заказ'})).not.toBeInTheDocument();
+    expect(asked.live).toEqual([]);
+    expect(screen.queryByRole('button', {name: 'Снять водителя'})).not.toBeInTheDocument();
+    expect(asked.reasons).toBe(0);
+  });
+
+  it('O7: a double click sends one command', async () => {
+    const {sent} = handlers('ASSIGNED', {command: async () => {
+      await delay(200);
+      return HttpResponse.json({...order, status: 'SEARCHING', version: 2, city_id: KYIV.id} as never);
+    }});
+    const user = await ordered();
+    await user.selectOptions(await screen.findByLabelText('Причина снятия водителя'), 'DRIVER_LATE');
+    const button = screen.getByRole('button', {name: 'Снять водителя'});
+    await Promise.all([user.click(button), user.click(button)]);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await delay(300);
+    expect(sent).toHaveLength(1);
+  });
+});

@@ -5,6 +5,12 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    driverActions: 'Водитель заказа', revokeDriver: 'Снять водителя', revokeReason: 'Причина снятия водителя',
+    revokeComment: 'Комментарий к снятию', revokeReasonNeeded: 'Выберите причину; комментарий — до 500 символов.',
+    offerOrder: 'Предложить заказ', offerDriver: 'Водитель для предложения', offerReason: 'Причина предложения',
+    offerNeeds: 'Выберите водителя и укажите причину, до 500 символов.',
+    driverNotEligible: 'Этот водитель сейчас не подходит для заказа.', driverBusy: 'Водитель занят.',
+    orderChanged: 'Заказ изменился, пока вы его меняли. Проверьте его состояние.',
     historyAndChat: 'История и переписка', history: 'История заказа', refreshHistory: 'Обновить историю',
     chatReason: 'Причина просмотра переписки', openChat: 'Открыть переписку', chat: 'Переписка',
     chatReasonNeeded: 'Укажите причину, до 500 символов: она попадёт в журнал.', noMessages: 'Сообщений нет.',
@@ -87,6 +93,12 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    driverActions: 'Водій замовлення', revokeDriver: 'Зняти водія', revokeReason: 'Причина зняття водія',
+    revokeComment: 'Коментар до зняття', revokeReasonNeeded: 'Оберіть причину; коментар — до 500 символів.',
+    offerOrder: 'Запропонувати замовлення', offerDriver: 'Водій для пропозиції', offerReason: 'Причина пропозиції',
+    offerNeeds: 'Оберіть водія та вкажіть причину, до 500 символів.',
+    driverNotEligible: 'Цей водій зараз не підходить для замовлення.', driverBusy: 'Водій зайнятий.',
+    orderChanged: 'Замовлення змінилося, поки ви його змінювали. Перевірте його стан.',
     historyAndChat: 'Історія та листування', history: 'Історія замовлення', refreshHistory: 'Оновити історію',
     chatReason: 'Причина перегляду листування', openChat: 'Відкрити листування', chat: 'Листування',
     chatReasonNeeded: 'Вкажіть причину, до 500 символів: вона потрапить до журналу.', noMessages: 'Повідомлень немає.',
@@ -169,6 +181,12 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    driverActions: 'Kierowca zlecenia', revokeDriver: 'Zdejmij kierowcę', revokeReason: 'Powód zdjęcia kierowcy',
+    revokeComment: 'Komentarz do zdjęcia', revokeReasonNeeded: 'Wybierz powód; komentarz — do 500 znaków.',
+    offerOrder: 'Zaproponuj zlecenie', offerDriver: 'Kierowca do propozycji', offerReason: 'Powód propozycji',
+    offerNeeds: 'Wybierz kierowcę i podaj powód, do 500 znaków.',
+    driverNotEligible: 'Ten kierowca nie pasuje teraz do zlecenia.', driverBusy: 'Kierowca jest zajęty.',
+    orderChanged: 'Zlecenie zmieniło się w trakcie zmiany. Sprawdź jego stan.',
     historyAndChat: 'Historia i rozmowa', history: 'Historia zlecenia', refreshHistory: 'Odśwież historię',
     chatReason: 'Powód wglądu w rozmowę', openChat: 'Otwórz rozmowę', chat: 'Rozmowa',
     chatReasonNeeded: 'Podaj powód, do 500 znaków: trafi do dziennika.', noMessages: 'Brak wiadomości.',
