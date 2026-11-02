@@ -41,7 +41,12 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await page.getByLabel('Новый пароль').fill('Operator-Next-2026-ok');
   await page.getByRole('button', {name: 'Сохранить пароль'}).click();
 
-  await expect(page.getByRole('heading', {name: 'Новый заказ по телефону'})).toBeVisible();
+  // What the page shows, in the log, when the form does not come (an artifact cannot always be fetched).
+  const form = page.getByRole('heading', {name: 'Новый заказ по телефону'});
+  if (!await form.isVisible({timeout: 10_000}).catch(() => false)) {
+    console.log('PAGE AFTER PASSWORD CHANGE:', await page.locator('body').innerText());
+  }
+  await expect(form).toBeVisible();
   await page.getByLabel('Телефон звонящего').fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда').fill('Хрещатик');
   await page.getByRole('button', {name: 'Найти'}).first().click();
