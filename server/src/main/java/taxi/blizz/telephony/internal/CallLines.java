@@ -57,6 +57,7 @@ class CallLines {
         if (!scope.allCities() && scope.cityIds().isEmpty()) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Missing permission " + PERMISSION);
         }
+        // The numbers of the staff member's own taxi service only (ADR 0016): the scope holds that service's cities.
         return jdbc.sql("select number, city_id, label, version from call_line order by number")
                 .query((rs, i) -> new Line(rs.getString(1), rs.getObject(2, UUID.class), rs.getString(3),
                         rs.getLong(4)))

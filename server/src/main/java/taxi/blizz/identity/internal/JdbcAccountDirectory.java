@@ -10,8 +10,10 @@ import taxi.blizz.platform.Actor;
 class JdbcAccountDirectory implements AccountDirectory {
 
     private final JdbcClient jdbc;
+    private final taxi.blizz.identity.Services services;
 
-    JdbcAccountDirectory(JdbcClient jdbc) {
+    JdbcAccountDirectory(JdbcClient jdbc, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
     }
 
@@ -70,14 +72,28 @@ class JdbcAccountDirectory implements AccountDirectory {
     }
 
     @Override
-    public Optional<java.util.UUID> clientByPhone(taxi.blizz.identity.PhoneNumber phone) {
-        return jdbc.sql("select id from client where phone_normalized = :phone and account_state <> 'ANONYMIZED'")
-                .param("phone", phone.e164()).query(java.util.UUID.class).optional();
+    public Optional<java.util.UUID> clientByPhone(java.util.UUID serviceId, taxi.blizz.identity.PhoneNumber phone) {
+        return jdbc.sql("""
+                        select id from client
+                        where service_id = :service and phone_normalized = :phone and account_state <> 'ANONYMIZED'""")
+                .param("service", serviceId).param("phone", phone.e164()).query(java.util.UUID.class).optional();
     }
 
     @Override
-    public Optional<java.util.UUID> driverByPhone(taxi.blizz.identity.PhoneNumber phone) {
-        return jdbc.sql("select id from driver where phone_normalized = :phone and account_state <> 'ANONYMIZED'")
-                .param("phone", phone.e164()).query(java.util.UUID.class).optional();
+    public Optional<java.util.UUID> driverByPhone(java.util.UUID serviceId, taxi.blizz.identity.PhoneNumber phone) {
+        return jdbc.sql("""
+                        select id from driver
+                        where service_id = :service and phone_normalized = :phone and account_state <> 'ANONYMIZED'""")
+                .param("service", serviceId).param("phone", phone.e164()).query(java.util.UUID.class).optional();
+    }
+
+    @Override
+    public Optional<java.util.UUID> clientByPhone(Actor within, taxi.blizz.identity.PhoneNumber phone) {
+        return services.of(within).flatMap(service -> clientByPhone(service, phone));
+    }
+
+    @Override
+    public Optional<java.util.UUID> driverByPhone(Actor within, taxi.blizz.identity.PhoneNumber phone) {
+        return services.of(within).flatMap(service -> driverByPhone(service, phone));
     }
 }

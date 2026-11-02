@@ -71,7 +71,7 @@ class PlaceSearchController {
                     @RequestParam(defaultValue = "10") int limit) {
         Actor rider = requireType(claims, SubjectType.CLIENT);
         GeoPoint near = new GeoPoint(lat, lon);
-        City city = city(near);
+        City city = city(claims.serviceId(), near);
         String lang = language != null ? language : accounts.language(rider).orElse(null);
         return search(rider.id(), Optional.of(rider.id()), city, query, lang, near, limit);
     }
@@ -82,7 +82,7 @@ class PlaceSearchController {
         Actor rider = requireType(claims, SubjectType.CLIENT);
         GeoPoint point = new GeoPoint(lat, lon);
         String lang = language != null ? language : accounts.language(rider).orElse(null);
-        return reverse(rider.id(), city(point), point, lang);
+        return reverse(rider.id(), city(claims.serviceId(), point), point, lang);
     }
 
     /** For a phone order: {@code caller_phone} adds the history of the caller's rider account, if there is one. */
@@ -94,10 +94,10 @@ class PlaceSearchController {
                        @RequestParam(defaultValue = "10") int limit) {
         Actor operator = claims.actor();
         GeoPoint near = new GeoPoint(lat, lon);
-        City city = city(near);
+        City city = city(claims.serviceId(), near);
         staff.require(operator, Orders.CREATE_PERMISSION, city.id());
         Optional<UUID> caller = callerPhone == null || callerPhone.isBlank() ? Optional.empty()
-                : accounts.clientByPhone(PhoneNumber.parse(callerPhone));
+                : accounts.clientByPhone(claims.serviceId(), PhoneNumber.parse(callerPhone));
         return search(operator.id(), caller, city, query, language, near, limit);
     }
 
@@ -106,7 +106,7 @@ class PlaceSearchController {
                                               @RequestParam double lon,
                                               @RequestParam(required = false) @Size(max = 16) String language) {
         GeoPoint point = new GeoPoint(lat, lon);
-        City city = city(point);
+        City city = city(claims.serviceId(), point);
         staff.require(claims.actor(), Orders.CREATE_PERMISSION, city.id());
         return reverse(claims.actor().id(), city, point, language);
     }
@@ -178,8 +178,8 @@ class PlaceSearchController {
                 new PlacePoint(p.point().lat(), p.point().lon()), p.instructions());
     }
 
-    private City city(GeoPoint point) {
-        return cities.resolve(point)
+    private City city(UUID serviceId, GeoPoint point) {
+        return cities.resolve(serviceId, point)
                 .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Point is outside service area"));
     }
 

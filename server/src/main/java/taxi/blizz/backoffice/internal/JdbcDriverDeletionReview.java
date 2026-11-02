@@ -39,9 +39,12 @@ class JdbcDriverDeletionReview implements DriverDeletionReview {
     private final Ledger ledger;
     private final CashDisputes disputes;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcDriverDeletionReview(IdempotentCommands commands, StaffAccess staff, AuditLog audit, DriverDeletions deletions,
                              Trips trips, Dispatch dispatch, Preorders preorders, Ledger ledger,
-                             CashDisputes disputes) {
+                             CashDisputes disputes, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.commands = commands;
         this.staff = staff;
         this.audit = audit;
@@ -57,7 +60,8 @@ class JdbcDriverDeletionReview implements DriverDeletionReview {
     @Transactional(readOnly = true)
     public List<Request> pending(Actor actor, PageCursor after, int limit) {
         staff.require(actor, DELETE_PERMISSION);
-        return deletions.pending(after, limit).stream()
+        // The drivers of the staff member's own taxi service (ADR 0016).
+        return deletions.pending(services.of(actor).orElse(null), after, limit).stream()
                 .map(p -> new Request(p.driverId(), p.previousState(), p.requestedAt(), blockers(p.driverId())))
                 .toList();
     }

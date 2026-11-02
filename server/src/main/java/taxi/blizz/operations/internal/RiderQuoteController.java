@@ -68,14 +68,14 @@ class RiderQuoteController {
 
     @GetMapping("/api/rider/v1/vehicle-classes")
     List<ClassOption> vehicleClasses(AccessClaims claims, @RequestParam double lat, @RequestParam double lon) {
-        City city = city(new GeoPoint(lat, lon));
+        City city = city(claims.serviceId(), new GeoPoint(lat, lon));
         return classes.orderable(city.id()).stream().map(c -> new ClassOption(c.code(), c.name())).toList();
     }
 
     @PostMapping("/api/rider/v1/quotes")
     @ResponseStatus(HttpStatus.CREATED)
     QuoteView quote(AccessClaims claims, @Valid @RequestBody QuoteCommand body) {
-        City city = city(body.pickup());
+        City city = city(claims.serviceId(), body.pickup());
         VehicleClasses.VehicleClass vehicleClass = classes.active(city.id(), body.vehicleClass())
                 .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED, "This class is not offered here"));
         QuoteService.Quote quote = quotes.create(body.commandId(), new QuoteService.Request(city.id(),
@@ -90,8 +90,8 @@ class RiderQuoteController {
                 quote.paymentMethods(), quote.cardHoldMinor());
     }
 
-    private City city(GeoPoint point) {
-        return cities.resolve(point).orElseThrow(() ->
+    private City city(UUID serviceId, GeoPoint point) {
+        return cities.resolve(serviceId, point).orElseThrow(() ->
                 new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Pickup is outside every service area"));
     }
 }

@@ -19,15 +19,39 @@ class JdbcStaffAccess implements StaffAccess {
 
     private final JdbcClient jdbc;
     private final DriverCities driverCities;
+    private final taxi.blizz.identity.CityServices cityServices;
 
-    JdbcStaffAccess(JdbcClient jdbc, DriverCities driverCities) {
+    JdbcStaffAccess(JdbcClient jdbc, DriverCities driverCities, taxi.blizz.identity.CityServices cityServices) {
+        this.cityServices = cityServices;
         this.jdbc = jdbc;
         this.driverCities = driverCities;
+    }
+
+    /** The member's own taxi service; null for an unknown member, who passes no check anyway. */
+    private UUID ownService(Actor actor) {
+        return jdbc.sql("select service_id from staff_user where id = :id").param("id", actor.id())
+                .query(UUID.class).optional().orElse(null);
+    }
+
+    /** A driver or staff member of another taxi service is out of reach, whatever the role (ADR 0016). */
+    private void requireSameService(Actor actor, String table, UUID subjectId) {
+        if (subjectId != null && jdbc.sql("select exists(select 1 from " + table + " where id = :subject"
+                        + " and service_id <> (select service_id from staff_user where id = :actor))")
+                .param("subject", subjectId).param("actor", actor.id()).query(Boolean.class).single()) {
+            throw new DomainException(ErrorCode.ACCESS_DENIED, "Of another taxi service");
+        }
+    }
+
+    @Override
+    public void requireForClient(Actor actor, String permission, UUID clientId) {
+        require(actor, permission);
+        requireSameService(actor, "client", clientId);
     }
 
     @Override
     public void requireForDriver(Actor actor, String permission, UUID driverId) {
         require(actor, permission);
+        requireSameService(actor, "driver", driverId);
         Set<UUID> cities = driverId == null ? Set.of() : driverCities.of(driverId);
         if (cities.isEmpty()) {
             return;
@@ -41,6 +65,7 @@ class JdbcStaffAccess implements StaffAccess {
 
     @Override
     public void requireOverStaff(Actor actor, String permission, UUID staffId) {
+        requireSameService(actor, "staff_user", staffId);
         List<Scope> target = jdbc.sql("""
                         select role = 'SUPER_ADMIN' or all_cities as all_cities, city_scope from staff_user
                         where id = :id""")
@@ -73,7 +98,12 @@ class JdbcStaffAccess implements StaffAccess {
         }
         UUID[] cities = cityIds == null ? new UUID[0]
                 : Arrays.stream(cityIds).filter(Objects::nonNull).distinct().toArray(UUID[]::new);
-        boolean allowed = jdbc.sql("""
+        // Every city asked about must be of the member's own taxi service, whatever the role or grant (ADR 0016):
+        // "all cities" and a super admin mean all cities of that service.
+        UUID own = ownService(actor);
+        boolean allowed = cityServices.servicesOf(Arrays.asList(cities)).values().stream()
+                .allMatch(s -> s.equals(own))
+                && jdbc.sql("""
                         select exists(select 1 from staff_user
                                       where id = :id and state = 'ACTIVE' and not must_change_password
                                         and (role = 'SUPER_ADMIN'
@@ -120,7 +150,19 @@ class JdbcStaffAccess implements StaffAccess {
         }
         java.util.Set<UUID> cities = new java.util.HashSet<>();
         parts.forEach(p -> cities.addAll(p.cityIds()));
-        return new Scope(parts.stream().anyMatch(Scope::allCities), cities);
+        boolean all = parts.stream().anyMatch(Scope::allCities);
+        // The member's own taxi service only (ADR 0016): "all cities" lists every city of that service, so a list
+        // filtered by the scope's cities never shows another service's; a city of another service is dropped.
+        UUID own = ownService(actor);
+        if (all) {
+            cities.addAll(cityServices.citiesOf(own));
+        }
+        cityServices.servicesOf(java.util.List.copyOf(cities)).forEach((city, service) -> {
+            if (!service.equals(own)) {
+                cities.remove(city);
+            }
+        });
+        return new Scope(all, cities);
     }
 
     @Override
@@ -128,6 +170,7 @@ class JdbcStaffAccess implements StaffAccess {
         return new java.util.LinkedHashSet<>(jdbc.sql("""
                         select id from staff_user
                         where state = 'ACTIVE' and not must_change_password
+                          and (cast(:service as uuid) is null or service_id = cast(:service as uuid))
                           and (role = 'SUPER_ADMIN'
                                or (:permission = any(permissions)
                                    and (all_cities or (cast(:city as uuid) is not null
@@ -135,11 +178,14 @@ class JdbcStaffAccess implements StaffAccess {
                         union
                         select g.staff_id from staff_emergency_grant g join staff_user u on u.id = g.staff_id
                         where u.state = 'ACTIVE' and not u.must_change_password
+                          and (cast(:service as uuid) is null or u.service_id = cast(:service as uuid))
                           and g.revoked_at is null and g.expires_at > now() and :permission = any(g.permissions)
                           and (g.all_cities or (cast(:city as uuid) is not null
                                                 and cast(:city as uuid) = any(g.city_scope)))
                         order by 1""")
                 .param("permission", permission).param("city", cityId)
+                .param("service", cityId == null ? null
+                        : cityServices.servicesOf(java.util.List.of(cityId)).get(cityId))
                 .query(UUID.class).list());
     }
 }

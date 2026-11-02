@@ -263,13 +263,13 @@ class JdbcCalls implements Calls {
             throw new DomainException(ErrorCode.ACCESS_DENIED,
                     "Missing permission " + ANSWER_PERMISSION + " or " + LISTEN_PERMISSION);
         }
-        var query = jdbc.sql(SELECT + " where (:all or c.city_id = any(cast(:cities as uuid[])))"
+        var query = jdbc.sql(SELECT + " where c.city_id = any(cast(:cities as uuid[]))"
                         + (state == null ? "" : " and c.state = :state")
                         + (orderId == null ? "" : " and (c.order_id = :order or exists (select 1 from call_order o"
                                 + " where o.call_id = c.id and o.order_id = :order))")
                         + (after == null ? "" : " and (c.started_at, c.id) < (:afterAt, :afterId)")
                         + " order by c.started_at desc, c.id desc limit :limit")
-                .param("all", all).param("cities", cities.toArray(UUID[]::new))
+                .param("cities", cities.toArray(UUID[]::new))
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
             query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));

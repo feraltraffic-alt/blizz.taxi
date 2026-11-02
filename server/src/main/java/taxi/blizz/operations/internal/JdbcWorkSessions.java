@@ -72,11 +72,15 @@ class JdbcWorkSessions implements WorkSessions {
     private final CityOperations cityOperations;
     private final Clock clock;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcWorkSessions(JdbcClient jdbc, IdempotentCommands commands, Outbox outbox, AuditLog auditLog,
                      AccountDirectory accounts, DriverAdmission admission, CityResolver cities,
                      PresenceProperties presence, RiskProperties risk, ImpossibleMovementFlags movementFlags,
                      LegalDocuments legal, OrderCore core, DispatchEngine engine,
-                     TransactionTemplate transactions, CityOperations cityOperations, Clock clock) {
+                     TransactionTemplate transactions, CityOperations cityOperations, Clock clock,
+                     taxi.blizz.identity.Services services) {
+        this.services = services;
         this.cityOperations = cityOperations;
         this.legal = legal;
         this.jdbc = jdbc;
@@ -131,7 +135,9 @@ class JdbcWorkSessions implements WorkSessions {
                             || location.recordedAt().isAfter(now.plus(presence.futureTolerance()))) {
                         throw new DomainException(ErrorCode.LOCATION_NOT_FRESH, "A current location is required");
                     }
-                    City city = cities.resolve(location.point())
+                    // A city of the driver's own taxi service only (ADR 0016).
+                    City city = cities.resolve(services.of(driver).orElseThrow(() -> new DomainException(
+                                    ErrorCode.ACCESS_DENIED, "Not a driver of a taxi service")), location.point())
                             .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA,
                                     "The location is outside every service area"));
                     // Only in a city the driver is admitted in (REQ-DSP-01, REQ-DS-06, issue #141).

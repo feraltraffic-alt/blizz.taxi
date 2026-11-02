@@ -192,7 +192,8 @@ class JdbcDriverBalances implements DriverBalances {
         if (amountMinor <= 0) {
             throw invalid("The amount must be positive");
         }
-        UUID recipient = accounts.driverByPhone(phone)
+        // A driver of the sender's own taxi service (ADR 0016).
+        UUID recipient = accounts.driverByPhone(driver, phone)
                 .filter(id -> accounts.accountState(new Actor(SubjectType.DRIVER, id)).map("ACTIVE"::equals)
                         .orElse(false))
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No active driver with this phone"));

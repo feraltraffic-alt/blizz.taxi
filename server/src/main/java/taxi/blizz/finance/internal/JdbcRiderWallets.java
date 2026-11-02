@@ -72,7 +72,7 @@ class JdbcRiderWallets implements RiderWallets {
     @Override
     @Transactional(readOnly = true)
     public Wallet of(Actor actor, UUID clientId, PageCursor after, int limit) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForClient(actor, MANAGE_PERMISSION, clientId);
         requireClient(clientId);
         return wallet(clientId, after, limit);
     }
@@ -87,7 +87,7 @@ class JdbcRiderWallets implements RiderWallets {
         } catch (RuntimeException e) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Not a phone number");
         }
-        return accounts.clientByPhone(number)
+        return accounts.clientByPhone(actor, number)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No rider with this phone"));
     }
 
@@ -97,7 +97,7 @@ class JdbcRiderWallets implements RiderWallets {
     @Override
     public Wallet topUp(Actor actor, UUID commandId, UUID clientId, String currency, long amountMinor,
                         String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireForClient(actor, MANAGE_PERMISSION, clientId);
         String why = reason == null ? "" : reason.strip();
         if (why.isEmpty() || why.length() > 500) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason (at most 500 characters) is required");

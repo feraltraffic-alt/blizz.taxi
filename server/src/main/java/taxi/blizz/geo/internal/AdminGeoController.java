@@ -100,8 +100,9 @@ class AdminGeoController {
         staff.require(claims.actor(), GeoConfiguration.MANAGE_PERMISSION);
         return new Cities(jdbc.sql("""
                         select id, code, name, currency, timezone, priority, state, version, ST_AsGeoJSON(polygon)
-                        from city where cast(:state as text) is null or state = :state
+                        from city where service_id = :service and (cast(:state as text) is null or state = :state)
                         order by state, name, code""")
+                .param("service", claims.serviceId())
                 .param("state", state)
                 .query((rs, i) -> new CityView(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getString(5), rs.getInt(6), rs.getString(7), rs.getLong(8),

@@ -28,8 +28,10 @@ class JdbcClientLookup implements ClientLookup {
     private final JdbcClient jdbc;
     private final OtpProperties phones;
     private final SecretKeySpec key;
+    private final taxi.blizz.identity.Services services;
 
-    JdbcClientLookup(JdbcClient jdbc, OtpProperties phones) {
+    JdbcClientLookup(JdbcClient jdbc, OtpProperties phones, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.phones = phones;
         this.key = new SecretKeySpec(("customer-lookup|" + phones.secret()).getBytes(StandardCharsets.UTF_8),
@@ -38,7 +40,7 @@ class JdbcClientLookup implements ClientLookup {
 
     @Override
     @Transactional(readOnly = true)
-    public Lookup byPhone(String phone) {
+    public Lookup byPhone(java.util.UUID serviceId, String phone) {
         if (phone == null || !E164.matcher(phone).matches()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "The phone must be a full number in E.164");
         }
@@ -50,11 +52,20 @@ class JdbcClientLookup implements ClientLookup {
         }
         Client client = jdbc.sql("""
                         select id, name, account_state from client
-                        where phone_normalized = :phone and account_state not in ('ANONYMIZED', 'DELETION_PENDING')""")
+                        where service_id = :service and phone_normalized = :phone
+                          and account_state not in ('ANONYMIZED', 'DELETION_PENDING')""")
+                .param("service", serviceId)
                 .param("phone", number.e164())
                 .query((rs, i) -> new Client(rs.getObject(1, java.util.UUID.class), rs.getString(2), rs.getString(3)))
                 .optional().orElse(null);
         return new Lookup(digest(number.e164()), client);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Lookup byPhone(taxi.blizz.platform.Actor within, String phone) {
+        return byPhone(services.of(within).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Not staff of a taxi service")), phone);
     }
 
     private String digest(String phone) {

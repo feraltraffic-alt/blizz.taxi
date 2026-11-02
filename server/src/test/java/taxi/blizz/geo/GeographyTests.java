@@ -30,6 +30,8 @@ import taxi.blizz.platform.SubjectType;
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class GeographyTests {
+
+    static final java.util.UUID SVC = taxi.blizz.identity.Services.DEFAULT_ID;
     private static final Actor STAFF = new Actor(SubjectType.STAFF, UUID.randomUUID());
     private static final String BOX = "SRID=4326;MULTIPOLYGON(((30 50,31 50,31 51,30 51,30 50)))";
     private static final String INVALID = "SRID=4326;MULTIPOLYGON(((30 50,31 51,30 51,31 50,30 50)))";
@@ -59,28 +61,28 @@ class GeographyTests {
     @Test
     void resolvesInsideAndBoundaryInLatitudeLongitudeOrderButNotOutsideOrDraft() {
         Revision draft = draft(BOX, 0);
-        assertThat(resolver.resolve(KYIV_POINT)).isEmpty();
+        assertThat(resolver.resolve(SVC, KYIV_POINT)).isEmpty();
         Revision published = geo.publishCity(change(draft));
-        City city = resolver.resolve(KYIV_POINT).orElseThrow();
+        City city = resolver.resolve(SVC, KYIV_POINT).orElseThrow();
         assertThat(city.id()).isEqualTo(published.id());
         assertThat(city.version()).isEqualTo(1);
         assertThat(city.currency()).isEqualTo("UAH");
         assertThat(city.timezone()).isEqualTo("Europe/Kyiv");
-        assertThat(resolver.resolve(new GeoPoint(50, 30.52))).hasValue(city);
-        assertThat(resolver.resolve(new GeoPoint(50, 30))).hasValue(city);
-        assertThat(resolver.resolve(new GeoPoint(49, 30))).isEmpty();
-        assertThat(resolver.resolve(new GeoPoint(30.52, 50.45))).isEmpty();
+        assertThat(resolver.resolve(SVC, new GeoPoint(50, 30.52))).hasValue(city);
+        assertThat(resolver.resolve(SVC, new GeoPoint(50, 30))).hasValue(city);
+        assertThat(resolver.resolve(SVC, new GeoPoint(49, 30))).isEmpty();
+        assertThat(resolver.resolve(SVC, new GeoPoint(30.52, 50.45))).isEmpty();
     }
 
     @Test
     void highestPriorityWinsAndArchivingFallsBackToTheLowerPriority() {
         Revision low = geo.publishCity(change(draft(BOX, -2)));
         Revision high = geo.publishCity(change(draft(BOX, 7)));
-        assertThat(resolver.resolve(KYIV_POINT).orElseThrow().id()).isEqualTo(high.id());
+        assertThat(resolver.resolve(SVC, KYIV_POINT).orElseThrow().id()).isEqualTo(high.id());
         geo.archiveCity(change(high));
-        assertThat(resolver.resolve(KYIV_POINT).orElseThrow().id()).isEqualTo(low.id());
+        assertThat(resolver.resolve(SVC, KYIV_POINT).orElseThrow().id()).isEqualTo(low.id());
         geo.archiveCity(change(low));
-        assertThat(resolver.resolve(KYIV_POINT)).isEmpty();
+        assertThat(resolver.resolve(SVC, KYIV_POINT)).isEmpty();
     }
 
     @Test
@@ -123,8 +125,8 @@ class GeographyTests {
         String hole = "SRID=4326;MULTIPOLYGON(((30 50,31 50,31 51,30 51,30 50),"
                 + "(30.4 50.4,30.4 50.6,30.6 50.6,30.6 50.4,30.4 50.4)))";
         geo.publishCity(change(draft(hole, 0)));
-        assertThat(resolver.resolve(new GeoPoint(50.5, 30.5))).isEmpty();
-        assertThat(resolver.resolve(new GeoPoint(50.4, 30.5))).isPresent();
+        assertThat(resolver.resolve(SVC, new GeoPoint(50.5, 30.5))).isEmpty();
+        assertThat(resolver.resolve(SVC, new GeoPoint(50.4, 30.5))).isPresent();
     }
 
     @Test
@@ -289,7 +291,7 @@ class GeographyTests {
         Change archive = change(city);
 
         reject(() -> geo.archiveCity(archive), ErrorCode.STATE_CONFLICT);
-        assertThat(resolver.resolve(KYIV_POINT)).isPresent();
+        assertThat(resolver.resolve(SVC, KYIV_POINT)).isPresent();
         assertThat(audits(city, "city.archive")).isZero();
         assertThat(jdbc.sql("select version from city where id = :id")
                 .param("id", city.id()).query(Long.class).single()).isEqualTo(city.version());
@@ -299,7 +301,7 @@ class GeographyTests {
         geo.archiveZone(change(publishedZone));
         assertThat(geo.archiveCity(archive).state()).isEqualTo("ARCHIVED");
         assertThat(audits(city, "city.archive")).isEqualTo(1);
-        assertThat(resolver.resolve(KYIV_POINT)).isEmpty();
+        assertThat(resolver.resolve(SVC, KYIV_POINT)).isEmpty();
     }
 
     @Test

@@ -58,7 +58,8 @@ class SandboxBankController {
 
     private List<String> tokensOf(String phone) {
         // The rider through identity's own lookup: payments does not read the client table (module boundary).
-        taxi.blizz.identity.ClientLookup.Client client = clients.byPhone(phone).client();
+        taxi.blizz.identity.ClientLookup.Client client = clients.byPhone(taxi.blizz.identity.Services.DEFAULT_ID, phone)
+                .client();
         if (client == null) {
             throw new DomainException(ErrorCode.NOT_FOUND, "No rider with this phone");
         }

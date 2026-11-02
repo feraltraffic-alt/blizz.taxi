@@ -20,15 +20,18 @@ public interface StaffAccess {
 
     /**
      * Where a staff member may use {@code permission}: every city ({@code allCities}), the listed ones, or none
-     * (an inactive member, a member without the permission, or not staff at all).
+     * (an inactive member, a member without the permission, or not staff at all). Only cities of the member's own
+     * taxi service (ADR 0016); with {@code allCities}, {@code cityIds} lists every one of them, so a list filtered by
+     * {@code cityIds} alone stays inside the service.
      */
     record Scope(boolean allCities, java.util.Set<UUID> cityIds) {
         public Scope {
             cityIds = cityIds == null ? java.util.Set.of() : java.util.Set.copyOf(cityIds);
         }
 
+        /** A city of the member's service in the scope; a city-less object only with every city. */
         public boolean covers(UUID cityId) {
-            return allCities || (cityId != null && cityIds.contains(cityId));
+            return cityId == null ? allCities : cityIds.contains(cityId);
         }
 
         public static Scope none() {
@@ -51,6 +54,12 @@ public interface StaffAccess {
      * the permission alone (the caller answers NOT_FOUND). Fails with {@code ACCESS_DENIED}.
      */
     void requireOverStaff(Actor actor, String permission, UUID staffId);
+
+    /**
+     * {@link #require} for an action on a rider: a rider of the member's own taxi service only (ADR 0016); riders
+     * have no city, so {@code permission} alone decides within the service.
+     */
+    void requireForClient(Actor actor, String permission, UUID clientId);
 
     /** {@link #require} with every city: for objects that serve several cities at once. */
     void requireEveryCity(Actor actor, String permission);

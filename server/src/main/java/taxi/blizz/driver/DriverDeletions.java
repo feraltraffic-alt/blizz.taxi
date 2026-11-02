@@ -40,6 +40,9 @@ public interface DriverDeletions {
     /** Pending requests, oldest first (requested_at, then id), after {@code after} when given (REQ-API-09). */
     List<Pending> pending(PageCursor after, int limit);
 
+    /** {@link #pending(PageCursor, int)} of the taxi service {@code serviceId} (ADR 0016). */
+    List<Pending> pending(java.util.UUID serviceId, PageCursor after, int limit);
+
     Optional<Pending> pending(UUID driverId);
 
     /**

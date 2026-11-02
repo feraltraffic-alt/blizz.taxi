@@ -39,8 +39,11 @@ class CallLiveFeed implements OutboxHandler {
     private final LiveBus bus;
     private final JsonMapper json;
 
+    private final taxi.blizz.geo.CityCatalog cities;
+
     CallLiveFeed(Calls calls, AccountDirectory accounts, Orders orders, StaffAccess staff, Operators operators,
-                 LiveBus bus, JsonMapper json) {
+                 LiveBus bus, JsonMapper json, taxi.blizz.geo.CityCatalog cities) {
+        this.cities = cities;
         this.calls = calls;
         this.accounts = accounts;
         this.orders = orders;
@@ -79,7 +82,11 @@ class CallLiveFeed implements OutboxHandler {
         Set<UUID> available = operators.available(holders);
         Set<UUID> to = available.isEmpty() ? holders : available;
         UUID client = call.callerPhone() == null ? null
-                : accounts.clientByPhone(new PhoneNumber(call.callerPhone())).orElse(null);
+                // The caller in the taxi service of the number dialled (its line's city), never another (ADR 0016).
+                : call.cityId() == null ? null
+                : cities.serviceOf(call.cityId())
+                        .flatMap(service -> accounts.clientByPhone(service, new PhoneNumber(call.callerPhone())))
+                        .orElse(null);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("call_id", call.id().toString());
         payload.put("city_id", call.cityId() == null ? null : call.cityId().toString());

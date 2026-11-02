@@ -43,7 +43,7 @@ class RiderAddressController {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Address search limit must be positive");
         }
         GeoPoint near = new GeoPoint(lat, lon);
-        City city = resolveCity(near);
+        City city = resolveCity(claims.serviceId(), near);
         rateLimiter.acquire(claims.actor().id());
         return addresses.search(city.id(), query, language, near, Math.min(limit, 20)).stream()
                 .map(RiderAddressController::view)
@@ -51,16 +51,16 @@ class RiderAddressController {
     }
 
     @GetMapping("/nearest")
-    ResponseEntity<RiderAddress> nearest(@RequestParam double lat, @RequestParam double lon) {
+    ResponseEntity<RiderAddress> nearest(AccessClaims claims, @RequestParam double lat, @RequestParam double lon) {
         GeoPoint point = new GeoPoint(lat, lon);
-        City city = resolveCity(point);
+        City city = resolveCity(claims.serviceId(), point);
         return addresses.nearest(city.id(), point, 100).map(RiderAddressController::view)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
-    private City resolveCity(GeoPoint point) {
-        return cities.resolve(point)
+    private City resolveCity(java.util.UUID serviceId, GeoPoint point) {
+        return cities.resolve(serviceId, point)
                 .orElseThrow(() -> new DomainException(ErrorCode.OUTSIDE_SERVICE_AREA, "Point is outside service area"));
     }
 

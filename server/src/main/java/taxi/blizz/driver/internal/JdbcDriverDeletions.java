@@ -127,11 +127,18 @@ class JdbcDriverDeletions implements DriverDeletions, ErasedSubjects {
     @Override
     @Transactional(readOnly = true)
     public List<Pending> pending(PageCursor after, int limit) {
+        return pending(null, after, limit);
+    }
+
+    @Override
+    public List<Pending> pending(UUID serviceId, PageCursor after, int limit) {
         var query = jdbc.sql("""
                         select id, deletion_previous_state, deletion_requested_at from driver
-                        where account_state = 'DELETION_PENDING'"""
+                        where account_state = 'DELETION_PENDING'
+                          and (cast(:service as uuid) is null or service_id = cast(:service as uuid))"""
                         + (after == null ? "" : " and (deletion_requested_at, id) > (:afterAt, :afterId)")
                         + " order by deletion_requested_at, id limit :limit")
+                .param("service", serviceId)
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)));
         if (after != null) {
             query = query.param("afterAt", after.time(0)).param("afterId", after.id(1));
