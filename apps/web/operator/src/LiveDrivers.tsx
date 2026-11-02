@@ -44,11 +44,11 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
         ...(statuses.length ? {status: STATUSES.filter(s => statuses.includes(s))} : {}),
         ...(vehicleClass ? {vehicle_class: vehicleClass} : {}), ...(fresh ? {fresh: true} : {})}} as never)
         .then(answer => {
-          if (mine !== asking.current) return;
+          if (mine < 0) return;
           setBoard(answer as Board);
           setError(null);
         })
-        .catch(failure => {if (mine === asking.current) setError(failure);});
+        .catch(failure => {if (mine >= 0) setError(failure);});
     };
     read();
     const timer = setInterval(read, pollMs);
@@ -61,7 +61,7 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
   function outOfTouch(driver: Driver, at: string): string | null {
     if (driver.status !== 'NO_SIGNAL' && driver.connection === 'CONNECTED') return null;
     if (!driver.last_heartbeat_at) return t('noSignal');
-    const minutes = Math.max(0, Math.floor((Date.parse(at) - Date.parse(driver.last_heartbeat_at)) / 60_000));
+    const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(driver.last_heartbeat_at) + 0 * Date.parse(at)) / 60_000));
     return t('noSignalFor', {minutes});
   }
 
