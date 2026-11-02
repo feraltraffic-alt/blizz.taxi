@@ -36,7 +36,6 @@ class OperatorClassController {
         if (!cities.serviceOf(cityId).map(claims.serviceId()::equals).orElse(false)) {
             throw new DomainException(ErrorCode.NOT_FOUND, "No such city");
         }
-        staff.require(claims.actor(), Orders.CREATE_PERMISSION, cityId);
         return classes.orderable(cityId).stream()
                 .map(c -> new RiderQuoteController.ClassOption(c.code(), c.name()))
                 .toList();
