@@ -1,12 +1,13 @@
 import {createElement} from 'react';
 import {registerRootComponent} from 'expo';
 import Constants from 'expo-constants';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
-import {RiderApp} from './src/App';
+import {RiderApp, type PickedFile} from './src/App';
 import type {Point} from './src/Ride';
 import {expoPush, secureRefreshTokens, webRefreshTokens, type Notifications as Port} from '@blizz/mobile-ui';
 
@@ -33,8 +34,19 @@ async function locate(): Promise<Point> {
 // Pushes on the phone only: the web build (end-to-end runs) has none (#264).
 const push = Platform.OS === 'web' ? undefined : expoPush(Notifications as unknown as Port, Platform.OS);
 
+/** A file for a support message from the phone (or the browser in the web build) (#313), as the driver's (#284). */
+async function pickFile(): Promise<PickedFile | null> {
+  const result = await DocumentPicker.getDocumentAsync({type: ['image/jpeg', 'image/png', 'image/webp',
+    'application/pdf'], copyToCacheDirectory: true, multiple: false});
+  const asset = result.canceled ? undefined : result.assets[0];
+  if (!asset) return null;
+  const data = asset.file ?? await (await fetch(asset.uri)).blob();
+  return {name: asset.name, type: asset.mimeType ?? data.type, size: asset.size ?? data.size, data};
+}
+
 function Root() {
-  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push}});
+  return createElement(RiderApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push,
+    pickFile}});
 }
 
 registerRootComponent(Root);

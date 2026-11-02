@@ -3,8 +3,8 @@ import {ActivityIndicator, Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
   Alert, Button, Field, LegalGuard, Loading, RIDER_CATEGORIES, Screen, SignIn, Support, UpdateScreen, failureText,
-  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type AboutOrder, type Locale, type PushPort,
-  type Shared
+  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type AboutOrder, type Locale, type PickedFile,
+  type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
@@ -23,7 +23,11 @@ export interface AppConfig {
   now?: () => number;
   /** The phone's pushes (#264); none in the web build. */
   push?: PushPort;
+  /** Picks a file to attach to a support message (#313); none: no attaching. */
+  pickFile?: () => Promise<PickedFile | null>;
 }
+
+export type {PickedFile} from '@blizz/mobile-ui';
 
 export function RiderApp({client, config}: {client: ApiClient; config: AppConfig}) {
   const locale = config.locale ?? 'ru';
@@ -71,6 +75,7 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   }
   if (tab === 'support') {
     return <Support {...shared} newId={newId} side={RIDER_SIDE} about={about} backLabel={t('toRide')}
+      pickFile={config.pickFile}
       onBack={() => {setAbout(null); setTab('ride');}} />;
   }
   return tab === 'profile' ? (

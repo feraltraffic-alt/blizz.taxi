@@ -192,6 +192,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   }
   if (tab === 'support') {
     return <Support client={client} t={t} guard={guard} failure={failure} newId={newId} side={DRIVER_SIDE}
+      pickFile={config.pickFile}
       about={null} backLabel={t('home')} onBack={() => setTab('work')} />;
   }
   if (tab === 'documents') {
