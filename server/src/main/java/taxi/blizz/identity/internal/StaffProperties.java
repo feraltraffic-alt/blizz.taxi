@@ -29,13 +29,6 @@ record StaffProperties(
         String ownerLogin,
         String ownerPassword) {
 
-    /** Without a platform owner (tests and servers that set none). */
-    StaffProperties(int maxFailedSignIns, Duration lockout, int minPasswordLength, String bootstrapLogin,
-                    String bootstrapPassword, int maxFailedSignInsPerAddress) {
-        this(maxFailedSignIns, lockout, minPasswordLength, bootstrapLogin, bootstrapPassword,
-                maxFailedSignInsPerAddress, null, null);
-    }
-
     StaffProperties {
         if (maxFailedSignInsPerAddress < 1) {
             throw new IllegalStateException("blizz.staff: max-failed-sign-ins-per-address must be at least 1");
