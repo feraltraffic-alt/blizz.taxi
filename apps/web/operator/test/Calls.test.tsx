@@ -223,15 +223,18 @@ describe('#302: recordings', () => {
       stored_at: state === 'STORED' ? '2026-11-02T10:04:00Z' : null}, ...over});
   const urls = {made: [] as Blob[], revoked: [] as string[]};
 
+  // jsdom has no object URLs: only these two statics are added, URL itself stays the real constructor.
+  const statics = URL as unknown as {createObjectURL?: (blob: Blob) => string; revokeObjectURL?: (url: string) => void};
   function stubUrls() {
     urls.made = [];
     urls.revoked = [];
-    vi.stubGlobal('URL', Object.assign(Object.create(URL), URL, {
-      createObjectURL: (blob: Blob) => {urls.made.push(blob); return 'blob:recording-' + urls.made.length;},
-      revokeObjectURL: (url: string) => {urls.revoked.push(url);}
-    }));
+    statics.createObjectURL = vi.fn((blob: Blob) => {urls.made.push(blob); return 'blob:recording-' + urls.made.length;});
+    statics.revokeObjectURL = vi.fn((url: string) => {urls.revoked.push(url);});
   }
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    delete statics.createObjectURL;
+    delete statics.revokeObjectURL;
+  });
 
   it('R1: a stored recording shows its length and plays with one request', async () => {
     stubUrls();
