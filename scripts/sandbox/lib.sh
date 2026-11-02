@@ -78,10 +78,13 @@ expect() {
     fi
 }
 
-# sign_in CLIENT|DRIVER PHONE — signs in by SMS code (read from the sandbox) and prints the access token.
+# sign_in CLIENT|DRIVER PHONE [SERVICE] — signs in by SMS code (read from the sandbox) and prints the access token;
+# SERVICE is the taxi service's code (ADR 0016), the first service when absent.
 sign_in() {
-    local audience="$1" phone="$2" device="sandbox-$RANDOM" challenge code
-    local body="{\"audience\":\"$audience\",\"phone\":\"$phone\",\"device_ref\":\"$device\"}"
+    local audience="$1" phone="$2" service="${3:-}" device="sandbox-$RANDOM" challenge code
+    local body="{\"audience\":\"$audience\",\"phone\":\"$phone\",\"device_ref\":\"$device\""
+    if [[ -n "$service" ]]; then body+=",\"service\":\"$service\""; fi
+    body+="}"
     challenge=$(api POST /auth/v1/otp/challenges "" "$body" | jq -r .challenge_id)
     if [[ "$(cat /tmp/sandbox-status)" == 429 ]]; then
         # The same phone asked for a code a moment ago (an earlier scenario): wait out the resend pause once.
