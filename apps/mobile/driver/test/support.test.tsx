@@ -192,3 +192,19 @@ describe('#330 X7: the driver asks for a copy through the driver API', () => {
       '/api/driver/v1/me/data-exports/challenge', '/api/driver/v1/me/data-exports']);
   });
 });
+
+describe('#336 A6: the driver deletes the account through the driver API', () => {
+  it('posts the code and the request to /api/driver/v1/me', async () => {
+    const http = await mountHome({
+      'POST /api/driver/v1/me/deletion-request/challenge': [{status: 201, body: {challenge_id: 'ch1',
+        expires_at: '2099-01-01T00:00:00Z', resend_available_at: '2026-11-02T10:01:00Z'}}],
+      'POST /api/driver/v1/me/deletion-request': [{status: 200, body: {driver_id: session.subject.id,
+        account_state: 'DELETION_PENDING', requested_at: '2026-11-02T10:00:00Z'}}]});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Удалить аккаунт'}));
+    await fireEvent.changeText(await screen.findByLabelText('Код подтверждения удаления'), '123456');
+    await fireEvent.press(screen.getByRole('button', {name: 'Подтвердить удаление'}));
+    expect(await screen.findByText('Запрос на удаление принят. Аккаунт удалят после проверки.')).toBeTruthy();
+    expect(http.filter(c => c.method === 'POST').map(c => c.path)).toEqual([
+      '/api/driver/v1/me/deletion-request/challenge', '/api/driver/v1/me/deletion-request']);
+  });
+});
