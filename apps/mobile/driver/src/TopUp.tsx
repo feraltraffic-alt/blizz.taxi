@@ -66,7 +66,7 @@ export function TopUpByCard({client, t, guard, failure, cityId, newId, pollMs, o
     setMessage(null);
     try {
       setPage(await guard(() => client.post('/api/driver/v1/balance/card-top-ups' as never, {body: {
-        command_id: newId(), city_id: cityId, amount_minor: minor}} as never)) as TopUp);
+        command_id: newId(), city_id: cityId, amount_minor: Math.round(minor / 100)}} as never)) as TopUp);
     } catch (error) {
       setMessage(error instanceof ApiError && error.status === 404 ? t('topUpNoCards') : failure(error));
     } finally {
