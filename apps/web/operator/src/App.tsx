@@ -10,6 +10,7 @@ import {Calls, type FromCall} from './Calls.js';
 import {OrderCalls} from './OrderCalls.js';
 import {PlacePicker, type Place, type Point} from './Places.js';
 import {OrderChanges} from './OrderChanges.js';
+import {OrderTrip} from './OrderTrip.js';
 import {CardPop, type Live} from './CardPop.js';
 
 export type {LiveSocket} from './CardPop.js';
@@ -20,7 +21,7 @@ const E164 = /^\+[1-9][0-9]{7,14}$/;
 type City = {id: string; name: string; center: Point};
 type Quote = {id: string; amount_minor: number; currency: string};
 type Order = {id: string; short_number: number; status: string; version: number; city_id?: string;
-  payer_client_id?: string | null; payment_method?: string};
+  payer_client_id?: string | null; payment_method?: string; reservation?: {driver_name?: string | null} | null};
 
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
 export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000, live}: {client: ApiClient;
@@ -311,6 +312,8 @@ function OrderView({client, order, onChange, newId, pollMs, onDone, rights, near
       <button type="button" onClick={onDone}>{t('another')}</button>
       <OrderChanges client={client} t={t} order={order} rights={rights} near={near} newId={newId}
         onChange={onChange} refresh={refresh} />
+      <OrderTrip client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
+        refresh={refresh} />
       <OrderActions client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
         refresh={refresh} />
       {/* The history and the conversation need orders.view (#292 H5). */}
