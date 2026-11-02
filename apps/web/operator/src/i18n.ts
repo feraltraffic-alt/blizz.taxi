@@ -5,6 +5,15 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    calls: 'Звонки', myCallStatus: 'Мой статус: {status}', extension: 'внутренний номер {number}',
+    noExtension: 'нет внутреннего номера', callStatus_AVAILABLE: 'доступен', callStatus_BREAK: 'перерыв',
+    callStatus_OFFLINE: 'не на линии', setStatus_AVAILABLE: 'Доступен', setStatus_BREAK: 'Перерыв',
+    setStatus_OFFLINE: 'Не на линии', ringingOnly: 'Только звонящие сейчас', noCalls: 'Звонков нет.',
+    hiddenNumber: 'номер скрыт', callOrders: 'заказов: {count}', takeCall: 'Взять звонок',
+    orderFromCall: 'Заказ по звонку', orderForCall: 'Заказ по звонку с {phone}',
+    callGone: 'Звонок уже взял другой оператор, или он закончился.', call_DIALING: 'набирается',
+    call_RINGING: 'звонит', call_ANSWERED: 'принят', call_ENDED: 'завершён', call_MISSED: 'пропущен',
+    call_FAILED: 'не удался',
     driverActions: 'Водитель заказа', revokeDriver: 'Снять водителя', revokeReason: 'Причина снятия водителя',
     revokeComment: 'Комментарий к снятию', revokeReasonNeeded: 'Выберите причину; комментарий — до 500 символов.',
     offerOrder: 'Предложить заказ', offerDriver: 'Водитель для предложения', offerReason: 'Причина предложения',
@@ -93,6 +102,15 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    calls: 'Дзвінки', myCallStatus: 'Мій статус: {status}', extension: 'внутрішній номер {number}',
+    noExtension: 'немає внутрішнього номера', callStatus_AVAILABLE: 'доступний', callStatus_BREAK: 'перерва',
+    callStatus_OFFLINE: 'не на лінії', setStatus_AVAILABLE: 'Доступний', setStatus_BREAK: 'Перерва',
+    setStatus_OFFLINE: 'Не на лінії', ringingOnly: 'Лише ті, що дзвонять зараз', noCalls: 'Дзвінків немає.',
+    hiddenNumber: 'номер приховано', callOrders: 'замовлень: {count}', takeCall: 'Взяти дзвінок',
+    orderFromCall: 'Замовлення за дзвінком', orderForCall: 'Замовлення за дзвінком з {phone}',
+    callGone: 'Дзвінок уже взяв інший оператор, або він закінчився.', call_DIALING: 'набирається',
+    call_RINGING: 'дзвонить', call_ANSWERED: 'прийнято', call_ENDED: 'завершено', call_MISSED: 'пропущено',
+    call_FAILED: 'не вдався',
     driverActions: 'Водій замовлення', revokeDriver: 'Зняти водія', revokeReason: 'Причина зняття водія',
     revokeComment: 'Коментар до зняття', revokeReasonNeeded: 'Оберіть причину; коментар — до 500 символів.',
     offerOrder: 'Запропонувати замовлення', offerDriver: 'Водій для пропозиції', offerReason: 'Причина пропозиції',
@@ -181,6 +199,15 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    calls: 'Połączenia', myCallStatus: 'Mój status: {status}', extension: 'numer wewnętrzny {number}',
+    noExtension: 'brak numeru wewnętrznego', callStatus_AVAILABLE: 'dostępny', callStatus_BREAK: 'przerwa',
+    callStatus_OFFLINE: 'poza linią', setStatus_AVAILABLE: 'Dostępny', setStatus_BREAK: 'Przerwa',
+    setStatus_OFFLINE: 'Poza linią', ringingOnly: 'Tylko dzwoniące teraz', noCalls: 'Brak połączeń.',
+    hiddenNumber: 'numer ukryty', callOrders: 'zleceń: {count}', takeCall: 'Odbierz połączenie',
+    orderFromCall: 'Zlecenie z połączenia', orderForCall: 'Zlecenie z połączenia z {phone}',
+    callGone: 'Połączenie odebrał już inny operator albo się zakończyło.', call_DIALING: 'wybieranie',
+    call_RINGING: 'dzwoni', call_ANSWERED: 'odebrane', call_ENDED: 'zakończone', call_MISSED: 'nieodebrane',
+    call_FAILED: 'nieudane',
     driverActions: 'Kierowca zlecenia', revokeDriver: 'Zdejmij kierowcę', revokeReason: 'Powód zdjęcia kierowcy',
     revokeComment: 'Komentarz do zdjęcia', revokeReasonNeeded: 'Wybierz powód; komentarz — do 500 znaków.',
     offerOrder: 'Zaproponuj zlecenie', offerDriver: 'Kierowca do propozycji', offerReason: 'Powód propozycji',
