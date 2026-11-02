@@ -1,13 +1,14 @@
-// The rider app's web build for the end-to-end run (#137): static files from apps/mobile/rider/dist, and the API on
-// the same origin, proxied to the server at 127.0.0.1:8080.
+// A mobile app's web build for its end-to-end run (#137, #237): `node scripts/serve-mobile-web.mjs <app> <port>`
+// serves the static files of apps/mobile/<app>/dist, and the API on the same origin, proxied to 127.0.0.1:8080.
 import {createServer, request} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {extname, join, normalize} from 'node:path';
 
-const root = join(process.cwd(), 'apps/mobile/rider/dist');
+const [app = 'rider', portArg = '4174'] = process.argv.slice(2);
+const root = join(process.cwd(), 'apps/mobile', app, 'dist');
 const types = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.png': 'image/png', '.ico': 'image/x-icon', '.ttf': 'font/ttf'};
-const port = Number(process.env.PORT ?? 4174);
+const port = Number(portArg);
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');

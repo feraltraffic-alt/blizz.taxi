@@ -5,16 +5,16 @@ import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
 import {RiderApp} from './src/App';
-import {secureRefreshTokens} from './src/secureTokens';
-import {webRefreshTokens} from './src/webTokens';
+import {secureRefreshTokens, webRefreshTokens} from '@blizz/mobile-ui';
 
+const KEY = 'blizz.rider.refresh';
 const extra = (Constants.expoConfig?.extra ?? {}) as {service?: string; apiUrl?: string};
 const version = Constants.expoConfig?.version ?? '0.0.0';
 const platform = Platform.OS === 'ios' ? 'RIDER_IOS' : 'RIDER_ANDROID';
 const client = createApiClient({
   baseUrl: extra.apiUrl || (Platform.OS === 'web' ? globalThis.location.origin : ''),
   // The web target (for the end-to-end run only) has no Keychain: the tab's sessionStorage stands in.
-  refreshTokens: Platform.OS === 'web' ? webRefreshTokens() : secureRefreshTokens(SecureStore),
+  refreshTokens: Platform.OS === 'web' ? webRefreshTokens(KEY) : secureRefreshTokens(SecureStore, KEY),
   headers: (): Record<string, string> =>
     Platform.OS === 'web' ? {} : {'X-App-Platform': platform, 'X-App-Version': version}
 });
