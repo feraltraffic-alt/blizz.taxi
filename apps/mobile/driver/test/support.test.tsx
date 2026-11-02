@@ -26,7 +26,8 @@ const full = (over: Record<string, unknown> = {}) => ({id: CASE, number: 77, cit
 type Call = {method: string; path: string; body?: unknown};
 type Answer = {status: number; body?: unknown; raw?: Uint8Array; type?: string};
 
-async function mount(script: Record<string, Answer[]>, profile: unknown = admitted,
+/** The app on the driver's home screen; the calls it makes are recorded. */
+async function mountHome(script: Record<string, Answer[]>, profile: unknown = admitted,
   pickFile?: () => Promise<PickedFile | null>) {
   const calls: Call[] = [];
   const all: Record<string, Answer[]> = {
@@ -56,6 +57,12 @@ async function mount(script: Record<string, Answer[]>, profile: unknown = admitt
     heartbeatMs: 60_000, pollMs: 60_000, locate: async () => ({lat: 50.45, lon: 30.52, accuracy_m: 8}),
     newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0'), ...(pickFile ? {pickFile} : {})};
   await render(<DriverApp client={client} config={config} />);
+  return calls;
+}
+
+async function mount(script: Record<string, Answer[]>, profile: unknown = admitted,
+  pickFile?: () => Promise<PickedFile | null>) {
+  const calls = await mountHome(script, profile, pickFile);
   await fireEvent.press(await screen.findByRole('button', {name: 'Поддержка'}));
   return {calls};
 }
@@ -142,5 +149,28 @@ describe('#319 O5: the driver opens through the driver API', () => {
     await fireEvent.press(await screen.findByRole('button', {name: 'Открыть check.jpg'}));
     expect(String((await screen.findByLabelText('check.jpg')).props.source.uri)).toBe('data:image/jpeg;base64,/9j/');
     expect(calls.filter(c => c.path === '/api/driver/v1/support/cases/' + CASE + '/attachments/a1')).toHaveLength(1);
+  });
+});
+
+describe('#328 C5: the driver changes the phone through the driver API', () => {
+  it('posts the three steps to /api/driver/v1/me', async () => {
+    const challenge = (id: string) => ({status: 201, body: {challenge_id: id, expires_at: '2099-01-01T00:00:00Z',
+      resend_available_at: '2026-11-02T10:01:00Z'}});
+    const http = await mountHome({
+      'POST /api/driver/v1/me/phone-change/current-code': [challenge('c1')],
+      'POST /api/driver/v1/me/phone-change/new-code': [challenge('c2')],
+      'POST /api/driver/v1/me/phone-change': [{status: 200, body: {subject_id: session.subject.id,
+        phone: '+380502222222', version: 2}}]});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Сменить номер'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Код на текущий номер'}));
+    await fireEvent.changeText(await screen.findByLabelText('Код с текущего номера'), '1111');
+    await fireEvent.changeText(screen.getByLabelText('Новый номер'), '+380502222222');
+    await fireEvent.press(screen.getByRole('button', {name: 'Код на новый номер'}));
+    await fireEvent.changeText(await screen.findByLabelText('Код с нового номера'), '2222');
+    await fireEvent.press(screen.getByRole('button', {name: 'Сменить номер'}));
+    expect(await screen.findByText('Номер изменён на +380502222222.')).toBeTruthy();
+    expect(http.filter(c => c.method === 'POST').map(c => c.path)).toEqual([
+      '/api/driver/v1/me/phone-change/current-code', '/api/driver/v1/me/phone-change/new-code',
+      '/api/driver/v1/me/phone-change']);
   });
 });
