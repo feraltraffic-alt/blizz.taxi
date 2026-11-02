@@ -147,7 +147,8 @@ function Work({client, t, guard, failure, config, newId, now}: Shared & {config:
     setMessage(null);
     try {
       setAvailability(await guard(() => client.post('/api/driver/v1/work-sessions/{id}/close' as never, {
-        params: {id: availability.session_id}, body: {command_id: newId(), expected_version: availability.session_version}
+        params: {id: availability.session_id},
+        body: {command_id: newId(), expected_version: availability.session_version}
       } as never)) as Availability);
     } catch (error) {
       setMessage(failure(error));
@@ -171,7 +172,8 @@ function Work({client, t, guard, failure, config, newId, now}: Shared & {config:
       <Text style={{color: theme.text}}>{online ? t('online') : t('offlineNow')}</Text>
       <Text style={{color: theme.muted}}>{t('review', {status: t('review' + profile.review_status)})}</Text>
       <Text style={{color: theme.muted}}>
-        {profile.admission_city_ids.length === 0 ? t('noCities') : t('cities', {count: profile.admission_city_ids.length})}
+        {profile.admission_city_ids.length === 0 ? t('noCities')
+          : t('cities', {count: profile.admission_city_ids.length})}
       </Text>
       {!profile.vehicles.some(v => v.state === 'APPROVED') ? <Text style={{color: theme.muted}}>{t('noVehicle')}</Text>
         : null}

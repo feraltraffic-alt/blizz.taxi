@@ -1413,6 +1413,10 @@ export interface components {
         LegalLanguage: "uk" | "pl" | "ru" | "en";
         Me: {
             account_state: string;
+            /** @description The name the person gave; null when none was given. */
+            name: string | null;
+            /** @description The phone of the account in E.164 form; null for an anonymized account. */
+            phone: string | null;
             session_id: components["schemas"]["Uuid"];
             subject_id: components["schemas"]["Uuid"];
             /** @constant */

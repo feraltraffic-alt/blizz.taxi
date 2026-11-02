@@ -60,6 +60,8 @@ class AuthApiTests {
 
     MockMvc mvc;
     String phone;
+    /** The installation the codes are asked from; shared by default, so a test with more codes takes its own. */
+    String device;
 
     @BeforeEach
     void setUp() {
@@ -67,6 +69,7 @@ class AuthApiTests {
         AnnotationAwareOrderComparator.sort(filters);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
         phone = taxi.blizz.TestPhones.unique("+38050", 7);
+        device = "test-device";
         delivery.codes.clear();
     }
 
@@ -90,7 +93,7 @@ class AuthApiTests {
     /** {@code service}: the taxi service's code (ADR 0016), or null for the first service. */
     private Map<String, Object> signIn(String audience, String service) throws Exception {
         Map<String, Object> request = new java.util.HashMap<>(
-                Map.of("audience", audience, "phone", phone, "device_ref", "test-device"));
+                Map.of("audience", audience, "phone", phone, "device_ref", device));
         if (service != null) {
             request.put("service", service);
         }
@@ -124,6 +127,40 @@ class AuthApiTests {
         assertThat(body(me)).containsEntry("subject_type", "CLIENT")
                 .containsEntry("account_state", "ACTIVE")
                 .containsEntry("session_id", session.get("session_id"));
+    }
+
+    /** Issue #241: /me gives the person's own phone and name; none given → null, anonymized → no phone. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void meGivesTheOwnPhoneAndNameOrNull() throws Exception {
+        // A number range and a device of its own: the class's other tests share the hourly budgets of codes of the
+        // +38050 range and of "test-device", and this test asks two more codes.
+        phone = taxi.blizz.TestPhones.unique("+38093", 7);
+        device = "test-device-me-" + UUID.randomUUID();
+        Map<String, Object> rider = signIn("CLIENT");
+        UUID clientId = UUID.fromString((String) ((Map<String, Object>) rider.get("subject")).get("id"));
+        String e164 = jdbc.sql("select phone_normalized from client where id = :id").param("id", clientId)
+                .query(String.class).single();
+        Map<String, Object> me = body(getWithToken("/api/rider/v1/me", rider.get("access_token")));
+        assertThat(me).containsEntry("phone", e164).containsEntry("name", null);
+
+        jdbc.sql("update client set name = '   ' where id = :id").param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).as("a blank name is none")
+                .containsEntry("name", null);
+        jdbc.sql("update client set name = 'Олена' where id = :id").param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).containsEntry("name", "Олена");
+        // An anonymized account keeps no phone (the table allows it only then); the session is still open here.
+        jdbc.sql("update client set account_state = 'ANONYMIZED', phone_normalized = null where id = :id")
+                .param("id", clientId).update();
+        assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).as("anonymized: no phone")
+                .containsEntry("phone", null);
+
+        Map<String, Object> driver = signIn("DRIVER");
+        UUID driverId = UUID.fromString((String) ((Map<String, Object>) driver.get("subject")).get("id"));
+        String driverPhone = jdbc.sql("select phone_normalized from driver where id = :id").param("id", driverId)
+                .query(String.class).single();
+        assertThat(body(getWithToken("/api/driver/v1/me", driver.get("access_token")))).as("the driver's own")
+                .containsEntry("phone", driverPhone).containsEntry("subject_id", driverId.toString());
     }
 
     /**
