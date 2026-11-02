@@ -6,6 +6,7 @@ import {
   useTheme, useUpgradeGuard, type Locale, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
+import {Dispatch} from './Trip';
 
 export interface Position {
   lat: number;
@@ -19,6 +20,8 @@ export interface AppConfig {
   deviceRef: string;
   locate: () => Promise<Position>;
   heartbeatMs?: number;
+  /** How often offers and the current trip are asked again (#249). */
+  pollMs?: number;
   locale?: Locale;
   newId?: () => string;
   now?: () => number;
@@ -44,7 +47,7 @@ export function DriverApp({client, config}: {client: ApiClient; config: AppConfi
   }
   return (
     <LegalGuard {...shared} app="driver" service={config.service} locale={locale} newId={newId}>
-      <Work {...shared} config={config} newId={newId} now={now} />
+      <Work {...shared} config={config} newId={newId} now={now} locale={locale} />
     </LegalGuard>
   );
 }
@@ -55,8 +58,8 @@ function admitted(profile: Profile): boolean {
     && profile.admission_city_ids.length > 0 && profile.vehicles.some(v => v.state === 'APPROVED');
 }
 
-function Work({client, t, guard, failure, config, newId, now}: Shared & {config: AppConfig; newId: () => string;
-  now: () => number}) {
+function Work({client, t, guard, failure, config, newId, now, locale}: Shared & {config: AppConfig;
+  newId: () => string; now: () => number; locale: Locale}) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -185,6 +188,8 @@ function Work({client, t, guard, failure, config, newId, now}: Shared & {config:
       {online ? <Button label={t('goOffline')} onPress={() => void goOffline()} disabled={busy} />
         : canWork ? <Button label={t('goOnline')} onPress={() => void goOnline()} disabled={busy} />
           : <Text style={{color: theme.muted}}>{t('notAdmitted')}</Text>}
+      {online ? <Dispatch client={client} t={t} guard={guard} failure={failure} newId={newId} now={now}
+        pollMs={config.pollMs ?? 3_000} locale={locale} /> : null}
       {lost ? <Text style={{color: theme.error}}>{t('connectionLost')}</Text> : null}
       <Alert text={message} />
       <Button label={t('signOut')} onPress={() => void client.logout()} />

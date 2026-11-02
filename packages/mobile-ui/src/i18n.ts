@@ -89,6 +89,11 @@ export const commonTranslations: Catalogs = {
 
 /** The shared texts and the app's own, one catalog per language. */
 export function withCommon(own: Catalogs): Catalogs {
+  // An app's key with a shared key's name would silently change a shared screen (the legal "accept" once became
+  // the driver's "accept the offer", #249): refuse it.
+  const shadowed = Object.values(own).flatMap(catalog => Object.keys(catalog))
+    .filter(key => key in commonTranslations.ru);
+  if (shadowed.length > 0) throw new Error('App texts shadow shared ones: ' + [...new Set(shadowed)].join(', '));
   return {ru: {...commonTranslations.ru, ...own.ru}, uk: {...commonTranslations.uk, ...own.uk},
     pl: {...commonTranslations.pl, ...own.pl}};
 }
