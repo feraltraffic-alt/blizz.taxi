@@ -108,7 +108,7 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
           {calls.map(c => (
             <li key={c.id}>
               <span>{line(c)}</span>
-              {canAnswer && c.state === 'RINGING'
+              {canAnswer && c.state !== 'X'
                 ? <button type="button" onClick={() => void take(c)}>{t('takeCall')}</button> : null}
               {rights.has('orders.create') && c.state === 'ANSWERED' && c.answered_by === me
                 ? <button type="button" onClick={() => onOrder({id: c.id, phone: c.caller_phone ?? null})}>

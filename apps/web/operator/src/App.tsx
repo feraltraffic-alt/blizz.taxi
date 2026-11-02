@@ -219,9 +219,7 @@ function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; c
         command_id: orderCommand.current, quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
         payment_method: payment, caller: {phone, ...(name.trim() ? {name: name.trim()} : {})},
-        ...(comment.trim() ? {comment: comment.trim()} : {}),
-        // The call it is made during (#300 K4): the server links the order to it.
-        ...(call ? {call_id: call.id} : {})
+        ...(comment.trim() ? {comment: comment.trim()} : {})
       }} as never) as Order);
     } catch (failure) {
       if (failure instanceof ApiError && (failure.code === 'QUOTE_EXPIRED' || failure.code === 'QUOTE_MISMATCH')) {
