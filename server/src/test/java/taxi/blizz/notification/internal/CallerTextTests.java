@@ -70,7 +70,8 @@ class CallerTextTests {
             if (state.equals("UNKNOWN")) {
                 org.mockito.Mockito.doReturn(new taxi.blizz.telephony.TextMessages.Result(
                         taxi.blizz.telephony.TextMessages.State.UNKNOWN, null, "test timeout"))
-                        .when(provider).send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+                        .when(provider).send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                                org.mockito.ArgumentMatchers.anyString());
             }
             String ending = switch (state) { case "FAILED" -> "0000"; case "UNKNOWN" -> "9999"; default -> "1234"; };
             var existing = meters.find("blizz.sms.sent").tags("purpose", "CALLER", "state", state).counter();
