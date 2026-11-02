@@ -37,8 +37,6 @@ function RateDriver({client, t, guard, failure, orderId, newId}: Shared & {order
 
   /** One rating at a time: a double tap with a slow answer is one (R1). */
   async function rate(score: number) {
-    if (sending.current) return;
-    sending.current = true;
     setMessage(null);
     try {
       const saved = await guard(() => client.post(path, {params: {order_id: orderId}, body: {command_id: newId(),
