@@ -70,7 +70,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await expect(page.getByText(/^Заказ №\d+/)).toBeVisible();
   await expect(page.getByText(/^Статус: /)).toBeVisible();
   await page.screenshot({path: info.outputPath('2-order.png'), fullPage: true});
-  await page.getByLabel('Причина отмены', {exact: true}).selectOption({index: 1});
+  await page.locator('select').first().selectOption({index: 1}); // the reason: the only select of the order view
   await page.getByRole('button', {name: 'Отменить заказ'}).click();
   await expect(page.getByText('Статус: CANCELLED')).toBeVisible();
   await page.screenshot({path: info.outputPath('3-cancelled.png'), fullPage: true});
