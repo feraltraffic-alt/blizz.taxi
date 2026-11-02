@@ -1,13 +1,14 @@
 import {Modal, View} from 'react-native';
 import {WebView} from 'react-native-webview';
-import {Button} from '@blizz/mobile-ui';
+import {Button} from './ui';
 
 type Props = {url: string; fields: Record<string, string>; returnUrl: string | null; onDone: () => void;
   closeLabel?: string};
 
 /**
  * The provider's page with 3-D Secure on the phone (#269): the form is POSTed in a WebView, which closes when it
- * reaches the return address (or the rider closes it); the app then reads the binding until it settles.
+ * reaches the return address (or the user closes it); the app then reads the result until it settles. Shared by the
+ * rider's card binding (#269) and the driver's top-up (#326).
  */
 export function ProviderPage({url, fields, returnUrl, onDone, closeLabel}: Props) {
   const body = Object.entries(fields).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
