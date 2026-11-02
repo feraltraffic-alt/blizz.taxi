@@ -108,9 +108,11 @@ class RiderDebtBlockTests {
     private Actor staff(UUID city, String... permissions) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Debts', 'ADMIN', :permissions, 'ACTIVE', now(), now())""")
-                .param("id", id).param("login", "debt-block-" + id).param("permissions", permissions).update();
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Debts', 'ADMIN', :permissions, :all, 'ACTIVE', now(), now())""")
+                .param("all", city == null).param("id", id).param("login", "debt-block-" + id)
+                .param("permissions", permissions).update();
         if (city != null) {
             jdbc.sql("update staff_user set city_scope = :scope where id = :id")
                     .param("scope", new UUID[]{city}).param("id", id).update();

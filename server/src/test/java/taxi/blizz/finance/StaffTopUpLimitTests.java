@@ -89,8 +89,9 @@ class StaffTopUpLimitTests {
     private Actor staff(String... permissions) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                        values (:id, :login, 'Top-ups', 'ADMIN', :permissions, 'ACTIVE', now(), now())""")
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
+                                                updated_at)
+                        values (:id, :login, 'Top-ups', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
                 .param("id", id).param("login", "top-ups-" + id).param("permissions", permissions).update();
         return new Actor(SubjectType.STAFF, id);
     }

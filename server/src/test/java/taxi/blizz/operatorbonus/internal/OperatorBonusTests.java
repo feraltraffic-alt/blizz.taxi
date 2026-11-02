@@ -201,8 +201,9 @@ class OperatorBonusTests {
     @Test
     void point2_settingsChangeIsAudited() {
         jdbc.sql("""
-                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
+                                        updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', true, 'ACTIVE', now(), now())
                 """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());
@@ -218,8 +219,9 @@ class OperatorBonusTests {
     @Test
     void point3_twoConcurrentSettingsChangesOneSucceedsOneConflicts() throws Exception {
         jdbc.sql("""
-                insert into staff_user (id, login, name, role, permissions, state, created_at, updated_at)
-                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', 'ACTIVE', now(), now())
+                insert into staff_user (id, login, name, role, permissions, all_cities, state, created_at,
+                                        updated_at)
+                values (:id, :login, 'Op', 'ADMIN', '{operator-bonuses.manage}', true, 'ACTIVE', now(), now())
                 """).param("id", operator.id()).param("login", "bonus-op-" + operator.id()).update();
         OperatorBonuses.SettingsVersion before = bonuses.currentSettings(operator);
         OperatorBonuses.Settings next = new OperatorBonuses.Settings(2, 20, true, 15, List.of());

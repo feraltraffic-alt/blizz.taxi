@@ -65,7 +65,7 @@ class JdbcLegalDocuments implements LegalDocuments {
 
     @Override
     public Version createDraft(Actor actor, UUID commandId, Audience audience, Kind kind, Draft draft) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         if (audience == null || kind == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "audience and kind are required");
         }
@@ -109,7 +109,7 @@ class JdbcLegalDocuments implements LegalDocuments {
 
     @Override
     public Version updateDraft(Actor actor, UUID commandId, UUID versionId, long expectedVersion, Draft draft) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         Draft clean = validate(draft);
         requireOwn(actor, versionId);
         return commands.execute(new CommandKey(actor, "legal_document.update", commandId),
@@ -135,7 +135,7 @@ class JdbcLegalDocuments implements LegalDocuments {
 
     @Override
     public Version publish(Actor actor, UUID commandId, UUID versionId, long expectedVersion) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         requireOwn(actor, versionId);
         return commands.execute(new CommandKey(actor, "legal_document.publish", commandId),
                 new PublishRequest(versionId, expectedVersion), Version.class, () -> {

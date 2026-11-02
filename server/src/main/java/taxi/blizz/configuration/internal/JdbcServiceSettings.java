@@ -113,7 +113,7 @@ class JdbcServiceSettings implements ServiceSettings {
 
     @Override
     public Version change(Actor actor, UUID commandId, long expectedVersion, Settings settings, String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         Settings clean = validate(settings);
         if (reason == null || reason.isBlank()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "A reason is required");

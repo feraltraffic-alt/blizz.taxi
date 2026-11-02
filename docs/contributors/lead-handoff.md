@@ -1,4 +1,4 @@
-# Lead handoff (state on 01.11.2026, evening)
+# Lead handoff (state on 02.11.2026, morning)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -30,7 +30,7 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 |---|---|
 | Codex | #136 web foundation (branch `codex/136-web-foundation` at 30bc0b3, no PR; idle since 30.10). The owner said Codex had it nearly done locally, so it stays Codex's until the owner says otherwise |
 | Second Claude | Idle since 01.11 09:16 (last commit on `claude2/201-staff-city-sweep`). Its #201 part 2 was taken by the lead on the owner's word. Only #137 is left, and it needs `packages/api-client` from #136. Asked the owner whether to give #136 to claude2 |
-| Lead | Nothing in flight. Next: what the owner names, or the follow-up below (global settings by staff of one city) |
+| Lead | ADR 0016, several taxi services on one server: parts 1 (#214, done) and 2 (#215, in progress). The rest of #215: integrations and keys, payment merchants, service-data retention, then removing the `service_id` column defaults. Then #216 (money and reports), #217 (apps, push, SMS), #218 (isolation sweeps across services). Also #136 (taken from Codex on the owner's word, 01.11) |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -47,10 +47,7 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 
 ### Open owner questions
 
-- Give #136 to claude2?
-- **Global settings.** Feature flags, legal texts, cancel reasons and transfer rules are changed with a permission
-  alone, so a holder of one city changes them for the whole service. City creation and retention already require
-  every city. The lead suggested the same rule for these settings; the owner has not answered yet.
+- Give #216 to claude2 (idle since 01.11)? The owner has not answered.
 - **Before launch:** a second super admin. The confirmation lockout of the only one stays by the owner's choice
   (#173).
 
@@ -85,6 +82,43 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (02.11.2026, night and morning)
+
+- **ADR 0016 (owner, 01.11):**
+  - Several taxi services run on one server, each with several cities.
+  - Riders, drivers, apps, brand and money are per service.
+  - A platform owner (`PLATFORM_OWNER`, no `service_id`) stands above the services.
+  - Each service has its own directory of phone numbers, so the server knows which service a caller rings.
+- **Part 1 (#214) is done** in #219–#222:
+  - `service` table; `service_id` on city, client, driver, staff, session and OTP;
+  - tokens carry `svc`;
+  - city resolution, phone lookups and call lines are per service;
+  - the platform owner, `/api/admin/v1/services`;
+  - sandbox scenario `two-services`.
+- **Part 2 (#215), done so far:**
+
+  | PR | Moved to per-service storage |
+  |---|---|
+  | #223 | Service settings |
+  | #224 | Feature flags and legal texts |
+  | #225 | Cancel reasons (a service's catalogue starts as a copy of the first service's) |
+  | #226 | Driver debt limits (one sweep number per currency from `driver_debt_sweep_seq`, under a per-currency advisory lock) |
+  | #227 | Transfer rules |
+  | #228 | Operator bonus rules, accounts and periods |
+
+  The access rule of ADR 0016 (service-wide settings are changed only by staff of every city) is on branch
+  `claude/215-service-wide-access`, with its guard `ServiceWideSettingsAccessTests`.
+- **Ports instead of other modules' tables (ADR 0004):**
+  - `identity.Services.of(actor)` gives a subject's service;
+  - `geo.CityCatalog.serviceOf(city)` gives a city's service;
+  - `identity.CityServices` is implemented in geo.
+- **Every step's proof:** CI, a full sandbox (62 scenarios) and a mutation branch `claude/<branch>-mutation`, red
+  on the new test. Mutation branches stay, because branch deletion is denied.
+- **Deferred:**
+  - SMS text uses the first service's brand until #217;
+  - there are no service-wide call lines (without a city);
+  - the column defaults `service_id = first service` are removed at the end of #215.
 
 ## Recent history (01.11.2026, evening)
 

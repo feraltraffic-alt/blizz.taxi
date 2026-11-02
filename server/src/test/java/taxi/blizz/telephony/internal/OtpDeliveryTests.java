@@ -139,9 +139,11 @@ class OtpDeliveryTests {
     private Actor staff(String... permissions) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into staff_user (id, login, name, role, permissions, state, password_hash, created_at,
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, password_hash,
+                                                created_at,
                                                 updated_at)
-                        values (:id, :login, 'Telephony', 'ADMIN', :permissions, 'ACTIVE', :hash, now(), now())""")
+                        values (:id, :login, 'Telephony', 'ADMIN', :permissions, true, 'ACTIVE', :hash, now(),
+                                now())""")
                 .param("id", id).param("login", "otp-" + id).param("permissions", permissions)
                 .param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD)).update();
         return new Actor(SubjectType.STAFF, id);

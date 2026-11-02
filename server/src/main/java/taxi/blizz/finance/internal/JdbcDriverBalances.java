@@ -316,7 +316,7 @@ class JdbcDriverBalances implements DriverBalances {
     @Override
     public TransferRule setTransferRule(Actor actor, UUID commandId, TransferRule rule, long expectedVersion,
                                        String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         String why = text(reason, 500, "A reason");
         if (rule == null) {
             throw invalid("The rule is required");

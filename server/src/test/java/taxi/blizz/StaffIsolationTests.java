@@ -156,7 +156,8 @@ class StaffIsolationTests {
             + "only\"); a super admin passes every city check";
     private static final String OWNER = "The platform owner's only (ADR 0016): above every service and city; "
             + "proven by PlatformOwnerTests";
-    private static final String GLOBAL_SETTING = "A setting of the whole service with no city in it";
+    private static final String GLOBAL_SETTING = "A setting of the whole service with no city in it: changed by staff "
+            + "of every city only (#215), proven by ServiceWideSettingsAccessTests";
     private static final String MERCHANT = "Staff of every city only (owner decision 01.11.2026 in #201): a merchant "
             + "serves several cities and holds the service's keys; proven by merchantsAreForStaffOfEveryCity";
 
