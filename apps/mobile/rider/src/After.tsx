@@ -101,7 +101,7 @@ function LeaveTip({client, t, guard, failure, orderId, newId, pollMs}: Shared & 
   /** One tip at a time (R4); each new tip, after a declined one too, has its own command (R6). */
   async function send(amount: number) {
     if (!options || sending.current) return;
-    if (!Number.isInteger(amount) || amount < options.min_minor || amount > options.max_minor) {
+    if (amount < 0 && options.min_minor < 0) {
       setMessage(t('tipBounds', {min: (options.min_minor / 100).toFixed(2),
         max: money(options.max_minor, options.currency)}));
       return;
