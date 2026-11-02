@@ -202,7 +202,7 @@ public class InMemoryProviderBreakers implements ProviderBreakers, MeterBinder {
     /** Kept for the life of the instance: one set per key (a taxi service), created at its first call. */
     @Override
     public ProviderBreakers keyed(String key) {
-        return keyed.computeIfAbsent(key, k -> new InMemoryProviderBreakers(properties, clock));
+        return this;
     }
 
     @Override
