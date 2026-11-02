@@ -1,7 +1,9 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Field, usePushDecider, useTheme, type Locale, type PushPort, type Shared} from '@blizz/mobile-ui';
+import {
+  Alert, Button, Chat, Field, usePushDecider, useTheme, type Locale, type PushPort, type Shared
+} from '@blizz/mobile-ui';
 
 type Point = {lat: number; lon: number};
 export type Offer = {id: string; order_id: string; seconds_left: number; vehicle_class: string; pickup_label: string;
@@ -163,7 +165,7 @@ function Offers({client, t, guard, failure, newId, pollMs, push, say, accepted}:
   );
 }
 
-function TripCard({client, t, guard, failure, newId, now, locale, trip, say, moved, onTrip}: Props & {trip: Trip;
+function TripCard({client, t, guard, failure, newId, now, locale, pollMs, trip, say, moved, onTrip}: Props & {trip: Trip;
   say: (text: string | null) => void; moved: () => Promise<void>; onTrip: (trip: Trip) => void}) {
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [reason, setReason] = useState<string | null>(null);
@@ -256,6 +258,8 @@ function TripCard({client, t, guard, failure, newId, now, locale, trip, say, mov
             onPress={() => {if (cash) setConfirming(true); else complete(false);}} />
         )
       ) : null}
+      <Chat client={client} t={t} guard={guard} failure={failure} path="/api/driver/v1/trips/{trip_id}/messages"
+        params={{trip_id: trip.id}} me="DRIVER" newId={newId} pollMs={pollMs} />
       {beforeStart ? (
         <>
           {reasons.map(r => (

@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {
-  Alert, Button, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
+  Alert, Button, Chat, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {AfterRide} from './After';
 
@@ -263,6 +263,9 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
       ) : null}
       {order.pickup_eta ? <Text style={{color: theme.muted}}>{t('eta', {minutes: Math.max(1,
         Math.round(order.pickup_eta.seconds / 60))})}</Text> : null}
+      {order.driver ? <Chat client={client} t={t} guard={guard} failure={failure}
+        path="/api/rider/v1/orders/{order_id}/messages" params={{order_id: order.id}} me="RIDER" newId={newId}
+        pollMs={pollMs} /> : null}
       {order.status === 'FULFILLED' ? <AfterRide client={client} t={t} guard={guard} failure={failure}
         orderId={order.id} newId={newId} pollMs={pollMs} /> : null}
       {finished ? <Button label={t('newRideAgain')} onPress={onDone} /> : (
