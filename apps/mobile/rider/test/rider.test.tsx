@@ -64,7 +64,8 @@ async function askCode(phone: string) {
   await fireEvent.press(screen.getByRole('button', {name: 'Получить код'}));
 }
 
-const legalNone = {'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}]};
+const legalNone = {'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}],
+  'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: []}}]};
 const meOk = {'GET /api/rider/v1/me': [{status: 200, body: {subject_type: 'CLIENT', subject_id: session.subject.id,
   session_id: session.session_id, account_state: 'ACTIVE', phone: '+380671234567', name: 'Олена'}}]};
 
@@ -111,6 +112,7 @@ describe('E2: the code', () => {
     await askCode('+380671234567');
     await fireEvent.changeText(await screen.findByLabelText('Код из сообщения'), '123456');
     await fireEvent.press(screen.getByRole('button', {name: 'Подтвердить'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Профиль'}));
     expect(await screen.findByText(/ACTIVE/)).toBeTruthy();
     expect(screen.getByText('Олена')).toBeTruthy();
     expect(screen.getByText('+380671234567')).toBeTruthy();
@@ -157,6 +159,7 @@ describe('E4: legal texts', () => {
     await fireEvent.press(accept);
     await fireEvent.press(accept);
     expect(http.calls.filter(c => c.path === '/api/rider/v1/legal/acceptances').length).toBeLessThanOrEqual(1);
+    await fireEvent.press(await screen.findByRole('button', {name: 'Профиль'}));
     expect(await screen.findByText(/ACTIVE/)).toBeTruthy();
     const acceptances = http.calls.filter(c => c.path === '/api/rider/v1/legal/acceptances');
     expect(acceptances).toHaveLength(1);
@@ -170,6 +173,7 @@ describe('E5: restarting', () => {
     const tokens = memory('stored-refresh');
     const {http} = await mount({'POST /auth/v1/token/refresh': [{status: 200, body: session}], ...legalNone, ...meOk},
       {tokens});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Профиль'}));
     expect(await screen.findByText(/ACTIVE/)).toBeTruthy();
     expect((http.calls[0]!.body as {refresh_token: string}).refresh_token).toBe('stored-refresh');
   });

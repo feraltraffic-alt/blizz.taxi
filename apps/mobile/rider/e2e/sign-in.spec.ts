@@ -31,6 +31,31 @@ test('a rider signs in by a code, accepts the texts in force and sees the profil
     await page.screenshot({path: info.outputPath('3-legal-' + i + '.png'), fullPage: true});
     await accept.click();
   }
+  // A ride in Kyiv from here to the station, priced, ordered and cancelled (#248).
+  await expect(page.getByText('Куда поедем?')).toBeVisible();
+  await page.getByLabel('Поиск адреса назначения', {exact: true}).fill('Вокзал');
+  await page.getByRole('button', {name: 'Найти', exact: true}).click();
+  await page.getByRole('button', {name: /^Вокзал/}).first().click();
+  await page.getByRole('button', {name: 'Узнать цену', exact: true}).click();
+  await expect(page.getByText(/^Цена: /)).toBeVisible();
+  await page.screenshot({path: info.outputPath('5-priced.png'), fullPage: true});
+  await page.getByRole('button', {name: 'Заказать', exact: true}).click();
+  await expect(page.getByText('Ищем водителя')).toBeVisible();
+  await page.screenshot({path: info.outputPath('6-searching.png'), fullPage: true});
+  await page.getByRole('button', {name: /^○ /}).first().click();
+  // The search moves the order on (its version grows with each offer), so a cancel may meet a 409: the app reloads
+  // the order and says so, and the rider presses again, as a person would.
+  const cancelled = page.getByText('Заказ отменён');
+  for (let i = 0; i < 3 && !await cancelled.isVisible(); i++) {
+    const answer = page.waitForResponse(r => r.url().includes('/cancel') && r.request().method() === 'POST');
+    await page.getByRole('button', {name: 'Отменить поездку', exact: true}).click();
+    const response = await answer;
+    console.log('CANCEL', response.status(), (await response.text()).slice(0, 300));
+    await expect(cancelled.or(page.getByText(/^Заказ изменился/))).toBeVisible();
+  }
+  await expect(cancelled).toBeVisible();
+  await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
+  await page.getByRole('button', {name: 'Профиль', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
   await page.screenshot({path: info.outputPath('4-profile.png'), fullPage: true});
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
