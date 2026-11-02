@@ -198,6 +198,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
 
   /** The single refresh in flight; true when a new access token is in hand. */
   function refresh(): Promise<boolean> {
+    refreshing = null; // mutation: no request ever joins a refresh in flight
     if (refreshing) return refreshing;
     const token = options.refreshTokens.read();
     if (!token) return Promise.resolve(false);
@@ -231,7 +232,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
     if (response.ok) return read(response);
     if (response.status === 401 && mayRefresh && token !== null) {
       // Another request may have refreshed already: then only retry with the new token.
-      const renewed = access !== null && access !== token ? true : await refresh();
+      const renewed = await refresh();
       if (renewed && access !== null) {
         const retry = await exchange(method, path, request, access);
         if (retry.response.ok) return read(retry.response);
