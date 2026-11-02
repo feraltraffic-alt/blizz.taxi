@@ -131,7 +131,9 @@ describe('P3: my reservations', () => {
 
 describe('P4: on my way', () => {
   it('is offered by the server\'s window, not the phone\'s clock, and returns to work', async () => {
-    // The phone says 10:00, long before confirm_from; the server is the judge and accepts.
+    // The phone says 10:00, long before confirm_from; the server is the judge and accepts. Both the app's clock and
+    // the device's own (Date.now) say so.
+    const phone = jest.spyOn(Date, 'now').mockReturnValue(NOW);
     const {http} = await open({[MINE]: [{status: 200, body: {reservations: [reservation()]}}],
       ['POST /api/driver/v1/preorders/reservations/' + RES + '/confirm']: [{status: 200, body: {id: 'a1',
         order_id: PRE, driver_id: session.subject.id, vehicle_id: VEHICLE, source: 'RESERVATION', state: 'COMMITTED',
@@ -140,6 +142,7 @@ describe('P4: on my way', () => {
     expect(await screen.findByText('Вы на линии')).toBeTruthy();
     expect(posts(http)).toEqual([{method: 'POST', path: '/api/driver/v1/preorders/reservations/' + RES + '/confirm',
       body: {command_id: expect.any(String)}}]);
+    phone.mockRestore();
   });
 
   it('a 409 tells the window', async () => {
