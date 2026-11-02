@@ -34,10 +34,15 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
     Promise.all([client.get('/api/config/v1/bootstrap' as never, {} as never), client.get('/api/operator/v1/me')])
       .then(([boot, me]) => {
         if (!current) return;
-        const list = (boot as {cities: City[]}).cities;
+        // Only the cities of the operator's scope: all of the service's, or the ones granted.
+        const member = me as {effective_permissions: string[]; member: {profile: {all_cities: boolean;
+          city_ids?: string[]}}};
+        const scope = member.member.profile;
+        const list = (boot as {cities: City[]}).cities
+          .filter(c => scope.all_cities || (scope.city_ids ?? []).includes(c.id));
         setCities(list);
         setCityId(list[0]?.id ?? '');
-        setRights(new Set((me as {effective_permissions: string[]}).effective_permissions));
+        setRights(new Set(member.effective_permissions));
       })
       .catch(failure => {if (current) setError(failure);});
     return () => {current = false;};

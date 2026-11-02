@@ -86,6 +86,20 @@ describe('E1: the right to create orders', () => {
   });
 });
 
+describe('the city list', () => {
+  it('holds only the cities of the operator\'s scope', async () => {
+    const warsaw = {...KYIV, id: '5a000000-0000-4000-8000-000000000002', code: 'warsaw', name: 'Warszawa'};
+    const scoped = {...operator, member: {...operator.member, profile: {...operator.member.profile, all_cities: false,
+      city_ids: [KYIV.id]}}};
+    // The first matching handler answers: the two-city bootstrap goes before the base ones.
+    server.use(http.get(origin + '/api/config/v1/bootstrap', () => HttpResponse.json({cities: [warsaw, KYIV]})),
+      ...base(scoped));
+    mount();
+    const select = await screen.findByLabelText('Город');
+    expect([...(select as HTMLSelectElement).options].map(o => o.text)).toEqual(['Київ']);
+  });
+});
+
 describe('E2: the caller\'s number', () => {
   it('a number that is not E.164 is refused at the field before any request', async () => {
     let lookups = 0;

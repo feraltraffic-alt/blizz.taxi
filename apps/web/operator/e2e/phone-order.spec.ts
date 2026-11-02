@@ -47,6 +47,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
     console.log('PAGE AFTER PASSWORD CHANGE:', await page.locator('body').innerText());
   }
   await expect(form).toBeVisible();
+  await page.getByLabel('Город').selectOption({label: 'Київ'});
   await page.getByLabel('Телефон звонящего').fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда').fill('Хрещатик');
   await page.getByRole('button', {name: 'Найти'}).first().click();
