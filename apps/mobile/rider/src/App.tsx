@@ -2,7 +2,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {ActivityIndicator, Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  Alert, Button, Field, LegalGuard, Loading, PhoneChange, RIDER_CATEGORIES, Screen, SignIn, Support, UpdateScreen, failureText,
+  Alert, Button, DataExports, Field, LegalGuard, Loading, PhoneChange, RIDER_CATEGORIES, Screen, SignIn, Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type AboutOrder, type Locale, type PickedFile,
   type PushPort, type Shared
 } from '@blizz/mobile-ui';
@@ -57,7 +57,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
 /** The rider's side of support (#296). */
 const RIDER_SIDE = {api: '/api/rider/v1', me: 'CLIENT', categories: RIDER_CATEGORIES} as const;
 
-type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone';
+type Tab = 'ride' | 'profile' | 'history' | 'cards' | 'support' | 'phone' | 'data';
 
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
 function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
@@ -68,6 +68,10 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   if (tab === 'cards') {
     return <Cards {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
       onBack={() => setTab('profile')} />;
+  }
+  if (tab === 'data') {
+    return <DataExports {...shared} newId={newId} api="/api/rider/v1" pollMs={config.pollMs ?? 5000}
+      backLabel={t('toProfile')} onBack={() => setTab('profile')} />;
   }
   if (tab === 'phone') {
     return <PhoneChange {...shared} newId={newId} api="/api/rider/v1" backLabel={t('toProfile')}
@@ -85,7 +89,7 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   return tab === 'profile' ? (
     <>
       <Profile {...shared} newId={newId} signOut={signOut} onCards={() => setTab('cards')}
-        onPhone={() => setTab('phone')} />
+        onPhone={() => setTab('phone')} onData={() => setTab('data')} />
       <Button label={t('toRide')} onPress={() => setTab('ride')} />
     </>
   ) : (
@@ -99,8 +103,8 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
   );
 }
 
-function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone}: Shared & {newId: () => string;
-  signOut: () => Promise<void>; onCards: () => void; onPhone: () => void}) {
+function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone, onData}: Shared & {
+  newId: () => string; signOut: () => Promise<void>; onCards: () => void; onPhone: () => void; onData: () => void}) {
   const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
@@ -153,6 +157,7 @@ function Profile({client, t, guard, failure, newId, signOut, onCards, onPhone}: 
       ) : <Button label={t('deleteAccount')} onPress={() => void askDeletion()} />}
       <Button label={t('myCards')} onPress={onCards} />
       <Button label={t('pcChange')} onPress={onPhone} />
+      <Button label={t('exTitle')} onPress={onData} />
       <Button label={t('signOut')} onPress={() => void signOut()} />
       <Alert text={message} />
     </Screen>
