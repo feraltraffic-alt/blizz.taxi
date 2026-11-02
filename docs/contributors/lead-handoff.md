@@ -47,10 +47,7 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 
 ### Open owner questions
 
-- **Settings of the whole server** (asked 02.11): the connection to the Asterisk exchange and the technical retention
-  terms (ADR 0015) are one per server. Today the exchange is changed in the first service's panel only (#231). Should
-  the platform owner manage them instead, with a panel of their own? The answer decides the last item of #215 (call
-  recordings kept per service, technical terms per server).
+- **Settings of the whole server**, answered 02.11: the super admin of each service sets its Asterisk connection and its retention terms (ADR 0016, owner decision 02.11.2026). The work is in the issues for Asterisk per service and retention per service.
 - **Before launch:** a second super admin. The confirmation lockout of the only one stays by the owner's choice
   (#173).
 
