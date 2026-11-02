@@ -182,7 +182,7 @@ class JdbcOtpService implements OtpService {
                     // a provider may take a minute, so a few hung sends emptied the pool (audit 29.10.2026).
                     sendExecutor.execute(() -> {
                         try {
-                            delivery.send(challengeId, phone, code, audience, channel);
+                            delivery.send(serviceId, challengeId, phone, code, audience, channel);
                         } catch (RuntimeException e) {
                             org.slf4j.LoggerFactory.getLogger(JdbcOtpService.class)
                                     .error("Sending the code of challenge {} failed", challengeId, e);
@@ -276,7 +276,7 @@ class JdbcOtpService implements OtpService {
             throw new RateLimitedException("Code sending budget exhausted", Duration.ofMinutes(5));
         }
 
-        OtpChannel channel = channel(phone, requested, perPhone > 0, hourAgo);
+        OtpChannel channel = channel(serviceId, phone, requested, perPhone > 0, hourAgo);
         if (channel == OtpChannel.VOICE) {
             int calls = jdbc.sql("""
                             select count(*) from otp_challenge
@@ -297,15 +297,16 @@ class JdbcOtpService implements OtpService {
      * configured channel. Without a request the configured channel, or its fallback when an attempt by it to this
      * number did not get through in the last hour.
      */
-    private OtpChannel channel(PhoneNumber phone, OtpChannel requested, boolean resend, OffsetDateTime since) {
-        OtpChannel primary = delivery.primaryChannel();
+    private OtpChannel channel(UUID serviceId, PhoneNumber phone, OtpChannel requested, boolean resend,
+                               OffsetDateTime since) {
+        OtpChannel primary = delivery.primaryChannel(serviceId);
         if (requested == OtpChannel.SMS) {
             return OtpChannel.SMS;
         }
         if (requested == OtpChannel.VOICE) {
             return resend ? OtpChannel.VOICE : primary;
         }
-        Optional<OtpChannel> fallback = delivery.fallbackChannel();
+        Optional<OtpChannel> fallback = delivery.fallbackChannel(serviceId);
         if (fallback.isPresent() && fallback.get() != primary && delivery.failedSince(phone, primary, since)) {
             return fallback.get();
         }

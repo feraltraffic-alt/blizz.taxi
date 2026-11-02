@@ -173,12 +173,37 @@ class GraphHopperRouteEstimatorTests {
         return java.net.URI.create(address);
     };
 
+    static final java.util.UUID FIRST = taxi.blizz.identity.Services.DEFAULT_ID;
+
+    /**
+     * ADR 0016, issue #215: the deployment's GraphHopper stands in for the first service only. Another service with
+     * nothing set in its panel prices by the straight line, never with the first service's router and key.
+     */
+    @Test
+    void theEnvironmentsRouterServesTheFirstServiceOnly() {
+        body = """
+                {"paths":[{"distance":1000,"time":60000}]}""";
+        RouteEstimator.Estimate straight = new RouteEstimator.Estimate(7, 7);
+        ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(
+                panel(new java.util.HashMap<>(), new java.util.concurrent.atomic.AtomicLong()),
+                new GraphHopperProperties(true, "http://127.0.0.1:" + server.getAddress().getPort(), null, "car",
+                        Duration.ofMillis(500)),
+                (a, b) -> straight, JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none(), allowed);
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).as("the first service")
+                .isEqualTo(new RouteEstimator.Estimate(1000, 60));
+        int asked = routeCalls.get();
+        assertThat(configured.estimate(java.util.UUID.randomUUID(), MAIDAN, STATION)).as("another service")
+                .isEqualTo(straight);
+        assertThat(configured.estimate(MAIDAN, STATION)).as("no service named").isEqualTo(straight);
+        assertThat(routeCalls.get()).as("the router is not called for them").isEqualTo(asked);
+    }
+
     private static Integrations panel(java.util.Map<String, String> values,
                                       java.util.concurrent.atomic.AtomicLong revision) {
         return (Integrations) java.lang.reflect.Proxy.newProxyInstance(
                 Integrations.class.getClassLoader(), new Class<?>[] {Integrations.class}, (proxy, method, args) ->
                         switch (method.getName()) {
-                            case "value" -> java.util.Optional.ofNullable(values.get((String) args[0]));
+                            case "value" -> java.util.Optional.ofNullable(values.get((String) args[1]));
                             case "revision" -> revision.get();
                             default -> throw new UnsupportedOperationException(method.getName());
                         });
@@ -200,11 +225,11 @@ class GraphHopperRouteEstimatorTests {
                 (a, b) -> straight, JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none(), allowed);
         body = """
                 {"paths":[{"distance":1000,"time":60000}]}""";
-        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
         int asked = routeCalls.get();
 
         addressRefused = true; // same settings revision: nothing is rebuilt
-        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(straight);
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).isEqualTo(straight);
         assertThat(routeCalls.get()).as("the router is not called").isEqualTo(asked);
     }
 
@@ -220,17 +245,17 @@ class GraphHopperRouteEstimatorTests {
         RouteEstimator straightLine = (a, b) -> straight;
         ConfiguredRouteEstimator configured = new ConfiguredRouteEstimator(panel, environment, straightLine,
                 JsonMapper.builder().build(), taxi.blizz.platform.ProviderBreakers.none(), allowed);
-        assertThat(configured.estimate(MAIDAN, STATION)).as("off in the environment").isEqualTo(straight);
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).as("off in the environment").isEqualTo(straight);
 
         body = """
                 {"paths":[{"distance":1000,"time":60000}]}""";
         values.put(Integrations.GRAPHHOPPER_ENABLED, "true");
         values.put(Integrations.GRAPHHOPPER_BASE_URL, "http://127.0.0.1:" + server.getAddress().getPort());
         revision.incrementAndGet();
-        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).isEqualTo(new RouteEstimator.Estimate(1000, 60));
 
         values.put(Integrations.GRAPHHOPPER_ENABLED, "false");
         revision.incrementAndGet();
-        assertThat(configured.estimate(MAIDAN, STATION)).isEqualTo(straight);
+        assertThat(configured.estimate(FIRST, MAIDAN, STATION)).isEqualTo(straight);
     }
 }

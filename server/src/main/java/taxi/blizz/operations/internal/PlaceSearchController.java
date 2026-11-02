@@ -132,7 +132,7 @@ class PlaceSearchController {
                 add(places, seen, view(p));
             }
         }
-        return new PlaceList(geocoding.provider(), places);
+        return new PlaceList(geocoding.provider(city.id()), places);
     }
 
     private ResponseEntity<PlaceView> reverse(UUID requesterId, City city, GeoPoint point, String language) {

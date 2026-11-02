@@ -21,8 +21,8 @@ public interface Geocoding {
                  String instructions) {
     }
 
-    /** The provider in force: BUILT_IN, GOOGLE, VISICOM (FAKE in tests and the sandbox). */
-    String provider();
+    /** The provider in force for the city's taxi service: BUILT_IN, GOOGLE, VISICOM (FAKE in tests and the sandbox). */
+    String provider(UUID cityId);
 
     /**
      * Up to {@code limit} (at most 20) places of the city for {@code query}, ranked by closeness to {@code near};

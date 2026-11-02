@@ -47,11 +47,12 @@ class AsteriskVoiceSender implements OtpSender {
     }
 
     @Override
-    public Result send(PhoneNumber phone, String code, OtpAudience audience) {
-        String url = integrations.value(Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
-        String user = integrations.value(Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
-        String password = integrations.value(Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
-        String endpoint = integrations.value(Integrations.OTP_ASTERISK_ENDPOINT).orElse(null);
+    public Result send(java.util.UUID serviceId, PhoneNumber phone, String code, OtpAudience audience) {
+        String url = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
+        String user = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
+        String password = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
+        // The trunk the call goes out by is the service's own (ADR 0016).
+        String endpoint = integrations.value(serviceId, Integrations.OTP_ASTERISK_ENDPOINT).orElse(null);
         if (url == null || user == null || password == null || endpoint == null) {
             return Result.failed("Asterisk is not configured (ARI address, user, password, endpoint)");
         }

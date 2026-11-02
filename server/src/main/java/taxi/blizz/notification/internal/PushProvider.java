@@ -21,4 +21,13 @@ interface PushProvider {
      * @param ttl how long the push service may keep it for an offline phone; an offer is useless after its deadline
      */
     Result send(String token, String platform, String title, String body, Map<String, String> data, Duration ttl);
+
+    /**
+     * As above, with the push keys of the recipient's taxi service (ADR 0016, issue #215). A provider of no particular
+     * service (a fake, one built for one project) sends the same way for every service.
+     */
+    default Result send(java.util.UUID serviceId, String token, String platform, String title, String body,
+                        Map<String, String> data, Duration ttl) {
+        return send(token, platform, title, body, data, ttl);
+    }
 }

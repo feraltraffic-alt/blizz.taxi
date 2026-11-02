@@ -112,8 +112,9 @@ class SettingsController {
                         ? calls.servicePhone() : null),
                 new PublicPreorders(current.settings().preorders().thresholdMinutes(),
                         current.settings().preorders().maxDaysAhead()),
-                new PublicMaps(map(Integrations.MAPS_PROVIDER), map(Integrations.MAPS_ANDROID_KEY),
-                        map(Integrations.MAPS_IOS_KEY), map(Integrations.MAPS_WEB_KEY)),
+                new PublicMaps(map(serviceId, Integrations.MAPS_PROVIDER),
+                        map(serviceId, Integrations.MAPS_ANDROID_KEY), map(serviceId, Integrations.MAPS_IOS_KEY),
+                        map(serviceId, Integrations.MAPS_WEB_KEY)),
                 cityItems(serviceId), current.settings().appVersions());
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(1)).cachePublic()).body(body);
     }
@@ -133,10 +134,10 @@ class SettingsController {
         return String.format("%02d:%02d", time.getHour(), time.getMinute());
     }
 
-    /** Only the fields meant for the apps ever reach this public answer. */
-    private String map(String name) {
+    /** Only the fields meant for the apps ever reach this public answer: the app's own service's. */
+    private String map(UUID serviceId, String name) {
         boolean forApps = Integrations.FIELDS.stream().anyMatch(f -> f.name().equals(name) && f.forApps()
                 && f.kind() != Integrations.Kind.SECRET);
-        return forApps ? integrations.value(name).orElse(null) : null;
+        return forApps ? integrations.value(serviceId, name).orElse(null) : null;
     }
 }

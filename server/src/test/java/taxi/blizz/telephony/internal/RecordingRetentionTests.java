@@ -158,7 +158,7 @@ class RecordingRetentionTests {
                     Integrations.OTP_ASTERISK_ARI_USER, "retention-test",
                     Integrations.OTP_ASTERISK_ARI_PASSWORD, "test-only");
             Integrations integrations = org.mockito.Mockito.mock(Integrations.class);
-            org.mockito.Mockito.when(integrations.value(org.mockito.ArgumentMatchers.anyString()))
+            org.mockito.Mockito.when(integrations.serverValue(org.mockito.ArgumentMatchers.anyString()))
                     .thenAnswer(invocation -> Optional.ofNullable(values.get(invocation.getArgument(0, String.class))));
             return new AriRecordingSource(integrations);
         }

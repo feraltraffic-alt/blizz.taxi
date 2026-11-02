@@ -20,5 +20,6 @@ public interface TextMessages {
     record Result(State state, String providerRef, String error) {
     }
 
-    Result send(PhoneNumber to, String text);
+    /** From the account and under the sender name of the taxi service {@code serviceId} (ADR 0016). */
+    Result send(java.util.UUID serviceId, PhoneNumber to, String text);
 }

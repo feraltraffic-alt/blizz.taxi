@@ -13,7 +13,8 @@ import taxi.blizz.configuration.Integrations;
 @Component
 class Merchants {
 
-    private static final String SELECT = "select id, provider, account, domain, secret_ref, currency from payment_merchant";
+    private static final String SELECT =
+            "select id, provider, account, domain, secret_ref, currency, service_id from payment_merchant";
 
     private final JdbcClient jdbc;
     private final PaymentsProperties properties;
@@ -40,29 +41,34 @@ class Merchants {
      * (REQ-SEC-09); empty when there is none or its window has passed. Never used for requests to the provider.
      */
     Optional<Merchant> withPreviousKey(Merchant merchant, java.time.OffsetDateTime now) {
-        boolean open = jdbc.sql("select previous_secret_until from payment_merchant where id = :id")
-                .param("id", merchant.id()).query(java.time.OffsetDateTime.class).optional()
-                .filter(until -> until != null && now.isBefore(until)).isPresent();
-        if (!open) {
+        record Window(java.time.OffsetDateTime until, UUID service) {
+        }
+        Optional<Window> window = jdbc.sql("select previous_secret_until, service_id from payment_merchant where id = :id")
+                .param("id", merchant.id())
+                .query((rs, i) -> new Window(rs.getObject(1, java.time.OffsetDateTime.class),
+                        rs.getObject(2, UUID.class))).optional()
+                .filter(w -> w.until() != null && now.isBefore(w.until()));
+        if (window.isEmpty()) {
             return Optional.empty();
         }
-        return integrations.value(previousSecretName(merchant.id())).filter(s -> !s.isBlank())
+        return integrations.value(window.get().service(), previousSecretName(merchant.id())).filter(s -> !s.isBlank())
                 .map(previous -> new Merchant(merchant.id(), merchant.provider(), merchant.account(),
                         merchant.domain(), previous, merchant.currency()));
     }
 
     /** PANEL, ENVIRONMENT or NONE. */
-    String secretSource(UUID merchantId, String secretRef) {
-        if (integrations.secretHint(secretName(merchantId)).isPresent()) {
+    String secretSource(UUID merchantId, UUID service, String secretRef) {
+        if (integrations.secretHint(service, secretName(merchantId)).isPresent()) {
             return "PANEL";
         }
         String env = properties.secrets().get(secretRef);
         return env == null || env.isBlank() ? "NONE" : "ENVIRONMENT";
     }
 
-    private String secret(UUID merchantId, String secretRef) {
+    /** The key the merchant's own service entered in the panel, else the environment's by {@code secret_ref}. */
+    private String secret(UUID merchantId, UUID service, String secretRef) {
         try {
-            Optional<String> panel = integrations.value(secretName(merchantId));
+            Optional<String> panel = integrations.value(service, secretName(merchantId));
             if (panel.isPresent()) {
                 return panel.get();
             }
@@ -90,16 +96,18 @@ class Merchants {
     }
 
     String secretOfAccount(String account) {
-        record Ref(UUID id, String secretRef) {
+        record Ref(UUID id, String secretRef, UUID service) {
         }
-        return jdbc.sql("select id, secret_ref from payment_merchant where account = :account")
+        return jdbc.sql("select id, secret_ref, service_id from payment_merchant where account = :account")
                 .param("account", account)
-                .query((rs, i) -> new Ref(rs.getObject(1, UUID.class), rs.getString(2))).optional()
-                .map(ref -> secret(ref.id(), ref.secretRef())).orElse("");
+                .query((rs, i) -> new Ref(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class)))
+                .optional()
+                .map(ref -> secret(ref.id(), ref.service(), ref.secretRef())).orElse("");
     }
 
     private Merchant merchant(java.sql.ResultSet rs) throws java.sql.SQLException {
-        String secret = secret(rs.getObject("id", UUID.class), rs.getString("secret_ref"));
+        String secret = secret(rs.getObject("id", UUID.class), rs.getObject("service_id", UUID.class),
+                rs.getString("secret_ref"));
         if (secret == null || secret.isBlank()) {
             return null;
         }

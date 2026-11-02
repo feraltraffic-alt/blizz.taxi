@@ -52,6 +52,8 @@ class OtpDeliveryTests {
     OtpService otp;
     @Autowired
     ChannelOtpDelivery delivery;
+
+    static final java.util.UUID FIRST = taxi.blizz.identity.Services.DEFAULT_ID;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     FakeOtpSender fake;
     @Autowired
@@ -100,10 +102,11 @@ class OtpDeliveryTests {
             OtpSender checked = new OtpSender() {
                 public OtpChannel channel() { return delegate.channel(); }
                 public String provider() { return delegate.provider(); }
-                public Result send(PhoneNumber phone, String code, OtpAudience audience) {
+                public Result send(java.util.UUID serviceId, PhoneNumber phone, String code,
+                                   OtpAudience audience) {
                     assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
                             .isActualTransactionActive()).as("provider must not hold a transaction").isFalse();
-                    return delegate.send(phone, code, audience);
+                    return delegate.send(serviceId, phone, code, audience);
                 }
             };
             org.mockito.Mockito.doReturn(checked).when(fake).sender(channel);
@@ -223,12 +226,12 @@ class OtpDeliveryTests {
 
     @Test
     void callMeInsteadAndTheAdminPanelDecideTheChannel() {
-        assertThat(delivery.primaryChannel()).isEqualTo(OtpChannel.SMS);
-        assertThat(delivery.fallbackChannel()).contains(OtpChannel.VOICE);
+        assertThat(delivery.primaryChannel(FIRST)).isEqualTo(OtpChannel.SMS);
+        assertThat(delivery.fallbackChannel(FIRST)).contains(OtpChannel.VOICE);
 
         set(Map.of(Integrations.OTP_CHANNEL, "voice", Integrations.OTP_FALLBACK, "NONE"));
-        assertThat(delivery.primaryChannel()).isEqualTo(OtpChannel.VOICE);
-        assertThat(delivery.fallbackChannel()).isEmpty();
+        assertThat(delivery.primaryChannel(FIRST)).isEqualTo(OtpChannel.VOICE);
+        assertThat(delivery.fallbackChannel(FIRST)).isEmpty();
 
         // "Call me instead" from the sign-in screen: the first code is an SMS, the resend a call.
         set(Map.of(Integrations.OTP_CHANNEL, "SMS", Integrations.OTP_FALLBACK, "VOICE"));
@@ -283,12 +286,12 @@ class OtpDeliveryTests {
         TurboSmsSender sms = new TurboSmsSender(integrations, settings, live(), http, json);
         PhoneNumber phone = new PhoneNumber("+380631234567");
 
-        assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).as("not configured")
+        assertThat(sms.send(FIRST, phone, "123456", OtpAudience.CLIENT).state()).as("not configured")
                 .isEqualTo(OtpSender.State.FAILED);
         assertThat(http.requests).isEmpty();
 
         set(Map.of(Integrations.OTP_TURBOSMS_TOKEN, "turbo-token-test", Integrations.OTP_TURBOSMS_SENDER, "Blizz"));
-        OtpSender.Result sent = sms.send(phone, "123456", OtpAudience.CLIENT);
+        OtpSender.Result sent = sms.send(FIRST, phone, "123456", OtpAudience.CLIENT);
         assertThat(sent.state()).isEqualTo(OtpSender.State.SENT);
         assertThat(sent.providerRef()).isEqualTo("f83f8868-5e46-c6cf-e4fb-615e5a293754");
         Recording.Request request = http.requests.getFirst();
@@ -299,22 +302,22 @@ class OtpDeliveryTests {
         assertThat(body.get("recipients")).isEqualTo(List.of("380631234567"));
         assertThat((Map<String, Object>) body.get("sms")).containsEntry("sender", "Blizz")
                 .hasEntrySatisfying("text", text -> assertThat((String) text).startsWith("Код 123456. "));
-        assertThat(sms.text("123456", new PhoneNumber("+48512345678"))).as("a Polish number")
+        assertThat(sms.text(FIRST, "123456", new PhoneNumber("+48512345678"))).as("a Polish number")
                 .startsWith("Kod 123456. ");
 
         http.answer = r -> new HttpTransport.Response(200, """
                 {"response_code":0,"response_status":"OK","response_result":[{"phone":"380631234567",
                  "response_code":406,"message_id":null,"response_status":"NOT_ALLOWED_RECIPIENT_COUNTRY"}]}""");
-        assertThat(sms.send(phone, "123456", OtpAudience.CLIENT)).satisfies(r -> {
+        assertThat(sms.send(FIRST, phone, "123456", OtpAudience.CLIENT)).satisfies(r -> {
             assertThat(r.state()).isEqualTo(OtpSender.State.FAILED);
             assertThat(r.error()).contains("NOT_ALLOWED_RECIPIENT_COUNTRY");
         });
         http.answer = r -> new HttpTransport.Response(401, "");
-        assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
+        assertThat(sms.send(FIRST, phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
         http.answer = r -> {
             throw new UncheckedIOException(new IOException("timed out"));
         };
-        assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).as("may still arrive: no retry here")
+        assertThat(sms.send(FIRST, phone, "123456", OtpAudience.CLIENT).state()).as("may still arrive: no retry here")
                 .isEqualTo(OtpSender.State.UNKNOWN);
         assertThat(http.requests).hasSize(4);
     }
@@ -334,17 +337,17 @@ class OtpDeliveryTests {
         TurboSmsSender sms = new TurboSmsSender(integrations, settings, live(), http, json, breakers);
         PhoneNumber phone = new PhoneNumber("+380631234567");
         for (int i = 0; i < 5; i++) {
-            assertThat(sms.send(phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
+            assertThat(sms.send(FIRST, phone, "123456", OtpAudience.CLIENT).state()).isEqualTo(OtpSender.State.FAILED);
         }
         assertThat(breakers.state(taxi.blizz.platform.ProviderBreakers.Provider.TURBOSMS))
                 .as("a declined number is an answer").isEqualTo(taxi.blizz.platform.ProviderBreakers.State.CLOSED);
 
         http.answer = r -> new HttpTransport.Response(503, "");
         for (int i = 0; i < 3; i++) {
-            sms.send(phone, "123456", OtpAudience.CLIENT);
+            sms.send(FIRST, phone, "123456", OtpAudience.CLIENT);
         }
         int asked = http.requests.size();
-        OtpSender.Result refused = sms.send(phone, "123456", OtpAudience.CLIENT);
+        OtpSender.Result refused = sms.send(FIRST, phone, "123456", OtpAudience.CLIENT);
         assertThat(refused.state()).as("so the call channel is tried").isEqualTo(OtpSender.State.FAILED);
         assertThat(refused.error()).contains("breaker open");
         assertThat(http.requests).as("no request while open").hasSize(asked);
@@ -358,13 +361,13 @@ class OtpDeliveryTests {
         Recording http = new Recording(r -> new HttpTransport.Response(200, "{\"id\":\"1730000000.42\"}"));
         AsteriskVoiceSender voice = new AsteriskVoiceSender(integrations, live(), http, json);
         PhoneNumber phone = new PhoneNumber("+380631234567");
-        assertThat(voice.send(phone, "654321", OtpAudience.DRIVER).state()).as("not configured")
+        assertThat(voice.send(FIRST, phone, "654321", OtpAudience.DRIVER).state()).as("not configured")
                 .isEqualTo(OtpSender.State.FAILED);
 
         set(Map.of(Integrations.OTP_ASTERISK_ARI_URL, "http://127.0.0.1:8088/", Integrations.OTP_ASTERISK_ARI_USER,
                 "blizz", Integrations.OTP_ASTERISK_ARI_PASSWORD, "ari-secret", Integrations.OTP_ASTERISK_ENDPOINT,
                 "PJSIP/{phone}@trunk"));
-        OtpSender.Result sent = voice.send(phone, "654321", OtpAudience.DRIVER);
+        OtpSender.Result sent = voice.send(FIRST, phone, "654321", OtpAudience.DRIVER);
         assertThat(sent.state()).isEqualTo(OtpSender.State.SENT);
         assertThat(sent.providerRef()).isEqualTo("1730000000.42");
         Recording.Request request = http.requests.getFirst();
@@ -379,7 +382,7 @@ class OtpDeliveryTests {
                 .containsEntry("OTP_CODE", "654321");
 
         http.answer = r -> new HttpTransport.Response(400, "{\"message\":\"Allocation failed\"}");
-        assertThat(voice.send(phone, "654321", OtpAudience.DRIVER).state()).isEqualTo(OtpSender.State.FAILED);
+        assertThat(voice.send(FIRST, phone, "654321", OtpAudience.DRIVER).state()).isEqualTo(OtpSender.State.FAILED);
         assertThatThrownBy(() -> set(Map.of(Integrations.OTP_ASTERISK_ENDPOINT, "PJSIP/trunk")))
                 .as("the number has to go somewhere").isInstanceOf(DomainException.class);
     }
@@ -392,13 +395,13 @@ class OtpDeliveryTests {
         Recording http = new Recording(r -> r.url().contains("balance")
                 ? new HttpTransport.Response(200, "{\"response_code\":0,\"response_result\":{\"balance\":12.5}}")
                 : new HttpTransport.Response(200, "{\"system\":{\"version\":\"22\"}}"));
-        Integrations.Check check = new OtpIntegrationCheck(integrations, live(), http, json).check();
+        Integrations.Check check = new OtpIntegrationCheck(integrations, live(), http, json).check(FIRST);
         assertThat(check.ok()).isTrue();
         assertThat(check.message()).contains("TurboSMS", "Asterisk").doesNotContain("turbo-token-test", "ari-secret");
         assertThat(http.requests).extracting(Recording.Request::url)
                 .containsExactly("https://turbosms.test/user/balance.json", "http://127.0.0.1:8088/ari/asterisk/info");
 
         http.answer = r -> new HttpTransport.Response(200, "{\"response_code\":103,\"response_status\":\"BAD_TOKEN\"}");
-        assertThat(new OtpIntegrationCheck(integrations, live(), http, json).check().ok()).isFalse();
+        assertThat(new OtpIntegrationCheck(integrations, live(), http, json).check(FIRST).ok()).isFalse();
     }
 }
