@@ -74,8 +74,8 @@ class DriverBalanceAdminController {
     }
 
     @GetMapping("/api/driver/v1/transfer-rules")
-    Rules driverRules() {
-        return new Rules(balances.transferRules());
+    Rules driverRules(AccessClaims claims) {
+        return new Rules(balances.transferRules(claims.actor()));
     }
 
     @GetMapping("/api/admin/v1/drivers/{driverId}/balance")
@@ -96,7 +96,7 @@ class DriverBalanceAdminController {
     @GetMapping("/api/admin/v1/settings/driver-transfers")
     Rules adminRules(AccessClaims claims) {
         staff.require(claims.actor(), DriverBalances.MANAGE_PERMISSION);
-        return new Rules(balances.transferRules());
+        return new Rules(balances.transferRules(claims.actor()));
     }
 
     @PostMapping("/api/admin/v1/settings/driver-transfers/{currency}")

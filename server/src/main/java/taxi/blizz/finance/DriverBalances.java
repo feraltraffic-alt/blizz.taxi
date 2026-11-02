@@ -68,8 +68,10 @@ public interface DriverBalances {
     /** A part of the balance to another driver, found by phone (ADR 0010 p. 2). */
     Transfer transfer(Actor driver, UUID commandId, String toPhone, String currency, long amountMinor, String comment);
 
-    List<TransferRule> transferRules();
+    /** The transfer rules of the taxi service {@code within} (a driver or a staff member) belongs to (ADR 0016). */
+    List<TransferRule> transferRules(Actor within);
 
+    /** Sets a rule of the staff member's own service; another service's rules stay as they were. */
     TransferRule setTransferRule(Actor staff, UUID commandId, TransferRule rule, long expectedVersion, String reason);
 
     /**

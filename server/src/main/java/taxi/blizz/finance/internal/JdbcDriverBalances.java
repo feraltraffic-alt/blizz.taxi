@@ -22,6 +22,7 @@ import taxi.blizz.finance.Ledger.Line;
 import taxi.blizz.geo.CityCatalog;
 import taxi.blizz.identity.AccountDirectory;
 import taxi.blizz.identity.PhoneNumber;
+import taxi.blizz.identity.Services;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
@@ -48,10 +49,12 @@ class JdbcDriverBalances implements DriverBalances {
     private final Clock clock;
     private final DriverTransferTimeZone transferTimeZone;
     private final StaffTopUpLimit topUpLimit;
+    private final Services services;
 
     JdbcDriverBalances(JdbcClient jdbc, Ledger ledger, DriverDebts debts, IdempotentCommands commands,
                        StaffAccess staff, AccountDirectory accounts, CityCatalog cities, AuditLog audit, Clock clock,
-                       DriverTransferTimeZone transferTimeZone, StaffTopUpLimit topUpLimit) {
+                       DriverTransferTimeZone transferTimeZone, StaffTopUpLimit topUpLimit, Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.debts = debts;
@@ -202,7 +205,7 @@ class JdbcDriverBalances implements DriverBalances {
         }
         return commands.execute(new CommandKey(driver, "driverBalance.transfer", commandId),
                 new TransferRequest(phone.e164(), currency, amountMinor, note), Transfer.class, () -> {
-                    TransferRule rule = transferRules().stream().filter(r -> r.currency().equals(currency))
+                    TransferRule rule = transferRules(driver).stream().filter(r -> r.currency().equals(currency))
                             .findFirst().filter(TransferRule::enabled)
                             .orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT,
                                     "Transfers between drivers are off for " + currency));
@@ -296,11 +299,12 @@ class JdbcDriverBalances implements DriverBalances {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TransferRule> transferRules() {
+    public List<TransferRule> transferRules(Actor within) {
         return jdbc.sql("""
                         select currency, enabled, max_per_transfer_minor, max_per_day_minor, min_balance_after_minor,
                                version
-                        from driver_transfer_rule order by currency""")
+                        from driver_transfer_rule where service_id = :service order by currency""")
+                .param("service", serviceOf(within))
                 .query((rs, i) -> new TransferRule(rs.getString(1), rs.getBoolean(2), rs.getLong(3), rs.getLong(4),
                         rs.getLong(5), rs.getLong(6)))
                 .list();
@@ -323,11 +327,13 @@ class JdbcDriverBalances implements DriverBalances {
         }
         return commands.execute(new CommandKey(actor, "driverBalance.transferRule", commandId),
                 new RuleRequest(rule, expectedVersion, why), TransferRule.class, () -> {
+                    UUID service = serviceOf(actor);
                     TransferRule before = jdbc.sql("""
                                     select currency, enabled, max_per_transfer_minor, max_per_day_minor,
                                            min_balance_after_minor, version
-                                    from driver_transfer_rule where currency = :currency for update""")
-                            .param("currency", rule.currency())
+                                    from driver_transfer_rule
+                                    where service_id = :service and currency = :currency for update""")
+                            .param("service", service).param("currency", rule.currency())
                             .query((rs, i) -> new TransferRule(rs.getString(1), rs.getBoolean(2), rs.getLong(3),
                                     rs.getLong(4), rs.getLong(5), rs.getLong(6)))
                             .optional().orElse(null);
@@ -336,16 +342,19 @@ class JdbcDriverBalances implements DriverBalances {
                         throw ConflictException.version(current, "The rule changed");
                     }
                     jdbc.sql("""
-                                    insert into driver_transfer_rule (currency, enabled, max_per_transfer_minor,
-                                        max_per_day_minor, min_balance_after_minor, version, changed_by, changed_at)
-                                    values (:currency, :enabled, :perTransfer, :perDay, :min, :version, :by, :now)
-                                    on conflict (currency) do update set enabled = excluded.enabled,
+                                    insert into driver_transfer_rule (service_id, currency, enabled,
+                                        max_per_transfer_minor, max_per_day_minor, min_balance_after_minor, version,
+                                        changed_by, changed_at)
+                                    values (:service, :currency, :enabled, :perTransfer, :perDay, :min, :version,
+                                            :by, :now)
+                                    on conflict (service_id, currency) do update set enabled = excluded.enabled,
                                         max_per_transfer_minor = excluded.max_per_transfer_minor,
                                         max_per_day_minor = excluded.max_per_day_minor,
                                         min_balance_after_minor = excluded.min_balance_after_minor,
                                         version = excluded.version, changed_by = excluded.changed_by,
                                         changed_at = excluded.changed_at""")
-                            .param("currency", rule.currency()).param("enabled", rule.enabled())
+                            .param("service", service).param("currency", rule.currency())
+                            .param("enabled", rule.enabled())
                             .param("perTransfer", rule.maxPerTransferMinor()).param("perDay", rule.maxPerDayMinor())
                             .param("min", rule.minBalanceAfterMinor()).param("version", current + 1)
                             .param("by", actor.id()).param("now", now()).update();
@@ -358,6 +367,11 @@ class JdbcDriverBalances implements DriverBalances {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    private UUID serviceOf(Actor within) {
+        return services.of(within).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Transfer rules belong to a taxi service"));
+    }
 
     private void requireDriver(Actor driver) {
         if (driver == null || driver.type() != SubjectType.DRIVER) {
