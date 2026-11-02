@@ -249,3 +249,118 @@ it('signs in with the OPERATOR audience', async () => {
   await user.click(screen.getByRole('button', {name: 'Войти'}));
   await waitFor(() => expect(audience).toBe('OPERATOR'));
 });
+
+/** The order's history and conversation (#292): H1–H6. */
+describe('#292: history and conversation', () => {
+  const at = (minute: number) => '2026-11-02T10:0' + minute + ':00Z';
+  const local = (iso: string) => {
+    const d = new Date(iso);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const entry = (n: number, type: string, actor: Record<string, unknown>, reason: string | null,
+    details: Record<string, unknown> = {}) => ({sequence: n, type, occurred_at: at(n), reason, details,
+    correlation_id: null, actor: {id: null, name: null, role: null, ...actor}});
+  const timeline = {events: [
+    entry(1, 'OrderCreated', {type: 'STAFF', name: 'Анна Коваль', role: 'OPERATOR'}, null),
+    entry(2, 'AssignmentWithdrawn', {type: 'DRIVER', name: 'Петро'}, 'flat tyre'),
+    entry(3, 'OrderCancelled', {type: 'STAFF', name: 'Анна Коваль', role: 'OPERATOR'}, 'CALLER_CHANGED_MIND',
+      {reason_code: 'CALLER_CHANGED_MIND', reason_labels: {ru: 'Клиент передумал'}}),
+    entry(4, 'SomethingNew', {type: 'SYSTEM'}, null)]};
+  const chat = {messages: [
+    {id: 'm1', order_id: order.id, sequence: 1, sender_role: 'RIDER', body: 'Я у входа', sent_at: at(1)},
+    {id: 'm2', order_id: order.id, sequence: 2, sender_role: 'DRIVER', body: 'Еду', sent_at: at(2)}]};
+
+  function handlers(opts: {events?: () => Response; messages?: (q: URLSearchParams) => Response} = {}) {
+    const asked = {events: 0, messages: [] as URLSearchParams[]};
+    server.use(...base(),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(order, {status: 201})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id + '/events', async () => {
+        asked.events++;
+        await delay(50);
+        return opts.events ? opts.events() : HttpResponse.json(timeline);
+      }),
+      http.get(origin + '/api/operator/v1/orders/' + order.id + '/messages', ({request}) => {
+        const query = new URL(request.url).searchParams;
+        asked.messages.push(query);
+        return opts.messages ? opts.messages(query) : HttpResponse.json(chat);
+      }));
+    return asked;
+  }
+
+  async function ordered() {
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    return user;
+  }
+
+  it('H1: the history in words, oldest first, with the reason label', async () => {
+    handlers();
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'История заказа'}));
+    const list = await screen.findByRole('list', {name: 'История заказа'});
+    expect([...list.querySelectorAll('li')].map(li => li.textContent)).toEqual([
+      local(at(1)) + ' · Анна Коваль, оператор · Заказ создан',
+      local(at(2)) + ' · Водитель Петро · Водитель отказался от заказа: flat tyre',
+      local(at(3)) + ' · Анна Коваль, оператор · Заказ отменён: Клиент передумал',
+      local(at(4)) + ' · Система · SomethingNew']);
+  });
+
+  it('H2: refresh reads again, once on a double click', async () => {
+    const asked = handlers();
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'История заказа'}));
+    await screen.findByRole('list', {name: 'История заказа'});
+    const refresh = screen.getByRole('button', {name: 'Обновить историю'});
+    await Promise.all([user.click(refresh), user.click(refresh)]);
+    await waitFor(() => expect(asked.events).toBe(2));
+    await delay(100);
+    expect(asked.events).toBe(2);
+  });
+
+  it('H3: the conversation needs a reason of 1–500 characters; otherwise nothing is asked', async () => {
+    const asked = handlers();
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'Открыть переписку'}));
+    expect(await screen.findByText('Укажите причину, до 500 символов: она попадёт в журнал.')).toBeVisible();
+    await user.click(screen.getByLabelText('Причина просмотра переписки'));
+    await user.paste('я'.repeat(501));
+    await user.click(screen.getByRole('button', {name: 'Открыть переписку'}));
+    expect(asked.messages).toEqual([]);
+  });
+
+  it('H4: with a reason, one read; the messages in order; an empty one says so', async () => {
+    let empty = false;
+    const asked = handlers({messages: () => HttpResponse.json(empty ? {messages: []} : chat)});
+    const user = await ordered();
+    await user.type(screen.getByLabelText('Причина просмотра переписки'), 'Клиент жалуется на водителя');
+    await user.click(screen.getByRole('button', {name: 'Открыть переписку'}));
+    const list = await screen.findByRole('list', {name: 'Переписка'});
+    expect([...list.querySelectorAll('li')].map(li => li.textContent)).toEqual([
+      'Пассажир ' + local(at(1)) + ': Я у входа', 'Водитель ' + local(at(2)) + ': Еду']);
+    expect(asked.messages.map(q => q.get('reason'))).toEqual(['Клиент жалуется на водителя']);
+    empty = true;
+    await user.click(screen.getByRole('button', {name: 'Открыть переписку'}));
+    expect(await screen.findByText('Сообщений нет.')).toBeVisible();
+  });
+
+  it('H5: without orders.view neither is offered', async () => {
+    const asked = handlers();
+    server.use(http.get(origin + '/api/operator/v1/me', () =>
+      HttpResponse.json({...operator, effective_permissions: ['orders.create', 'orders.cancel']})));
+    await ordered();
+    expect(screen.queryByRole('button', {name: 'История заказа'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Открыть переписку'})).not.toBeInTheDocument();
+    expect(asked.events).toBe(0);
+    expect(asked.messages).toEqual([]);
+  });
+
+  it('H6: a refusal is shown with its correlation id', async () => {
+    handlers({events: () => HttpResponse.json(problem(403, 'ACCESS_DENIED'), {status: 403})});
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'История заказа'}));
+    expect(await screen.findByText(new RegExp(cid))).toBeVisible();
+  });
+});
