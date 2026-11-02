@@ -290,7 +290,7 @@ describe('file upload (#284 D9)', () => {
 
   it('a refused file is a typed error with the server code', async () => {
     server.use(http.put(origin + path, () => HttpResponse.json(problem(409, 'CONFLICT'), {status: 409})));
-    const error = await client().upload(path, new Blob([new Uint8Array([1])]), 'image/png').catch(e => e);
+    const error = await client().upload(path, new Blob([new Uint8Array([1])]), 'image/png').catch(e => e) as ApiError;
     expect(error).toBeInstanceOf(ApiError);
     expect(error.code).toBe('CONFLICT');
   });
