@@ -39,7 +39,7 @@ export function DataExports({client, t, guard, failure, newId, api, pollMs, back
   }, [read]); // the failure text follows the same texts
 
   // While a copy is being built, it is read again; never once none is (#330 X4).
-  const building = (exports ?? []).some(e => e.state === 'PENDING' || e.state === 'RUNNING');
+  const building = (exports ?? []).some(e => e.state === 'PENDING');
   useEffect(() => {
     if (!building) return;
     const timer = setInterval(() => {read().catch(() => undefined);}, pollMs);
@@ -77,7 +77,7 @@ export function DataExports({client, t, guard, failure, newId, api, pollMs, back
     }
     return once(async () => {
       await guard(() => client.post((api + '/me/data-exports') as never, {body: {command_id: command.current,
-        challenge_id: challenge, otp_code: code.trim()}} as never));
+        challenge_id: challenge}} as never));
       setChallenge(null);
       setCode('');
       command.current = newId();
