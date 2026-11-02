@@ -2158,7 +2158,7 @@ export interface paths {
         };
         /**
          * Technical data retention by kind
-         * @description Requires retention.manage with all-city scope. Version 0 contains the defaults; each setting is a number of days and 0 keeps that kind forever.
+         * @description The staff member's own taxi service's terms (ADR 0016,
          */
         get: operations["getRetention"];
         /**
@@ -5160,7 +5160,7 @@ export interface components {
             expected_version: number;
             reason: string;
         };
-        /** @description Separate retention in whole days for each kind. 0 always means keep forever. A change applies to the next cleanup run; already deleted data cannot be restored. Cleanup never deletes the audit log, journal, orders, payments or FAILED outbox events. */
+        /** @description The taxi service's own retention in whole days for each kind of its rows (ADR 0016, */
         RetentionDays: {
             /**
              * @description Recording files and metadata, including refused recordings still on Asterisk. Defaults to keeping forever. 0 means keep forever.
@@ -5172,21 +5172,6 @@ export interface components {
              * @default 90
              */
             code_deliveries: number;
-            /**
-             * @description Completed command receipts, measured from completion. After expiry a command id is no longer remembered. 0 means keep forever.
-             * @default 30
-             */
-            command_receipts: number;
-            /**
-             * @description Completed consumer inbox receipts, measured from completion. Receipts for events still PENDING or FAILED are preserved so replay skips completed consumers. 0 means keep forever.
-             * @default 30
-             */
-            consumer_receipts: number;
-            /**
-             * @description Only DONE outbox events, measured from completion. FAILED and PENDING events are preserved. 0 means keep forever.
-             * @default 30
-             */
-            delivered_events: number;
             /**
              * @description Files stuck in quarantine; call recordings use their separate setting. 0 means keep forever.
              * @default 30
@@ -5214,6 +5199,15 @@ export interface components {
             /** Format: uuid */
             changed_by: string | null;
             days: components["schemas"]["RetentionDays"];
+            /** @description Rows of no service, kept a fixed number of days whatever is set (owner answer 02.11.2026). */
+            fixed_days: {
+                /** @constant */
+                command_receipts: 30;
+                /** @constant */
+                consumer_receipts: 30;
+                /** @constant */
+                delivered_events: 30;
+            };
             reason: string | null;
             /** Format: int64 */
             version: number;

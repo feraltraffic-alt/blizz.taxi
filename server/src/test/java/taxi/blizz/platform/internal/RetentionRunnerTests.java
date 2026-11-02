@@ -25,7 +25,9 @@ class RetentionRunnerTests {
             work.add(part(kind, kind.equals("call_recordings") && failedSource, allocated));
         }
         work.add(part("call_recordings", false, allocated));
-        RetentionPolicy policy = () -> RetentionPolicy.KINDS.stream().collect(Collectors.toMap(k -> k, k -> 1));
+        // One service with every term at 1 day; works that do not separate services follow it (#276).
+        RetentionPolicy policy = () -> java.util.Map.of(java.util.UUID.randomUUID(),
+                RetentionPolicy.SERVICE_KINDS.stream().collect(Collectors.toMap(k -> k, k -> 1)));
         var metrics = new SimpleMeterRegistry();
         try {
             var runner = new RetentionRunner(policy, work, metrics, Clock.systemUTC());

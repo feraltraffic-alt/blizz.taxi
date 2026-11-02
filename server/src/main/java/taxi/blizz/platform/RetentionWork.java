@@ -24,6 +24,19 @@ public interface RetentionWork {
     /** One batch only; no transaction may span a call to external storage or a provider. */
     Result run(OffsetDateTime cutoff, OffsetDateTime now, int limit);
 
+    /**
+     * Whether this work's rows carry their taxi service, so each service's term applies to its own rows (#276); then
+     * {@link #run(java.util.UUID, OffsetDateTime, OffsetDateTime, int)} is used instead of the plain run.
+     */
+    default boolean perService() {
+        return false;
+    }
+
+    /** One batch of the rows of {@code serviceId} only. */
+    default Result run(java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+        throw new UnsupportedOperationException(kind() + " does not separate its rows by service");
+    }
+
     static int limit(int value) {
         return Math.max(1, Math.min(1000, value));
     }

@@ -54,6 +54,9 @@ class RetentionAcceptanceTests {
         }
     }
 
+    /** The kinds a service sets (#276); delivered events and the receipts are kept exactly 30 days. */
+    static final String[] SERVICE_KINDS = {"sessions", "sign_in_codes", "code_deliveries", "upload_sessions",
+            "quarantined_files", "call_recordings"};
     static final String[] KINDS = {"sessions", "sign_in_codes", "code_deliveries", "delivered_events",
             "consumer_receipts", "command_receipts", "upload_sessions", "quarantined_files", "call_recordings"};
     @Autowired
@@ -115,7 +118,7 @@ class RetentionAcceptanceTests {
 
     Map<String, Object> days(int n) {
         Map<String, Object> map = new LinkedHashMap<>();
-        for (String k : KINDS) {
+        for (String k : SERVICE_KINDS) {
             map.put(k, n);
         }
         return map;
@@ -303,9 +306,23 @@ class RetentionAcceptanceTests {
         }
     }
 
+    /** #276 R5: rows without a service are kept exactly 30 days (owner answer 02.11.2026), with no setting. */
     @ParameterizedTest
-    @ValueSource(strings = {"sessions", "sign_in_codes", "code_deliveries", "delivered_events", "consumer_receipts",
-            "command_receipts", "upload_sessions", "quarantined_files", "call_recordings"})
+    @ValueSource(strings = {"delivered_events", "consumer_receipts", "command_receipts"})
+    void rowsWithoutAServiceAreKeptExactlyThirtyDays(String kind) throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        Row old = seed(kind, now.minusDays(31)), edge = seed(kind, now.minusDays(30)),
+                recent = seed(kind, now.minusDays(29));
+        policy(days(0));
+        run(kind, now);
+        assertPresent(old, false);
+        assertPresent(edge, true);
+        assertPresent(recent, true);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sessions", "sign_in_codes", "code_deliveries", "upload_sessions", "quarantined_files",
+            "call_recordings"})
     void eachKindHonorsBothSidesOfTheBoundaryZeroAndChangedPolicies(String kind) throws Exception {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         Row old = seed(kind, now.minusDays(31)), edge = seed(kind, now.minusDays(30)),
@@ -339,9 +356,14 @@ class RetentionAcceptanceTests {
     void defaultsAuditHistoryVersionConflictAndAuthorizationAreRealHttpChecks() throws Exception {
         JsonNode before = current();
         assertThat(before.path("version").asLong()).isZero();
-        int[] defaults = {30, 90, 90, 30, 30, 30, 7, 30, 0};
-        for (int i = 0; i < KINDS.length; i++) {
-            assertThat(before.path("days").path(KINDS[i]).asInt()).as(KINDS[i] + " default").isEqualTo(defaults[i]);
+        int[] defaults = {30, 90, 90, 7, 30, 0};
+        for (int i = 0; i < SERVICE_KINDS.length; i++) {
+            assertThat(before.path("days").path(SERVICE_KINDS[i]).asInt()).as(SERVICE_KINDS[i] + " default")
+                    .isEqualTo(defaults[i]);
+        }
+        assertThat(before.path("days").size()).as("only the service's own kinds").isEqualTo(SERVICE_KINDS.length);
+        for (String fixed : List.of("delivered_events", "consumer_receipts", "command_receipts")) {
+            assertThat(before.path("fixed_days").path(fixed).asInt()).as(fixed + " is fixed").isEqualTo(30);
         }
         long version = before.path("version").asLong();
         Map<String, Object> body = command(version, days(12), UUID.randomUUID());
@@ -581,9 +603,7 @@ class RetentionAcceptanceTests {
                         from generate_series(1,2005) g
                         """)
                 .param("prefix", prefix).update();
-        Map<String, Object> p = days(0);
-        p.put("delivered_events", 1);
-        policy(p);
+        // 600 days old: past the fixed 30 days of delivered events (#276).
         for (int expected : List.of(1005, 5, 0)) {
             run("delivered_events", OffsetDateTime.now());
             assertThat(jdbc.sql("select count(*) from outbox where event_type=:prefix").param("prefix", prefix)

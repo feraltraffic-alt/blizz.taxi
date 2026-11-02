@@ -24,15 +24,18 @@ class IdentityRetention {
 
     @Bean
     RetentionWork sessionRetention() {
-        return batch("sessions", "refresh_token", "token_hash", "inactive_at");
+        // A refresh token belongs to its session's service (ADR 0016).
+        return batch("sessions", "refresh_token", "token_hash", "inactive_at",
+                "session_id in (select id from device_session where service_id = :service)");
     }
 
     @Bean
     RetentionWork signInCodeRetention() {
-        return batch("sign_in_codes", "otp_challenge", "id", "created_at");
+        return batch("sign_in_codes", "otp_challenge", "id", "created_at", "service_id = :service");
     }
 
-    private RetentionWork batch(String kind, String table, String key, String age) {
+    /** {@code ofService}: the condition that keeps a service's rows, for its own term (#276). */
+    private RetentionWork batch(String kind, String table, String key, String age, String ofService) {
         return new RetentionWork() {
             public String kind() {
                 return kind;
@@ -47,6 +50,20 @@ class IdentityRetention {
                 int deleted = tx.execute(status -> jdbc.sql(
                                 "delete from " + table + " where " + key + " in (" + selectionSql(limit) + ")")
                         .param("cutoff", cutoff).update());
+                return new Result(deleted, 0);
+            }
+
+            public boolean perService() {
+                return true;
+            }
+
+            public Result run(java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+                String selection = "select " + key + " from " + table + " where " + age + "<:cutoff and " + ofService
+                        + " order by " + age + "," + key + " limit " + RetentionWork.limit(limit)
+                        + " for update skip locked";
+                int deleted = tx.execute(status -> jdbc.sql(
+                                "delete from " + table + " where " + key + " in (" + selection + ")")
+                        .param("cutoff", cutoff).param("service", serviceId).update());
                 return new Result(deleted, 0);
             }
         };

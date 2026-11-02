@@ -67,6 +67,20 @@ class CallRecordingRetention implements RetentionWork {
         return run(ELIGIBLE, selectionSql(limit), Map.of("cutoff", cutoff, "now", now), now);
     }
 
+    /** A call belongs to the service of its exchange (#275): its recording goes by that service's term (#276). */
+    @Override
+    public boolean perService() {
+        return true;
+    }
+
+    @Override
+    public Result run(UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+        String eligible = ELIGIBLE + " and call_id in (select id from call where service_id = :service)";
+        return run(eligible, "select call_id from call_recording where " + eligible
+                + " order by created_at,call_id limit " + RetentionWork.limit(limit),
+                Map.of("cutoff", cutoff, "now", now, "service", serviceId), now);
+    }
+
     private Result run(String eligible, String selection, Map<String, Object> params, OffsetDateTime now) {
         Result total = new Result(0, 0, 0);
         long started = System.nanoTime();
