@@ -11,6 +11,8 @@ export type Trip = {id: string; phase: string; version: number; pickup: Point; p
   dropoff_label: string; payment_method: string; price_minor?: number | null; currency?: string | null;
   wallet_minor?: number; discount_minor?: number; comment?: string | null; entrance?: string | null};
 type Reason = {code: string; labels: Record<string, string>};
+type BroadcastOrder = {order_id: string; vehicle_class: string; pickup_label: string; dropoff_label: string;
+  payment_method: string; price_minor?: number | null; currency?: string | null; distance_m: number};
 
 const ENDED = new Set(['COMPLETED', 'ABORTED']);
 const money = (minor: number, currency?: string | null) => (minor / 100).toFixed(2) + (currency ? ' ' + currency : '');
@@ -62,6 +64,7 @@ export function Dispatch(props: Props) {
 function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props & {say: (text: string | null) => void;
   accepted: () => void}) {
   const [offer, setOffer] = useState<Offer | null>(null);
+  const [polled, setPolled] = useState(false);
   const [left, setLeft] = useState(0);
   const gone = useRef(new Set<string>());
   const commands = useRef(new Map<string, string>());
@@ -72,6 +75,7 @@ function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props
     const list = await guard(() => client.get('/api/driver/v1/offers')) as Offer[];
     const next = list.find(o => !gone.current.has(o.id) && o.seconds_left > 0) ?? null;
     setOffer(next);
+    setPolled(true);
     // The server's seconds, never the device clock (REQ-DRV-07): a phone set minutes off still counts right.
     if (next) setLeft(next.seconds_left);
   }, [client, guard]);
@@ -121,7 +125,15 @@ function Offers({client, t, guard, failure, newId, pollMs, say, accepted}: Props
     }
   }
 
-  if (!offer) return <Text style={{color: theme.muted}}>{t('waitingOffers')}</Text>;
+  if (!offer) {
+    return (
+      <View style={{gap: 12}}>
+        <Text style={{color: theme.muted}}>{t('waitingOffers')}</Text>
+        {polled ? <AllTab client={client} t={t} guard={guard} failure={failure} newId={newId} pollMs={pollMs}
+          say={say} accepted={accepted} /> : null}
+      </View>
+    );
+  }
   return (
     <View style={{gap: 12}}>
       <Text style={{color: theme.text, fontWeight: '600'}}>{t('newOffer')}</Text>
@@ -247,6 +259,86 @@ function TripCard({client, t, guard, failure, newId, now, locale, trip, say, mov
             onPress={() => void run('cancel', {reason_code: reason})} />
         </>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The ALL tab (#256, REQ-DRV-08): orders nobody took as a personal offer, near the driver. Shown only while no
+ * personal offer is open; polled at the screen's pace, which stays within the server's 120 reads a minute.
+ */
+function AllTab({client, t, guard, failure, newId, pollMs, say, accepted}: Shared & {newId: () => string;
+  pollMs: number; say: (text: string | null) => void; accepted: () => void}) {
+  const [orders, setOrders] = useState<BroadcastOrder[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
+  const gone = useRef(new Set<string>());
+  const commands = useRef(new Map<string, string>());
+  const acting = useRef(false);
+  const theme = useTheme();
+
+  const text = useCallback((error: unknown) => error instanceof ApiError && error.status === 429 ? t('tooOften')
+    : failure(error), [t]); // the failure text follows the same texts
+
+  // A failed read is said under the list, never over what the screen said last (an offer gone, a trip moved).
+  const read = useCallback(async () => {
+    try {
+      const list = await guard(() => client.get('/api/driver/v1/broadcast-orders' as never, {} as never)) as
+        BroadcastOrder[];
+      setOrders(list.filter(o => !gone.current.has(o.order_id)));
+      setListError(null);
+    } catch (error) {
+      setListError(text(error));
+    }
+  }, [client, guard, text]);
+
+  useEffect(() => {
+    void read();
+    const timer = setInterval(() => {void read();}, pollMs);
+    return () => clearInterval(timer);
+  }, [read, pollMs]);
+
+  /** One claim at a time (A5), one command per order: a repeat after a lost answer is the same claim. */
+  async function take(orderId: string) {
+    if (acting.current) return;
+    acting.current = true;
+    say(null);
+    const command = commands.current.get(orderId) ?? newId();
+    commands.current.set(orderId, command);
+    try {
+      await guard(() => client.post('/api/driver/v1/orders/{order_id}/claim' as never,
+        {params: {order_id: orderId}, body: {command_id: command}} as never));
+      accepted();
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'ORDER_ALREADY_ASSIGNED') {
+        gone.current.add(orderId);
+        setOrders(list => list.filter(o => o.order_id !== orderId));
+        say(t('alreadyTaken'));
+      } else if (error instanceof ApiError && error.code === 'PICKUP_TOO_FAR') {
+        say(t('claimTooFar'));
+        await read();
+      } else if (error instanceof ApiError && error.code === 'STATE_CONFLICT') {
+        say(t('shiftElsewhere'));
+      } else say(text(error));
+    } finally {
+      acting.current = false;
+    }
+  }
+
+  if (orders.length === 0) return listError ? <Alert text={listError} /> : null;
+  return (
+    <View style={{gap: 12}}>
+      <Text style={{color: theme.text, fontWeight: '600'}}>{t('allOrders')}</Text>
+      <Alert text={listError} />
+      {orders.map(o => (
+        <View key={o.order_id} style={{gap: 6}}>
+          <Text style={{color: theme.text}}>{o.pickup_label} → {o.dropoff_label}</Text>
+          <Text style={{color: theme.muted}}>
+            {t('distance', {meters: o.distance_m})} · {o.vehicle_class} · {t('payment_' + o.payment_method)}
+            {o.price_minor != null ? ' · ' + money(o.price_minor, o.currency) : ''}
+          </Text>
+          <Button label={t('takeOrder')} onPress={() => void take(o.order_id)} />
+        </View>
+      ))}
     </View>
   );
 }

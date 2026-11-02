@@ -105,6 +105,20 @@ test('a sandbox driver signs in by a code, goes online, takes an offer, drives i
   await page.screenshot({path: info.outputPath('11-money.png'), fullPage: true});
   await page.getByRole('button', {name: 'Работа', exact: true}).click();
   await expect(page.getByText('Ждём предложений…')).toBeVisible();
+
+  // A second ride: the driver declines the offer; nobody else is near, so the order comes to the ALL tab, where the
+  // driver takes it, and then cancels it at the passenger's request (#256).
+  await riderOrders(request, place);
+  await expect(page.getByText('Точка E2E → Назначение E2E')).toBeVisible({timeout: 30_000});
+  await page.getByRole('button', {name: 'Отклонить', exact: true}).click();
+  await expect(page.getByText('Все заказы рядом')).toBeVisible({timeout: 30_000});
+  await page.screenshot({path: info.outputPath('11-all-tab.png'), fullPage: true});
+  await page.getByRole('button', {name: 'Взять', exact: true}).first().click();
+  await expect(page.getByText('Едете к пассажиру')).toBeVisible();
+  await page.getByRole('button', {name: '○ Пассажир попросил отменить', exact: true}).click();
+  await page.getByRole('button', {name: 'Отменить поездку', exact: true}).click();
+  await expect(page.getByText('Ждём предложений…')).toBeVisible();
+  await page.screenshot({path: info.outputPath('12-cancelled.png'), fullPage: true});
   await page.getByRole('button', {name: 'Уйти с линии'}).click();
   await expect(page.getByText('Вы не на линии')).toBeVisible();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
