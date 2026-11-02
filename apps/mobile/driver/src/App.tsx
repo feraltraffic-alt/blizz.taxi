@@ -186,7 +186,8 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     return (
       <Screen title={t('money')}>
         <Button label={t('home')} onPress={() => setTab('work')} />
-        <Money client={client} t={t} guard={guard} failure={failure} cityId={profile.admission_city_ids[0]} now={now} />
+        <Money client={client} t={t} guard={guard} failure={failure} cityId={profile.admission_city_ids[0]} now={now}
+          service={config.service} />
       </Screen>
     );
   }
