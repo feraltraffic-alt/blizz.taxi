@@ -47,7 +47,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
     console.log('PAGE AFTER PASSWORD CHANGE:', await page.locator('body').innerText());
   }
   await expect(form).toBeVisible();
-  await page.getByLabel('Город', {exact: true}).selectOption({label: 'Київ'});
+  await page.locator('select').first().selectOption({label: 'Київ'});
   await page.getByLabel('Телефон звонящего', {exact: true}).fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда', {exact: true}).fill('Хрещатик');
   const answer = page.waitForResponse(r => r.url().includes('/api/operator/v1/places'));
