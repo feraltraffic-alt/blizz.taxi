@@ -11,7 +11,7 @@ const session = {
 };
 
 type Call = {method: string; path: string; query: URLSearchParams; body?: unknown};
-type Answer = {status: number; body?: unknown; delayMs?: number};
+type Answer = {status: number; body?: unknown; delayMs?: number; raw?: Uint8Array; type?: string};
 
 function server(script: Record<string, Answer[]>) {
   const calls: Call[] = [];
@@ -26,6 +26,7 @@ function server(script: Record<string, Answer[]>) {
     const answers = script[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
     if (answer.delayMs) await new Promise(resolve => setTimeout(resolve, answer.delayMs));
+    if (answer.raw) return new Response(answer.raw.buffer as ArrayBuffer, {status: answer.status, headers: {'Content-Type': answer.type!}});
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body),
       {status: answer.status, headers: {'Content-Type': 'application/json'}});
   });
@@ -306,5 +307,49 @@ describe('#313: attachments', () => {
     await mount({});
     await fireEvent.press(await screen.findByRole('button', {name: 'Новое обращение'}));
     expect(screen.queryByRole('button', {name: 'Приложить файл'})).toBeNull();
+  });
+});
+
+/** Opening attachments on the phone (#319): O1–O4. */
+describe('#319: opening attachments', () => {
+  const att = (id: string, type: string, name: string | null, size = 2048) => ({file_id: id, content_type: type,
+    size_bytes: size, name});
+  const withFiles = () => full({messages: [{...msg(2, 'STAFF', 'Вот фото зонта'),
+    attachments: [att('a1', 'image/png', 'umbrella.png'), att('a2', 'application/pdf', null)]}]});
+  const DOWNLOAD = 'GET /api/rider/v1/support/cases/' + CASE + '/attachments/a1';
+  const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
+  async function openIt(script: Record<string, Answer[]>) {
+    const result = await mount({[ONE]: [{status: 200, body: withFiles()}], ...script});
+    await fireEvent.press(await screen.findByRole('button', {name: '№501 · Забыл зонт · в работе'}));
+    await screen.findByText(/Вот фото зонта/);
+    return result;
+  }
+
+  it('O1: each file is listed with its name and size', async () => {
+    await openIt({});
+    expect(screen.getByText('umbrella.png · 2 КБ')).toBeTruthy();
+    expect(screen.getByText('файл · 2 КБ')).toBeTruthy();
+  });
+
+  it('O2: an image opens with one download and is shown', async () => {
+    const {http} = await openIt({[DOWNLOAD]: [{status: 200, raw: PNG, type: 'image/png'}]});
+    await fireEvent.press(screen.getByRole('button', {name: 'Открыть umbrella.png'}));
+    const image = await screen.findByLabelText('umbrella.png');
+    expect(String(image.props.source.uri)).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(screen.queryByRole('button', {name: 'Открыть umbrella.png'})).toBeNull();
+    expect(http.calls.filter(c => c.path.endsWith('/attachments/a1'))).toHaveLength(1);
+  });
+
+  it('O3: a PDF has no open button and says where to read it', async () => {
+    await openIt({});
+    expect(screen.queryByRole('button', {name: 'Открыть файл'})).toBeNull();
+    expect(screen.getByText('PDF открывается в веб-версии или по просьбе в поддержку.')).toBeTruthy();
+  });
+
+  it('O4: a refused download is told', async () => {
+    await openIt({[DOWNLOAD]: [problem(404, 'NOT_FOUND')]});
+    await fireEvent.press(screen.getByRole('button', {name: 'Открыть umbrella.png'}));
+    expect(await screen.findByText(/Код запроса/)).toBeTruthy();
   });
 });

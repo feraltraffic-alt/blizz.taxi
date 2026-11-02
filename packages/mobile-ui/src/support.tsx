@@ -1,10 +1,26 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Text, View} from 'react-native';
+import {Image, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {Alert, Button, Field, Screen, useTheme} from './ui';
 import type {Shared} from './session';
 
-type Message = {id: string; author_type: string; body: string; attachments?: unknown[]};
+type Attachment = {file_id: string; content_type: string; size_bytes: number; name?: string | null};
+type Message = {id: string; author_type: string; body: string; attachments?: Attachment[]};
+
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** A data URI of downloaded bytes for an Image: no FileReader or btoa needed, which not every engine has. */
+async function dataUri(blob: Blob, type: string): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const [a, b, c] = [bytes[i]!, bytes[i + 1], bytes[i + 2]];
+    out += BASE64[a >> 2]! + BASE64[((a & 3) << 4) | ((b ?? 0) >> 4)]!
+      + (b === undefined ? '=' : BASE64[((b & 15) << 2) | ((c ?? 0) >> 6)]!)
+      + (c === undefined ? '=' : BASE64[c & 63]!);
+  }
+  return 'data:' + type + ';base64,' + out;
+}
 type Case = {id: string; number: number; subject: string; state: string; messages: Message[]};
 type Page = {cases: Case[]; page: {next_cursor?: string | null}};
 
@@ -209,6 +225,25 @@ function CaseView({client, t, guard, failure, newId, side, id, onBack, pickFile}
   side: SupportSide; id: string; onBack: () => void; pickFile?: () => Promise<PickedFile | null>}) {
   const files = useAttachments({client, t, guard, failure, newId, side, pickFile});
   const [item, setItem] = useState<Case | null>(null);
+  /** Opened images by file id: downloaded once while the case is open (#319 O2). */
+  const [opened, setOpened] = useState<Record<string, string>>({});
+  const opening = useRef(false);
+
+  async function open(file: Attachment) {
+    if (opened[file.file_id] || opening.current) return;
+    opening.current = true;
+    setMessage(null);
+    try {
+      const blob = await guard(() => client.get((side.api + '/support/cases/{case_id}/attachments/{file_id}') as never,
+        {params: {case_id: id, file_id: file.file_id}} as never)) as unknown as Blob;
+      const uri = await dataUri(blob, file.content_type);
+      setOpened(all => ({...all, [file.file_id]: uri}));
+    } catch (error) {
+      setMessage(failure(error));
+    } finally {
+      opening.current = false;
+    }
+  }
   const [answer, setAnswer] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const sending = useRef(false);
@@ -250,10 +285,27 @@ function CaseView({client, t, guard, failure, newId, side, id, onBack, pickFile}
     <Screen title={'№' + item.number + ' · ' + item.subject}>
       <Text style={{color: theme.muted}}>{t('case_' + item.state)}</Text>
       {item.messages.map(m => (
-        <Text key={m.id} style={{color: theme.text}}>
-          {(m.author_type === side.me ? t('you') : t('supportTeam')) + ': ' + m.body
-            + (m.attachments?.length ? ' · ' + t('attachments', {count: m.attachments.length}) : '')}
-        </Text>
+        <View key={m.id} style={{gap: 4}}>
+          <Text style={{color: theme.text}}>
+            {(m.author_type === side.me ? t('you') : t('supportTeam')) + ': ' + m.body
+              + (m.attachments?.length ? ' · ' + t('attachments', {count: m.attachments.length}) : '')}
+          </Text>
+          {(m.attachments ?? []).map(f => {
+            const name = f.name ?? t('unnamedFile');
+            const image = f.content_type.startsWith('image/');
+            return (
+              <View key={f.file_id} style={{gap: 4}}>
+                <Text style={{color: theme.muted}}>
+                  {name + ' · ' + Math.max(1, Math.round(f.size_bytes / 1024)) + ' ' + t('kilobytes')}
+                </Text>
+                {opened[f.file_id] ? <Image accessibilityLabel={name} source={{uri: opened[f.file_id]}}
+                  style={{width: 240, height: 240}} resizeMode="contain" />
+                  : image ? <Button label={t('openFileOf', {name})} onPress={() => void open(f)} />
+                    : <Text style={{color: theme.muted}}>{t('pdfElsewhere')}</Text>}
+              </View>
+            );
+          })}
+        </View>
       ))}
       {item.state === 'CLOSED' ? <Text style={{color: theme.muted}}>{t('caseClosed')}</Text> : (
         <>

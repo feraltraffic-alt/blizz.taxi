@@ -24,7 +24,7 @@ const full = (over: Record<string, unknown> = {}) => ({id: CASE, number: 77, cit
   messages: [msg(1, 'DRIVER', 'Пассажир не доплатил'), msg(2, 'STAFF', 'Разбираемся')], ...over});
 
 type Call = {method: string; path: string; body?: unknown};
-type Answer = {status: number; body?: unknown};
+type Answer = {status: number; body?: unknown; raw?: Uint8Array; type?: string};
 
 async function mount(script: Record<string, Answer[]>, profile: unknown = admitted,
   pickFile?: () => Promise<PickedFile | null>) {
@@ -45,6 +45,7 @@ async function mount(script: Record<string, Answer[]>, profile: unknown = admitt
       : init.body ? JSON.parse(String(init.body)) : undefined});
     const answers = all[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
+    if (answer.raw) return new Response(answer.raw.buffer as ArrayBuffer, {status: answer.status, headers: {'Content-Type': answer.type!}});
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body),
       {status: answer.status, headers: {'Content-Type': 'application/json'}});
   });
@@ -127,5 +128,19 @@ describe('#313 A6: the driver attaches through the driver API', () => {
     expect(calls.filter(c => c.method !== 'GET').map(c => c.method + ' ' + c.path)).toEqual([
       'POST /api/driver/v1/support/uploads', 'PUT /api/driver/v1/uploads/' + FILE, 'POST /api/driver/v1/support/cases']);
     expect(calls.filter(c => c.method === 'POST').at(-1)!.body).toMatchObject({attachment_ids: [FILE]});
+  });
+});
+
+describe('#319 O5: the driver opens through the driver API', () => {
+  it('downloads from /api/driver/v1 and shows the image', async () => {
+    const withFile = full({messages: [{...msg(2, 'STAFF', 'Фото чека'), attachments: [{file_id: 'a1',
+      content_type: 'image/jpeg', size_bytes: 1024, name: 'check.jpg'}]}]});
+    const {calls} = await mount({['GET /api/driver/v1/support/cases/' + CASE]: [{status: 200, body: withFile}],
+      ['GET /api/driver/v1/support/cases/' + CASE + '/attachments/a1']: [{status: 200,
+        raw: new Uint8Array([255, 216, 255]), type: 'image/jpeg'}]});
+    await fireEvent.press(await screen.findByRole('button', {name: '№77 · Не доплатил · открыто'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Открыть check.jpg'}));
+    expect(String((await screen.findByLabelText('check.jpg')).props.source.uri)).toBe('data:image/jpeg;base64,/9j/');
+    expect(calls.filter(c => c.path === '/api/driver/v1/support/cases/' + CASE + '/attachments/a1')).toHaveLength(1);
   });
 });
