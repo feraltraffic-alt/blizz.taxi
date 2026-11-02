@@ -182,6 +182,20 @@ Real cases from pull requests on this repository: what was handed in, what the r
   refusals. A dependency the tests inject (`locate`, a clock, a store) is also wired in the app's entry point, and
   the end-to-end run is what proves that.
 
+## 19. A mutation run that failed for the wrong reason, and a substring check that matched a timestamp (lead's #284, #290)
+
+- **Task:** the driver's documents screen (#284). The PR was checked with a mutation branch that must fail D2 and D4.
+- **Missed:**
+  - **The first mutation run was red, but on a type error.** The lead's new `api-client` test said
+    `.catch(e => e)` on a `Promise<unknown>`, so `error.code` did not compile. The lead had run `npm run
+    typecheck` on another branch only. A red run said nothing about D2 or D4 until the failing test names were read.
+  - **`ChargebackEvidenceTests` refused any `"4111"` in a JSON document.** One day a timestamp read
+    `17:13:51.741119Z`, and an unrelated branch went red.
+- **Habit:**
+  - Run the full typecheck and lint **on every branch you push**, the mutation branch included.
+  - A guard against leaked data looks for the **whole shape of the secret** (`4111[ -]?1111`), never for a short
+    substring that dates, ids or amounts can contain.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

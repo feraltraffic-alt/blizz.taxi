@@ -83,6 +83,25 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
 
+## Recent history (02.11.2026, evening)
+
+- **Merged:**
+
+  | PR | What |
+  |---|---|
+  | #281, #282 | #276 retention terms per service: the service kinds by each service's term, the rows without a service a fixed 30 days (ADR 0016, owner decision 02.11) |
+  | #283 | `RetentionVolumeTests`: the 50 ms bound against the best of up to three warm runs |
+  | #285 | #284 driver app: vehicle and documents for admission. `ApiClient.upload` (a relative `/api/` path only); `expo-document-picker` behind `AppConfig.pickFile` |
+  | #287 | #286 operator: cars on the line, a list (no map) |
+  | #289 | #288 operator: the support queue and one case (no attachments) |
+  | #290 | `ChargebackEvidenceTests`: the typed card pattern instead of any `"4111"` (lessons, case 19) |
+- **Merging.** At 17:10 the session's auto-mode refused the lead's squash merge as "merge without review". The owner allowed merging again at 18:40 ("разрешаю мерджить").
+- **Next candidates:**
+  - the operator's order chat, manual offers and the order's events;
+  - the rider's support cases;
+  - a sandbox driver who is not yet admitted, for an end-to-end run of the driver documents;
+  - the operator's live map, which needs a decision on the map tiles.
+
 ## Recent history (02.11.2026, day)
 
 - **Merged:**
