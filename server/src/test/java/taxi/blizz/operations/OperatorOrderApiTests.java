@@ -219,6 +219,60 @@ class OperatorOrderApiTests {
                 .contains("/api/operator/v1/quotes", "/api/operator/v1/orders");
     }
 
+    /** The classes an operator can quote in a city (#251): orderable only, by the quote's access rule. */
+    @Test
+    void operatorListsTheOrderableClassesOfACityTheyMayOrderIn() throws Exception {
+        try {
+            listsTheOrderableClasses();
+        } finally {
+            // Every test's cities lie on the same squares: these move away so the next test's pickup is in its own.
+            // Not to (0, 0), which other tests use as a point outside every city: to a corner of the Antarctic.
+            jdbc.sql("update city set polygon = ST_GeomFromEWKT('SRID=4326;MULTIPOLYGON(((-170 -80,-169.999 -80,"
+                    + "-169.999 -79.999,-170 -79.999,-170 -80)))') where id in (:a, :b)")
+                    .param("a", cityA).param("b", cityB).update();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void listsTheOrderableClasses() throws Exception {
+        testQuotes.ensureClass(cityA, "COMFORT");
+        jdbc.sql("""
+                        insert into vehicle_class (id, city_id, code, name, active, created_at, updated_at)
+                        values (:id, :city, 'NO_TARIFF', 'No tariff', true, now(), now())""")
+                .param("id", UUID.randomUUID()).param("city", cityA).update();
+        SignedOperator creator = operator(cityA, List.of("orders.create"));
+        SignedOperator viewer = operator(cityA, List.of("orders.view"));
+        SignedOperator otherCity = operator(cityB, List.of("orders.create"));
+
+        MvcResult listed = getAuth("/api/operator/v1/vehicle-classes?city_id=" + cityA, creator.token());
+        assertThat(listed.getResponse().getStatus()).as("C1").isEqualTo(200);
+        List<Map<String, Object>> classes = json.readValue(listed.getResponse().getContentAsString(), List.class);
+        assertThat(classes).as("C1: active classes with a tariff in force, in code order")
+                .extracting(c -> c.get("code")).containsExactly("COMFORT", "STANDARD");
+        assertThat(classes.getFirst()).containsOnlyKeys("code", "name");
+
+        assertThat(getAuth("/api/operator/v1/vehicle-classes?city_id=" + cityA, viewer.token())
+                .getResponse().getStatus()).as("C2: no orders.create").isEqualTo(403);
+        assertThat(getAuth("/api/operator/v1/vehicle-classes?city_id=" + cityA, otherCity.token())
+                .getResponse().getStatus()).as("C2: orders.create in the next city only").isEqualTo(403);
+
+        UUID otherService = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Other taxi', now(), now())""")
+                .param("id", otherService).param("code", "classes-" + otherService.toString().substring(0, 8)).update();
+        UUID foreign = city("operator-foreign", 59, 49, 61, 51);
+        jdbc.sql("update city set service_id = :service where id = :id")
+                .param("service", otherService).param("id", foreign).update();
+        testQuotes.ensureClass(foreign, "FOREIGN_ONLY");
+        assertThat(getAuth("/api/operator/v1/vehicle-classes?city_id=" + foreign, creator.token())
+                .getResponse().getStatus()).as("C3: a city of another service").isEqualTo(404);
+        assertThat(getAuth("/api/operator/v1/vehicle-classes?city_id=" + UUID.randomUUID(), creator.token())
+                .getResponse().getStatus()).as("C3: no such city").isEqualTo(404);
+        assertThat(getAuth("/api/operator/v1/vehicle-classes", creator.token())
+                .getResponse().getStatus()).as("C4").isEqualTo(400);
+    }
+
     private SignedOperator operator(UUID cityId, List<String> permissions) throws Exception {
         String login = unique("operator");
         StaffDirectory.StaffMember member = directory.create(root, UUID.randomUUID(), login, INITIAL_PASSWORD,
