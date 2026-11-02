@@ -93,7 +93,7 @@ class DriverDebtTests {
 
     private DriverDebts.Limit setLimit(Long limit) {
         DriverDebts.Limit changed = debts.setLimit(finance, UUID.randomUUID(), "CZK", limit,
-                debts.limit("CZK").version(), "test");
+                debts.limit(finance, "CZK").version(), "test");
         // The staff command commits first; tests drive finance's disabled scheduler explicitly.
         Object worker = context.getBean("driverDebtRefreshJob");
         for (int i = 0; i < 100 && jdbc.sql("select exists(select 1 from driver_debt_refresh where currency='CZK')")
@@ -180,7 +180,7 @@ class DriverDebtTests {
     @Test
     void onlyFinanceStaffChangeTheLimitAndVersionsAreChecked() {
         Actor other = staff("orders.cancel");
-        long version = debts.limit("CZK").version();
+        long version = debts.limit(finance, "CZK").version();
         assertCode(() -> debts.setLimit(other, UUID.randomUUID(), "CZK", 100L, version, "x"), ErrorCode.ACCESS_DENIED);
         assertCode(() -> debts.recordPayment(other, UUID.randomUUID(), UUID.randomUUID(), "CZK", 100, "r", "x"),
                 ErrorCode.ACCESS_DENIED);

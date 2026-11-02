@@ -24,12 +24,14 @@ public interface DriverDebts {
     }
 
     /**
-     * Sets the debt limit for a currency; {@code limitMinor} null removes it. Every driver's status in
-     * that currency is recomputed in durable background batches after this command commits. {@code expectedVersion} is 0 for a currency without a limit yet.
+     * Sets the debt limit of the staff member's taxi service for a currency (ADR 0016); {@code limitMinor} null
+     * removes it. Every driver's status in that currency is recomputed in durable background batches after this
+     * command commits. {@code expectedVersion} is 0 for a currency without a limit yet in that service.
      */
     Limit setLimit(Actor staff, UUID commandId, String currency, Long limitMinor, long expectedVersion, String reason);
 
-    Limit limit(String currency);
+    /** The limit of the service {@code within} (a driver or a staff member) belongs to. */
+    Limit limit(Actor within, String currency);
 
     /**
      * Records money the driver paid in to the service (cash at the office, a transfer), with the

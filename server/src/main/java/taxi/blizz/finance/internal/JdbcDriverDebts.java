@@ -18,6 +18,7 @@ import taxi.blizz.finance.DriverDebts;
 import taxi.blizz.finance.Ledger;
 import taxi.blizz.finance.Ledger.Account;
 import taxi.blizz.finance.Ledger.Line;
+import taxi.blizz.identity.Services;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.CommandKey;
@@ -42,10 +43,12 @@ class JdbcDriverDebts implements DriverDebts {
     private final Clock clock;
 
     private final taxi.blizz.identity.AccountDirectory accounts;
+    private final Services services;
 
     JdbcDriverDebts(JdbcClient jdbc, StaffAccess staff, IdempotentCommands commands, Ledger ledger, Outbox outbox,
-                    AuditLog audit, Clock clock, taxi.blizz.identity.AccountDirectory accounts) {
+                    AuditLog audit, Clock clock, taxi.blizz.identity.AccountDirectory accounts, Services services) {
         this.accounts = accounts;
+        this.services = services;
         this.jdbc = jdbc;
         this.staff = staff;
         this.commands = commands;
@@ -71,14 +74,18 @@ class JdbcDriverDebts implements DriverDebts {
         }
         return commands.execute(new CommandKey(actor, "driverDebt.setLimit", commandId),
                 new LimitRequest(currency, limitMinor, expectedVersion, reason), Limit.class, () -> {
+                    UUID service = services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                            "A debt limit belongs to a taxi service"));
                     jdbc.sql("""
-                                    insert into driver_debt_limit (currency, limit_minor, version, updated_at)
-                                    values (:currency, null, 0, :now) on conflict (currency) do nothing""")
-                            .param("currency", currency).param("now", now()).update();
+                                    insert into driver_debt_limit (service_id, currency, limit_minor, version,
+                                                                   sweep_version, updated_at)
+                                    values (:service, :currency, null, 0, 0, :now)
+                                    on conflict (service_id, currency) do nothing""")
+                            .param("service", service).param("currency", currency).param("now", now()).update();
                     Limit before = jdbc.sql("""
                                     select currency, limit_minor, version from driver_debt_limit
-                                    where currency = :currency for update""")
-                            .param("currency", currency)
+                                    where service_id = :service and currency = :currency for update""")
+                            .param("service", service).param("currency", currency)
                             .query((rs, i) -> new Limit(rs.getString(1), (Long) rs.getObject(2), rs.getLong(3)))
                             .single();
                     long current = before.version();
@@ -86,28 +93,46 @@ class JdbcDriverDebts implements DriverDebts {
                         throw ConflictException.version(current, "The limit changed");
                     }
                     long version = current + 1;
+                    // Changes of one currency in different services take their sweep numbers one after another and
+                    // commit in that order, so a refresh that saw the newest number also saw every earlier limit.
+                    jdbc.sql("select pg_advisory_xact_lock(hashtext('driver_debt_limit:' || :currency))")
+                            .param("currency", currency).query().singleRow();
+                    long sweep = jdbc.sql("select nextval('driver_debt_sweep_seq')").query(Long.class).single();
                     jdbc.sql("""
                                     update driver_debt_limit set limit_minor = :limit, version = :version,
-                                                                 updated_at = :now
-                                    where currency = :currency""")
-                            .param("limit", limitMinor).param("version", version).param("now", now())
-                            .param("currency", currency).update();
+                                                                 sweep_version = :sweep, updated_at = :now
+                                    where service_id = :service and currency = :currency""")
+                            .param("limit", limitMinor).param("version", version).param("sweep", sweep)
+                            .param("now", now()).param("service", service).param("currency", currency).update();
                     Limit after = new Limit(currency, limitMinor, version);
                     audit.record(new AuditEntry(actor, "driverDebt.setLimit", "driver_debt_limit", currency, reason,
                             current == 0 ? null : before, after));
-                    DebtRefreshWork.enqueue(jdbc, currency, version);
+                    DebtRefreshWork.enqueue(jdbc, currency, sweep);
                     return after;
                 });
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Limit limit(String currency) {
-        return jdbc.sql("select currency, limit_minor, version from driver_debt_limit where currency = :currency")
-                .param("currency", currency)
+    public Limit limit(Actor within, String currency) {
+        return limitOf(services.of(within).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "A debt limit belongs to a taxi service")), currency);
+    }
+
+    private Limit limitOf(UUID service, String currency) {
+        return jdbc.sql("""
+                        select currency, limit_minor, version from driver_debt_limit
+                        where service_id = :service and currency = :currency""")
+                .param("service", service).param("currency", currency)
                 .query((rs, i) -> new Limit(rs.getString(1), (Long) rs.getObject(2), rs.getLong(3)))
                 .optional()
                 .orElse(new Limit(currency, null, 0));
+    }
+
+    /** The newest sweep of the currency in any service: a refresh reads the driver's own limit as it is now. */
+    private long sweepOf(String currency) {
+        return jdbc.sql("select coalesce(max(sweep_version), 0) from driver_debt_limit where currency = :currency")
+                .param("currency", currency).query(Long.class).single();
     }
 
     // ---------------------------------------------------------------- payments
@@ -167,9 +192,12 @@ class JdbcDriverDebts implements DriverDebts {
                 .filter(b -> b.currency().equals(currency))
                 .mapToLong(b -> b.debitMinor() - b.creditMinor())
                 .sum();
-        Limit configured = limit(currency);
-        Long limit = configured.limitMinor();
-        DebtRefreshWork.applied(jdbc, driverId, currency, configured.version());
+        // A journal party with no driver row (history before services) keeps the first service's limit.
+        UUID service = services.of(new Actor(taxi.blizz.platform.SubjectType.DRIVER, driverId))
+                .orElse(Services.DEFAULT_ID);
+        long sweep = sweepOf(currency);
+        Long limit = limitOf(service, currency).limitMinor();
+        DebtRefreshWork.applied(jdbc, driverId, currency, sweep);
         boolean blocked = limit != null && owed > limit;
         if (owed == before.owed() && java.util.Objects.equals(limit, before.limit()) && blocked == before.blocked()) {
             return new Status(driverId, currency, owed, limit, blocked);

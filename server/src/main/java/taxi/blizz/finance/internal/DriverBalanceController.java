@@ -37,7 +37,8 @@ class DriverBalanceController {
                     DriverDebts.Status status = debts.statusOf(claims.actor().id()).stream()
                             .filter(st -> st.currency().equals(b.currency())).findFirst().orElse(null);
                     return new CurrencyBalance(b.currency(), b.creditMinor() - b.debitMinor(),
-                            status == null ? debts.limit(b.currency()).limitMinor() : status.limitMinor(),
+                            status == null ? debts.limit(claims.actor(), b.currency()).limitMinor()
+                                    : status.limitMinor(),
                             status != null && status.blocked());
                 })
                 .toList());
