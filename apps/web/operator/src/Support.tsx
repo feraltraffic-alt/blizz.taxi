@@ -132,7 +132,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
   useEffect(() => () => urls.current.forEach(url => URL.revokeObjectURL(url)), []);
 
   async function open(file: Attachment) {
-    if (opened[file.file_id] || acting.current) return;
+    if (acting.current) return;
     acting.current = true;
     setError(null);
     try {
@@ -238,7 +238,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
                   return (
                     <li key={f.file_id}>
                       <span>{attachmentLine(f)}</span>
-                      {!url ? <button type="button" onClick={() => void open(f)}>{t('openFileOf', {name})}</button>
+                      {!url || url ? <button type="button" onClick={() => void open(f)}>{t('openFileOf', {name})}</button>
                         : f.content_type.startsWith('image/') ? <img src={url} alt={name} />
                           : <a href={url} download={name}>{t('downloadFileOf', {name})}</a>}
                     </li>
@@ -277,7 +277,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
             {t('waitForRequester')}
           </label>
           <button type="button" onClick={() => void command('comments', {visibility: 'PUBLIC', body: text,
-            ...(wait ? {wait_for_requester: true} : {}), ...ids}, true)}>{t('reply')}</button>
+            ...(wait ? {wait_for_requester: true} : {})}, true)}>{t('reply')}</button>
         </>
       ) : null}
       <button type="button" onClick={() => void command('comments', {visibility: 'INTERNAL', body: text, ...ids}, true)}>
