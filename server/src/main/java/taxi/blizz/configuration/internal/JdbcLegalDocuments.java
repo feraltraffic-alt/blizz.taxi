@@ -39,8 +39,11 @@ class JdbcLegalDocuments implements LegalDocuments {
     private final JsonMapper json;
     private final Clock clock;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcLegalDocuments(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
-                       JsonMapper json, Clock clock) {
+                       JsonMapper json, Clock clock, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -73,20 +76,24 @@ class JdbcLegalDocuments implements LegalDocuments {
         return commands.execute(new CommandKey(actor, "legal_document.create", commandId),
                 new CreateRequest(audience, kind, clean), Version.class, () -> {
                     // One number after another per document, also when two staff create drafts at once.
+                    UUID service = serviceOf(actor);
                     jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))")
-                            .param("key", "legal_document:" + audience + ":" + kind).query().singleRow();
+                            .param("key", "legal_document:" + service + ":" + audience + ":" + kind).query()
+                            .singleRow();
                     int number = jdbc.sql("""
                                     select coalesce(max(number), 0) + 1 from legal_document_version
-                                    where audience = :audience and kind = :kind""")
-                            .param("audience", audience.name()).param("kind", kind.name())
+                                    where service_id = :service and audience = :audience and kind = :kind""")
+                            .param("service", service).param("audience", audience.name())
+                            .param("kind", kind.name())
                             .query(Integer.class).single();
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into legal_document_version (id, audience, kind, number, state, texts,
-                                        acceptance_required, effective_from, created_by, created_at)
+                                        acceptance_required, effective_from, created_by, created_at, service_id)
                                     values (:id, :audience, :kind, :number, 'DRAFT', cast(:texts as jsonb),
-                                        :required, :from, :by, :now)""")
-                            .param("id", id).param("audience", audience.name()).param("kind", kind.name())
+                                        :required, :from, :by, :now, :service)""")
+                            .param("service", service).param("id", id).param("audience", audience.name())
+                            .param("kind", kind.name())
                             .param("number", number).param("texts", json.writeValueAsString(clean.texts()))
                             .param("required", clean.acceptanceRequired()).param("from", clean.effectiveFrom())
                             .param("by", actor.id()).param("now", now()).update();
@@ -104,6 +111,7 @@ class JdbcLegalDocuments implements LegalDocuments {
     public Version updateDraft(Actor actor, UUID commandId, UUID versionId, long expectedVersion, Draft draft) {
         staff.require(actor, MANAGE_PERMISSION);
         Draft clean = validate(draft);
+        requireOwn(actor, versionId);
         return commands.execute(new CommandKey(actor, "legal_document.update", commandId),
                 new UpdateRequest(versionId, expectedVersion, clean), Version.class, () -> {
                     Version before = lockDraft(versionId, expectedVersion);
@@ -128,6 +136,7 @@ class JdbcLegalDocuments implements LegalDocuments {
     @Override
     public Version publish(Actor actor, UUID commandId, UUID versionId, long expectedVersion) {
         staff.require(actor, MANAGE_PERMISSION);
+        requireOwn(actor, versionId);
         return commands.execute(new CommandKey(actor, "legal_document.publish", commandId),
                 new PublishRequest(versionId, expectedVersion), Version.class, () -> {
                     Version before = lockDraft(versionId, expectedVersion);
@@ -153,9 +162,10 @@ class JdbcLegalDocuments implements LegalDocuments {
     public List<Version> versions(Actor actor, Audience audience, Kind kind) {
         staff.require(actor, MANAGE_PERMISSION);
         return jdbc.sql(SELECT + """
-                        where (cast(:audience as text) is null or audience = :audience)
+                        where service_id = :service and (cast(:audience as text) is null or audience = :audience)
                           and (cast(:kind as text) is null or kind = :kind)
                         order by audience, kind, number desc""")
+                .param("service", serviceOf(actor))
                 .param("audience", audience == null ? null : audience.name())
                 .param("kind", kind == null ? null : kind.name())
                 .query((rs, i) -> version(rs)).list();
@@ -165,8 +175,8 @@ class JdbcLegalDocuments implements LegalDocuments {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Text> text(Audience audience, Kind kind, String language) {
-        return current(audience).stream().filter(v -> v.kind() == kind).findFirst().map(v -> {
+    public Optional<Text> text(UUID serviceId, Audience audience, Kind kind, String language) {
+        return current(serviceId, audience).stream().filter(v -> v.kind() == kind).findFirst().map(v -> {
             String lang = v.texts().containsKey(language) ? language
                     : LANGUAGES.stream().filter(v.texts()::containsKey).findFirst()
                     .orElse(v.texts().keySet().iterator().next());
@@ -179,7 +189,7 @@ class JdbcLegalDocuments implements LegalDocuments {
     @Transactional(readOnly = true)
     public List<InForce> inForce(Actor person) {
         Audience audience = audience(person);
-        return current(audience).stream()
+        return current(serviceOf(person), audience).stream()
                 .map(v -> new InForce(v.id(), v.audience(), v.kind(), v.number(), v.acceptanceRequired(),
                         accepted(v.id(), person), v.effectiveFrom(), List.copyOf(v.texts().keySet())))
                 .toList();
@@ -196,7 +206,8 @@ class JdbcLegalDocuments implements LegalDocuments {
                     Version version = find(versionId)
                             .filter(v -> v.audience() == audience && "PUBLISHED".equals(v.state()))
                             .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Legal text not found"));
-                    boolean inForce = current(audience).stream().anyMatch(v -> v.id().equals(versionId));
+                    boolean inForce = current(serviceOf(person), audience).stream()
+                            .anyMatch(v -> v.id().equals(versionId));
                     if (!inForce) {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Only the version in force can be accepted");
@@ -251,15 +262,30 @@ class JdbcLegalDocuments implements LegalDocuments {
     // ---------------------------------------------------------------- helpers
 
     /** The version in force of every kind of the audience's documents. */
-    private List<Version> current(Audience audience) {
+    private List<Version> current(UUID service, Audience audience) {
         return jdbc.sql("""
                         select distinct on (kind) id, audience, kind, number, state, texts::text as texts,
                                acceptance_required, effective_from, published_at, version
                         from legal_document_version
-                        where audience = :audience and state = 'PUBLISHED' and effective_from <= :now
+                        where service_id = :service and audience = :audience and state = 'PUBLISHED'
+                          and effective_from <= :now
                         order by kind, effective_from desc, number desc""")
-                .param("audience", audience.name()).param("now", now())
+                .param("service", service).param("audience", audience.name()).param("now", now())
                 .query((rs, i) -> version(rs)).list();
+    }
+
+    /** The taxi service of a rider, driver or staff member (ADR 0016). */
+    private UUID serviceOf(Actor subject) {
+        return services.of(subject).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Not of a taxi service"));
+    }
+
+    /** A version of another taxi service does not exist for this staff member. */
+    private void requireOwn(Actor actor, UUID versionId) {
+        if (jdbc.sql("select exists(select 1 from legal_document_version where id = :id and service_id <> :service)")
+                .param("id", versionId).param("service", serviceOf(actor)).query(Boolean.class).single()) {
+            throw new DomainException(ErrorCode.NOT_FOUND, "Legal text not found");
+        }
     }
 
     private boolean accepted(UUID versionId, Actor person) {

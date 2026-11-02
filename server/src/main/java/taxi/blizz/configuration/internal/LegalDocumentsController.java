@@ -26,7 +26,10 @@ class LegalDocumentsController {
 
     private final LegalDocuments legal;
 
-    LegalDocumentsController(LegalDocuments legal) {
+    private final taxi.blizz.identity.Services services;
+
+    LegalDocumentsController(LegalDocuments legal, taxi.blizz.identity.Services services) {
+        this.services = services;
         this.legal = legal;
     }
 
@@ -95,7 +98,12 @@ class LegalDocumentsController {
     /** Public: what the apps show before sign-in. */
     @GetMapping("/api/config/v1/legal/{audience}/{kind}")
     LegalDocuments.Text text(@PathVariable String audience, @PathVariable String kind,
-                             @RequestParam(defaultValue = "en") String language) {
+                             @RequestParam(defaultValue = "en") String language,
+                             @RequestParam(name = "service", required = false) String service) {
+        // The texts of the app's taxi service (ADR 0016); absent — the first service.
+        UUID serviceId = service == null ? taxi.blizz.identity.Services.DEFAULT_ID
+                : services.active(service).orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND,
+                        "No such legal text"));
         LegalDocuments.Audience a;
         LegalDocuments.Kind k;
         try {
@@ -104,7 +112,7 @@ class LegalDocumentsController {
         } catch (IllegalArgumentException e) {
             throw new DomainException(ErrorCode.NOT_FOUND, "No such legal text");
         }
-        return legal.text(a, k, language)
+        return legal.text(serviceId, a, k, language)
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No version in force"));
     }
 }

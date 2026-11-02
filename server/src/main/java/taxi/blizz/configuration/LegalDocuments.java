@@ -63,7 +63,8 @@ public interface LegalDocuments {
     // ---------------------------------------------------------------- the apps
 
     /** For showing before sign-in; empty when no version is in force. */
-    Optional<Text> text(Audience audience, Kind kind, String language);
+    /** The version in force of the taxi service {@code serviceId} (ADR 0016), for its apps' public pages. */
+    Optional<Text> text(UUID serviceId, Audience audience, Kind kind, String language);
 
     /** The versions in force for a signed-in rider or driver. */
     List<InForce> inForce(Actor person);

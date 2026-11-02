@@ -37,6 +37,8 @@ import taxi.blizz.pricing.QuoteService;
 @Import(TestcontainersConfiguration.class)
 class LegalDocumentsTests {
 
+    static final java.util.UUID FIRST = taxi.blizz.identity.Services.DEFAULT_ID;
+
     static final GeoPoint PICKUP = new GeoPoint(-39.5, 40.5);
     static final GeoPoint DROPOFF = new GeoPoint(-39.45, 40.55);
 
@@ -88,11 +90,13 @@ class LegalDocumentsTests {
         assertThatThrownBy(() -> jdbc.sql("delete from legal_document_version where id = :id")
                 .param("id", draft.id()).update()).isInstanceOf(DataAccessException.class);
 
-        LegalDocuments.Text pl = legal.text(LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE, "pl")
+        LegalDocuments.Text pl = legal.text(FIRST, LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE,
+                "pl")
                 .orElseThrow();
         assertThat(pl.versionId()).isEqualTo(draft.id());
         assertThat(pl.text()).isEqualTo("Informacja");
-        assertThat(legal.text(LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE, "de").orElseThrow()
+        assertThat(legal.text(FIRST, LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE,
+                "de").orElseThrow()
                 .language()).as("the first of uk, pl, ru, en it has").isEqualTo("uk");
 
         assertCode(() -> legal.createDraft(staff(), UUID.randomUUID(), LegalDocuments.Audience.RIDER,
