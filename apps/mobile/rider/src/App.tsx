@@ -7,6 +7,7 @@ import {
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
+import {History} from './History';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
@@ -30,7 +31,7 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   const {session, restored} = useAppSession(client);
   const {upgrade, guard} = useUpgradeGuard();
   const shared: Shared = {client, t, guard, failure: failureText(t)};
-  const [tab, setTab] = useState<'ride' | 'profile'>('ride');
+  const [tab, setTab] = useState<'ride' | 'profile' | 'history'>('ride');
   /** A new round of the legal texts after the server said one must be accepted (ACCEPTANCE_REQUIRED, #248 E6). */
   const [legalRound, setLegalRound] = useState(0);
 
@@ -49,10 +50,14 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
 
 /** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
 function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
-  newId: () => string; locale: Locale; tab: 'ride' | 'profile'; setTab: (tab: 'ride' | 'profile') => void;
+  newId: () => string; locale: Locale; tab: 'ride' | 'profile' | 'history';
+  setTab: (tab: 'ride' | 'profile' | 'history') => void;
   onLegal: () => void}) {
   const {signOut} = usePushDevice(shared.client, config.push, '/api/rider/v1', newId, locale);
   const t = shared.t;
+  if (tab === 'history') {
+    return <History {...shared} newId={newId} pollMs={config.pollMs ?? 5000} onBack={() => setTab('ride')} />;
+  }
   return tab === 'profile' ? (
     <>
       <Profile {...shared} newId={newId} signOut={signOut} />
@@ -62,6 +67,7 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
     <>
       <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000} push={config.push}
         locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal} />
+      <Button label={t('toHistory')} onPress={() => setTab('history')} />
       <Button label={t('toProfile')} onPress={() => setTab('profile')} />
     </>
   );
