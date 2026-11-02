@@ -1,4 +1,4 @@
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+import {fireEvent, render, screen} from '@testing-library/react-native';
 import {createApiClient} from '@blizz/api-client';
 import {DriverApp, type AppConfig} from '../src/App';
 
