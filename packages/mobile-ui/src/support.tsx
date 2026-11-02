@@ -127,7 +127,6 @@ function useAttachments({client, t, guard, failure, newId, side, pickFile}: Shar
       const stored = await guard(() => client.upload(opened.upload_path, file.data, file.type)) as {state: string;
         reject_reason?: string | null};
       if (stored.state === 'REJECTED') setNote(t('attachRejected', {reason: stored.reject_reason ?? ''}));
-      else if (stored.state === 'QUARANTINE') setNote(t('attachQuarantine'));
       else setFiles(list => [...list, {id: opened.file_id, name: file.name}]);
     } catch (error) {
       setNote(failure(error));
@@ -176,8 +175,8 @@ function NewCase({client, t, guard, failure, newId, side, about, onOpened, onCan
     setMessage(null);
     try {
       const created = await guard(() => client.post((side.api + '/support/cases') as never, {body: {
-        command_id: newId(), category, ...(about ? {order_id: about.id} : {}), subject: title, message: body,
-        ...files.ids}} as never));
+        command_id: newId(), category, ...(about ? {order_id: about.id} : {}), subject: title, message: body
+        }} as never));
       onOpened((created as Case).id);
     } catch (error) {
       setMessage(failure(error));
