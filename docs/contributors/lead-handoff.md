@@ -29,8 +29,8 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 | Who | Queue (in order) |
 |---|---|
 | Codex | Idle since 30.10. #136 was finished by the lead (#233) from Codex's tests-first commit |
-| Second Claude | Idle since 01.11 09:16. #137 (operator workstation) can start now: `packages/api-client` is on main (#233) |
-| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next" |
+| Second Claude | Idle since 01.11 09:16. Its #137 (rider app) was finished by the lead (#236) |
+| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. Clients: web foundation (#233), rider app first slice (#236), driver app first slice (#239). The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next". Next candidates: the operator workstation (`apps/web/operator` is an empty shell), the driver's offers and trips, a rider profile with phone and name (the contract's `/me` has neither) |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -99,11 +99,21 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   | #233 | #136 web foundation: `packages/api-client`, the admin panel, the Web E2E workflow |
   | #234 | #218: other-service staff in the sweep; the change and activity logs per service (port `audit.ActorServices`) |
   | #235 | `ServiceColumnGuardTests`: every server insert into a table with `service_id` names it |
-  | #216 | Journal per service, reconciliations per service (the PR is opened after its sandbox) |
+  | #236 | #137 rider app first slice (Expo SDK 58): sign-in by code, legal gate, profile, 426 |
+  | #238 | #216 journal and reconciliations per service |
+  | #239 | #237 driver app first slice; the shared `packages/mobile-ui` |
+- **Client stack:**
+  - npm workspace at the root: `apps/web/*`, `apps/mobile/*`, `packages/api-client`, `packages/mobile-ui`;
+  - `scripts/web-check.sh` is the Web CI job;
+  - `.github/workflows/web-e2e.yml` runs the admin, rider and driver end-to-end against the sandbox-profile server on every push that changes client code.
+  - Artifacts cannot be downloaded from this environment (the proxy refuses the blob host): read the run log instead.
 - **Habits that paid off:**
   - **A green tests-first run is not proof.** #218's sweep was green at once. Only a mutation, a city check that ignores
     the service, showed that the new refused staff reach the check.
-  - **Read why a mutation failed.** #136's first single-flight mutation failed on lint, not on E4.
+  - **Read why a mutation failed.** #136's first single-flight mutation failed on lint, not on E4. A mutation keeps
+    lint green (`void unused;`), so that only the test can fail.
+  - **A double tap must land while the first request is in flight.** #236's first E4 was green without the guard;
+    the answer is now slow (`delayMs`).
   - **Merging a squash-merged branch into a later branch.** A PR from a branch that still carries an earlier PR's commits
     shows those files too (#232 showed 41). Check `git diff <squash>^ <squash>` after the merge.
 - **Migrations:** a later PR may sort before one merged meanwhile. Rename it after main's last (#216: `0700` → `0800`).
