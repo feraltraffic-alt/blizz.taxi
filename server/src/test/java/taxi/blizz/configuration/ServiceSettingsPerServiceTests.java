@@ -160,7 +160,8 @@ class ServiceSettingsPerServiceTests {
                 .extracting(e -> ((taxi.blizz.platform.DomainException) e).code())
                 .isEqualTo(taxi.blizz.platform.ErrorCode.NOT_FOUND);
         CancelReasons.Reason firstOfB = reasons.all(adminB).stream()
-                .filter(r -> r.audience() == CancelReasons.Audience.RIDER && r.active()).findFirst().orElseThrow();
+                .filter(r -> r.audience() == CancelReasons.Audience.RIDER && r.active() && !r.code().equals("ONLY_B"))
+                .findFirst().orElseThrow();
         reasons.update(adminB, UUID.randomUUID(), firstOfB.id(), firstOfB.version(), new CancelReasons.Draft(null,
                 null, Map.of(language, "Прихована"), null, false, firstOfB.sortOrder()), "Hidden in B");
         assertThat(reasons.require(first, CancelReasons.Audience.RIDER, firstOfB.code()).active())

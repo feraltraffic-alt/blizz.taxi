@@ -177,14 +177,14 @@ class OperatorBonusTests {
                                            created_at, updated_at)
                 values (gen_random_uuid(), 'STAFF', 'WRONG_ADDRESS',
                         '{"en":"Wrong address"}', null, true, 60, true, now(), now())
-                on conflict (audience, code) do update set operator_fault = true
+                on conflict (service_id, audience, code) do update set operator_fault = true
                 """).update();
         jdbc.sql("""
                 insert into cancel_reason (id, audience, code, labels, driver_outcome, active, sort_order, operator_fault,
                                            created_at, updated_at)
                 values (gen_random_uuid(), 'RIDER', 'WRONG_ADDRESS',
                         '{"en":"Wrong address"}', null, true, 60, false, now(), now())
-                on conflict (audience, code) do nothing
+                on conflict (service_id, audience, code) do nothing
                 """).update();
 
         UUID staffCancelled = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));

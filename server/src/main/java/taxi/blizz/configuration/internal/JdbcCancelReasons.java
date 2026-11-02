@@ -171,7 +171,16 @@ class JdbcCancelReasons implements CancelReasons {
         if (audience == null || code == null || code.isBlank()) {
             return Optional.empty();
         }
-        UUID service = catalogueOf(within);
+        return find(catalogueOf(within), audience, code);
+    }
+
+    @Override
+    @Transactional
+    public Optional<Reason> find(UUID serviceId, Audience audience, String code) {
+        if (serviceId == null || audience == null || code == null || code.isBlank()) {
+            return Optional.empty();
+        }
+        UUID service = catalogueOf(serviceId);
         return jdbc.sql(SELECT + " where service_id = :service and audience = :audience and code = :code")
                 .param("service", service).param("audience", audience.name()).param("code", code.trim())
                 .query((rs, i) -> map(rs)).optional();
@@ -189,6 +198,10 @@ class JdbcCancelReasons implements CancelReasons {
         if (service == null) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Cancellation reasons belong to a taxi service");
         }
+        return catalogueOf(service);
+    }
+
+    private UUID catalogueOf(UUID service) {
         if (!Services.DEFAULT_ID.equals(service)) {
             jdbc.sql("""
                             insert into cancel_reason (id, service_id, audience, code, labels, driver_outcome,

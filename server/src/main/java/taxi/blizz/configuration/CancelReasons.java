@@ -74,4 +74,7 @@ public interface CancelReasons {
 
     /** A reason of the side in the service of {@code within}, whether active or not. */
     Optional<Reason> find(Actor within, Audience audience, String code);
+
+    /** A reason of the side in the catalogue of the service, e.g. the service of an order's city. */
+    Optional<Reason> find(UUID serviceId, Audience audience, String code);
 }
