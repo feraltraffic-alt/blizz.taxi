@@ -150,7 +150,7 @@ class JdbcOrders implements Orders {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Only a rider pays by a saved card");
         }
         // A switch for the whole service (REQ-ENG-14): read only here, where a card payment starts.
-        if (card && !flags.enabled(FeatureFlags.Flag.CARD_PAYMENTS)) {
+        if (card && !flags.enabledInCity(city.id(), FeatureFlags.Flag.CARD_PAYMENTS)) {
             throw new DomainException(ErrorCode.PAYMENT_METHOD_NOT_OFFERED, "Card payments are switched off; pay in cash");
         }
         boolean terminal = order.paymentMethod() == PaymentMethod.TERMINAL;

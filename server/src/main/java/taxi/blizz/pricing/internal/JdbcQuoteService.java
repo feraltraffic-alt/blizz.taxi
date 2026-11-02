@@ -223,7 +223,8 @@ class JdbcQuoteService implements QuoteService {
      */
     private List<String> paymentMethods(Request request) {
         Set<String> payer = switch (request.payer().type()) {
-            case CLIENT -> flags.enabled(taxi.blizz.configuration.FeatureFlags.Flag.CARD_PAYMENTS)
+            case CLIENT -> flags.enabledInCity(request.cityId(),
+                    taxi.blizz.configuration.FeatureFlags.Flag.CARD_PAYMENTS)
                     ? Set.of("CASH", "CARD") : Set.of("CASH");
             case STAFF -> Set.of("CASH", "TERMINAL");
             default -> Set.of();

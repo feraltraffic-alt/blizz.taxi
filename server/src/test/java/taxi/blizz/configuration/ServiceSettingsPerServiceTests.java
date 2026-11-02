@@ -36,6 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ServiceSettingsPerServiceTests {
 
     @Autowired ServiceSettings settings;
+    @Autowired FeatureFlags flags;
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
@@ -54,8 +55,8 @@ class ServiceSettingsPerServiceTests {
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, all_cities, state, service_id,
                                                 created_at, updated_at)
-                        values (:id, :login, 'Settings', 'ADMIN', '{settings.manage}', true, 'ACTIVE', :service,
-                                now(), now())""")
+                        values (:id, :login, 'Settings', 'ADMIN', '{settings.manage,flags.manage}', true, 'ACTIVE',
+                                :service, now(), now())""")
                 .param("id", id).param("login", "settings-" + id).param("service", service).update();
         return new Actor(SubjectType.STAFF, id);
     }
@@ -100,6 +101,19 @@ class ServiceSettingsPerServiceTests {
 
     private static final java.util.regex.Pattern FIRST_SERVICE =
             java.util.regex.Pattern.compile("\\bsettings\\.current\\(\\)\\.settings\\(\\)");
+
+    @Test
+    void aFeatureFlagSwitchedInOneServiceStaysAsItWasInAnother() {
+        UUID a = service("flags-a");
+        UUID b = service("flags-b");
+        FeatureFlags.Flag card = FeatureFlags.Flag.CARD_PAYMENTS;
+        boolean before = flags.enabled(a, card);
+        Actor adminB = admin(b);
+        FeatureFlags.State state = flags.all(adminB).stream().filter(f -> f.flag() == card).findFirst().orElseThrow();
+        flags.change(adminB, UUID.randomUUID(), card.key(), state.version(), !state.enabled(), "Only B");
+        assertThat(flags.enabled(b, card)).isEqualTo(!state.enabled());
+        assertThat(flags.enabled(a, card)).as("A as it was").isEqualTo(before);
+    }
 
     /** Server code names the service whose settings it reads: no call of the first service's shortcut. */
     @Test
