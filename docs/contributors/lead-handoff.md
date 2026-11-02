@@ -83,6 +83,30 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
 
+## Recent history (02.11.2026, night)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #293 | #292 | Operator: the order's history and the rider–driver conversation (read with a reason, audited) |
+  | #295 | #294 | Operator: take a driver off (orders.reassign) and offer to a chosen free driver (orders.offer) |
+  | #297 | #296 | Rider app: support cases |
+  | #299 | #298 | Driver app: support cases. The screen moved to `packages/mobile-ui` (`Support`, `SupportSide`) |
+  | #301 | #300 | Operator: the calls panel (status, log, taking a call, an order from a call with `call_id`) |
+  | #303 | #302 | `api-client` reads non-JSON answers as bytes (WAV, exports). Operator: plays STORED call recordings, one audited request each |
+  | #305 | #304 | Operator: click-to-call from an order. After a 503 the retry keeps the `command_id` |
+  | #307 | #306 | Operator: card-pop over `/ws/v1/operator` (token in the subprotocol; 4401 refresh, 4403 stop). `ApiClient.socketToken` and `renewSocketToken` |
+- **Each PR followed the same pattern:**
+  - an issue with cases and Acceptance;
+  - a tests-first commit, then the implementation;
+  - a mutation branch whose CI run fails exactly the named cases. The link is in the PR body.
+- **Next candidates:**
+  - a sandbox driver who is not yet admitted, for an end-to-end run of the driver documents (#284);
+  - the operator's switch-to-cash, destination change, trip interruption and pre-order reservations;
+  - attachments in support cases (rider, driver, operator);
+  - the operator's live map, which needs a decision on the map tiles.
+
 ## Recent history (02.11.2026, evening)
 
 - **Merged:**
