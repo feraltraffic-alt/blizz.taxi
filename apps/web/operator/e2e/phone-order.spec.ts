@@ -51,7 +51,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await page.getByLabel('Телефон звонящего').fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда').fill('Хрещатик');
   const answer = page.waitForResponse(r => r.url().includes('/api/operator/v1/places'));
-  await page.getByRole('button', {name: 'Найти'}).first().click();
+  await page.getByRole('button', {name: 'Найти', exact: true}).first().click();
   const places = await answer;
   console.log('PLACES', places.status(), places.url(), (await places.text()).slice(0, 600));
   const found = page.locator('fieldset').nth(0).getByRole('listitem').first().getByRole('button');
@@ -60,7 +60,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   }
   await found.click();
   await page.getByLabel('Куда').fill('Вокзал');
-  await page.getByRole('button', {name: 'Найти'}).nth(1).click();
+  await page.getByRole('button', {name: 'Найти', exact: true}).nth(1).click();
   await page.locator('fieldset').nth(1).getByRole('listitem').first().getByRole('button').click();
   await page.getByRole('button', {name: 'Рассчитать цену'}).click();
   await expect(page.getByText(/^Цена: /)).toBeVisible();
