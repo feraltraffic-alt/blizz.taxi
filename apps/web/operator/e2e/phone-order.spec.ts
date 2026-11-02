@@ -34,11 +34,11 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   expect(created.status(), await created.text()).toBe(201);
 
   await page.goto('/');
-  await page.getByLabel('Логин').fill(login);
-  await page.getByLabel('Пароль').fill(first);
+  await page.getByLabel('Логин', {exact: true}).fill(login);
+  await page.getByLabel('Пароль', {exact: true}).fill(first);
   await page.getByRole('button', {name: 'Войти'}).click();
-  await page.getByLabel('Текущий пароль').fill(first);
-  await page.getByLabel('Новый пароль').fill('Operator-Next-2026-ok');
+  await page.getByLabel('Текущий пароль', {exact: true}).fill(first);
+  await page.getByLabel('Новый пароль', {exact: true}).fill('Operator-Next-2026-ok');
   await page.getByRole('button', {name: 'Сохранить пароль'}).click();
 
   // What the page shows, in the log, when the form does not come (an artifact cannot always be fetched).
@@ -47,9 +47,9 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
     console.log('PAGE AFTER PASSWORD CHANGE:', await page.locator('body').innerText());
   }
   await expect(form).toBeVisible();
-  await page.getByLabel('Город').selectOption({label: 'Київ'});
-  await page.getByLabel('Телефон звонящего').fill('+38067' + String(Date.now()).slice(-7));
-  await page.getByLabel('Откуда').fill('Хрещатик');
+  await page.getByLabel('Город', {exact: true}).selectOption({label: 'Київ'});
+  await page.getByLabel('Телефон звонящего', {exact: true}).fill('+38067' + String(Date.now()).slice(-7));
+  await page.getByLabel('Откуда', {exact: true}).fill('Хрещатик');
   const answer = page.waitForResponse(r => r.url().includes('/api/operator/v1/places'));
   await page.getByRole('button', {name: 'Найти', exact: true}).first().click();
   const places = await answer;
@@ -59,7 +59,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
     console.log('PAGE AFTER ADDRESS SEARCH:', await page.locator('body').innerText());
   }
   await found.click();
-  await page.getByLabel('Куда').fill('Вокзал');
+  await page.getByLabel('Куда', {exact: true}).fill('Вокзал');
   await page.getByRole('button', {name: 'Найти', exact: true}).nth(1).click();
   await page.locator('fieldset').nth(1).getByRole('listitem').first().getByRole('button').click();
   await page.getByRole('button', {name: 'Рассчитать цену'}).click();
@@ -70,7 +70,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await expect(page.getByText(/^Заказ №\d+/)).toBeVisible();
   await expect(page.getByText(/^Статус: /)).toBeVisible();
   await page.screenshot({path: info.outputPath('2-order.png'), fullPage: true});
-  await page.getByLabel('Причина отмены').selectOption({index: 1});
+  await page.getByLabel('Причина отмены', {exact: true}).selectOption({index: 1});
   await page.getByRole('button', {name: 'Отменить заказ'}).click();
   await expect(page.getByText('Статус: CANCELLED')).toBeVisible();
   await page.screenshot({path: info.outputPath('3-cancelled.png'), fullPage: true});
