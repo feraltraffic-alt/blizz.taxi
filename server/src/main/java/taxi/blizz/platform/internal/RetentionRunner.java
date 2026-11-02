@@ -82,7 +82,8 @@ class RetentionRunner implements taxi.blizz.platform.RetentionRuns {
             // Rows that carry their service go by that service's term (#276).
             List<RetentionWork> perService = own.stream().filter(RetentionWork::perService).toList();
             for (var entry : terms.entrySet()) {
-                total = total.plus(runWorks(kind, perService, entry.getKey(), entry.getValue().get(kind), now));
+                total = total.plus(runWorks(kind, perService, entry.getKey(),
+                        terms.values().iterator().next().get(kind), now));
             }
             // A work whose rows do not carry a service yet follows the first service's term (#276, until they do).
             List<RetentionWork> shared = own.stream().filter(w -> !w.perService()).toList();
