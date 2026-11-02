@@ -35,7 +35,7 @@ function base(rights: unknown = viewer, answer: (asked: Asked) => unknown = () =
   const asked: Asked[] = [];
   const handlers = [
     http.get(origin + '/api/config/v1/bootstrap', () => HttpResponse.json({cities: [KYIV, LVIV]})),
-    http.get(origin + '/api/operator/v1/me', () => HttpResponse.json(rights)),
+    http.get(origin + '/api/operator/v1/me', () => HttpResponse.json(rights as never)),
     http.get(origin + '/api/operator/v1/vehicle-classes', () =>
       HttpResponse.json([{code: 'STANDARD', name: 'Стандарт'}, {code: 'COMFORT', name: 'Комфорт'}])),
     http.get(origin + '/api/operator/v1/drivers/live', async ({request}) => {
@@ -48,9 +48,9 @@ function base(rights: unknown = viewer, answer: (asked: Asked) => unknown = () =
       const {wait, body} = (result as {wait?: number; body?: unknown});
       if (wait !== undefined) {
         await delay(wait);
-        return HttpResponse.json(body);
+        return HttpResponse.json(body as never);
       }
-      return HttpResponse.json(result);
+      return HttpResponse.json(result as never);
     })
   ];
   server.use(...handlers);

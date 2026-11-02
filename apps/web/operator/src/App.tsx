@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, StaffGate, translator, type Translate} from '@blizz/web-ui';
 import {translations} from './i18n.js';
+import {LiveDrivers} from './LiveDrivers.js';
 
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -27,6 +28,7 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
+  const [view, setView] = useState<'order' | 'live'>('order');
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -54,9 +56,14 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
   return (
     <>
       <nav>
+        {/* The board needs orders.view; without it nothing is offered or asked (#286 L5). */}
+        {rights.has('orders.view') ? (view === 'live'
+          ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button>
+          : <button type="button" onClick={() => setView('live')}>{t('liveDrivers')}</button>) : null}
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
-      {order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
+      {view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
+        pollMs={pollMs} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
         onDone={() => setOrder(null)} /> : (
         <section aria-labelledby="new-order">
           <h1 id="new-order">{t('newOrder')}</h1>
