@@ -3,7 +3,7 @@ import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
   Alert, Button, LegalGuard, Loading, Screen, SignIn, UpdateScreen, failureText, translator, useAppSession,
-  useTheme, useUpgradeGuard, type Locale, type Shared
+  usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
@@ -26,6 +26,8 @@ export interface AppConfig {
   locale?: Locale;
   newId?: () => string;
   now?: () => number;
+  /** The phone's pushes (#264); none in the web build. */
+  push?: PushPort;
 }
 
 type Profile = {account_state: string; review_status: string; admission_city_ids: string[];
@@ -69,6 +71,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
   const [tab, setTab] = useState<'work' | 'money'>('work');
+  const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   const theme = useTheme();
 
   /** The server's state, never the app's memory: also after a restart (E5). */
@@ -200,10 +203,10 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
         : canWork ? <Button label={t('goOnline')} onPress={() => void goOnline()} disabled={busy} />
           : <Text style={{color: theme.muted}}>{t('notAdmitted')}</Text>}
       {online ? <Dispatch client={client} t={t} guard={guard} failure={failure} newId={newId} now={now}
-        pollMs={config.pollMs ?? 3_000} locale={locale} /> : null}
+        pollMs={config.pollMs ?? 3_000} locale={locale} push={config.push} /> : null}
       {lost ? <Text style={{color: theme.error}}>{t('connectionLost')}</Text> : null}
       <Alert text={message} />
-      <Button label={t('signOut')} onPress={() => void client.logout()} />
+      <Button label={t('signOut')} onPress={() => void signOut()} />
     </Screen>
   );
 }

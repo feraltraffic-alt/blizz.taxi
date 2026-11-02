@@ -1,7 +1,9 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
-import {Alert, Button, Field, Loading, Screen, useTheme, type Shared} from '@blizz/mobile-ui';
+import {
+  Alert, Button, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
+} from '@blizz/mobile-ui';
 import {AfterRide} from './After';
 
 export type Point = {lat: number; lon: number};
@@ -19,7 +21,7 @@ const FINAL = new Set(['FULFILLED', 'CANCELLED', 'UNFULFILLED']);
  * pickup, the drop-off, a vehicle class and its price.
  */
 export function Ride(props: Shared & {newId: () => string; locate: () => Promise<Point>; service: string;
-  pollMs: number; onLegal: () => void}) {
+  pollMs: number; onLegal: () => void; push?: PushPort}) {
   const {client, t, guard, failure} = props;
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -198,8 +200,9 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
   );
 }
 
-function Tracker({client, t, guard, failure, newId, pollMs, order, onChange, onDone}: Shared & {
-  newId: () => string; pollMs: number; order: Order; onChange: (order: Order) => void; onDone: () => void}) {
+function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChange, onDone}: Shared & {
+  newId: () => string; pollMs: number; push?: PushPort; order: Order; onChange: (order: Order) => void;
+  onDone: () => void}) {
   const [reasons, setReasons] = useState<{code: string; labels: Record<string, string>}[]>([]);
   const [reason, setReason] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -209,6 +212,15 @@ function Tracker({client, t, guard, failure, newId, pollMs, order, onChange, onD
     onChange(await guard(() => client.get('/api/rider/v1/orders/{order_id}' as never,
       {params: {order_id: order.id}} as never)) as Order);
   }, [client, guard, order.id, onChange]);
+
+  // A push about this order that is not newer than what is shown is stale and stays hidden (AC-19); a newer one is
+  // shown and the order is read at once. Pushes about other orders are none of this screen's business.
+  usePushDecider(push, data => {
+    if (data.order_id !== order.id) return true;
+    if (!(Number(data.order_version) > order.version)) return false;
+    refresh().catch(() => undefined);
+    return true;
+  });
 
   // An ended order changes no more: the server is no longer asked.
   const ended = FINAL.has(order.status);

@@ -3,7 +3,7 @@ import {ActivityIndicator, Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
   Alert, Button, Field, LegalGuard, Loading, Screen, SignIn, UpdateScreen, failureText, translator, useAppSession,
-  useTheme, useUpgradeGuard, type Locale, type Shared
+  usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Ride, type Point} from './Ride';
@@ -18,6 +18,8 @@ export interface AppConfig {
   locale?: Locale;
   newId?: () => string;
   now?: () => number;
+  /** The phone's pushes (#264); none in the web build. */
+  push?: PushPort;
 }
 
 export function RiderApp({client, config}: {client: ApiClient; config: AppConfig}) {
@@ -39,24 +41,34 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   }
   return (
     <LegalGuard key={legalRound} {...shared} app="rider" service={config.service} locale={locale} newId={newId}>
-      {tab === 'profile' ? (
-        <>
-          <Profile {...shared} newId={newId} />
-          <Button label={t('toRide')} onPress={() => setTab('ride')} />
-        </>
-      ) : (
-        <>
-          <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
-            locate={config.locate ?? (() => Promise.reject(new Error('No location')))}
-            onLegal={() => setLegalRound(r => r + 1)} />
-          <Button label={t('toProfile')} onPress={() => setTab('profile')} />
-        </>
-      )}
+      <Home shared={shared} config={config} newId={newId} locale={locale} tab={tab} setTab={setTab}
+        onLegal={() => setLegalRound(r => r + 1)} />
     </LegalGuard>
   );
 }
 
-function Profile({client, t, guard, failure, newId}: Shared & {newId: () => string}) {
+/** Signed in, the texts accepted: the phone registers for pushes (#264) and the tabs are shown. */
+function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Shared; config: AppConfig;
+  newId: () => string; locale: Locale; tab: 'ride' | 'profile'; setTab: (tab: 'ride' | 'profile') => void;
+  onLegal: () => void}) {
+  const {signOut} = usePushDevice(shared.client, config.push, '/api/rider/v1', newId, locale);
+  const t = shared.t;
+  return tab === 'profile' ? (
+    <>
+      <Profile {...shared} newId={newId} signOut={signOut} />
+      <Button label={t('toRide')} onPress={() => setTab('ride')} />
+    </>
+  ) : (
+    <>
+      <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000} push={config.push}
+        locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal} />
+      <Button label={t('toProfile')} onPress={() => setTab('profile')} />
+    </>
+  );
+}
+
+function Profile({client, t, guard, failure, newId, signOut}: Shared & {newId: () => string;
+  signOut: () => Promise<void>}) {
   const [me, setMe] = useState<{account_state: string; phone?: string | null; name?: string | null} | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [deletion, setDeletion] = useState<{challenge_id: string} | null>(null);
@@ -107,7 +119,7 @@ function Profile({client, t, guard, failure, newId}: Shared & {newId: () => stri
           <Button label={t('confirmDeletion')} onPress={() => void confirmDeletion()} disabled={code.length < 4} />
         </>
       ) : <Button label={t('deleteAccount')} onPress={() => void askDeletion()} />}
-      <Button label={t('signOut')} onPress={() => void client.logout()} />
+      <Button label={t('signOut')} onPress={() => void signOut()} />
       <Alert text={message} />
     </Screen>
   );
