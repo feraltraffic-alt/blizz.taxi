@@ -2692,7 +2692,7 @@ paths:
     get:
       operationId: listPaymentReconciliations
       summary: Daily card reconciliation runs
-      description: REQ-LED-07. Needs payments.retry and every city of the merchant; unmapped merchants require all-city scope. Failed attempts are visible as FAILED, never as clean zero differences. Completed daily snapshots are immutable.
+      description: REQ-LED-07. Needs payments.retry and every city of the merchant; unmapped merchants require all-city scope. Only the merchants of the staff member's taxi service; another service's merchant_id is not found (ADR 0016). Failed attempts are visible as FAILED, never as clean zero differences. Completed daily snapshots are immutable.
       tags: [Payments]
       parameters:
         - $ref: "./common.yaml#/components/parameters/CorrelationId"
@@ -2725,6 +2725,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
   /api/admin/v1/payment-reconciliations/{run_id}:
     get:
       operationId: getPaymentReconciliation

@@ -1913,7 +1913,7 @@ export interface paths {
         };
         /**
          * Daily card reconciliation runs
-         * @description REQ-LED-07. Needs payments.retry and every city of the merchant; unmapped merchants require all-city scope. Failed attempts are visible as FAILED, never as clean zero differences. Completed daily snapshots are immutable.
+         * @description REQ-LED-07. Needs payments.retry and every city of the merchant; unmapped merchants require all-city scope. Only the merchants of the staff member's taxi service; another service's merchant_id is not found (ADR 0016). Failed attempts are visible as FAILED, never as clean zero differences. Completed daily snapshots are immutable.
          */
         get: operations["listPaymentReconciliations"];
         put?: never;
@@ -9277,6 +9277,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getPaymentReconciliation: {

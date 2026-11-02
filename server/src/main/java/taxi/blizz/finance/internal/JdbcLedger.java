@@ -17,22 +17,55 @@ class JdbcLedger implements Ledger {
     private final JdbcClient jdbc;
     private final Clock clock;
 
-    JdbcLedger(JdbcClient jdbc, Clock clock) {
+    private final taxi.blizz.identity.Services services;
+
+    JdbcLedger(JdbcClient jdbc, Clock clock, taxi.blizz.identity.Services services) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.services = services;
+    }
+
+    /**
+     * The one taxi service of the posting (ADR 0016): every driver and rider in it is of that service, and a service
+     * named by the caller is theirs too. Money of two services never meets in one transaction.
+     */
+    private UUID serviceOf(Posting posting) {
+        java.util.Set<UUID> found = new java.util.LinkedHashSet<>();
+        if (posting.serviceId() != null) {
+            found.add(posting.serviceId());
+        }
+        for (Line line : posting.lines()) {
+            if (line.partyId() == null) {
+                continue;
+            }
+            UUID party = line.partyId();
+            UUID service = services.of(new taxi.blizz.platform.Actor(taxi.blizz.platform.SubjectType.DRIVER, party))
+                    .or(() -> services.of(new taxi.blizz.platform.Actor(taxi.blizz.platform.SubjectType.CLIENT,
+                            party)))
+                    .orElseThrow(() -> new DomainException(ErrorCode.VALIDATION_FAILED,
+                            "A journal party is neither a driver nor a rider of any taxi service"));
+            found.add(service);
+        }
+        if (found.size() != 1) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, found.isEmpty()
+                    ? "A journal posting with no driver or rider names its taxi service"
+                    : "A journal posting mixes the money of two taxi services");
+        }
+        return found.iterator().next();
     }
 
     @Override
     @Transactional
     public boolean post(Posting posting) {
         validate(posting);
+        UUID service = serviceOf(posting);
         UUID id = UUID.randomUUID();
         int inserted = jdbc.sql("""
                         insert into journal_transaction (id, business_key, basis_type, basis_id, currency, reason,
-                                                         occurred_at)
-                        values (:id, :key, :basisType, :basisId, :currency, :reason, :now)
+                                                         occurred_at, service_id)
+                        values (:id, :key, :basisType, :basisId, :currency, :reason, :now, :service)
                         on conflict (business_key) do nothing""")
-                .param("id", id)
+                .param("id", id).param("service", service)
                 .param("key", posting.businessKey())
                 .param("basisType", posting.basisType())
                 .param("basisId", posting.basisId())
