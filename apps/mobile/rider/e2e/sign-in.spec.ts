@@ -172,6 +172,30 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
   await popup.close();
   await page.getByRole('button', {name: 'Назад', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
+
+  // A ride by card (#271): the sandbox's bank holds the price, then the search starts; the rider cancels it.
+  await page.getByRole('button', {name: 'Поездка', exact: true}).click();
+  await page.getByLabel('Поиск адреса назначения', {exact: true}).fill('Вокзал');
+  await page.getByRole('button', {name: 'Найти', exact: true}).click();
+  await page.getByRole('button', {name: /^Вокзал/}).first().click();
+  await page.getByRole('button', {name: 'Узнать цену', exact: true}).click();
+  await page.getByRole('button', {name: /^○ Картой /}).click();
+  await expect(page.getByText(/^На карте заблокируем /)).toBeVisible();
+  await page.getByRole('button', {name: 'Заказать', exact: true}).click();
+  await expect(page.getByText('Ищем водителя')).toBeVisible({timeout: 30_000});
+  await expect(page.getByText('Оплата: картой')).toBeVisible();
+  await page.screenshot({path: info.outputPath('11-card-order.png'), fullPage: true});
+  const reasonByCard = page.getByRole('button', {name: /^○ /}).first();
+  await reasonByCard.click();
+  const cardCancelled = page.getByText('Заказ отменён');
+  for (let i = 0; i < 3 && !await cardCancelled.isVisible(); i++) {
+    await page.getByRole('button', {name: 'Отменить поездку', exact: true}).click();
+    await expect(cardCancelled.or(page.getByText(/^Заказ изменился/))).toBeVisible();
+  }
+  await expect(cardCancelled).toBeVisible();
+  await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
+  await page.getByRole('button', {name: 'Профиль', exact: true}).click();
+  await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
   await page.screenshot({path: info.outputPath('4-profile.png'), fullPage: true});
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
 

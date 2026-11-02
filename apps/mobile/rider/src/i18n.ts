@@ -5,6 +5,15 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    payCash: 'Наличными',
+    payCard: 'Картой {card}',
+    cardHold: 'На карте заблокируем {amount} до конца поездки.',
+    paymentDeclined: 'Банк отклонил оплату картой.',
+    paymentTimeout: 'Банк не ответил вовремя. Деньги не списаны.',
+    paidByCard: 'Оплата: картой',
+    paidInCash: 'Оплата: наличными',
+    switchToCash: 'Платить наличными',
+    paymentUnknown: 'Банк ещё отвечает. Попробуйте через минуту.',
     myCards: 'Мои карты',
     cards: 'Мои карты',
     noCards: 'Карт пока нет.',
@@ -57,6 +66,15 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    payCash: 'Готівкою',
+    payCard: 'Карткою {card}',
+    cardHold: 'На картці заблокуємо {amount} до кінця поїздки.',
+    paymentDeclined: 'Банк відхилив оплату карткою.',
+    paymentTimeout: 'Банк не відповів вчасно. Гроші не списано.',
+    paidByCard: 'Оплата: карткою',
+    paidInCash: 'Оплата: готівкою',
+    switchToCash: 'Платити готівкою',
+    paymentUnknown: 'Банк ще відповідає. Спробуйте за хвилину.',
     myCards: 'Мої картки',
     cards: 'Мої картки',
     noCards: 'Карток ще немає.',
@@ -109,6 +127,15 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    payCash: 'Gotówką',
+    payCard: 'Kartą {card}',
+    cardHold: 'Na karcie zablokujemy {amount} do końca przejazdu.',
+    paymentDeclined: 'Bank odrzucił płatność kartą.',
+    paymentTimeout: 'Bank nie odpowiedział na czas. Pieniądze nie zostały pobrane.',
+    paidByCard: 'Płatność: kartą',
+    paidInCash: 'Płatność: gotówką',
+    switchToCash: 'Zapłać gotówką',
+    paymentUnknown: 'Bank jeszcze odpowiada. Spróbuj za minutę.',
     myCards: 'Moje karty',
     cards: 'Moje karty',
     noCards: 'Nie ma jeszcze kart.',
