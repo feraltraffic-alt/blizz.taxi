@@ -51,7 +51,7 @@ const base = (profile: unknown) => ({
     session_version: 0, session_state: 'CLOSED'}}],
   'POST /api/driver/v1/documents/upload-sessions': [{status: 201, body: {file_id: FILE, upload_path: UPLOAD,
     expires_at: '2099-01-01T00:00:00Z', max_bytes: 4096}}],
-  'PUT /api/driver/v1/uploads/' + FILE: [{status: 200, body: {file_id: FILE, state: 'SAFE', content_type: 'image/png',
+  ['PUT ' + UPLOAD]: [{status: 200, body: {file_id: FILE, state: 'SAFE', content_type: 'image/png',
     size_bytes: 4}}],
   'POST /api/driver/v1/documents': [{status: 201, body: {id: '90000000-0000-4000-8000-000000000001'}}],
 });
