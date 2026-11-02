@@ -67,7 +67,7 @@ async function openQueue(user = userEvent.setup()) {
 async function openCase(user = userEvent.setup()) {
   await openQueue(user);
   await user.click(await screen.findByRole('button', {name: /№501/}));
-  await screen.findByText('Оставил зонт в машине');
+  await screen.findByText(/Оставил зонт в машине/);
   return user;
 }
 
