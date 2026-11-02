@@ -1,7 +1,6 @@
 package taxi.blizz.configuration.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import jakarta.servlet.Filter;
@@ -24,14 +23,12 @@ import taxi.blizz.configuration.Integrations;
 import taxi.blizz.configuration.Integrations.Change;
 import taxi.blizz.identity.Services;
 import taxi.blizz.platform.Actor;
-import taxi.blizz.platform.DomainException;
-import taxi.blizz.platform.ErrorCode;
 import taxi.blizz.platform.SubjectType;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * ADR 0016, issue #215: each taxi service enters its own keys. Another service neither sees nor changes them, its
- * apps get their own map keys, and the server's telephone exchange is set in the first service's panel only.
+ * apps get their own map keys, and each service sets its own telephone exchange (owner decision 02.11.2026).
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -98,17 +95,20 @@ class IntegrationsPerServiceTests {
                 .containsEntry("android_key", "android-key-of-b").containsEntry("provider", "MAPTILER");
     }
 
+    /** T1 of #275: each service's super admin sets its own exchange; the other service's stays as it was. */
     @Test
-    void theServersTelephoneExchangeIsSetInTheFirstServiceOnly() {
-        Actor keeperB = keeper(service("keys-pbx"));
-        assertThatThrownBy(() -> integrations.change(keeperB, UUID.randomUUID(), PASSWORD,
-                List.of(new Change(Integrations.OTP_ASTERISK_ARI_USER, "intruder")), "Take over the exchange"))
-                .isInstanceOf(DomainException.class)
-                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED);
-        assertThat(integrations.serverValue(Integrations.OTP_ASTERISK_ARI_USER)).as("the exchange as it was")
-                .isNotEqualTo(java.util.Optional.of("intruder"));
-        assertThatThrownBy(() -> integrations.serverValue(Integrations.OTP_TURBOSMS_TOKEN))
-                .as("a service's own key is never read as the server's")
-                .isInstanceOf(IllegalArgumentException.class);
+    void eachServiceSetsItsOwnTelephoneExchange() {
+        UUID b = service("keys-pbx");
+        Actor keeperB = keeper(b);
+        java.util.Optional<String> firstBefore = integrations.value(Services.DEFAULT_ID,
+                Integrations.OTP_ASTERISK_ARI_USER);
+        integrations.change(keeperB, UUID.randomUUID(), PASSWORD, List.of(
+                new Change(Integrations.OTP_ASTERISK_ARI_URL, "https://pbx-b.example:8089"),
+                new Change(Integrations.OTP_ASTERISK_ARI_USER, "ari-b")), "B's own exchange");
+        assertThat(integrations.value(b, Integrations.OTP_ASTERISK_ARI_USER)).contains("ari-b");
+        assertThat(integrations.value(b, Integrations.OTP_ASTERISK_ARI_URL)).contains("https://pbx-b.example:8089");
+        assertThat(integrations.value(Services.DEFAULT_ID, Integrations.OTP_ASTERISK_ARI_USER))
+                .as("the first service's exchange as it was").isEqualTo(firstBefore);
+        assertThat(value(integrations.list(keeperB), Integrations.OTP_ASTERISK_ARI_USER)).isEqualTo("ari-b");
     }
 }

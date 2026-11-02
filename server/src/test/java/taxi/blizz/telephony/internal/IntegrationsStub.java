@@ -7,22 +7,39 @@ import java.util.UUID;
 import taxi.blizz.configuration.Integrations;
 import taxi.blizz.platform.Actor;
 
-/** Integrations with fixed values for every service, for a provider that must not touch the shared ones. */
+/**
+ * Integrations with fixed values, for a provider that must not touch the shared ones: the same values for every
+ * service, or each service's own ({@link #perService}, changeable while a test runs).
+ */
 class IntegrationsStub implements Integrations {
 
     private final Map<String, String> values;
+    private final Map<UUID, Map<String, String>> services;
 
     IntegrationsStub(Map<String, String> values) {
         this.values = Map.copyOf(values);
+        this.services = null;
+    }
+
+    private IntegrationsStub(Map<UUID, Map<String, String>> services, boolean perService) {
+        this.values = Map.of();
+        this.services = new java.util.concurrent.ConcurrentHashMap<>(services);
+    }
+
+    /** Each service's values; {@link #set} changes them while a test runs. */
+    static IntegrationsStub perService(Map<UUID, Map<String, String>> services) {
+        return new IntegrationsStub(services, true);
+    }
+
+    void set(UUID serviceId, Map<String, String> values) {
+        services.put(serviceId, Map.copyOf(values));
     }
 
     @Override
     public Optional<String> value(UUID serviceId, String name) {
-        return Optional.ofNullable(values.get(name));
-    }
-
-    @Override
-    public Optional<String> serverValue(String name) {
+        if (services != null) {
+            return Optional.ofNullable(services.getOrDefault(serviceId, Map.of()).get(name));
+        }
         return Optional.ofNullable(values.get(name));
     }
 

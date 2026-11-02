@@ -10,7 +10,6 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -157,10 +156,8 @@ class RecordingRetentionTests {
                     Integrations.OTP_ASTERISK_ARI_URL, "http://127.0.0.1:" + server.getAddress().getPort(),
                     Integrations.OTP_ASTERISK_ARI_USER, "retention-test",
                     Integrations.OTP_ASTERISK_ARI_PASSWORD, "test-only");
-            Integrations integrations = org.mockito.Mockito.mock(Integrations.class);
-            org.mockito.Mockito.when(integrations.serverValue(org.mockito.ArgumentMatchers.anyString()))
-                    .thenAnswer(invocation -> Optional.ofNullable(values.get(invocation.getArgument(0, String.class))));
-            return new AriRecordingSource(integrations);
+            // Every service's exchange is this one: the retention test is about the deletion, not the service.
+            return new AriRecordingSource(new IntegrationsStub(values));
         }
 
         CallRecordingRetention work() {
