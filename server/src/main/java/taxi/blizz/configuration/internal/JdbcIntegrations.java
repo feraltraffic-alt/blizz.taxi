@@ -444,7 +444,12 @@ class JdbcIntegrations implements Integrations {
     @Override
     public Health health(Actor actor) {
         staff.require(actor, MANAGE_PERMISSION);
-        return new Health(INSTANCE, clock.instant(), breakers.health());
+        // Asterisk is each service's own (#275): the panel shows its own exchange's breaker (#278).
+        var asterisk = taxi.blizz.platform.ProviderBreakers.Provider.ASTERISK;
+        var own = breakers.keyed(serviceOf(actor).toString()).health().stream()
+                .filter(h -> h.provider() == asterisk).findFirst();
+        return new Health(INSTANCE, clock.instant(), breakers.health().stream()
+                .map(h -> h.provider() == asterisk ? own.orElse(h) : h).toList());
     }
 
     /** The answering server: the container's host name, else the JVM's name (pid@host). */

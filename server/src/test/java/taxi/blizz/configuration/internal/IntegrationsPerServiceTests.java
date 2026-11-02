@@ -40,6 +40,7 @@ class IntegrationsPerServiceTests {
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
+    @Autowired taxi.blizz.platform.ProviderBreakers breakers;
 
     private UUID service(String prefix) {
         UUID id = UUID.randomUUID();
@@ -109,5 +110,26 @@ class IntegrationsPerServiceTests {
         assertThat(integrations.value(Services.DEFAULT_ID, Integrations.OTP_ASTERISK_ARI_USER))
                 .as("the first service's exchange as it was").isEqualTo(firstBefore);
         assertThat(value(integrations.list(keeperB), Integrations.OTP_ASTERISK_ARI_USER)).isEqualTo("ari-b");
+    }
+
+    /** #278 K3: a service's panel shows its own exchange's breaker; B's open breaker is not A's. */
+    @Test
+    void eachServicesHealthShowsItsOwnExchangesBreaker() {
+        UUID a = service("breaker-a");
+        UUID b = service("breaker-b");
+        var asterisk = taxi.blizz.platform.ProviderBreakers.Provider.ASTERISK;
+        for (int i = 0; i < 50 && breakers.keyed(b.toString()).state(asterisk)
+                != taxi.blizz.platform.ProviderBreakers.State.OPEN; i++) {
+            breakers.keyed(b.toString()).call(asterisk, () -> 500, code -> code >= 500, e -> 500, () -> 503);
+        }
+        assertThat(state(integrations.health(keeper(b)), asterisk))
+                .isEqualTo(taxi.blizz.platform.ProviderBreakers.State.OPEN);
+        assertThat(state(integrations.health(keeper(a)), asterisk)).as("not A's")
+                .isEqualTo(taxi.blizz.platform.ProviderBreakers.State.CLOSED);
+    }
+
+    private static taxi.blizz.platform.ProviderBreakers.State state(Integrations.Health health,
+                                                                    taxi.blizz.platform.ProviderBreakers.Provider p) {
+        return health.providers().stream().filter(h -> h.provider() == p).findFirst().orElseThrow().state();
     }
 }
