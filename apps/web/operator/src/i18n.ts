@@ -5,6 +5,8 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    recordingPending: 'запись готовится', recordingNone: 'записи нет', recordingLength: 'запись {length}',
+    listen: 'Прослушать запись', callRecording: 'Запись звонка',
     calls: 'Звонки', myCallStatus: 'Мой статус: {status}', extension: 'внутренний номер {number}',
     noExtension: 'нет внутреннего номера', callStatus_AVAILABLE: 'доступен', callStatus_BREAK: 'перерыв',
     callStatus_OFFLINE: 'не на линии', setStatus_AVAILABLE: 'Доступен', setStatus_BREAK: 'Перерыв',
@@ -102,6 +104,8 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    recordingPending: 'запис готується', recordingNone: 'запису немає', recordingLength: 'запис {length}',
+    listen: 'Прослухати запис', callRecording: 'Запис дзвінка',
     calls: 'Дзвінки', myCallStatus: 'Мій статус: {status}', extension: 'внутрішній номер {number}',
     noExtension: 'немає внутрішнього номера', callStatus_AVAILABLE: 'доступний', callStatus_BREAK: 'перерва',
     callStatus_OFFLINE: 'не на лінії', setStatus_AVAILABLE: 'Доступний', setStatus_BREAK: 'Перерва',
@@ -199,6 +203,8 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    recordingPending: 'nagranie w przygotowaniu', recordingNone: 'brak nagrania', recordingLength: 'nagranie {length}',
+    listen: 'Odsłuchaj nagranie', callRecording: 'Nagranie połączenia',
     calls: 'Połączenia', myCallStatus: 'Mój status: {status}', extension: 'numer wewnętrzny {number}',
     noExtension: 'brak numeru wewnętrznego', callStatus_AVAILABLE: 'dostępny', callStatus_BREAK: 'przerwa',
     callStatus_OFFLINE: 'poza linią', setStatus_AVAILABLE: 'Dostępny', setStatus_BREAK: 'Przerwa',

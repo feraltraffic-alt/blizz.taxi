@@ -2,8 +2,9 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 
+type Recording = {state: 'PENDING' | 'STORED' | 'NONE'; duration_seconds?: number | null};
 type Call = {id: string; state: string; caller_phone?: string | null; answered_by?: string | null;
-  order_ids: string[]; started_at: string};
+  order_ids: string[]; started_at: string; recording?: Recording | null};
 type Status = {status: string; extension?: string | null};
 
 /** A call an order is made from (#300 K4): the order carries its id and the form gets the caller's number. */
@@ -29,6 +30,11 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
   const [error, setError] = useState<unknown>(null);
   const acting = useRef(false);
   const asking = useRef(0);
+  /** Recordings fetched in this panel, by call: every fetch is an audited listening (#302 R2). */
+  const [players, setPlayers] = useState<Record<string, string>>({});
+  const urls = useRef<string[]>([]);
+
+  useEffect(() => () => urls.current.forEach(url => URL.revokeObjectURL(url)), []);
 
   useEffect(() => {
     if (!canAnswer) return;
@@ -81,9 +87,27 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
     setCalls(list => (list ?? []).map(c => c.id === taken.id ? taken : c));
   });
 
+  const listen = (call: Call) => once(async () => {
+    if (players[call.id]) return;
+    const blob = await client.get('/api/operator/v1/calls/{call_id}/recording' as never,
+      {params: {call_id: call.id}} as never) as unknown as Blob;
+    const url = URL.createObjectURL(blob);
+    urls.current.push(url);
+    setPlayers(all => ({...all, [call.id]: url}));
+  });
+
+  function recording(call: Call): string | null {
+    const r = call.recording;
+    if (!r) return null;
+    if (r.state !== 'STORED') return t(r.state === 'PENDING' ? 'recordingPending' : 'recordingNone');
+    const seconds = r.duration_seconds ?? 0;
+    return t('recordingLength', {length: Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')});
+  }
+
   function line(call: Call): string {
     return [clock(call.started_at), call.caller_phone ?? t('hiddenNumber'), t('call_' + call.state),
-      ...(call.order_ids.length ? [t('callOrders', {count: call.order_ids.length})] : [])].join(' · ');
+      ...(call.order_ids.length ? [t('callOrders', {count: call.order_ids.length})] : []),
+      ...(recording(call) ? [recording(call)!] : [])].join(' · ');
   }
 
   return (
@@ -113,6 +137,9 @@ export function Calls({client, t, rights, me, newId, pollMs, onOrder}: {client: 
               {rights.has('orders.create') && c.state === 'ANSWERED' && c.answered_by === me
                 ? <button type="button" onClick={() => onOrder({id: c.id, phone: c.caller_phone ?? null})}>
                   {t('orderFromCall')}</button> : null}
+              {players[c.id] ? <audio controls src={players[c.id]} aria-label={t('callRecording')} />
+                : rights.has('calls.listen') && c.recording?.state === 'STORED'
+                  ? <button type="button" onClick={() => void listen(c)}>{t('listen')}</button> : null}
             </li>
           ))}
         </ul>
