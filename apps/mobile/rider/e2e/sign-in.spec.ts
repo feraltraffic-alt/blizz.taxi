@@ -31,6 +31,22 @@ test('a rider signs in by a code, accepts the texts in force and sees the profil
     await page.screenshot({path: info.outputPath('3-legal-' + i + '.png'), fullPage: true});
     await accept.click();
   }
+  // A ride in Kyiv from here to the station, priced, ordered and cancelled (#248).
+  await expect(page.getByText('Куда поедем?')).toBeVisible();
+  await page.getByLabel('Поиск адреса назначения', {exact: true}).fill('Вокзал');
+  await page.getByRole('button', {name: 'Найти', exact: true}).click();
+  await page.getByRole('button', {name: /^Вокзал/}).first().click();
+  await page.getByRole('button', {name: 'Узнать цену', exact: true}).click();
+  await expect(page.getByText(/^Цена: /)).toBeVisible();
+  await page.screenshot({path: info.outputPath('5-priced.png'), fullPage: true});
+  await page.getByRole('button', {name: 'Заказать', exact: true}).click();
+  await expect(page.getByText('Ищем водителя')).toBeVisible();
+  await page.screenshot({path: info.outputPath('6-searching.png'), fullPage: true});
+  await page.getByRole('button', {name: /^○ /}).first().click();
+  await page.getByRole('button', {name: 'Отменить поездку', exact: true}).click();
+  await expect(page.getByText('Заказ отменён')).toBeVisible();
+  await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
+  await page.getByRole('button', {name: 'Профиль', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
   await page.screenshot({path: info.outputPath('4-profile.png'), fullPage: true});
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
