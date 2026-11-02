@@ -504,3 +504,100 @@ describe('#294: driver actions on an order', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+/** Calling the order's caller, driver or rider (#304): T1–T6. */
+describe('#304: click-to-call', () => {
+  type Sent = {to: string; command_id: string};
+  const placed = (state: string) => ({id: 'ca000000-0000-4000-8000-000000000009', direction: 'OUTBOUND',
+    party: 'CALLER', state, caller_phone: null, called_number: null, city_id: KYIV.id, answered_by: me.member.id,
+    order_ids: [order.id], started_at: '2026-11-02T10:00:00Z', answered_at: null, ended_at: null, recording: null});
+
+  function handlers(status: string, opts: {rights?: string[]; answers?: (() => Response | Promise<Response>)[];
+    payer?: boolean} = {}) {
+    const sent: Sent[] = [];
+    const created = {...order, status, city_id: KYIV.id, ...(opts.payer ? {payer_client_id: 'p1'} : {})};
+    let n = 0;
+    server.use(...base({...operator, effective_permissions: opts.rights ?? ['orders.create', 'orders.view']}),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(created, {status: 201})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id, () => HttpResponse.json(created as never)),
+      http.post(origin + '/api/operator/v1/orders/' + order.id + '/calls', async ({request}) => {
+        sent.push(await request.json() as Sent);
+        const answer = opts.answers?.[Math.min(n++, opts.answers.length - 1)];
+        return answer ? answer() : HttpResponse.json(placed('DIALING') as never, {status: 201});
+      }));
+    return sent;
+  }
+
+  async function ordered() {
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    return user;
+  }
+  const buttons = () => ['Позвонить звонящему', 'Позвонить водителю', 'Позвонить пассажиру']
+    .filter(name => screen.queryByRole('button', {name}));
+
+  it.each([
+    ['SEARCHING', false, ['Позвонить звонящему']],
+    ['ASSIGNED', false, ['Позвонить звонящему', 'Позвонить водителю']],
+    ['IN_SERVICE', true, ['Позвонить звонящему', 'Позвонить водителю', 'Позвонить пассажиру']]
+  ])('T1: in %s (payer %s) the offered calls are %j', async (status, payer, offered) => {
+    handlers(status, {payer});
+    await ordered();
+    expect(buttons()).toEqual(offered);
+  });
+
+  it('T2: one call with a command id; the phone rings', async () => {
+    const sent = handlers('ASSIGNED');
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'Позвонить водителю'}));
+    expect(await screen.findByText('Звонит ваш телефон…')).toBeVisible();
+    expect(sent).toEqual([{command_id: expect.any(String), to: 'DRIVER'}]);
+  });
+
+  it('T3: a 409 says why and offers no retry', async () => {
+    handlers('SEARCHING', {answers: [() => HttpResponse.json(problem(409, 'STATE_CONFLICT'), {status: 409})]});
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'Позвонить звонящему'}));
+    expect(await screen.findByText('Нельзя позвонить: нет внутреннего номера или этой стороны у заказа.'))
+      .toBeVisible();
+    expect(screen.queryByRole('button', {name: 'Повторить звонок'})).not.toBeInTheDocument();
+  });
+
+  it('T4: after a 503 the retry is the same command; after a FAILED call the next is new', async () => {
+    const sent = handlers('SEARCHING', {answers: [
+      () => HttpResponse.json(problem(503, 'PROVIDER_UNAVAILABLE'), {status: 503}),
+      () => HttpResponse.json(placed('FAILED') as never, {status: 201}),
+      () => HttpResponse.json(placed('DIALING') as never, {status: 201})]});
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'Позвонить звонящему'}));
+    await user.click(await screen.findByRole('button', {name: 'Повторить звонок'}));
+    expect(await screen.findByText('Звонок не удался.')).toBeVisible();
+    await user.click(screen.getByRole('button', {name: 'Позвонить звонящему'}));
+    expect(await screen.findByText('Звонит ваш телефон…')).toBeVisible();
+    expect(sent.map(s => s.to)).toEqual(['CALLER', 'CALLER', 'CALLER']);
+    expect(sent[1]!.command_id).toBe(sent[0]!.command_id);
+    expect(sent[2]!.command_id).not.toBe(sent[0]!.command_id);
+  });
+
+  it('T5: a double click sends one command', async () => {
+    const sent = handlers('SEARCHING', {answers: [async () => {
+      await delay(200);
+      return HttpResponse.json(placed('DIALING') as never, {status: 201});
+    }]});
+    const user = await ordered();
+    const call = screen.getByRole('button', {name: 'Позвонить звонящему'});
+    await Promise.all([user.click(call), user.click(call)]);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await delay(300);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('T6: without orders.view no calls are offered', async () => {
+    handlers('ASSIGNED', {rights: ['orders.create']});
+    await ordered();
+    expect(buttons()).toEqual([]);
+  });
+});
