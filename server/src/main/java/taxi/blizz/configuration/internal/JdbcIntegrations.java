@@ -124,7 +124,7 @@ class JdbcIntegrations implements Integrations {
 
     @Override
     public Optional<String> value(UUID serviceId, String name) {
-        Row row = snapshot().of(serviceId).get(name);
+        Row row = snapshot().of(Services.DEFAULT_ID).get(name);
         if (row == null) {
             return Optional.empty();
         }
