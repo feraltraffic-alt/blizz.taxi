@@ -467,7 +467,7 @@ class JdbcOrders implements Orders {
                     }
                     // Rider and staff each choose from their own list (owner decision 27.10.2026).
                     String by = actor.type() == SubjectType.STAFF ? "STAFF" : "RIDER";
-                    CancelReasons.Reason reason = reasons.require(actor.type() == SubjectType.STAFF
+                    CancelReasons.Reason reason = reasons.require(actor, actor.type() == SubjectType.STAFF
                             ? CancelReasons.Audience.STAFF : CancelReasons.Audience.RIDER, reasonCode);
                     Map<String, Object> details = new java.util.LinkedHashMap<>();
                     switch (order.status()) {
@@ -650,7 +650,7 @@ class JdbcOrders implements Orders {
         String code = reasonCode.strip();
         return commands.execute(new CommandKey(staffActor, "order.assignment.revoke", commandId),
                 new RevokeRequest(orderId, expectedVersion, code, note), OrderView.class, () -> {
-                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.REASSIGN, code);
+                    CancelReasons.Reason reason = reasons.require(staffActor, CancelReasons.Audience.REASSIGN, code);
                     OrderCore.LockedOrder order = core.lockOrder(orderId);
                     if (order.version() != expectedVersion) {
                         throw ConflictException.version(order.version(), "The order changed");
@@ -918,7 +918,7 @@ class JdbcOrders implements Orders {
                         throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "Only a trip in progress is interrupted; before the start cancel or reassign");
                     }
-                    CancelReasons.Reason reason = reasons.require(CancelReasons.Audience.STAFF,
+                    CancelReasons.Reason reason = reasons.require(actor, CancelReasons.Audience.STAFF,
                             interruption.reasonCode().trim());
                     AssignmentView assignment = core.assignmentOfOrder(orderId)
                             .filter(a -> "COMMITTED".equals(a.state()) && "IN_PROGRESS".equals(a.tripPhase()))

@@ -55,10 +55,13 @@ public interface CancelReasons {
         }
     }
 
-    /** Active reasons of one side in display order; public, for the apps. */
-    List<Reason> active(Audience audience);
+    /**
+     * Active reasons of one side in display order, from the catalogue of the taxi service {@code within} belongs to
+     * (ADR 0016, issue #215); for the apps. A service's catalogue starts as a copy of the first service's.
+     */
+    List<Reason> active(Actor within, Audience audience);
 
-    /** Every reason including inactive ones, for the admin panel. */
+    /** Every reason of the staff member's service including inactive ones, for the admin panel. */
     List<Reason> all(Actor staff);
 
     Reason create(Actor staff, UUID commandId, Draft draft, String reason);
@@ -66,9 +69,9 @@ public interface CancelReasons {
     /** Labels, driver outcome, operator-fault flag, activity and order; audience and code stay as they were. */
     Reason update(Actor staff, UUID commandId, UUID reasonId, long expectedVersion, Draft draft, String reason);
 
-    /** An active reason of the side, or {@code VALIDATION_FAILED}. */
-    Reason require(Audience audience, String code);
+    /** An active reason of the side in the service of {@code within}, or {@code VALIDATION_FAILED}. */
+    Reason require(Actor within, Audience audience, String code);
 
-    /** A reason of the side whether active or not. */
-    Optional<Reason> find(Audience audience, String code);
+    /** A reason of the side in the service of {@code within}, whether active or not. */
+    Optional<Reason> find(Actor within, Audience audience, String code);
 }

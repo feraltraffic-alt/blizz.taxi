@@ -249,7 +249,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         }
         SettingsVersion version = settingsAt(origin.createdAt());
         if ("OPERATOR_FAULT_CANCELLATION".equals(kind)) {
-            boolean operatorFault = cancelReasons.find(CancelReasons.Audience.STAFF, reasonCode)
+            boolean operatorFault = cancelReasons.find(new Actor(SubjectType.STAFF, origin.createdById()),
+                    CancelReasons.Audience.STAFF, reasonCode)
                     .map(CancelReasons.Reason::operatorFault).orElse(false);
             if (!operatorFault || !version.settings().countCancellations()) {
                 return;

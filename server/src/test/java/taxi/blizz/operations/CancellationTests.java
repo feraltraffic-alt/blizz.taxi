@@ -228,7 +228,7 @@ class CancellationTests {
                 Audience.DRIVER, code.toLowerCase(), Map.of("ru", "Пробка", "uk", "Затор"),
                 DriverOutcome.RETURN_TO_SEARCH, true, 50), "Drivers asked for it");
         assertThat(created.code()).isEqualTo(code);
-        assertThat(reasons.active(Audience.DRIVER)).extracting(CancelReasons.Reason::code).contains(code);
+        assertThat(reasons.active(admin, Audience.DRIVER)).extracting(CancelReasons.Reason::code).contains(code);
         assertCode(() -> reasons.create(admin, UUID.randomUUID(), new CancelReasons.Draft(Audience.DRIVER, code,
                 Map.of("ru", "Ещё раз", "uk", "Ще раз"), DriverOutcome.RETURN_TO_SEARCH, true, 50), "x"), ErrorCode.STATE_CONFLICT);
 
@@ -243,9 +243,9 @@ class CancellationTests {
                 "Not used any more");
         assertThat(hidden.active()).isFalse();
         assertThat(hidden.driverOutcome()).isEqualTo(DriverOutcome.CANCEL_ORDER);
-        assertThat(reasons.active(Audience.DRIVER)).extracting(CancelReasons.Reason::code).doesNotContain(code);
+        assertThat(reasons.active(admin, Audience.DRIVER)).extracting(CancelReasons.Reason::code).doesNotContain(code);
         assertThat(reasons.all(admin)).extracting(CancelReasons.Reason::code).contains(code);
-        assertCode(() -> reasons.require(Audience.DRIVER, code), ErrorCode.VALIDATION_FAILED);
+        assertCode(() -> reasons.require(admin, Audience.DRIVER, code), ErrorCode.VALIDATION_FAILED);
         assertThat(jdbc.sql("select count(*) from audit_log where resource_id = :id")
                 .param("id", created.id().toString()).query(Long.class).single()).isEqualTo(2);
 

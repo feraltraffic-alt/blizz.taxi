@@ -38,6 +38,7 @@ class ServiceSettingsPerServiceTests {
     @Autowired ServiceSettings settings;
     @Autowired FeatureFlags flags;
     @Autowired LegalDocuments legal;
+    @Autowired CancelReasons reasons;
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired WebApplicationContext context;
@@ -134,6 +135,36 @@ class ServiceSettingsPerServiceTests {
                 .map(LegalDocuments.Text::text).hasValue("Тільки B");
         assertThat(legal.text(a, LegalDocuments.Audience.RIDER, LegalDocuments.Kind.PRIVACY_NOTICE, "uk"))
                 .as("not A's").isEmpty();
+    }
+
+    @Test
+    void eachServiceKeepsItsOwnCancelReasonsStartingFromACopyOfTheFirst() {
+        Actor first = admin(taxi.blizz.identity.Services.DEFAULT_ID);
+        List<String> firstCodes = reasons.all(first).stream().map(r -> r.audience() + ":" + r.code()).toList();
+        Actor adminA = admin(service("reasons-a"));
+        Actor adminB = admin(service("reasons-b"));
+        assertThat(reasons.all(adminB)).as("B starts with a copy of the first service's catalogue")
+                .extracting(r -> r.audience() + ":" + r.code()).containsExactlyInAnyOrderElementsOf(firstCodes);
+        String language = settings.of(adminB).settings().languages().defaultLanguage();
+        CancelReasons.Reason own = reasons.create(adminB, UUID.randomUUID(), new CancelReasons.Draft(
+                CancelReasons.Audience.RIDER, "ONLY_B", Map.of(language, "Тільки B"), null, true, 5), "Own reason");
+        assertThat(reasons.active(adminB, CancelReasons.Audience.RIDER)).extracting(CancelReasons.Reason::code)
+                .contains("ONLY_B");
+        assertThat(reasons.active(adminA, CancelReasons.Audience.RIDER)).as("not in A")
+                .extracting(CancelReasons.Reason::code).doesNotContain("ONLY_B");
+        assertThat(reasons.find(first, CancelReasons.Audience.RIDER, "ONLY_B")).as("not in the first").isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> reasons.update(adminA, UUID.randomUUID(), own.id(),
+                        own.version(), new CancelReasons.Draft(null, null, Map.of(language, "Чужа"), null, false, 5),
+                        "Foreign"))
+                .isInstanceOf(taxi.blizz.platform.DomainException.class)
+                .extracting(e -> ((taxi.blizz.platform.DomainException) e).code())
+                .isEqualTo(taxi.blizz.platform.ErrorCode.NOT_FOUND);
+        CancelReasons.Reason firstOfB = reasons.all(adminB).stream()
+                .filter(r -> r.audience() == CancelReasons.Audience.RIDER && r.active()).findFirst().orElseThrow();
+        reasons.update(adminB, UUID.randomUUID(), firstOfB.id(), firstOfB.version(), new CancelReasons.Draft(null,
+                null, Map.of(language, "Прихована"), null, false, firstOfB.sortOrder()), "Hidden in B");
+        assertThat(reasons.require(first, CancelReasons.Audience.RIDER, firstOfB.code()).active())
+                .as("hiding a copied reason in B leaves the first service's as it was").isTrue();
     }
 
     /** Server code names the service whose settings it reads: no call of the first service's shortcut. */
