@@ -72,7 +72,7 @@ class ChannelOtpDelivery implements OtpDelivery {
         } catch (RuntimeException e) {
             result = OtpSender.Result.unknown(e.getClass().getSimpleName());
         }
-        record(challengeId, phone, audience, sender, result);
+        record(serviceId, challengeId, phone, audience, sender, result);
         if (result.state() != OtpSender.State.SENT) {
             log.warn("The code for {} (challenge {}) did not go out by {}", phone.masked(), challengeId,
                     sender.channel());
@@ -113,16 +113,17 @@ class ChannelOtpDelivery implements OtpDelivery {
                 .orElseThrow(() -> new IllegalStateException("No sender for " + channel));
     }
 
-    private void record(UUID challengeId, PhoneNumber phone, OtpAudience audience, OtpSender sender,
+    private void record(UUID serviceId, UUID challengeId, PhoneNumber phone, OtpAudience audience, OtpSender sender,
                         OtpSender.Result result) {
         try {
             tx.executeWithoutResult(status -> {
                 jdbc.sql("""
-                                insert into otp_delivery (id, challenge_id, phone, audience, channel, provider, state,
-                                                          provider_ref, error, attempted_at)
-                                values (:id, :challenge, :phone, :audience, :channel, :provider, :state, :ref, :error,
-                                        :now)""")
-                        .param("id", UUID.randomUUID()).param("challenge", challengeId).param("phone", phone.e164())
+                                insert into otp_delivery (id, service_id, challenge_id, phone, audience, channel,
+                                                          provider, state, provider_ref, error, attempted_at)
+                                values (:id, :service, :challenge, :phone, :audience, :channel, :provider, :state,
+                                        :ref, :error, :now)""")
+                        .param("id", UUID.randomUUID()).param("service", serviceId).param("challenge", challengeId)
+                        .param("phone", phone.e164())
                         .param("audience", audience.name()).param("channel", sender.channel().name())
                         .param("provider", sender.provider()).param("state", result.state().name())
                         .param("ref", result.providerRef()).param("error", result.error())

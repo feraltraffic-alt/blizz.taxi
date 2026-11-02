@@ -963,7 +963,8 @@ class RetentionAcceptanceTests {
     void rejectedAndUnlinkedSystemRecordingsFollowOnlyTheRecordingPolicy() throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
         var files = context.getBean(taxi.blizz.files.FileService.class);
-        var rejected = files.storeSystemFile(taxi.blizz.files.FilePurpose.CALL_RECORDING, "audio/wav",
+        var rejected = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                taxi.blizz.files.FilePurpose.CALL_RECORDING, "audio/wav",
                 new java.io.ByteArrayInputStream(new byte[] {1, 2, 3}), 1000000);
         assertThat(rejected.state()).isEqualTo(taxi.blizz.files.FileState.REJECTED);
         // Valid WAV bytes from the already-tested fake recording source, through the real encrypted storage path.
@@ -973,7 +974,8 @@ class RetentionAcceptanceTests {
                 taxi.blizz.identity.Services.DEFAULT_ID, "retention-orphan");
         taxi.blizz.files.StoredFile unlinked;
         try (var body = Files.newInputStream(wav.orElseThrow())) {
-            unlinked = files.storeSystemFile(taxi.blizz.files.FilePurpose.CALL_RECORDING, "audio/wav", body, 1000000);
+            unlinked = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                taxi.blizz.files.FilePurpose.CALL_RECORDING, "audio/wav", body, 1000000);
         } finally {
             Files.deleteIfExists(wav.orElseThrow());
         }

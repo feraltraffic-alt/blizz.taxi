@@ -669,7 +669,8 @@ class StaffIsolationTests {
                     .param("state", recording ? "ENDED" : "RINGING").param("ended", recording).update();
             if (recording) {
                 byte[] wav = taxi.blizz.telephony.internal.TestRecordings.tone(1);
-                var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
+                var stored = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                FilePurpose.CALL_RECORDING, "audio/wav",
                         new ByteArrayInputStream(wav), wav.length);
                 new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(
                         status -> files.markAttached(Actor.system(), stored.fileId(), FilePurpose.CALL_RECORDING));

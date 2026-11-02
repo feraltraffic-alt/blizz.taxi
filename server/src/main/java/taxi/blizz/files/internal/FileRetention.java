@@ -45,6 +45,14 @@ class FileRetention {
             public Result run(OffsetDateTime cutoff, OffsetDateTime now, int limit) {
                 return files.run(kind, cutoff, now, limit);
             }
+
+            public boolean perService() {
+                return true;
+            }
+
+            public Result run(java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+                return files.run(kind, serviceId, cutoff, now, limit);
+            }
         };
     }
 }

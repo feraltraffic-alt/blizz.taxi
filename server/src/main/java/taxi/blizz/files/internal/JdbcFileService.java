@@ -63,10 +63,13 @@ class JdbcFileService implements FileService {
     private final Clock clock;
     private final FileRetirement retirement;
 
+    private final taxi.blizz.identity.Services services;
+
     JdbcFileService(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, FileStorage storage,
                     FileScanner scanner, ContentScanner antivirus, FilesProperties properties,
                     FileEncryption encryption, Clock clock, taxi.blizz.platform.RateLimits rateLimits,
-                    FileRetirement retirement) {
+                    FileRetirement retirement, taxi.blizz.identity.Services services) {
+        this.services = services;
 
         this.retirement = retirement;
         this.rateLimits = rateLimits;
@@ -102,10 +105,14 @@ class JdbcFileService implements FileService {
                     OffsetDateTime now = now();
                     OffsetDateTime expiresAt = now.plus(properties.uploadTtl());
                     jdbc.sql("""
-                                    insert into file_object (id, owner_type, owner_id, purpose, declared_content_type,
-                                                             declared_size_bytes, upload_expires_at, created_at)
-                                    values (:id, :ownerType, :ownerId, :purpose, :type, :size, :expiresAt, :now)""")
+                                    insert into file_object (id, service_id, owner_type, owner_id, purpose,
+                                                             declared_content_type, declared_size_bytes,
+                                                             upload_expires_at, created_at)
+                                    values (:id, :service, :ownerType, :ownerId, :purpose, :type, :size, :expiresAt,
+                                            :now)""")
                             .param("id", id)
+                            // The owner's service, whose retention term applies (#276).
+                            .param("service", services.of(owner).orElse(taxi.blizz.identity.Services.DEFAULT_ID))
                             .param("ownerType", owner.type().name())
                             .param("ownerId", owner.id())
                             .param("purpose", purpose.name())
@@ -313,7 +320,8 @@ class JdbcFileService implements FileService {
     }
 
     @Override
-    public StoredFile storeSystemFile(FilePurpose purpose, String contentType, InputStream body, long maxBytes) {
+    public StoredFile storeSystemFile(UUID serviceId, FilePurpose purpose, String contentType, InputStream body,
+                                      long maxBytes) {
         if (purpose != FilePurpose.CALL_RECORDING) {
             throw new IllegalArgumentException("Only call recordings are stored by the server itself");
         }
@@ -325,11 +333,12 @@ class JdbcFileService implements FileService {
         tx.executeWithoutResult(status -> {
             OffsetDateTime at = now();
             jdbc.sql("""
-                            insert into file_object(id,owner_type,purpose,declared_content_type,declared_size_bytes,
-                              state,staging_key,upload_expires_at,created_at,quarantine_at)
-                            values(:id,'SYSTEM',:purpose,:type,:size,'QUARANTINE',:key,:now,:now,:now)
+                            insert into file_object(id,service_id,owner_type,purpose,declared_content_type,
+                              declared_size_bytes,state,staging_key,upload_expires_at,created_at,quarantine_at)
+                            values(:id,:service,'SYSTEM',:purpose,:type,:size,'QUARANTINE',:key,:now,:now,:now)
                             """)
-                    .param("id", fileId).param("purpose", purpose.name()).param("type", type.isEmpty() ? "-" : type)
+                    .param("id", fileId).param("service", serviceId).param("purpose", purpose.name())
+                    .param("type", type.isEmpty() ? "-" : type)
                     .param("size", Math.max(maxBytes, 1)).param("key", key).param("now", at).update();
             reserveStage(key);
         });
