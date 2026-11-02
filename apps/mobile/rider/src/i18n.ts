@@ -5,6 +5,11 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    toHistory: 'Мои поездки',
+    history: 'Мои поездки',
+    noHistory: 'Поездок пока не было.',
+    moreHistory: 'Ещё',
+    back: 'Назад',
     rateDriver: 'Оцените водителя',
     score: 'Оценка {score}',
     ratingThanks: 'Спасибо за оценку: {score}',
@@ -41,6 +46,11 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    toHistory: 'Мої поїздки',
+    history: 'Мої поїздки',
+    noHistory: 'Поїздок ще не було.',
+    moreHistory: 'Ще',
+    back: 'Назад',
     rateDriver: 'Оцініть водія',
     score: 'Оцінка {score}',
     ratingThanks: 'Дякуємо за оцінку: {score}',
@@ -77,6 +87,11 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    toHistory: 'Moje przejazdy',
+    history: 'Moje przejazdy',
+    noHistory: 'Nie było jeszcze przejazdów.',
+    moreHistory: 'Więcej',
+    back: 'Wstecz',
     rateDriver: 'Oceń kierowcę',
     score: 'Ocena {score}',
     ratingThanks: 'Dziękujemy za ocenę: {score}',

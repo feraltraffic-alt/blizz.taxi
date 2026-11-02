@@ -146,6 +146,16 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
     await driver.offline();
   }
   await page.getByRole('button', {name: 'Новая поездка', exact: true}).click();
+
+  // The ride in the history (#267): fulfilled first, the cancelled one after it; it opens with its rating.
+  await page.getByRole('button', {name: 'Мои поездки', exact: true}).click();
+  await expect(page.getByText(/ · Поездка завершена · /)).toBeVisible();
+  await expect(page.getByText(/ · Заказ отменён/)).toBeVisible();
+  await page.screenshot({path: info.outputPath('9-history.png'), fullPage: true});
+  await page.getByRole('button', {name: / → Вокзал/}).first().click();
+  await expect(page.getByText('Ваша оценка: 5')).toBeVisible();
+  await page.getByRole('button', {name: 'Назад', exact: true}).click();
+  await page.getByRole('button', {name: 'Поездка', exact: true}).click();
   await page.getByRole('button', {name: 'Профиль', exact: true}).click();
   await expect(page.getByText(/Состояние аккаунта/)).toBeVisible();
   await page.screenshot({path: info.outputPath('4-profile.png'), fullPage: true});
