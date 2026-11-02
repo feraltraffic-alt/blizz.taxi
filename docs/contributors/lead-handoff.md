@@ -1,4 +1,4 @@
-# Lead handoff (state on 02.11.2026, morning)
+# Lead handoff (state on 02.11.2026, day)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -28,9 +28,9 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 
 | Who | Queue (in order) |
 |---|---|
-| Codex | #136 web foundation (branch `codex/136-web-foundation` at 30bc0b3, no PR; idle since 30.10). The owner said Codex had it nearly done locally, so it stays Codex's until the owner says otherwise |
-| Second Claude | Idle since 01.11 09:16 (last commit on `claude2/201-staff-city-sweep`). Its #201 part 2 was taken by the lead on the owner's word. Only #137 is left, and it needs `packages/api-client` from #136. Asked the owner whether to give #136 to claude2 |
-| Lead | ADR 0016, several taxi services on one server: parts 1 (#214, done) and 2 (#215, in progress). The rest of #215: integrations and keys, payment merchants, service-data retention, then removing the `service_id` column defaults. Then #216 (money and reports), #217 (apps, push, SMS), #218 (isolation sweeps across services). Also #136 (taken from Codex on the owner's word, 01.11) |
+| Codex | Idle since 30.10. #136 was finished by the lead (#233) from Codex's tests-first commit |
+| Second Claude | Idle since 01.11 09:16. #137 (operator workstation) can start now: `packages/api-client` is on main (#233) |
+| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next" |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -47,7 +47,10 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 
 ### Open owner questions
 
-- Give #216 to claude2 (idle since 01.11)? The owner has not answered.
+- **Settings of the whole server** (asked 02.11): the connection to the Asterisk exchange and the technical retention
+  terms (ADR 0015) are one per server. Today the exchange is changed in the first service's panel only (#231). Should
+  the platform owner manage them instead, with a panel of their own? The answer decides the last item of #215 (call
+  recordings kept per service, technical terms per server).
 - **Before launch:** a second super admin. The confirmation lockout of the only one stays by the owner's choice
   (#173).
 
@@ -82,6 +85,28 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (02.11.2026, day)
+
+- **Merged:**
+
+  | PR | What |
+  |---|---|
+  | #229 | Service-wide settings changed by staff of every city only (ADR 0016 point 6) |
+  | #230 | Payment merchants per service |
+  | #231 | Integrations and keys per service. Environment values serve the first service only; the exchange connection is server-wide (`Integrations.SERVER_FIELDS`) |
+  | #232 | #217 tests: push and SMS per service |
+  | #233 | #136 web foundation: `packages/api-client`, the admin panel, the Web E2E workflow |
+  | #234 | #218: other-service staff in the sweep; the change and activity logs per service (port `audit.ActorServices`) |
+  | #235 | `ServiceColumnGuardTests`: every server insert into a table with `service_id` names it |
+  | #216 | Journal per service, reconciliations per service (the PR is opened after its sandbox) |
+- **Habits that paid off:**
+  - **A green tests-first run is not proof.** #218's sweep was green at once. Only a mutation, a city check that ignores
+    the service, showed that the new refused staff reach the check.
+  - **Read why a mutation failed.** #136's first single-flight mutation failed on lint, not on E4.
+  - **Merging a squash-merged branch into a later branch.** A PR from a branch that still carries an earlier PR's commits
+    shows those files too (#232 showed 41). Check `git diff <squash>^ <squash>` after the merge.
+- **Migrations:** a later PR may sort before one merged meanwhile. Rename it after main's last (#216: `0700` → `0800`).
 
 ## Recent history (02.11.2026, night and morning)
 
