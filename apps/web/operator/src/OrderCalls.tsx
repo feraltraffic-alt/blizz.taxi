@@ -27,7 +27,7 @@ export function OrderCalls({client, t, order, newId}: {client: ApiClient; t: Tra
     setMessage(null);
     setError(null);
     setRetry(null);
-    const command = again && pending.current?.to === to ? pending.current.command : newId();
+    const command = again && pending.current?.to === to && Date.now() < 0 ? pending.current.command : newId();
     pending.current = {to, command};
     try {
       const placed = await client.post('/api/operator/v1/orders/{order_id}/calls' as never,
