@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
-import {Alert, Button, useTheme, type Shared} from '@blizz/mobile-ui';
-import {TopUpByCard} from './TopUp';
+import {Alert, Button, TopUpByCard, useTheme, type Shared} from '@blizz/mobile-ui';
+import {ProviderPage} from './ProviderPage';
 
 type Balance = {currency: string; balance_minor: number; debt_limit_minor: number | null; blocked: boolean};
 type Figures = {trips: number; fare_minor: number; commission_minor: number; driver_share_minor: number};
@@ -124,7 +124,7 @@ export function Money({client, t, guard, failure, cityId, now, service, newId, p
         </View>
       ))}
       {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cityId} newId={newId}
-        pollMs={pollMs} onCompleted={reload} /> : null}
+        path="/api/driver/v1/balance/card-top-ups" Page={ProviderPage} pollMs={pollMs} onCompleted={reload} /> : null}
       {earnings ? (
         <>
           <Text style={{color: theme.text}}>{t('week', {trips: earnings.total.trips,

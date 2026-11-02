@@ -5,6 +5,14 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    wallet: 'Бонусы',
+    walletAvailable: 'Доступно: {amount}',
+    walletCity: 'Город оплаты: {city}',
+    walletKind_STAFF_TOP_UP: 'Начисление службой',
+    walletKind_CARD_TOP_UP: 'Пополнение картой',
+    walletKind_PROMOTION: 'Акция',
+    walletKind_TRIP_PAYMENT: 'Оплата поездки',
+    walletKind_TIP: 'Чаевые',
     debts: 'Долги',
     noDebts: 'Долгов нет.',
     debtLine: 'Долг {left} (оплачено {paid} из {owed})',
@@ -78,6 +86,14 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    wallet: 'Бонуси',
+    walletAvailable: 'Доступно: {amount}',
+    walletCity: 'Місто оплати: {city}',
+    walletKind_STAFF_TOP_UP: 'Нарахування службою',
+    walletKind_CARD_TOP_UP: 'Поповнення карткою',
+    walletKind_PROMOTION: 'Акція',
+    walletKind_TRIP_PAYMENT: 'Оплата поїздки',
+    walletKind_TIP: 'Чайові',
     debts: 'Борги',
     noDebts: 'Боргів немає.',
     debtLine: 'Борг {left} (сплачено {paid} з {owed})',
@@ -151,6 +167,14 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    wallet: 'Bonusy',
+    walletAvailable: 'Dostępne: {amount}',
+    walletCity: 'Miasto płatności: {city}',
+    walletKind_STAFF_TOP_UP: 'Zasilenie przez firmę',
+    walletKind_CARD_TOP_UP: 'Doładowanie kartą',
+    walletKind_PROMOTION: 'Promocja',
+    walletKind_TRIP_PAYMENT: 'Opłata za przejazd',
+    walletKind_TIP: 'Napiwek',
     debts: 'Długi',
     noDebts: 'Brak długów.',
     debtLine: 'Dług {left} (zapłacono {paid} z {owed})',
