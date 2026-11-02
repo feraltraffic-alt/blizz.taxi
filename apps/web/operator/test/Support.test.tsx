@@ -258,7 +258,7 @@ describe('#317: attachments', () => {
   const FILE = 'f0000000-0000-4000-8000-000000000001';
   const att = (id: string, type: string, name: string | null) => ({file_id: id, content_type: type, size_bytes: 2048,
     name});
-  const withFiles = () => full({messages: [{...message(1, 'PUBLIC', 'Вот фото и чек'),
+  const withFiles = () => full({messages: [{...message(1, 'PUBLIC', 'Оставил зонт в машине'),
     attachments: [att('a1', 'image/png', 'photo.png'), att('a2', 'application/pdf', null)]}]});
   const statics = URL as unknown as {createObjectURL?: (blob: Blob) => string; revokeObjectURL?: (url: string) => void};
   const urls = {made: 0, revoked: [] as string[]};
