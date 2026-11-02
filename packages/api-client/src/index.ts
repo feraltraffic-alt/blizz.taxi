@@ -44,6 +44,11 @@ export interface ClientOptions {
 export interface ApiClient {
   get<P extends PathsFor<'get'>>(path: P, ...options: Arguments<P, 'get'>): Promise<Success<Operation<P, 'get'>>>;
   post<P extends PathsFor<'post'>>(path: P, ...options: Arguments<P, 'post'>): Promise<Success<Operation<P, 'post'>>>;
+  /**
+   * The raw bytes of a file, PUT to the upload_path the server gave (a relative /api/… path only, so the token never
+   * leaves for another host); refreshed once on 401 like any call. Answers the server's JSON (StoredFile).
+   */
+  upload(path: string, data: Blob, contentType: string): Promise<unknown>;
   signIn(input: StaffSignIn): Promise<void>;
   changePassword(input: ChangePassword): Promise<void>;
   logout(): Promise<void>;
@@ -70,6 +75,8 @@ export class UpgradeRequiredError extends ApiError {}
 
 type RequestOptions = {
   body?: unknown;
+  /** Raw bytes instead of a JSON body, with their own Content-Type. */
+  raw?: {data: Blob; type: string};
   params?: Record<string, unknown>;
   query?: Record<string, unknown>;
   signal?: AbortSignal;
@@ -185,11 +192,12 @@ export function createApiClient(options: ClientOptions): ApiClient {
     };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (request.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (request.raw) headers['Content-Type'] = request.raw.type;
     let response: Response;
     try {
       response = await doFetch(url(path, request), {
         method: method.toUpperCase(), headers,
-        body: request.body === undefined ? undefined : JSON.stringify(request.body),
+        body: request.raw ? request.raw.data : request.body === undefined ? undefined : JSON.stringify(request.body),
         signal: request.signal
       });
     } catch {
@@ -254,6 +262,11 @@ export function createApiClient(options: ClientOptions): ApiClient {
   return {
     get: ((path: string, request?: RequestOptions) => call('get', path, request)) as ApiClient['get'],
     post: ((path: string, request?: RequestOptions) => call('post', path, request)) as ApiClient['post'],
+
+    async upload(path, data, contentType) {
+      if (!/^\/api\/[A-Za-z0-9/_-]+$/.test(path)) throw new Error('Not an upload path of this server: ' + path);
+      return call('put', path, {raw: {data, type: contentType}});
+    },
 
     async signIn(input) {
       const {response, id} = await exchange('post', '/auth/v1/staff/sign-in', {body: input}, null);
