@@ -14,7 +14,7 @@ export function OrderActions<O extends Order>({client, t, order, rights, newId, 
   t: Translate; order: O; rights: Set<string>; newId: () => string; onChange: (order: O) => void;
   refresh: () => Promise<void>}) {
   const canRevoke = rights.has('orders.reassign') && order.status === 'ASSIGNED';
-  const canOffer = rights.has('orders.offer') && order.status === 'SEARCHING' && Boolean(order.city_id);
+  const canOffer = rights.has('orders.offer') && order.status !== 'X' && Boolean(order.city_id);
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [reasonCode, setReasonCode] = useState('');
   const [comment, setComment] = useState('');
@@ -70,7 +70,7 @@ export function OrderActions<O extends Order>({client, t, order, rights, newId, 
       setMessage(t('revokeReasonNeeded'));
       return;
     }
-    return command('revoke-assignment', {expected_version: order.version, reason_code: reasonCode,
+    return command('revoke-assignment', {reason_code: reasonCode,
       ...(comment.trim() ? {comment: comment.trim()} : {})});
   }
 
