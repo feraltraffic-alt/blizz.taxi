@@ -49,6 +49,13 @@ export interface ApiClient {
    * leaves for another host); refreshed once on 401 like any call. Answers the server's JSON (StoredFile).
    */
   upload(path: string, data: Blob, contentType: string): Promise<unknown>;
+  /**
+   * The access token for a live channel's subprotocol (a browser cannot set Authorization on a WebSocket, and a
+   * token in the address would reach proxy logs, REQ-SEC-08): the current one, refreshed only when there is none.
+   */
+  socketToken(): Promise<string | null>;
+  /** A fresh token after the channel was closed for an expired one (4401): one refresh, shared with other calls. */
+  renewSocketToken(): Promise<string | null>;
   signIn(input: StaffSignIn): Promise<void>;
   changePassword(input: ChangePassword): Promise<void>;
   logout(): Promise<void>;
@@ -263,6 +270,15 @@ export function createApiClient(options: ClientOptions): ApiClient {
   return {
     get: ((path: string, request?: RequestOptions) => call('get', path, request)) as ApiClient['get'],
     post: ((path: string, request?: RequestOptions) => call('post', path, request)) as ApiClient['post'],
+
+    async socketToken() {
+      if (access) return access;
+      return await refresh() ? access : null;
+    },
+
+    async renewSocketToken() {
+      return await refresh() ? access : null;
+    },
 
     async upload(path, data, contentType) {
       if (!/^\/api\/[A-Za-z0-9/_-]+$/.test(path)) throw new Error('Not an upload path of this server: ' + path);

@@ -5,6 +5,8 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    cardPop: 'Входящие звонки', ringingCall: 'Звонок: {phone}', openOrders: 'открытых заказов: {count}',
+    dismiss: 'Скрыть', liveClosed: 'Доступ к звонкам закрыт. Войдите снова.',
     orderCalls: 'Звонки по заказу', callTo_CALLER: 'Позвонить звонящему', callTo_DRIVER: 'Позвонить водителю',
     callTo_RIDER: 'Позвонить пассажиру', retryCall: 'Повторить звонок', phoneRinging: 'Звонит ваш телефон…',
     callFailed: 'Звонок не удался.', callUnsure: 'АТС не ответила. Повторите: второй раз телефон не зазвонит.',
@@ -108,6 +110,8 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    cardPop: 'Вхідні дзвінки', ringingCall: 'Дзвінок: {phone}', openOrders: 'відкритих замовлень: {count}',
+    dismiss: 'Сховати', liveClosed: 'Доступ до дзвінків закрито. Увійдіть знову.',
     orderCalls: 'Дзвінки щодо замовлення', callTo_CALLER: 'Подзвонити абоненту', callTo_DRIVER: 'Подзвонити водію',
     callTo_RIDER: 'Подзвонити пасажиру', retryCall: 'Повторити дзвінок', phoneRinging: 'Дзвонить ваш телефон…',
     callFailed: 'Дзвінок не вдався.', callUnsure: 'АТС не відповіла. Повторіть: удруге телефон не задзвонить.',
@@ -211,6 +215,8 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    cardPop: 'Połączenia przychodzące', ringingCall: 'Połączenie: {phone}', openOrders: 'otwartych zleceń: {count}',
+    dismiss: 'Ukryj', liveClosed: 'Dostęp do połączeń zamknięty. Zaloguj się ponownie.',
     orderCalls: 'Połączenia zlecenia', callTo_CALLER: 'Zadzwoń do zgłaszającego', callTo_DRIVER: 'Zadzwoń do kierowcy',
     callTo_RIDER: 'Zadzwoń do pasażera', retryCall: 'Ponów połączenie', phoneRinging: 'Dzwoni twój telefon…',
     callFailed: 'Połączenie nie powiodło się.', callUnsure: 'Centrala nie odpowiedziała. Ponów: telefon nie zadzwoni drugi raz.',
