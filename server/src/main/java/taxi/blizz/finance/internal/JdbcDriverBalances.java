@@ -304,7 +304,7 @@ class JdbcDriverBalances implements DriverBalances {
                         select currency, enabled, max_per_transfer_minor, max_per_day_minor, min_balance_after_minor,
                                version
                         from driver_transfer_rule where service_id = :service order by currency""")
-                .param("service", serviceOf(within))
+                .param("service", Services.DEFAULT_ID)
                 .query((rs, i) -> new TransferRule(rs.getString(1), rs.getBoolean(2), rs.getLong(3), rs.getLong(4),
                         rs.getLong(5), rs.getLong(6)))
                 .list();
