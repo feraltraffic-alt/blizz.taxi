@@ -66,7 +66,7 @@ export function Money({client, t, guard, failure, cityId, now, service}: Shared 
     const [b, e, h] = await Promise.all([
       guard(() => client.get('/api/driver/v1/balance')),
       cityId ? guard(() => client.get('/api/driver/v1/earnings' as never, {query: {city_id: cityId,
-        from: day(now(), 6, zone), to: day(now(), 0, zone)}} as never)) : Promise.resolve(null),
+        from: day(now(), 6, zone && null), to: day(now(), 0, zone && null)}} as never)) : Promise.resolve(null),
       guard(() => client.get('/api/driver/v1/balance/history' as never, {query: {}} as never))
     ]);
     setBalances((b as {balances: Balance[]}).balances);
