@@ -81,6 +81,55 @@ class MerchantAdminTests {
         assertThat(check.message()).doesNotContain("merchant-secret");
     }
 
+    /** ADR 0016, issue #215: a merchant belongs to one taxi service; another service neither sees nor changes it. */
+    @Test
+    void aMerchantIsSeenAndChangedOnlyInItsOwnService() {
+        UUID other = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Other taxi', now(), now())""")
+                .param("id", other).param("code", "merchants-" + other.toString().substring(0, 8)).update();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, state, password_hash,
+                                                service_id, created_at, updated_at)
+                        values (:id, :login, 'Money B', 'ADMIN', :permissions, true, 'ACTIVE', :hash, :service, now(),
+                                now())""")
+                .param("id", id).param("login", "money-b-" + id)
+                .param("permissions", new String[] {Integrations.MANAGE_PERMISSION})
+                .param("hash", new BCryptPasswordEncoder(4).encode(PASSWORD)).param("service", other).update();
+        Actor staffOfOther = new Actor(SubjectType.STAFF, id);
+        String account = "other_" + UUID.randomUUID().toString().substring(0, 8);
+        MerchantAdmin.MerchantView ofOther = admin.create(staffOfOther, UUID.randomUUID(), PASSWORD,
+                new MerchantAdmin.NewMerchant("fake", account, "other.example", "UAH", "merchant-secret-0003",
+                        List.of()), "B's merchant");
+
+        assertThat(admin.list(staffOfOther)).extracting(MerchantAdmin.MerchantView::id).contains(ofOther.id());
+        assertThat(admin.list(staff)).as("not in the first service's list")
+                .extracting(MerchantAdmin.MerchantView::id).doesNotContain(ofOther.id());
+        assertThatThrownBy(() -> admin.change(staff, UUID.randomUUID(), PASSWORD, ofOther.id(),
+                new MerchantAdmin.MerchantChange("evil.example", null, null), "Foreign"))
+                .as("another service changes it").isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
+        assertThatThrownBy(() -> admin.check(staff, ofOther.id())).as("another service checks it")
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.NOT_FOUND);
+
+        UUID cityOfFirst = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into city (id, code, name, currency, timezone, polygon, priority, state, created_at,
+                                          updated_at)
+                        values (:id, :code, 'First service city', 'UAH', 'UTC',
+                                ST_GeomFromText('MULTIPOLYGON(((170 -80, 171 -80, 171 -79, 170 -79, 170 -80)))', 4326),
+                                1, 'DRAFT', now(), now())""")
+                .param("id", cityOfFirst).param("code", "merchants-" + cityOfFirst.toString().substring(0, 8))
+                .update();
+        assertThatThrownBy(() -> admin.change(staffOfOther, UUID.randomUUID(), PASSWORD, ofOther.id(),
+                new MerchantAdmin.MerchantChange(null, null, List.of(cityOfFirst)), "A city of the first"))
+                .as("a city of another service").isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).code()).isEqualTo(ErrorCode.ACCESS_DENIED);
+    }
+
     @Test
     void theWrongPasswordAndBadInputAreRefused() {
         assertThatThrownBy(() -> admin.create(staff, UUID.randomUUID(), "wrong", new MerchantAdmin.NewMerchant(

@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import taxi.blizz.audit.AuditEntry;
 import taxi.blizz.audit.AuditLog;
 import taxi.blizz.configuration.Integrations;
+import taxi.blizz.identity.Services;
 import taxi.blizz.identity.StaffAccess;
 import taxi.blizz.identity.StaffSignIn;
 import taxi.blizz.platform.Actor;
@@ -47,10 +48,12 @@ class MerchantAdmin {
     private final IdempotentCommands commands;
     private final AuditLog audit;
     private final Clock clock;
+    private final Services services;
 
     MerchantAdmin(JdbcClient jdbc, Merchants merchants, Providers providers, PaymentsProperties properties,
                   Integrations integrations, StaffAccess staff, StaffSignIn signIn, IdempotentCommands commands,
-                  AuditLog audit, Clock clock) {
+                  AuditLog audit, Clock clock, Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.merchants = merchants;
         this.providers = providers;
@@ -94,7 +97,8 @@ class MerchantAdmin {
     @Transactional(readOnly = true)
     List<MerchantView> list(Actor actor) {
         staff.require(actor, Integrations.MANAGE_PERMISSION);
-        return jdbc.sql("select id from payment_merchant order by created_at").query(UUID.class).list().stream()
+        return jdbc.sql("select id from payment_merchant where service_id = :service order by created_at")
+                .param("service", serviceOf(actor)).query(UUID.class).list().stream()
                 .map(this::view).toList();
     }
 
@@ -110,6 +114,8 @@ class MerchantAdmin {
         String currency = require(body.currency(), CURRENCY, "currency (three capital letters)");
         String secret = secret(body.secret(), true);
         List<UUID> cities = cities(body.cityIds());
+        requireOwnCities(actor, cities);
+        UUID service = serviceOf(actor);
         String why = reason(reason);
         signIn.confirmPassword(actor, password);
         return commands.execute(new CommandKey(actor, "payments.merchant.create", commandId),
@@ -123,9 +129,9 @@ class MerchantAdmin {
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
                                     insert into payment_merchant (id, provider, account, domain, secret_ref, currency,
-                                                                  created_at)
-                                    values (:id, :provider, :account, :domain, 'panel', :currency, :now)""")
-                            .param("id", id).param("provider", provider).param("account", account)
+                                                                  created_at, service_id)
+                                    values (:id, :provider, :account, :domain, 'panel', :currency, :now, :service)""")
+                            .param("id", id).param("service", service).param("provider", provider).param("account", account)
                             .param("domain", domain).param("currency", currency).param("now", now()).update();
                     integrations.putSecret(actor, Merchants.secretName(id), secret);
                     assignCities(id, cities);
@@ -145,13 +151,20 @@ class MerchantAdmin {
         if (domain == null && secret == null && cities == null) {
             throw invalid("Nothing to change");
         }
+        if (cities != null) {
+            requireOwnCities(actor, cities);
+        }
+        UUID service = serviceOf(actor);
         String why = reason(reason);
         signIn.confirmPassword(actor, password);
         return commands.execute(new CommandKey(actor, "payments.merchant.change", commandId),
                 new Request(merchantId, null, null, domain, null, fingerprint(secret), cities, why),
                 MerchantView.class, () -> {
-                    boolean found = jdbc.sql("select id from payment_merchant where id = :id for update")
-                            .param("id", merchantId).query(UUID.class).optional().isPresent();
+                    boolean found = jdbc.sql("""
+                                    select id from payment_merchant where id = :id and service_id = :service
+                                    for update""")
+                            .param("id", merchantId).param("service", service).query(UUID.class).optional()
+                            .isPresent();
                     if (!found) {
                         throw new DomainException(ErrorCode.NOT_FOUND, "Merchant not found");
                     }
@@ -193,6 +206,12 @@ class MerchantAdmin {
     Integrations.Check check(Actor actor, UUID merchantId) {
         staff.requireEveryCity(actor, Integrations.MANAGE_PERMISSION);
         String group = "payments";
+        boolean own = jdbc.sql("""
+                        select exists(select 1 from payment_merchant where id = :id and service_id = :service)""")
+                .param("id", merchantId).param("service", serviceOf(actor)).query(Boolean.class).single();
+        if (!own) {
+            throw new DomainException(ErrorCode.NOT_FOUND, "Merchant not found");
+        }
         Merchant merchant = merchants.byId(merchantId).orElse(null);
         if (merchant == null) {
             return new Integrations.Check(group, false, "The merchant has no secret key (or does not exist)");
@@ -211,6 +230,18 @@ class MerchantAdmin {
         String lower = answer.toLowerCase(Locale.ROOT);
         boolean refused = lower.contains("signature") || lower.contains("merchant");
         return new Integrations.Check(group, !refused, merchant.provider() + " answered: " + answer.strip());
+    }
+
+    private UUID serviceOf(Actor actor) {
+        return services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "A payment merchant belongs to a taxi service"));
+    }
+
+    /** A merchant serves only cities of its own service: a city of another service is refused (ADR 0016). */
+    private void requireOwnCities(Actor actor, List<UUID> cities) {
+        if (!cities.isEmpty()) {
+            staff.require(actor, Integrations.MANAGE_PERMISSION, cities.toArray(UUID[]::new));
+        }
     }
 
     private void assignCities(UUID merchantId, List<UUID> cities) {
@@ -234,7 +265,8 @@ class MerchantAdmin {
                 .query((rs, i) -> new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
                         rs.getString(5), rs.getObject(6, OffsetDateTime.class)))
                 .single();
-        List<UUID> cities = jdbc.sql("select city_id from payment_merchant_city where merchant_id = :id order by city_id")
+        List<UUID> cities = jdbc.sql(
+                        "select city_id from payment_merchant_city where merchant_id = :id order by city_id")
                 .param("id", id).query(UUID.class).list();
         String source = merchants.secretSource(id, row.secretRef());
         return new MerchantView(id, row.provider(), row.account(), row.domain(), row.currency(), cities, source,
