@@ -53,9 +53,12 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     private final AuditLog audit;
     private final JsonMapper json;
     private final Clock clock;
+    private final taxi.blizz.identity.Services services;
 
     JdbcOperatorBonuses(JdbcClient jdbc, Orders orders, CancelReasons cancelReasons, CityCatalog cities,
-                        StaffAccess staff, IdempotentCommands commands, AuditLog audit, JsonMapper json, Clock clock) {
+                        StaffAccess staff, IdempotentCommands commands, AuditLog audit, JsonMapper json, Clock clock,
+                        taxi.blizz.identity.Services services) {
+        this.services = services;
         this.jdbc = jdbc;
         this.orders = orders;
         this.cancelReasons = cancelReasons;
@@ -99,10 +102,10 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public SettingsVersion currentSettings(Actor actor) {
         staff.require(actor, MANAGE_PERMISSION);
-        return currentSettingsInternal();
+        return currentSettingsInternal(serviceOf(actor));
     }
 
     record ChangeRequest(long expectedVersion, Settings settings, String reason) {
@@ -121,10 +124,10 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
     @Transactional
     SettingsVersion changeInside(Actor actor, long expectedVersion, Settings settings, String reason) {
-        jdbc.sql("select pg_advisory_xact_lock(hashtext('operator-bonus-settings'))").query().singleRow();
-        SettingsVersion current = jdbc.sql("select version, m, g, count_cancellations, reset_day, time_rules::text, "
-                        + "effective_at, changed_by, reason from operator_bonus_settings order by version desc limit 1 for update")
-                .query((rs, i) -> mapSettings(rs)).single();
+        UUID service = serviceOf(actor);
+        jdbc.sql("select pg_advisory_xact_lock(hashtext('operator-bonus-settings:' || :service))")
+                .param("service", service.toString()).query().singleRow();
+        SettingsVersion current = currentSettingsInternal(service);
         if (current.version() != expectedVersion) {
             throw ConflictException.version(current.version(), "Operator bonus settings changed");
         }
@@ -132,11 +135,12 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         OffsetDateTime now = now();
         try {
             jdbc.sql("""
-                            insert into operator_bonus_settings
-                                (version, m, g, count_cancellations, reset_day, time_rules, effective_at, changed_by, reason)
-                            values (:version, :m, :g, :count, :reset, cast(:rules as jsonb), :at, :by, :reason)
+                            insert into operator_bonus_settings (service_id, version, m, g, count_cancellations,
+                                reset_day, time_rules, effective_at, changed_by, reason)
+                            values (:service, :version, :m, :g, :count, :reset, cast(:rules as jsonb), :at, :by,
+                                    :reason)
                             """)
-                    .param("version", version).param("m", settings.m()).param("g", settings.g())
+                    .param("service", service).param("version", version).param("m", settings.m()).param("g", settings.g())
                     .param("count", settings.countCancellations()).param("reset", settings.resetDay())
                     .param("rules", json.writeValueAsString(settings.timeRules())).param("at", now)
                     .param("by", actor.id()).param("reason", reason).update();
@@ -146,7 +150,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         }
         audit.record(new AuditEntry(actor, "operator_bonus.settings.change", "operator_bonus_settings",
                 Long.toString(version), reason, current.settings(), settings));
-        return readSettings(version);
+        return readSettings(service, version);
     }
 
     @Override
@@ -162,8 +166,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     @Transactional(readOnly = true)
     public List<Account> accounts(Actor actor) {
         staff.require(actor, MANAGE_PERMISSION);
-        return jdbc.sql("select staff_id from operator_bonus_account order by staff_id")
-                .query(UUID.class).list().stream().map(id -> account(id, 10)).toList();
+        return jdbc.sql("select staff_id from operator_bonus_account where service_id = :service order by staff_id")
+                .param("service", serviceOf(actor)).query(UUID.class).list().stream().map(id -> account(id, 10)).toList();
     }
 
     @Override
@@ -182,10 +186,12 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                         select staff_id, period_key, period_started_at, period_ended_at, points,
                                fulfilled_count, cancelled_count, closed_at
                         from operator_bonus_period
-                        where cast(:afterKey as date) is null
-                           or (period_key, staff_id) < (:afterKey, cast(:afterStaff as uuid))
+                        where service_id = :service
+                          and (cast(:afterKey as date) is null
+                               or (period_key, staff_id) < (:afterKey, cast(:afterStaff as uuid)))
                         order by period_key desc, staff_id desc limit :limit
                         """)
+                .param("service", serviceOf(actor))
                 .param("afterKey", after == null ? null : after.date(0))
                 .param("afterStaff", after == null ? null : after.id(1))
                 .param("limit", Math.max(1, Math.min(limit, PageCursor.MAX_FETCH)))
@@ -199,16 +205,21 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     @Override
     @Transactional
     public void resetDueAccounts() {
-        Settings settings = currentSettingsInternal().settings();
+        // Each operator's period closes on the reset day of their own service (ADR 0016).
+        java.util.Map<UUID, Settings> byService = new java.util.HashMap<>();
         OffsetDateTime now = now();
         List<AccountRow> rows = jdbc.sql("""
-                        select staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone
+                        select staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone,
+                               service_id
                         from operator_bonus_account for update
                         """)
                 .query((rs, i) -> new AccountRow(rs.getObject("staff_id", UUID.class), rs.getInt("balance"),
                         rs.getInt("fulfilled_count"), rs.getInt("cancelled_count"),
-                        rs.getObject("period_started_at", OffsetDateTime.class), rs.getString("timezone"))).list();
+                        rs.getObject("period_started_at", OffsetDateTime.class), rs.getString("timezone"),
+                        rs.getObject("service_id", UUID.class))).list();
         for (AccountRow row : rows) {
+            Settings settings = byService.computeIfAbsent(row.serviceId(),
+                    service -> currentSettingsInternal(service).settings());
             ZoneId zone = ZoneId.of(row.timezone());
             LocalDate today = now.atZoneSameInstant(zone).toLocalDate();
             LocalDate due = resetDate(today, settings.resetDay());
@@ -219,14 +230,15 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
             int inserted = jdbc.sql("""
                             insert into operator_bonus_period
                                 (id, staff_id, period_key, period_started_at, period_ended_at, points,
-                                 fulfilled_count, cancelled_count, closed_at)
-                            values (:id, :staff, :key, :started, :ended, :points, :fulfilled, :cancelled, :closed)
+                                 fulfilled_count, cancelled_count, closed_at, service_id)
+                            values (:id, :staff, :key, :started, :ended, :points, :fulfilled, :cancelled, :closed,
+                                    :service)
                             on conflict (staff_id, period_key) do nothing
                             """)
                     .param("id", UUID.randomUUID()).param("staff", row.staffId()).param("key", due)
                     .param("started", row.periodStartedAt()).param("ended", now).param("points", row.balance())
                     .param("fulfilled", row.fulfilledCount()).param("cancelled", row.cancelledCount())
-                    .param("closed", now).update();
+                    .param("closed", now).param("service", row.serviceId()).update();
             if (inserted == 1) {
                 jdbc.sql("""
                                 update operator_bonus_account set balance = 0, fulfilled_count = 0,
@@ -247,10 +259,15 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                 || origin.createdById() == null) {
             return;
         }
-        SettingsVersion version = settingsAt(origin.createdAt());
+        // The order's city decides the service whose rules count (ADR 0016).
+        UUID service = cities.serviceOf(origin.cityId()).orElse(null);
+        if (service == null) {
+            log.warn("Skipping operator bonus for order {}: city {} not found", orderId, origin.cityId());
+            return;
+        }
+        SettingsVersion version = settingsAt(service, origin.createdAt());
         if ("OPERATOR_FAULT_CANCELLATION".equals(kind)) {
-            boolean operatorFault = cities.serviceOf(origin.cityId())
-                    .flatMap(service -> cancelReasons.find(service, CancelReasons.Audience.STAFF, reasonCode))
+            boolean operatorFault = cancelReasons.find(service, CancelReasons.Audience.STAFF, reasonCode)
                     .map(CancelReasons.Reason::operatorFault).orElse(false);
             if (!operatorFault || !version.settings().countCancellations()) {
                 return;
@@ -291,8 +308,9 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         } else {
             jdbc.sql("""
                             insert into operator_bonus_account
-                                (staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone, updated_at)
-                            values (:staff, :points, :fulfilled, :cancelled, :started, :timezone, :now)
+                                (staff_id, balance, fulfilled_count, cancelled_count, period_started_at, timezone,
+                                 updated_at, service_id)
+                            values (:staff, :points, :fulfilled, :cancelled, :started, :timezone, :now, :service)
                             on conflict (staff_id) do update set
                                 balance = operator_bonus_account.balance + excluded.balance,
                                 fulfilled_count = operator_bonus_account.fulfilled_count + excluded.fulfilled_count,
@@ -302,7 +320,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                             """)
                     .param("staff", origin.createdById()).param("points", selected.points())
                     .param("fulfilled", fulfilled).param("cancelled", cancelled).param("started", occurredAt)
-                    .param("timezone", timezone).param("now", now()).update();
+                    .param("timezone", timezone).param("now", now()).param("service", service).update();
         }
     }
 
@@ -338,28 +356,48 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         return new RuleValue(DEFAULT_RULE, "FULFILLED".equals(kind) ? settings.m() : -settings.g());
     }
 
-    private SettingsVersion settingsAt(OffsetDateTime createdAt) {
+    private SettingsVersion settingsAt(UUID service, OffsetDateTime createdAt) {
+        seed(service);
         return jdbc.sql("""
                         select version, m, g, count_cancellations, reset_day, time_rules::text,
                                effective_at, changed_by, reason
-                        from operator_bonus_settings where effective_at <= :at order by version desc limit 1
-                        """).param("at", createdAt).query((rs, i) -> mapSettings(rs)).single();
+                        from operator_bonus_settings
+                        where service_id = :service and effective_at <= :at order by version desc limit 1
+                        """).param("service", service).param("at", createdAt).query((rs, i) -> mapSettings(rs))
+                .single();
     }
 
-    private SettingsVersion currentSettingsInternal() {
+    private SettingsVersion currentSettingsInternal(UUID service) {
+        seed(service);
         return jdbc.sql("""
                         select version, m, g, count_cancellations, reset_day, time_rules::text,
                                effective_at, changed_by, reason
-                        from operator_bonus_settings order by version desc limit 1
-                        """).query((rs, i) -> mapSettings(rs)).single();
+                        from operator_bonus_settings where service_id = :service order by version desc limit 1
+                        """).param("service", service).query((rs, i) -> mapSettings(rs)).single();
     }
 
-    private SettingsVersion readSettings(long version) {
+    private SettingsVersion readSettings(UUID service, long version) {
         return jdbc.sql("""
                         select version, m, g, count_cancellations, reset_day, time_rules::text,
                                effective_at, changed_by, reason
-                        from operator_bonus_settings where version = :version
-                        """).param("version", version).query((rs, i) -> mapSettings(rs)).single();
+                        from operator_bonus_settings where service_id = :service and version = :version
+                        """).param("service", service).param("version", version).query((rs, i) -> mapSettings(rs))
+                .single();
+    }
+
+    /** A service starts from the initial rules (migration V20261028_0110_2) as its version 0. */
+    private void seed(UUID service) {
+        jdbc.sql("""
+                        insert into operator_bonus_settings (service_id, version, m, g, count_cancellations, reset_day,
+                                                             time_rules, effective_at, changed_by, reason)
+                        values (:service, 0, 1, 10, true, 1, '[]'::jsonb, '2000-01-01T00:00:00Z', null,
+                                'Initial operator bonus settings')
+                        on conflict (service_id, version) do nothing""").param("service", service).update();
+    }
+
+    private UUID serviceOf(Actor actor) {
+        return services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Operator bonuses belong to a taxi service"));
     }
 
     private SettingsVersion mapSettings(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -377,7 +415,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                         """).param("staff", staffId)
                 .query((rs, i) -> new AccountRow(rs.getObject("staff_id", UUID.class), rs.getInt("balance"),
                         rs.getInt("fulfilled_count"), rs.getInt("cancelled_count"),
-                        rs.getObject("period_started_at", OffsetDateTime.class), rs.getString("timezone"))).optional();
+                        rs.getObject("period_started_at", OffsetDateTime.class), rs.getString("timezone"), null))
+                .optional();
         if (row.isEmpty()) {
             return new Account(staffId, 0, 0, 0, now(), List.of());
         }
@@ -455,5 +494,5 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
     private record RuleValue(String key, int points) {}
     private record AccountRow(UUID staffId, int balance, int fulfilledCount, int cancelledCount,
-                              OffsetDateTime periodStartedAt, String timezone) {}
+                              OffsetDateTime periodStartedAt, String timezone, UUID serviceId) {}
 }
