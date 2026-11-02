@@ -839,6 +839,39 @@ paths:
         "429":
           $ref: "./common.yaml#/components/responses/TooManyRequests"
 
+  /api/operator/v1/vehicle-classes:
+    get:
+      operationId: listOperatorVehicleClasses
+      summary: Classes that can be ordered in a city
+      description: >-
+        For a phone order (#251): the city's active classes with a tariff in force now, in code order, the same list as
+        the rider's. Needs orders.create for the city, as POST /quotes does; a city of another service → 404.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "./rider.v1.yaml#/components/schemas/VehicleClassOption"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
   /api/operator/v1/cancel-reasons:
     get:
       operationId: listOperatorCancelReasons
