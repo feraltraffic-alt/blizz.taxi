@@ -32,7 +32,8 @@ class AriCallEvents {
     }
 
     @SuppressWarnings("unchecked")
-    void handle(String event) {
+    /** An event of the exchange of {@code serviceId} (#275): it can only touch that service's calls. */
+    void handle(java.util.UUID serviceId, String event) {
         try {
             Map<String, Object> e = json.readValue(event, Map.class);
             Object type = e.get("type");
@@ -48,19 +49,19 @@ class AriCallEvents {
             OffsetDateTime at = time(text(e.get("timestamp")));
             if (linked != null && !id.equals(text(linked))) {
                 if ("ChannelStateChange".equals(type) && "Up".equalsIgnoreCase(text(channel.get("state")))) {
-                    calls.legAnswered(text(linked), text(channel.get("name")), at);
+                    calls.legAnswered(serviceId, text(linked), text(channel.get("name")), at);
                 }
                 return;
             }
             switch (String.valueOf(type)) {
-                case "ChannelCreated" -> calls.ringing(id, field(channel, "caller", "number"),
+                case "ChannelCreated" -> calls.ringing(serviceId, id, field(channel, "caller", "number"),
                         field(channel, "dialplan", "exten"), field(channel, "dialplan", "context"), at);
                 case "ChannelStateChange" -> {
                     if ("Up".equalsIgnoreCase(text(channel.get("state")))) {
-                        calls.answered(id, at);
+                        calls.answered(serviceId, id, at);
                     }
                 }
-                case "ChannelDestroyed" -> calls.ended(id, at, "HANGUP");
+                case "ChannelDestroyed" -> calls.ended(serviceId, id, at, "HANGUP");
                 default -> {
                 }
             }

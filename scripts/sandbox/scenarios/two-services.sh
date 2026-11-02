@@ -52,6 +52,18 @@ BOSS=$(staff_sign_in ADMIN "$BOSS_LOGIN" "Sandbox-Boss-2026-ok"); expect 200
 api GET /api/admin/v1/cities "$BOSS" | jq -e '.cities | length == 0' >/dev/null; expect 200
 api GET /api/admin/v1/staff "$BOSS" | jq -e --arg l "$BOSS_LOGIN" '[.staff[].login] == [$l]' >/dev/null; expect 200
 
+say "Each service its own Asterisk (owner decision 02.11.2026, #275): the second sets its ARI user, the first keeps its"
+FIRST_ARI=$(api GET /api/admin/v1/integrations "$(admin_token)" \
+  | jq -c '[.fields[] | select(.name == "otp.asterisk.ari-user")]'); expect 200
+api POST /api/admin/v1/integrations "$BOSS" "{\"command_id\":\"$(uuid)\",\"password\":\"Sandbox-Boss-2026-ok\",
+  \"changes\":[{\"name\":\"otp.asterisk.ari-user\",\"value\":\"second-taxi-ari\"}],
+  \"reason\":\"Sandbox: the second service's own exchange\"}" >/dev/null; expect 200
+api GET /api/admin/v1/integrations "$BOSS" \
+  | jq -e '[.fields[] | select(.name == "otp.asterisk.ari-user")][0].value == "second-taxi-ari"' >/dev/null; expect 200
+[[ "$(api GET /api/admin/v1/integrations "$(admin_token)" \
+  | jq -c '[.fields[] | select(.name == "otp.asterisk.ari-user")]')" == "$FIRST_ARI" ]] \
+  || { note "**The first service's ARI user changed with the second's.**"; exit 1; }
+
 say "Suspending the service signs its rider out at once; resuming lets it sign in again"
 SUSPENDED=$(api POST "/api/admin/v1/services/$SERVICE_ID/suspend" "$OWNER" "{\"command_id\":\"$(uuid)\",
   \"expected_version\":$(jq -r .version <<<"$SERVICE"),\"reason\":\"Sandbox: paused\"}"); expect 200

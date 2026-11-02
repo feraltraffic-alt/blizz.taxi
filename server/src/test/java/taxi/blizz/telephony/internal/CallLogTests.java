@@ -136,6 +136,15 @@ class CallLogTests {
                 .formatted(channel, channel, caller.replace("+", ""), called.replace("+", "")));
     }
 
+    /** As {@link #created(String, String, String)}, on the exchange of {@code service} (#275). */
+    private void createdOn(UUID service, String channel, String caller, String called) {
+        asterisk.push(service, """
+                {"type":"ChannelCreated","timestamp":"2026-10-27T18:00:00.000+0000","application":"blizz-calls",
+                 "channel":{"id":"%s","name":"PJSIP/trunk-00000001","state":"Ring","linkedid":"%s",
+                 "caller":{"name":"","number":"%s"},"dialplan":{"context":"from-trunk","exten":"%s","priority":1}}}"""
+                .formatted(channel, channel, caller.replace("+", ""), called.replace("+", "")));
+    }
+
     private void up(String channel) {
         asterisk.push("""
                 {"type":"ChannelStateChange","timestamp":"2026-10-27T18:00:05.000+0000",
@@ -411,6 +420,47 @@ class CallLogTests {
         cancel(anna, first);
         cancel(anna, second);
         destroyed(another);
+    }
+
+    // ------------------------------------------------------------ each service's exchange (#275)
+
+    /**
+     * T2 and T3 of #275: a call on B's exchange to B's line is B's; A's number rung on B's exchange, or B's on A's, is
+     * no call of either; A's operators never see B's call.
+     */
+    @Test
+    void aCallOnAServicesExchangeIsThatServicesAndAnotherServicesNumberIsNoCall() {
+        UUID b = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Calls B', now(), now())""")
+                .param("id", b).param("code", "calls-" + b.toString().substring(0, 8)).update();
+        UUID cityB = rides.city("test-calls-b", "UAH", 63);
+        jdbc.sql("update city set service_id = :b where id = :c").param("b", b).param("c", cityB).update();
+        String lineB = newPhone("+38044");
+        jdbc.sql("""
+                        insert into call_line (number, city_id, service_id, version, updated_at)
+                        values (:n, :c, :b, 1, now())""")
+                .param("n", lineB).param("c", cityB).param("b", b).update();
+
+        String onB = channel();
+        createdOn(b, onB, newPhone("+38067"), lineB);
+        assertThat(rows(onB)).as("T2: B's call").isEqualTo(1);
+        assertThat(call(onB).cityId()).isEqualTo(cityB);
+        Actor annaOfA = callOperator(cityId);
+        assertThat(calls.recent(annaOfA, null, null, null, 50)).extracting(Calls.Call::id)
+                .as("A's operators do not see it").doesNotContain(call(onB).id());
+
+        String aNumberOnB = channel();
+        createdOn(b, aNumberOnB, newPhone("+38067"), line);
+        assertThat(rows(aNumberOnB)).as("T3: A's line rung on B's exchange is no call").isZero();
+        String bNumberOnA = channel();
+        createdOn(taxi.blizz.identity.Services.DEFAULT_ID, bNumberOnA, newPhone("+38067"), lineB);
+        assertThat(rows(bNumberOnA)).as("nor B's line on A's exchange").isZero();
+        asterisk.push(b, """
+                {"type":"ChannelDestroyed","timestamp":"2026-10-27T18:02:00.000+0000","cause":16,
+                 "cause_txt":"Normal Clearing","channel":{"id":"%s","state":"Up"}}""".formatted(onB));
+        assertThat(call(onB).state()).as("B's end on B's exchange").isNotEqualTo(Calls.State.RINGING);
     }
 
     // ------------------------------------------------------------ Asterisk down (T-36, AC-06)

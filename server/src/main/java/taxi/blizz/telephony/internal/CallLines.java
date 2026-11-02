@@ -42,8 +42,11 @@ class CallLines {
     private final StaffAccess staff;
     private final AuditLog audit;
     private final Clock clock;
+    private final taxi.blizz.identity.Services services;
 
-    CallLines(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit, Clock clock) {
+    CallLines(JdbcClient jdbc, IdempotentCommands commands, StaffAccess staff, AuditLog audit,
+              taxi.blizz.identity.Services services, Clock clock) {
+        this.services = services;
         this.jdbc = jdbc;
         this.commands = commands;
         this.staff = staff;
@@ -95,13 +98,17 @@ class CallLines {
                         jdbc.sql("delete from call_line where number = :number").param("number", number).update();
                         after = current.get();
                     } else {
+                        // The line rings on its service's exchange (#275): the service of whoever sets it, whose
+                        // city it is (checked above).
+                        UUID service = services.of(actor).orElseThrow();
                         jdbc.sql("""
-                                        insert into call_line (number, city_id, label, version, updated_at)
-                                        values (:number, :city, :label, 1, :now)
+                                        insert into call_line (number, city_id, service_id, label, version, updated_at)
+                                        values (:number, :city, :service, :label, 1, :now)
                                         on conflict (number) do update
-                                        set city_id = :city, label = :label, version = call_line.version + 1,
-                                            updated_at = :now""")
-                                .param("number", number).param("city", cityId).param("label", text)
+                                        set city_id = :city, service_id = :service, label = :label,
+                                            version = call_line.version + 1, updated_at = :now""")
+                                .param("number", number).param("city", cityId).param("service", service)
+                                .param("label", text)
                                 .param("now", now).update();
                         after = read(number, false).orElseThrow();
                     }

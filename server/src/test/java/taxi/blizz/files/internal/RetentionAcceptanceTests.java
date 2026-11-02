@@ -949,7 +949,8 @@ class RetentionAcceptanceTests {
         // Valid WAV bytes from the already-tested fake recording source, through the real encrypted storage path.
         var fake = context.getBean("fakeCallSource");
         @SuppressWarnings("unchecked")
-        java.util.Optional<Path> wav = ReflectionTestUtils.invokeMethod(fake, "fetch", "retention-orphan");
+        java.util.Optional<Path> wav = ReflectionTestUtils.invokeMethod(fake, "fetch",
+                taxi.blizz.identity.Services.DEFAULT_ID, "retention-orphan");
         taxi.blizz.files.StoredFile unlinked;
         try (var body = Files.newInputStream(wav.orElseThrow())) {
             unlinked = files.storeSystemFile(taxi.blizz.files.FilePurpose.CALL_RECORDING, "audio/wav", body, 1000000);

@@ -67,10 +67,13 @@ class JdbcCalls implements Calls {
     private final Outbox outbox;
     private final TelephonyProperties properties;
     private final ChannelControl channels;
+    private final taxi.blizz.identity.Services services;
     private final Clock clock;
 
     JdbcCalls(JdbcClient jdbc, TransactionTemplate tx, IdempotentCommands commands, StaffAccess staff,
-              Outbox outbox, TelephonyProperties properties, AriChannels asterisk, FakeChannels fake, Clock clock) {
+              Outbox outbox, TelephonyProperties properties, AriChannels asterisk, FakeChannels fake,
+              taxi.blizz.identity.Services services, Clock clock) {
+        this.services = services;
         this.jdbc = jdbc;
         this.tx = tx;
         this.commands = commands;
@@ -87,13 +90,15 @@ class JdbcCalls implements Calls {
      * A channel was created. Logged as a new RINGING call when it is a call to a service number; a repeat (the same
      * channel) changes nothing. {@code CallRinging} is published once, with the new row.
      */
-    Optional<UUID> ringing(String channelId, String callerRaw, String calledRaw, String context, OffsetDateTime at) {
+    Optional<UUID> ringing(UUID serviceId, String channelId, String callerRaw, String calledRaw, String context,
+                           OffsetDateTime at) {
         Optional<String> called = e164(calledRaw);
         if (channelId == null || called.isEmpty()) {
             return Optional.empty();
         }
-        Optional<UUID> city = jdbc.sql("select city_id from call_line where number = :number")
-                .param("number", called.get()).query(UUID.class).optional();
+        // A number of this exchange's service only (#275): another service's line rung here is no call of either.
+        Optional<UUID> city = jdbc.sql("select city_id from call_line where number = :number and service_id = :service")
+                .param("number", called.get()).param("service", serviceId).query(UUID.class).optional();
         if (city.isEmpty()) {
             if (quiet(callerRaw, context)) {
                 return Optional.empty();
@@ -107,11 +112,12 @@ class JdbcCalls implements Calls {
         return tx.execute(status -> {
             UUID id = UUID.randomUUID();
             int inserted = jdbc.sql("""
-                            insert into call (id, channel_id, caller_phone, caller_raw, called_number, city_id, state,
-                                              started_at)
-                            values (:id, :channel, :caller, :raw, :called, :city, 'RINGING', :at)
-                            on conflict (channel_id) do nothing""")
-                    .param("id", id).param("channel", channelId).param("caller", e164(callerRaw).orElse(null))
+                            insert into call (id, service_id, channel_id, caller_phone, caller_raw, called_number,
+                                              city_id, state, started_at)
+                            values (:id, :service, :channel, :caller, :raw, :called, :city, 'RINGING', :at)
+                            on conflict (service_id, channel_id) do nothing""")
+                    .param("id", id).param("service", serviceId).param("channel", channelId)
+                    .param("caller", e164(callerRaw).orElse(null))
                     .param("raw", callerRaw == null ? null : callerRaw.strip()).param("called", called.get())
                     .param("city", city.get()).param("at", at(at)).update();
             if (inserted == 0) {
@@ -142,16 +148,16 @@ class JdbcCalls implements Calls {
      * The call's own channel went Up. Incoming: RINGING → ANSWERED. Outgoing: the operator picked up their phone —
      * DIALING → RINGING (the other side is being rung); anything else stays.
      */
-    void answered(String channelId, OffsetDateTime at) {
+    void answered(UUID serviceId, String channelId, OffsetDateTime at) {
         jdbc.sql("""
                         update call set state = case when direction = 'OUTBOUND' then 'RINGING' else 'ANSWERED' end,
                                         answered_at = case when direction = 'OUTBOUND' then answered_at
                                                            else coalesce(answered_at, :at) end,
                                         version = version + 1
-                        where channel_id = :channel
+                        where service_id = :service and channel_id = :channel
                           and ((direction = 'INBOUND' and state = 'RINGING')
                                or (direction = 'OUTBOUND' and state = 'DIALING'))""")
-                .param("channel", channelId).param("at", at(at)).update();
+                .param("service", serviceId).param("channel", channelId).param("at", at(at)).update();
     }
 
     /**
@@ -159,11 +165,13 @@ class JdbcCalls implements Calls {
      * answered — its extension names who took the call, unless someone is already recorded (the first answer stays;
      * a different one is logged). Outgoing: the other side picked up — ANSWERED.
      */
-    void legAnswered(String callChannelId, String legName, OffsetDateTime at) {
+    void legAnswered(UUID serviceId, String callChannelId, String legName, OffsetDateTime at) {
         record Row(UUID id, String direction, UUID answeredBy) {
         }
-        Optional<Row> call = jdbc.sql("select id, direction, answered_by from call where channel_id = :channel")
-                .param("channel", callChannelId)
+        Optional<Row> call = jdbc.sql("""
+                        select id, direction, answered_by from call
+                        where service_id = :service and channel_id = :channel""")
+                .param("service", serviceId).param("channel", callChannelId)
                 .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class)))
                 .optional();
         if (call.isEmpty()) {
@@ -179,8 +187,8 @@ class JdbcCalls implements Calls {
         }
         String extension = properties.extensionOf(legName);
         Optional<UUID> who = extension == null ? Optional.empty()
-                : jdbc.sql("select staff_id from staff_extension where extension = :e").param("e", extension)
-                        .query(UUID.class).optional();
+                : jdbc.sql("select staff_id from staff_extension where extension = :e and service_id = :service")
+                        .param("e", extension).param("service", serviceId).query(UUID.class).optional();
         if (who.isEmpty()) {
             return;
         }
@@ -200,13 +208,15 @@ class JdbcCalls implements Calls {
      * The channel is gone: ANSWERED → ENDED, RINGING → MISSED; a call already over stays. A call that was taken gets
      * its recording fetched from Asterisk (PENDING, {@link CallRecordings}).
      */
-    void ended(String channelId, OffsetDateTime at, String reason) {
+    void ended(UUID serviceId, String channelId, OffsetDateTime at, String reason) {
         jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :at, ended_reason = :reason, version = version + 1
-                        where channel_id = :channel and state in ('DIALING', 'RINGING', 'ANSWERED')
+                        where service_id = :service and channel_id = :channel
+                          and state in ('DIALING', 'RINGING', 'ANSWERED')
                         returning id, state""" + RECORD_TAKEN)
-                .param("channel", channelId).param("at", at(at)).param("reason", reason).param("now", now())
+                .param("service", serviceId).param("channel", channelId).param("at", at(at)).param("reason", reason)
+                .param("now", now())
                 .query(Long.class).single();
     }
 
@@ -234,14 +244,15 @@ class JdbcCalls implements Calls {
      * listening — closed as LOST; a taken one gets its recording fetched. DIALING calls are left to the command that
      * places them. Returns how many.
      */
-    int reconcile(Set<String> alive, OffsetDateTime snapshotAt) {
+    int reconcile(UUID serviceId, Set<String> alive, OffsetDateTime snapshotAt) {
         long closed = jdbc.sql("with closed as (" + """
                         update call set state = case when state = 'ANSWERED' then 'ENDED' else 'MISSED' end,
                                         ended_at = :now, ended_reason = 'LOST', version = version + 1
-                        where state in ('RINGING', 'ANSWERED') and started_at < :snapshot
+                        where service_id = :service and state in ('RINGING', 'ANSWERED') and started_at < :snapshot
                           and not (channel_id = any(cast(:alive as text[])))
                         returning id, state""" + RECORD_TAKEN)
-                .param("now", now()).param("snapshot", snapshotAt).param("alive", alive.toArray(String[]::new))
+                .param("service", serviceId).param("now", now()).param("snapshot", snapshotAt)
+                .param("alive", alive.toArray(String[]::new))
                 .query(Long.class).single();
         if (closed > 0) {
             log.info("Closed {} calls that ended while Asterisk's events were not reachable", closed);
@@ -345,6 +356,8 @@ class JdbcCalls implements Calls {
         if (outbound.to() == null || outbound.party() == null || outbound.orderId() == null) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "Whom to call is required");
         }
+        UUID service = services.of(actor).orElseThrow(() -> new DomainException(ErrorCode.ACCESS_DENIED,
+                "Not a staff member"));
         String extension = extension(actor.id()).orElseThrow(() -> new DomainException(ErrorCode.STATE_CONFLICT,
                 "You have no extension: the admin sets it (Settings → staff extensions)"));
         // 1. The receipt and the call, committed before Asterisk is asked.
@@ -352,11 +365,12 @@ class JdbcCalls implements Calls {
                 new DialRequest(outbound.orderId(), outbound.party()), Call.class, () -> {
                     UUID id = UUID.randomUUID();
                     jdbc.sql("""
-                                    insert into call (id, channel_id, direction, party, order_id, city_id, state,
-                                                      answered_by, started_at)
-                                    values (:id, :channel, 'OUTBOUND', :party, :order, :city, 'DIALING', :staff,
-                                            :now)""")
-                            .param("id", id).param("channel", id.toString()).param("party", outbound.party().name())
+                                    insert into call (id, service_id, channel_id, direction, party, order_id, city_id,
+                                                      state, answered_by, started_at)
+                                    values (:id, :service, :channel, 'OUTBOUND', :party, :order, :city, 'DIALING',
+                                            :staff, :now)""")
+                            .param("id", id).param("service", service).param("channel", id.toString())
+                            .param("party", outbound.party().name())
                             .param("order", outbound.orderId()).param("city", outbound.cityId())
                             .param("staff", actor.id()).param("now", now()).update();
                     return find(id).orElseThrow();
@@ -370,7 +384,9 @@ class JdbcCalls implements Calls {
         }
         // 2. Asterisk, outside any transaction. The call's id is the channel's: a repeat cannot ring twice.
         try {
-            channels.originate(current.id().toString(), properties.endpoint(extension), properties.outgoingContext(),
+            // The operator's own service's exchange (#275).
+            channels.originate(service, current.id().toString(), properties.endpoint(extension),
+                    properties.outgoingContext(),
                     Map.of("BLIZZ_DIAL", outbound.to().e164(), "BLIZZ_CALL_ID", current.id().toString()));
         } catch (IOException | RuntimeException e) {
             // Only the type and our own message: the request's variables are never part of either.

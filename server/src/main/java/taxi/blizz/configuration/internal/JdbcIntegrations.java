@@ -150,14 +150,6 @@ class JdbcIntegrations implements Integrations {
     }
 
     @Override
-    public Optional<String> serverValue(String name) {
-        if (!SERVER_FIELDS.contains(name)) {
-            throw new IllegalArgumentException(name + " is a setting of each service, not of the server");
-        }
-        return value(Services.DEFAULT_ID, name);
-    }
-
-    @Override
     public long revision() {
         return snapshot().revision();
     }
@@ -219,9 +211,6 @@ class JdbcIntegrations implements Integrations {
                     .orElseThrow(() -> invalid("Unknown setting " + change.name()));
             if (normalized.containsKey(field.name())) {
                 throw invalid(field.name() + " is given twice");
-            }
-            if (SERVER_FIELDS.contains(field.name()) && !Services.DEFAULT_ID.equals(serviceOf(actor))) {
-                throw invalid(field.name() + " is the server's telephone exchange, set in the first service's panel");
             }
             normalized.put(field.name(), validate(field, change.value()));
         }

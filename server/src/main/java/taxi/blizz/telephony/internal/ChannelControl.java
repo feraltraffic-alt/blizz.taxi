@@ -13,11 +13,12 @@ interface ChannelControl {
     }
 
     /**
-     * Rings {@code endpoint} and sends it to {@code context} (extension {@code s}) with {@code variables}, as the
+     * On the exchange of {@code serviceId} (ADR 0016, #275), rings {@code endpoint} and sends it to
+     * {@code context} (extension {@code s}) with {@code variables}, as the
      * channel {@code channelId}. Asterisk unreachable or refusing throws; the exception never carries the variables.
      */
-    Originated originate(String channelId, String endpoint, String context, Map<String, String> variables)
-            throws IOException;
+    Originated originate(java.util.UUID serviceId, String channelId, String endpoint, String context,
+                         Map<String, String> variables) throws IOException;
 
     /**
      * Asterisk answered and did not take the request, or it cannot be asked at all (not configured): nothing was
@@ -29,6 +30,6 @@ interface ChannelControl {
         }
     }
 
-    /** The ids of the channels Asterisk has now. */
-    Set<String> channels() throws IOException;
+    /** The ids of the channels the service's Asterisk has now. */
+    Set<String> channels(java.util.UUID serviceId) throws IOException;
 }

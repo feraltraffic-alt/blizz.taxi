@@ -48,9 +48,9 @@ class AsteriskVoiceSender implements OtpSender {
 
     @Override
     public Result send(java.util.UUID serviceId, PhoneNumber phone, String code, OtpAudience audience) {
-        String url = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
-        String user = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
-        String password = integrations.serverValue(Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
+        String url = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_URL).orElse(null);
+        String user = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_USER).orElse(null);
+        String password = integrations.value(serviceId, Integrations.OTP_ASTERISK_ARI_PASSWORD).orElse(null);
         // The trunk the call goes out by is the service's own (ADR 0016).
         String endpoint = integrations.value(serviceId, Integrations.OTP_ASTERISK_ENDPOINT).orElse(null);
         if (url == null || user == null || password == null || endpoint == null) {

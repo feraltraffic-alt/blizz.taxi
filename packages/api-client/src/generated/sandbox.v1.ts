@@ -31,7 +31,7 @@ export interface paths {
         put?: never;
         /**
          * Inject an ARI event into the fake Asterisk
-         * @description Handled like a real Asterisk event. Sandbox profile only.
+         * @description Handled like a real Asterisk event of the service's own exchange (ADR 0016, #275): the first service's, or the one named by `service`. Sandbox profile only.
          */
         post: operations["sandboxInjectCallEvent"];
         delete?: never;
@@ -220,7 +220,10 @@ export interface operations {
     };
     sandboxInjectCallEvent: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The code of an ACTIVE service; an unknown one → 404. */
+                service?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -240,7 +243,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description This instance uses a real Asterisk and ignored the event. */
+            /** @description This instance uses a real Asterisk and ignored the event, or no such service. */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -53,8 +53,8 @@ class AriChannels implements ChannelControl {
     }
 
     @Override
-    public Originated originate(String channelId, String endpoint, String context, Map<String, String> variables)
-            throws IOException {
+    public Originated originate(java.util.UUID serviceId, String channelId, String endpoint, String context,
+                                Map<String, String> variables) throws IOException {
         Map<String, String> query = new LinkedHashMap<>();
         query.put("endpoint", endpoint);
         query.put("context", context);
@@ -66,7 +66,7 @@ class AriChannels implements ChannelControl {
         String address = "/ari/channels?" + query.entrySet().stream()
                 .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                 .collect(Collectors.joining("&"));
-        HttpResponse<Void> response = send(request(address)
+        HttpResponse<Void> response = send(request(serviceId, address)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("variables", variables))))
                 .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.discarding());
@@ -79,9 +79,9 @@ class AriChannels implements ChannelControl {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Set<String> channels() throws IOException {
-        HttpResponse<String> response = send(request("/ari/channels").GET().timeout(breakers.timeout(Provider.ASTERISK))
-                .build(), HttpResponse.BodyHandlers.ofString());
+    public Set<String> channels(java.util.UUID serviceId) throws IOException {
+        HttpResponse<String> response = send(request(serviceId, "/ari/channels").GET()
+                .timeout(breakers.timeout(Provider.ASTERISK)).build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IOException("Asterisk answered " + response.statusCode() + " to the list of channels");
         }
@@ -94,10 +94,10 @@ class AriChannels implements ChannelControl {
         return ids;
     }
 
-    private HttpRequest.Builder request(String address) throws IOException {
-        String base = AriAccess.baseUrl(integrations)
+    private HttpRequest.Builder request(java.util.UUID serviceId, String address) throws IOException {
+        String base = AriAccess.baseUrl(integrations, serviceId)
                 .orElseThrow(() -> new Refused("The ARI address is not configured"));
-        String authorization = AriAccess.authorization(integrations)
+        String authorization = AriAccess.authorization(integrations, serviceId)
                 .orElseThrow(() -> new Refused("The ARI user is not configured"));
         return HttpRequest.newBuilder(URI.create(base + address)).header("Authorization", authorization);
     }

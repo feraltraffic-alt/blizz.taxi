@@ -29,12 +29,15 @@ class CallReconciliation {
         this.clock = clock;
     }
 
-    /** Never throws: a failed check leaves the calls to the sweep. */
-    void afterConnect() {
+    /**
+     * The calls of {@code serviceId} against its own exchange (#275). Never throws: a failed check leaves them to the
+     * sweep.
+     */
+    void afterConnect(java.util.UUID serviceId) {
         OffsetDateTime snapshotAt = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
         try {
-            Set<String> alive = asterisk.channels();
-            calls.reconcile(alive, snapshotAt);
+            Set<String> alive = asterisk.channels(serviceId);
+            calls.reconcile(serviceId, alive, snapshotAt);
         } catch (Exception e) {
             log.warn("The calls could not be checked against Asterisk's channels ({}); the sweep closes them later",
                     e.getClass().getSimpleName());
