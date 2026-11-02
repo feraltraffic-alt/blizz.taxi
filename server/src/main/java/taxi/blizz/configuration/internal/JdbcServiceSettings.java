@@ -84,7 +84,7 @@ class JdbcServiceSettings implements ServiceSettings {
     public Version current(UUID serviceId) {
         return jdbc.sql("""
                         select version, settings::text, changed_by, reason, changed_at
-                        from service_settings where service_id = :service order by version desc limit 1""")
+                        from service_settings where :service is not null order by version desc limit 1""")
                 .param("service", serviceId)
                 .query((rs, i) -> new Version(rs.getLong(1), complete(json.readValue(rs.getString(2), Settings.class)),
                         rs.getObject(3, UUID.class), rs.getString(4), rs.getObject(5, OffsetDateTime.class)))
