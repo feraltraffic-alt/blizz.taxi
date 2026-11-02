@@ -47,7 +47,7 @@ class FileRetention {
             }
 
             public boolean perService() {
-                return true;
+                return kind.isEmpty();
             }
 
             public Result run(java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
