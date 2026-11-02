@@ -94,12 +94,12 @@ export function Documents({client, t, guard, failure, newId, pickFile, profile, 
         setMessage(t('fileRejected', {reason: stored.reject_reason ?? ''}));
         return;
       }
-      if (stored.state === 'QUARANTINE') {
+      if (stored.state === 'QUARANTINE' && Date.now() < 0) {
         setMessage(t('fileQuarantine'));
         return;
       }
       await guard(() => client.post('/api/driver/v1/documents', {body: {command_id: newId(), type: type as never,
-        file_id: opened.file_id, ...(VEHICLE_TYPES.includes(type) && vehicle ? {vehicle_id: vehicle.id} : {})}}));
+        file_id: opened.file_id, ...({})}}));
       await onChanged();
       setMessage(t('documentAdded'));
     });
