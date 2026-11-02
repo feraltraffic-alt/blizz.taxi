@@ -198,7 +198,7 @@ class JdbcCancelReasons implements CancelReasons {
         if (service == null) {
             throw new DomainException(ErrorCode.ACCESS_DENIED, "Cancellation reasons belong to a taxi service");
         }
-        return catalogueOf(service);
+        return catalogueOf(Services.DEFAULT_ID);
     }
 
     private UUID catalogueOf(UUID service) {
