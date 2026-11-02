@@ -69,6 +69,14 @@ public interface ProviderBreakers {
     /** How long one call to the provider may take: {@code blizz.providers.<name>.timeout}. */
     java.time.Duration timeout(Provider provider);
 
+    /**
+     * Breakers and bulkheads of their own for {@code key}, with the same settings: e.g. each taxi service's own
+     * Asterisk (#278), so one service's failing exchange never opens another's. Calls through straight here.
+     */
+    default ProviderBreakers keyed(String key) {
+        return this;
+    }
+
     /** Real breakers with the same settings for every provider, for code built outside Spring (tests). */
     static ProviderBreakers of(int failureThreshold, java.time.Duration openFor, java.time.Clock clock) {
         return new taxi.blizz.platform.internal.InMemoryProviderBreakers(failureThreshold, openFor, clock);
