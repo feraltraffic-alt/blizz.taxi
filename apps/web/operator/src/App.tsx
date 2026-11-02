@@ -5,6 +5,7 @@ import {translations} from './i18n.js';
 import {LiveDrivers} from './LiveDrivers.js';
 import {Support} from './Support.js';
 import {OrderHistory} from './OrderHistory.js';
+import {OrderActions} from './OrderActions.js';
 
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
@@ -13,7 +14,7 @@ type Point = {lat: number; lon: number};
 type City = {id: string; name: string; center: Point};
 type Place = {label: string; point: Point};
 type Quote = {id: string; amount_minor: number; currency: string};
-type Order = {id: string; short_number: number; status: string; version: number};
+type Order = {id: string; short_number: number; status: string; version: number; city_id?: string};
 
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
 export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000}: {client: ApiClient;
@@ -72,7 +73,7 @@ function Workstation({client, newId, pollMs}: {client: ApiClient; newId: () => s
       {view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
         pollMs={pollMs} /> : view === 'support' && rights.has('support.manage') ? <Support client={client} t={t}
         cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
-        canView={rights.has('orders.view')}
+        rights={rights}
         onDone={() => setOrder(null)} /> : (
         <section aria-labelledby="new-order">
           <h1 id="new-order">{t('newOrder')}</h1>
@@ -270,8 +271,9 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
   );
 }
 
-function OrderView({client, order, onChange, newId, pollMs, onDone, canView}: {client: ApiClient; order: Order;
-  onChange: (order: Order) => void; newId: () => string; pollMs: number; onDone: () => void; canView: boolean}) {
+function OrderView({client, order, onChange, newId, pollMs, onDone, rights}: {client: ApiClient; order: Order;
+  onChange: (order: Order) => void; newId: () => string; pollMs: number; onDone: () => void; rights: Set<string>}) {
+  const canView = rights.has('orders.view');
   const [reasons, setReasons] = useState<{code: string; labels: Record<string, string>}[]>([]);
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -321,6 +323,8 @@ function OrderView({client, order, onChange, newId, pollMs, onDone, canView}: {c
       </label>
       <button type="button" onClick={() => void cancel()} disabled={!reason}>{t('cancel')}</button>
       <button type="button" onClick={onDone}>{t('another')}</button>
+      <OrderActions client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
+        refresh={refresh} />
       {/* The history and the conversation need orders.view (#292 H5). */}
       {canView ? <OrderHistory client={client} t={t} orderId={order.id} /> : null}
       {message ? <p role="alert">{message}</p> : null}

@@ -486,8 +486,7 @@ describe('#294: driver actions on an order', () => {
     await ordered();
     expect(screen.queryByRole('button', {name: 'Предложить заказ'})).not.toBeInTheDocument();
     expect(asked.live).toEqual([]);
-    const second = handlers('ASSIGNED', {rights: ['orders.create', 'orders.view', 'orders.cancel']});
-    expect(second.asked.reasons).toBe(0);
+    expect(screen.queryByRole('button', {name: 'Снять водителя'})).not.toBeInTheDocument();
     expect(asked.reasons).toBe(0);
   });
 
