@@ -19,6 +19,7 @@ export function Cards({client, t, guard, failure, newId, service, pollMs, onBack
   const [waiting, setWaiting] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [cities, setCities] = useState<{id: string; name: string}[]>([]);
   const acting = useRef(false);
   const theme = useTheme();
 
@@ -30,6 +31,14 @@ export function Cards({client, t, guard, failure, newId, service, pollMs, onBack
     setMessage(null);
     list().catch(error => setMessage(failure(error)));
   }, [list, attempt]); // the failure text follows the same texts
+
+  // A card is bound for one city's merchant: with several cities the rider says which (#271 found an order in Kyiv
+  // refused for a card bound in the bootstrap's first city).
+  useEffect(() => {
+    client.get('/api/config/v1/bootstrap' as never, {query: {service}} as never)
+      .then(boot => setCities((boot as {cities: {id: string; name: string}[]}).cities))
+      .catch(() => setCities([]));
+  }, [client, service]);
 
   // After the provider's page: the binding is read until it is no longer PENDING.
   useEffect(() => {
@@ -57,15 +66,12 @@ export function Cards({client, t, guard, failure, newId, service, pollMs, onBack
     };
   }, [waiting, client, guard, list, pollMs, t]);
 
-  /** One binding at a time (K4), for the service's first city. */
-  async function add() {
+  /** One binding at a time (K4), for the chosen city. */
+  async function add(city: {id: string} | undefined) {
     if (acting.current || waiting) return;
     acting.current = true;
     setMessage(null);
     try {
-      const boot = await client.get('/api/config/v1/bootstrap' as never, {query: {service}} as never) as
-        {cities: {id: string}[]};
-      const city = boot.cities[0];
       if (!city) {
         setMessage(t('noCardsHere'));
         return;
@@ -107,7 +113,10 @@ export function Cards({client, t, guard, failure, newId, service, pollMs, onBack
                 onPress={() => void remove(c)} />
             </View>
           ))}
-          <Button label={t('addCard')} onPress={() => void add()} disabled={Boolean(waiting)} />
+          {cities.length > 1 ? cities.map(city => (
+            <Button key={city.id} label={t('addCardIn', {city: city.name})} onPress={() => void add(city)}
+              disabled={Boolean(waiting)} />
+          )) : <Button label={t('addCard')} onPress={() => void add(cities[0])} disabled={Boolean(waiting)} />}
           {waiting ? <Text style={{color: theme.muted}}>{t('cardWaiting')}</Text> : null}
         </>
       )}
