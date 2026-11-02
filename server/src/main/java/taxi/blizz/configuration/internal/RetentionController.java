@@ -21,10 +21,12 @@ class RetentionController {
 
     private final RetentionSettings settings;
     private final StaffAccess staff;
+    private final taxi.blizz.identity.Services services;
 
-    RetentionController(RetentionSettings settings, StaffAccess staff) {
+    RetentionController(RetentionSettings settings, StaffAccess staff, taxi.blizz.identity.Services services) {
         this.settings = settings;
         this.staff = staff;
+        this.services = services;
     }
 
     record Change(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion, @NotNull JsonNode days,
@@ -34,17 +36,19 @@ class RetentionController {
     @GetMapping("/api/admin/v1/retention")
     RetentionSettings.Version current(AccessClaims claims) {
         JdbcRetentionSettings.require(staff, claims.actor());
-        return settings.current();
+        // The staff member's own service's terms (ADR 0016, #276).
+        return settings.current(services.of(claims.actor()).orElseThrow(() -> new DomainException(
+                ErrorCode.ACCESS_DENIED, "Not a staff member")));
     }
 
     @PutMapping("/api/admin/v1/retention")
     RetentionSettings.Version change(AccessClaims claims, @Valid @RequestBody Change body) {
         JdbcRetentionSettings.require(staff, claims.actor());
         Map<String, Integer> days = new LinkedHashMap<>();
-        if (!body.days().isObject() || body.days().size() != RetentionPolicy.KINDS.size()) {
+        if (!body.days().isObject() || body.days().size() != RetentionPolicy.SERVICE_KINDS.size()) {
             throw invalid();
         }
-        for (String kind : RetentionPolicy.KINDS) {
+        for (String kind : RetentionPolicy.SERVICE_KINDS) {
             JsonNode value = body.days().path(kind);
             if (!value.isIntegralNumber() || !value.canConvertToInt() || value.asInt() < 0) {
                 throw invalid();

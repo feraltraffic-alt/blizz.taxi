@@ -165,8 +165,9 @@ class OutboxTests {
             }
         }
         var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
-        var runner = new RetentionRunner(() -> taxi.blizz.platform.RetentionPolicy.KINDS.stream()
-                .collect(java.util.stream.Collectors.toMap(k -> k, k -> 1)), allWork, meters,
+        var runner = new RetentionRunner(() -> java.util.Map.of(java.util.UUID.randomUUID(),
+                taxi.blizz.platform.RetentionPolicy.SERVICE_KINDS.stream()
+                        .collect(java.util.stream.Collectors.toMap(k -> k, k -> 1))), allWork, meters,
                 java.time.Clock.systemUTC());
         try {
             runner.runOnce();

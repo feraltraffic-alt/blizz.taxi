@@ -58,38 +58,67 @@ class RetentionRunner implements taxi.blizz.platform.RetentionRuns {
         if (!RetentionPolicy.KINDS.contains(kind)) {
             throw new IllegalArgumentException("Unknown retention kind");
         }
-        RetentionWork.Result total = new RetentionWork.Result(0, 0);
-        Integer days;
-        try {
-            days = policy.days().get(kind);
-            if (days == null || days < 0) {
-                throw new IllegalStateException("Invalid retention policy: " + kind);
-            }
-        } catch (RuntimeException ex) {
-            log.warn("Retention policy read failed for {} ({})", kind, ex.getClass().getSimpleName());
-            count("blizz.retention.failures", kind, 1);
-            return new RetentionWork.Result(0, 1, 0);
-        }
         List<RetentionWork> own = work.stream().filter(item -> item.kind().equals(kind)).toList();
-        if (days != 0) {
-            for (int i = 0; i < own.size(); i++) {
-                int remaining = 1000 - total.examined();
-                if (remaining <= 0) {
-                    break;
+        RetentionWork.Result total;
+        if (RetentionPolicy.FIXED_KINDS.contains(kind)) {
+            // Rows of no service: exactly 30 days, whatever any service sets (owner answer 02.11.2026, #276).
+            total = runWorks(kind, own, null, RetentionPolicy.FIXED_DAYS, now);
+        } else {
+            Map<java.util.UUID, Map<String, Integer>> terms;
+            try {
+                terms = policy.byService();
+                for (Map<String, Integer> days : terms.values()) {
+                    Integer value = days.get(kind);
+                    if (value == null || value < 0) {
+                        throw new IllegalStateException("Invalid retention policy: " + kind);
+                    }
                 }
-                // Share the budget so failed source copies cannot starve unlinked recording files.
-                int budget = Math.max(1, remaining / (own.size() - i));
-                try {
-                    total = total.plus(own.get(i).run(cutoff(now, days), now, budget));
-                } catch (RuntimeException ex) {
-                    // An unexpected failure may follow committed items: reserve its entire allocation.
-                    total = total.plus(new RetentionWork.Result(0, 1, budget));
-                    log.warn("Retention batch failed for {} ({})", kind, ex.getClass().getSimpleName());
-                }
+            } catch (RuntimeException ex) {
+                log.warn("Retention policy read failed for {} ({})", kind, ex.getClass().getSimpleName());
+                count("blizz.retention.failures", kind, 1);
+                return new RetentionWork.Result(0, 1, 0);
+            }
+            total = new RetentionWork.Result(0, 0);
+            // Rows that carry their service go by that service's term (#276).
+            List<RetentionWork> perService = own.stream().filter(RetentionWork::perService).toList();
+            for (var entry : terms.entrySet()) {
+                total = total.plus(runWorks(kind, perService, entry.getKey(), entry.getValue().get(kind), now));
+            }
+            // A work whose rows do not carry a service yet follows the first service's term (#276, until they do).
+            List<RetentionWork> shared = own.stream().filter(w -> !w.perService()).toList();
+            if (!shared.isEmpty() && !terms.isEmpty()) {
+                total = total.plus(runWorks(kind, shared, null, terms.values().iterator().next().get(kind), now));
             }
         }
         count("blizz.retention.deleted", kind, total.deleted());
         count("blizz.retention.failures", kind, total.failures());
+        return total;
+    }
+
+    /** One bounded batch of the works, for one service ({@code serviceId}) or for rows of none (null). */
+    private RetentionWork.Result runWorks(String kind, List<RetentionWork> works, java.util.UUID serviceId, int days,
+                                          OffsetDateTime now) {
+        RetentionWork.Result total = new RetentionWork.Result(0, 0);
+        if (days == 0) {
+            return total;
+        }
+        for (int i = 0; i < works.size(); i++) {
+            int remaining = 1000 - total.examined();
+            if (remaining <= 0) {
+                break;
+            }
+            // Share the budget so failed source copies cannot starve unlinked recording files.
+            int budget = Math.max(1, remaining / (works.size() - i));
+            try {
+                RetentionWork item = works.get(i);
+                total = total.plus(serviceId == null ? item.run(cutoff(now, days), now, budget)
+                        : item.run(serviceId, cutoff(now, days), now, budget));
+            } catch (RuntimeException ex) {
+                // An unexpected failure may follow committed items: reserve its entire allocation.
+                total = total.plus(new RetentionWork.Result(0, 1, budget));
+                log.warn("Retention batch failed for {} ({})", kind, ex.getClass().getSimpleName());
+            }
+        }
         return total;
     }
 

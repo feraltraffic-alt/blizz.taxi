@@ -8,8 +8,8 @@ components:
     RetentionDays:
       type: object
       additionalProperties: false
-      description: Separate retention in whole days for each kind. 0 always means keep forever. A change applies to the next cleanup run; already deleted data cannot be restored. Cleanup never deletes the audit log, journal, orders, payments or FAILED outbox events.
-      required: [sessions, sign_in_codes, code_deliveries, delivered_events, consumer_receipts, command_receipts, upload_sessions, quarantined_files, call_recordings]
+      description: The taxi service's own retention in whole days for each kind of its rows (ADR 0016, #276); delivered events and receipts belong to no service and are kept a fixed 30 days (fixed_days). 0 always means keep forever. A change applies to the next cleanup run; already deleted data cannot be restored. Cleanup never deletes the audit log, journal, orders, payments or FAILED outbox events.
+      required: [sessions, sign_in_codes, code_deliveries, upload_sessions, quarantined_files, call_recordings]
       properties:
         sessions:
           type: integer
@@ -29,24 +29,6 @@ components:
           maximum: 2147483647
           default: 90
           description: "Code delivery attempts, measured from the attempt time. 0 means keep forever."
-        delivered_events:
-          type: integer
-          minimum: 0
-          maximum: 2147483647
-          default: 30
-          description: "Only DONE outbox events, measured from completion. FAILED and PENDING events are preserved. 0 means keep forever."
-        consumer_receipts:
-          type: integer
-          minimum: 0
-          maximum: 2147483647
-          default: 30
-          description: "Completed consumer inbox receipts, measured from completion. Receipts for events still PENDING or FAILED are preserved so replay skips completed consumers. 0 means keep forever."
-        command_receipts:
-          type: integer
-          minimum: 0
-          maximum: 2147483647
-          default: 30
-          description: "Completed command receipts, measured from completion. After expiry a command id is no longer remembered. 0 means keep forever."
         upload_sessions:
           type: integer
           minimum: 0
@@ -68,7 +50,7 @@ components:
     RetentionVersion:
       type: object
       additionalProperties: false
-      required: [version, days, changed_by, reason, changed_at]
+      required: [version, days, changed_by, reason, changed_at, fixed_days]
       properties:
         version:
           type: integer
@@ -84,6 +66,21 @@ components:
         changed_at:
           type: [string, 'null']
           format: date-time
+        fixed_days:
+          description: Rows of no service, kept a fixed number of days whatever is set (owner answer 02.11.2026).
+          type: object
+          additionalProperties: false
+          required: [delivered_events, consumer_receipts, command_receipts]
+          properties:
+            delivered_events:
+              type: integer
+              const: 30
+            consumer_receipts:
+              type: integer
+              const: 30
+            command_receipts:
+              type: integer
+              const: 30
     ChangeRetention:
       type: object
       additionalProperties: false
