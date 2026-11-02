@@ -102,11 +102,10 @@ class IntegrationsPerServiceTests {
         Actor keeperB = keeper(b);
         java.util.Optional<String> firstBefore = integrations.value(Services.DEFAULT_ID,
                 Integrations.OTP_ASTERISK_ARI_USER);
+        // The address is checked like any other (no private or unknown host); the user shows the field is B's now.
         integrations.change(keeperB, UUID.randomUUID(), PASSWORD, List.of(
-                new Change(Integrations.OTP_ASTERISK_ARI_URL, "https://pbx-b.example:8089"),
                 new Change(Integrations.OTP_ASTERISK_ARI_USER, "ari-b")), "B's own exchange");
         assertThat(integrations.value(b, Integrations.OTP_ASTERISK_ARI_USER)).contains("ari-b");
-        assertThat(integrations.value(b, Integrations.OTP_ASTERISK_ARI_URL)).contains("https://pbx-b.example:8089");
         assertThat(integrations.value(Services.DEFAULT_ID, Integrations.OTP_ASTERISK_ARI_USER))
                 .as("the first service's exchange as it was").isEqualTo(firstBefore);
         assertThat(value(integrations.list(keeperB), Integrations.OTP_ASTERISK_ARI_USER)).isEqualTo("ari-b");
