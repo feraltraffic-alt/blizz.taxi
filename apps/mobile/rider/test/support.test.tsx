@@ -26,7 +26,7 @@ function server(script: Record<string, Answer[]>) {
     const answers = script[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
     if (answer.delayMs) await new Promise(resolve => setTimeout(resolve, answer.delayMs));
-    if (answer.raw) return new Response(answer.raw, {status: answer.status, headers: {'Content-Type': answer.type!}});
+    if (answer.raw) return new Response(answer.raw.buffer as ArrayBuffer, {status: answer.status, headers: {'Content-Type': answer.type!}});
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body),
       {status: answer.status, headers: {'Content-Type': 'application/json'}});
   });

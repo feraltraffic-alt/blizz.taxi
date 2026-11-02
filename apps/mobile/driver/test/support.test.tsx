@@ -45,7 +45,7 @@ async function mount(script: Record<string, Answer[]>, profile: unknown = admitt
       : init.body ? JSON.parse(String(init.body)) : undefined});
     const answers = all[method + ' ' + path] ?? [{status: 404, body: {code: 'NOT_FOUND', correlation_id: cid}}];
     const answer = answers.length > 1 ? answers.shift()! : answers[0]!;
-    if (answer.raw) return new Response(answer.raw, {status: answer.status, headers: {'Content-Type': answer.type!}});
+    if (answer.raw) return new Response(answer.raw.buffer as ArrayBuffer, {status: answer.status, headers: {'Content-Type': answer.type!}});
     return new Response(answer.body === undefined ? null : JSON.stringify(answer.body),
       {status: answer.status, headers: {'Content-Type': 'application/json'}});
   });

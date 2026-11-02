@@ -5,6 +5,10 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    unnamedFile: 'файл',
+    kilobytes: 'КБ',
+    openFileOf: 'Открыть {name}',
+    pdfElsewhere: 'PDF открывается в веб-версии или по просьбе в поддержку.',
     attachFile: 'Приложить файл',
     removeFile: 'Убрать',
     removeFileOf: 'Убрать {name}',
@@ -82,6 +86,10 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    unnamedFile: 'файл',
+    kilobytes: 'КБ',
+    openFileOf: 'Відкрити {name}',
+    pdfElsewhere: 'PDF відкривається у веб-версії або на прохання в підтримку.',
     attachFile: 'Додати файл',
     removeFile: 'Прибрати',
     removeFileOf: 'Прибрати {name}',
@@ -159,6 +167,10 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    unnamedFile: 'plik',
+    kilobytes: 'KB',
+    openFileOf: 'Otwórz {name}',
+    pdfElsewhere: 'PDF otwiera się w wersji przeglądarkowej lub na prośbę w pomocy.',
     attachFile: 'Dołącz plik',
     removeFile: 'Usuń',
     removeFileOf: 'Usuń {name}',
