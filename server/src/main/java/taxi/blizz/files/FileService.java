@@ -47,9 +47,11 @@ public interface FileService {
      * Stores a file the server itself produced or fetched (no uploading subject), for
      * {@link FilePurpose#CALL_RECORDING} only: the real type must be {@code contentType}, and the bytes are encrypted
      * at rest. SAFE, or REJECTED with the reason (nothing is kept then). The file is reachable only through
-     * {@link #openAttached}. Never in a transaction: the body is read and written here.
+     * {@link #openAttached}. Never in a transaction: the body is read and written here. {@code serviceId}: the taxi
+     * service the file belongs to, whose retention term applies (#276).
      */
-    StoredFile storeSystemFile(FilePurpose purpose, String contentType, InputStream body, long maxBytes);
+    StoredFile storeSystemFile(java.util.UUID serviceId, FilePurpose purpose, String contentType, InputStream body,
+                               long maxBytes);
 
     /** Opens a SAFE file after another module has already authorized access to a record that owns it. */
     FileContent openAttached(UUID fileId, FilePurpose purpose);

@@ -73,6 +73,21 @@ class FileRetirement {
     private record Attempt(boolean gone, int deleted, int failures, boolean fenced) {
     }
 
+    /** The files of {@code serviceId} only (#276): their owner's service, or their call's. */
+    RetentionWork.Result run(String kind, java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now,
+                             int limit) {
+        String eligible = eligibility(kind) + " and service_id = :service";
+        Map<String, Object> params = Map.of("cutoff", cutoff, "now", now, "service", serviceId);
+        RetentionWork.Result total = new RetentionWork.Result(0, 0, 0);
+        for (UUID id : jdbc.sql("select id from file_object where " + eligible + " and " + AVAILABLE
+                        + " order by " + age(kind) + ",id limit " + RetentionWork.limit(limit))
+                .params(params).query(UUID.class).list()) {
+            Attempt attempt = retire(id, eligible, params, now);
+            total = total.plus(new RetentionWork.Result(attempt.deleted(), attempt.failures(), 1));
+        }
+        return total;
+    }
+
     RetentionWork.Result run(String kind, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
         RetentionWork.Result total = new RetentionWork.Result(0, 0, 0);
         for (UUID id : jdbc.sql(selection(kind, limit)).params(Map.of("cutoff", cutoff, "now", now))

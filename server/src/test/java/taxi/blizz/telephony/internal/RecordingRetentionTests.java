@@ -196,7 +196,8 @@ class RecordingRetentionTests {
     @Test
     void aStoredFileFailureKeepsBothMetadataRowsAndRetriesAnAlreadyAbsentSource() throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
-        var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
+        var stored = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                FilePurpose.CALL_RECORDING, "audio/wav",
                 new java.io.ByteArrayInputStream(WavFiles.tone(1)), 1000000);
         UUID id = recording("STORED", stored.fileId(), now.minusDays(400));
         String key = jdbc.sql("select storage_key from file_object where id=:id").param("id", stored.fileId())
@@ -229,7 +230,8 @@ class RecordingRetentionTests {
     void untouchedRecordingsPlayAndPendingRecordingsFetchAfterAFailureAndZeroPolicy() throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
         byte[] wav = WavFiles.tone(1);
-        var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
+        var stored = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                FilePurpose.CALL_RECORDING, "audio/wav",
                 new java.io.ByteArrayInputStream(wav), 1000000);
         UUID playable = recording("STORED", stored.fileId(), now.minusDays(400));
         UUID pending = recording("PENDING", null, now.minusDays(400));
@@ -253,7 +255,8 @@ class RecordingRetentionTests {
     void anAbsentSourceAndUntouchedLocalFileFailureAlsoReleaseTheRecordingFence() throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
         byte[] wav = WavFiles.tone(1);
-        var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
+        var stored = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                FilePurpose.CALL_RECORDING, "audio/wav",
                 new java.io.ByteArrayInputStream(wav), 1000000);
         UUID id = recording("STORED", stored.fileId(), now.minusDays(400));
         String key = jdbc.sql("select storage_key from file_object where id=:id").param("id", stored.fileId())
@@ -357,7 +360,8 @@ class RecordingRetentionTests {
     void anErasedCallersRecordingGoesWhateverTheTermAndOthersStay() throws Exception {
         keepRecordingsForever();
         OffsetDateTime now = OffsetDateTime.now();
-        var stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav",
+        var stored = files.storeSystemFile(taxi.blizz.identity.Services.DEFAULT_ID,
+                FilePurpose.CALL_RECORDING, "audio/wav",
                 new java.io.ByteArrayInputStream(WavFiles.tone(1)), 1000000);
         UUID erased = recording("STORED", stored.fileId(), now.minusMinutes(5));
         UUID pending = recording("PENDING", null, now.minusMinutes(5));

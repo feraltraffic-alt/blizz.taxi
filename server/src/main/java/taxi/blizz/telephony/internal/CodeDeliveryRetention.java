@@ -35,4 +35,21 @@ class CodeDeliveryRetention implements RetentionWork {
                 .param("cutoff", cutoff).update());
         return new Result(deleted, 0);
     }
+
+    /** A delivery belongs to the service of the code it carried (#276). */
+    @Override
+    public boolean perService() {
+        return true;
+    }
+
+    @Override
+    public Result run(java.util.UUID serviceId, OffsetDateTime cutoff, OffsetDateTime now, int limit) {
+        int deleted = tx.execute(status -> jdbc.sql("""
+                        delete from otp_delivery where id in (
+                            select id from otp_delivery where service_id = :service and attempted_at < :cutoff
+                            order by attempted_at limit :limit for update skip locked)""")
+                .param("service", serviceId).param("cutoff", cutoff).param("limit", RetentionWork.limit(limit))
+                .update());
+        return new Result(deleted, 0);
+    }
 }

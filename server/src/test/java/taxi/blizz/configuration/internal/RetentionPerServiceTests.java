@@ -144,6 +144,36 @@ class RetentionPerServiceTests {
         assertThat(exists("outbox", "event_id", recent)).as("B's 1 day does not apply").isTrue();
     }
 
+    /** R6 (part 2): code deliveries go by their service's term. */
+    @Test
+    void r6CodeDeliveriesGoByTheirServicesTerm() {
+        UUID a = service("del-a");
+        UUID b = service("del-b");
+        set(keeper(a, true), a, with(days(0), "code_deliveries", 30));
+        set(keeper(b, true), b, with(days(0), "code_deliveries", 7));
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        UUID ofA = delivery(a, now.minusDays(10));
+        UUID ofB = delivery(b, now.minusDays(10));
+        run("code_deliveries", now);
+        assertThat(exists("otp_delivery", "id", ofB)).as("B's").isFalse();
+        assertThat(exists("otp_delivery", "id", ofA)).as("A's").isTrue();
+    }
+
+    /** R7 (part 2): an abandoned upload goes by its owner's service's term. */
+    @Test
+    void r7UploadSessionsGoByTheirServicesTerm() {
+        UUID a = service("upl-a");
+        UUID b = service("upl-b");
+        set(keeper(a, true), a, with(days(0), "upload_sessions", 30));
+        set(keeper(b, true), b, with(days(0), "upload_sessions", 7));
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        UUID ofA = upload(a, now.minusDays(10));
+        UUID ofB = upload(b, now.minusDays(10));
+        run("upload_sessions", now);
+        assertThat(exists("file_object", "id", ofB)).as("B's").isFalse();
+        assertThat(exists("file_object", "id", ofA)).as("A's").isTrue();
+    }
+
     // ------------------------------------------------------------ fixtures
 
     private static Map<String, Integer> with(Map<String, Integer> days, String kind, int value) {
@@ -204,6 +234,27 @@ class RetentionPerServiceTests {
                                             next_attempt_at, completed_at)
                         values (:id, 'RetentionFixture', 1, 'Fixture', :id, 0, '{}', :id, :at, 'DONE', :at, :at)""")
                 .param("id", id).param("at", at).update();
+        return id;
+    }
+
+    private UUID delivery(UUID service, OffsetDateTime at) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into otp_delivery (id, service_id, phone, audience, channel, provider, state,
+                                                  attempted_at)
+                        values (:id, :service, '+48111000000', 'CLIENT', 'SMS', 'FAKE', 'SENT', :at)""")
+                .param("id", id).param("service", service).param("at", at).update();
+        return id;
+    }
+
+    private UUID upload(UUID service, OffsetDateTime at) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into file_object (id, service_id, owner_type, owner_id, purpose,
+                                                 declared_content_type, declared_size_bytes, upload_expires_at,
+                                                 created_at)
+                        values (:id, :service, 'DRIVER', :id, 'DRIVER_DOCUMENT', 'image/jpeg', 10, :at, :at)""")
+                .param("id", id).param("service", service).param("at", at).update();
         return id;
     }
 }

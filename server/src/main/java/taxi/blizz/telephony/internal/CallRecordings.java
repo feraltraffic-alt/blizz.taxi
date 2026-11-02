@@ -131,7 +131,7 @@ class CallRecordings {
             Integer seconds = WavFiles.seconds(file);
             StoredFile stored;
             try (InputStream in = Files.newInputStream(file)) {
-                stored = files.storeSystemFile(FilePurpose.CALL_RECORDING, "audio/wav", in,
+                stored = files.storeSystemFile(due.serviceId(), FilePurpose.CALL_RECORDING, "audio/wav", in,
                         properties.recordingMaxBytes());
             }
             if (stored.state() != FileState.SAFE) {
