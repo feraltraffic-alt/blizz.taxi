@@ -164,14 +164,15 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    if (!checkPhone() || !quote || !pickup || !dropoff || creating.current) return;
+    if (!checkPhone() || !quote || !pickup || !dropoff ) return;
+    void creating; // mutation: a second click is not stopped
     creating.current = true;
     setBusy(true);
     setMessage(null);
     setError(null);
     try {
       onCreated(await client.post('/api/operator/v1/orders', {body: {
-        command_id: orderCommand.current, quote_id: quote.id, vehicle_class: vehicleClass,
+        command_id: newId(), quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
         payment_method: payment, caller: {phone, ...(name.trim() ? {name: name.trim()} : {})},
         ...(comment.trim() ? {comment: comment.trim()} : {})
@@ -224,7 +225,7 @@ function OrderForm({client, city, newId, onCreated}: {client: ApiClient; city: C
       </label>
       <button type="button" onClick={() => void price()} disabled={busy || !pickup || !dropoff}>{t('price')}</button>
       {quote ? <p>{t('priceIs', {amount: (quote.amount_minor / 100).toFixed(2), currency: quote.currency})}</p> : null}
-      <button type="submit" disabled={busy || !quote}>{t('create')}</button>
+      <button type="submit" disabled={!quote}>{t('create')}</button>
       {message ? <p role="alert">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
     </form>
