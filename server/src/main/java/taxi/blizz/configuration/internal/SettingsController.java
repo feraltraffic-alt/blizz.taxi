@@ -57,8 +57,10 @@ class SettingsController {
     record PublicHours(java.util.Set<Integer> daysOfWeek, String from, String to) {
     }
 
+    /** {@code center}: a point inside the city, where an address search or a map starts (issue #243). */
     record CityItem(UUID id, String code, String name, String currency, String timezone,
-                    List<PublicHours> workingHours, java.util.Set<String> paymentMethods, boolean ordersPaused) {
+                    List<PublicHours> workingHours, java.util.Set<String> paymentMethods, boolean ordersPaused,
+                    taxi.blizz.geo.GeoPoint center) {
     }
 
     record PublicCalls(ServiceSettings.CallMode mode, String servicePhone) {
@@ -121,12 +123,14 @@ class SettingsController {
 
     private List<CityItem> cityItems(UUID serviceId) {
         java.util.Map<UUID, CityOperations.State> states = operations.all();
+        java.util.Map<UUID, taxi.blizz.geo.GeoPoint> centers = cities.centers(serviceId);
         return cities.published(serviceId).stream().map(c -> {
                     CityOperations.State state = states.containsKey(c.id()) ? states.get(c.id()) : operations.of(c.id());
                     return new CityItem(c.id(), c.code(), c.name(), c.currency(), c.timezone(),
                             state.workingHours().stream().map(h -> new PublicHours(new java.util.TreeSet<>(h.daysOfWeek()),
                                     hhmm(h.from()), hhmm(h.to()))).toList(),
-                            new java.util.TreeSet<>(state.paymentMethods()), state.ordersPaused());
+                            new java.util.TreeSet<>(state.paymentMethods()), state.ordersPaused(),
+                            centers.get(c.id()));
                 }).toList();
     }
 

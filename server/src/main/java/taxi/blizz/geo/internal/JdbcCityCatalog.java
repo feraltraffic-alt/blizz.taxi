@@ -32,6 +32,21 @@ class JdbcCityCatalog implements CityCatalog {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Map<UUID, taxi.blizz.geo.GeoPoint> centers(UUID serviceId) {
+        java.util.Map<UUID, taxi.blizz.geo.GeoPoint> centers = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                        select id, ST_Y(ST_PointOnSurface(polygon)), ST_X(ST_PointOnSurface(polygon)) from city
+                        where state = 'PUBLISHED' and service_id = :service order by name, code""")
+                .param("service", serviceId)
+                .query(rs -> {
+                    centers.put(rs.getObject(1, UUID.class), new taxi.blizz.geo.GeoPoint(rs.getDouble(2),
+                            rs.getDouble(3)));
+                });
+        return centers;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<City> published() {
         return jdbc.sql("""
                         select id, code, name, currency, timezone, priority, version from city
