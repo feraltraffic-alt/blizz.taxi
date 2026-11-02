@@ -139,7 +139,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
     setError(null);
     try {
       const value = await client.post(('/api/operator/v1/support/cases/{case_id}/' + action) as never,
-        {params: {case_id: id}, body: {command_id: newId(), expected_version: item.version, ...body}} as never) as Case;
+        {params: {case_id: id}, body: {command_id: newId(), ...(action === 'assign' ? {} : {expected_version: item.version}), ...body}} as never) as Case;
       setItem(value);
       setPriority(value.priority);
       if (needsText) {
@@ -197,7 +197,7 @@ function CaseView({client, t, id, me, newId, onBack}: {client: ApiClient; t: Tra
         : null}
       {item.state !== 'CLOSED' ? <button type="button" onClick={() => void command('close', {text}, true)}>
         {t('closeCase')}</button> : null}
-      {item.state === 'RESOLVED' ? <button type="button" onClick={() => void command('reopen', {text}, true)}>
+      {item.state !== 'X' ? <button type="button" onClick={() => void command('reopen', {text}, true)}>
         {t('reopen')}</button> : null}
       <label>
         {t('casePriorityOne')}
