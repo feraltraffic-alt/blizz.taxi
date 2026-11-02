@@ -35,7 +35,7 @@ class JdbcCityCatalog implements CityCatalog {
     public java.util.Map<UUID, taxi.blizz.geo.GeoPoint> centers(UUID serviceId) {
         java.util.Map<UUID, taxi.blizz.geo.GeoPoint> centers = new java.util.LinkedHashMap<>();
         jdbc.sql("""
-                        select id, ST_Y(ST_PointOnSurface(polygon)), ST_X(ST_PointOnSurface(polygon)) from city
+                        select id, ST_Y(ST_Centroid(polygon)), ST_X(ST_Centroid(polygon)) from city
                         where state = 'PUBLISHED' and service_id = :service order by name, code""")
                 .param("service", serviceId)
                 .query(rs -> {
