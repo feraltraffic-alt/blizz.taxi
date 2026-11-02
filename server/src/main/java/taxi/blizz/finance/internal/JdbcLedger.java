@@ -46,7 +46,7 @@ class JdbcLedger implements Ledger {
                             "A journal party is neither a driver nor a rider of any taxi service"));
             found.add(service);
         }
-        if (found.size() != 1) {
+        if (found.isEmpty()) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, found.isEmpty()
                     ? "A journal posting with no driver or rider names its taxi service"
                     : "A journal posting mixes the money of two taxi services");
