@@ -112,7 +112,6 @@ public class AuditLog {
             // This fixed scope also proves the partial index's predicate in a generic prepared plan.
             sql.append(" and actor_type = 'STAFF'");
         } else equal(sql, params, "actor_type", q.actorType());
-        equal(sql, params, "service_id", q.serviceId());
         equal(sql, params, "actor_id", q.actorId());
         equal(sql, params, "actor_role", q.actorRole());
         equal(sql, params, "action", q.action());
