@@ -166,6 +166,22 @@ Real cases from pull requests on this repository: what was handed in, what the r
   paths and the real fixtures' scopes, not the shapes the client happens to send. In Playwright, ask for **exact**
   names whenever one label is a part of another.
 
+## 18. Every refusal tested, the plain success not (lead's #248)
+
+- **Task:** the rider's ordering slice, with E1–E6 unit tests and one end-to-end run against the real server.
+- **Handed in by the lead:** 23 green unit tests, one for each refusal in the issue (422, `QUOTE_EXPIRED`, a 409 on
+  cancel, `RIDER_HAS_DEBT`, `ACCEPTANCE_REQUIRED`), and two red mutations.
+- **Missed:**
+  - **A successful cancel never showed "Заказ отменён".** The screen showed the tracker for open orders only, so a
+    200 `CANCELLED` went straight to the new-order screen. No unit test pressed "cancel" and got a 200. All tests
+    went to the error paths the issue listed.
+  - **`index.ts` passed no location**, so on a device the pickup stayed empty. The unit tests inject their own
+    `locate`.
+  - Both were caught only by the end-to-end run, as case 17 predicts.
+- **Habit:** **each action gets one test of its plain success**, with what the user sees afterwards, before its
+  refusals. A dependency the tests inject (`locate`, a clock, a store) is also wired in the app's entry point, and
+  the end-to-end run is what proves that.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

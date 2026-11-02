@@ -5,7 +5,8 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
   reporter: [['list'], ['html', {open: 'never', outputFolder: 'playwright-report'}]],
-  use: {baseURL: 'http://127.0.0.1:4174', trace: 'on'},
+  use: {baseURL: 'http://127.0.0.1:4174', trace: 'on', permissions: ['geolocation'],
+    geolocation: {latitude: 50.4501, longitude: 30.5234, accuracy: 10}},
   projects: [
     {name: 'light', use: {colorScheme: 'light'}},
     {name: 'dark', use: {colorScheme: 'dark'}}

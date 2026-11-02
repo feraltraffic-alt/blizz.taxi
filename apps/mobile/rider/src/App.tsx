@@ -6,11 +6,15 @@ import {
   useTheme, useUpgradeGuard, type Locale, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
+import {Ride, type Point} from './Ride';
 
 /** What the build knows: its taxi service, the installation and the locale (ADR 0016, REQ-API-10). */
 export interface AppConfig {
   service: string;
   deviceRef: string;
+  /** The device's location; a refusal falls back to the service's first city (#248). */
+  locate?: () => Promise<Point>;
+  pollMs?: number;
   locale?: Locale;
   newId?: () => string;
   now?: () => number;
@@ -24,6 +28,9 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
   const {session, restored} = useAppSession(client);
   const {upgrade, guard} = useUpgradeGuard();
   const shared: Shared = {client, t, guard, failure: failureText(t)};
+  const [tab, setTab] = useState<'ride' | 'profile'>('ride');
+  /** A new round of the legal texts after the server said one must be accepted (ACCEPTANCE_REQUIRED, #248 E6). */
+  const [legalRound, setLegalRound] = useState(0);
 
   if (upgrade) return <UpdateScreen t={t} />;
   if (!restored && !session.authenticated) return <Loading t={t} />;
@@ -31,8 +38,20 @@ export function RiderApp({client, config}: {client: ApiClient; config: AppConfig
     return <SignIn {...shared} audience="CLIENT" service={config.service} deviceRef={config.deviceRef} now={now} />;
   }
   return (
-    <LegalGuard {...shared} app="rider" service={config.service} locale={locale} newId={newId}>
-      <Profile {...shared} newId={newId} />
+    <LegalGuard key={legalRound} {...shared} app="rider" service={config.service} locale={locale} newId={newId}>
+      {tab === 'profile' ? (
+        <>
+          <Profile {...shared} newId={newId} />
+          <Button label={t('toRide')} onPress={() => setTab('ride')} />
+        </>
+      ) : (
+        <>
+          <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000}
+            locate={config.locate ?? (() => Promise.reject(new Error('No location')))}
+            onLegal={() => setLegalRound(r => r + 1)} />
+          <Button label={t('toProfile')} onPress={() => setTab('profile')} />
+        </>
+      )}
     </LegalGuard>
   );
 }
