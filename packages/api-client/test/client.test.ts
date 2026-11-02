@@ -240,3 +240,58 @@ describe('staff panels', () => {
     expect(paths).toEqual(['operator', 'admin']);
   });
 });
+
+describe('file upload (#284 D9)', () => {
+  const path = '/api/driver/v1/uploads/80000000-0000-4000-8000-000000000001';
+  const stored = {file_id: '80000000-0000-4000-8000-000000000001', state: 'SAFE', content_type: 'image/png',
+    size_bytes: 4};
+
+  it('puts the raw bytes with the declared type and the bearer token', async () => {
+    let seen = {method: '', type: '', auth: '', bytes: [] as number[]};
+    server.use(http.put(origin + path, async ({request}) => {
+      seen = {method: request.method, type: request.headers.get('Content-Type') ?? '',
+        auth: request.headers.get('Authorization') ?? '', bytes: [...new Uint8Array(await request.arrayBuffer())]};
+      return HttpResponse.json(stored);
+    }));
+    const data = new Blob([new Uint8Array([137, 80, 78, 71])], {type: 'image/png'});
+    expect(await client().upload(path, data, 'image/png')).toEqual(stored);
+    expect(seen).toEqual({method: 'PUT', type: 'image/png', auth: 'Bearer ' + session.access_token,
+      bytes: [137, 80, 78, 71]});
+  });
+
+  it('refreshes once on 401 and puts the same bytes again', async () => {
+    const tokens: string[] = [];
+    let refreshes = 0;
+    server.use(
+      http.put(origin + path, async ({request}) => {
+        tokens.push(request.headers.get('Authorization') ?? '');
+        const size = (await request.arrayBuffer()).byteLength;
+        return tokens.length === 1 ? HttpResponse.json(problem(401, 'UNAUTHENTICATED'), {status: 401})
+          : HttpResponse.json({...stored, size_bytes: size});
+      }),
+      http.post(origin + '/auth/v1/token/refresh', () => {refreshes++; return HttpResponse.json(rotated);})
+    );
+    const result = await client().upload(path, new Blob([new Uint8Array([1, 2, 3])]), 'application/pdf');
+    expect(result).toEqual({...stored, size_bytes: 3});
+    expect(refreshes).toBe(1);
+    expect(tokens).toEqual(['Bearer ' + session.access_token, 'Bearer ' + rotated.access_token]);
+  });
+
+  it.each(['https://evil.test/api/driver/v1/uploads/x', '//evil.test/api/x', 'api/driver/v1/uploads/x',
+    '/auth/v1/token/refresh', '/api/../auth/v1/logout'])(
+    'refuses %s and makes no request: the token never leaves for another host or path', async target => {
+      let requests = 0;
+      server.events.on('request:start', () => {requests++;});
+      const error = await client().upload(target, new Blob([new Uint8Array([1])]), 'image/png').catch(e => e);
+      server.events.removeAllListeners();
+      expect(error).toBeInstanceOf(Error);
+      expect(requests).toBe(0);
+    });
+
+  it('a refused file is a typed error with the server code', async () => {
+    server.use(http.put(origin + path, () => HttpResponse.json(problem(409, 'CONFLICT'), {status: 409})));
+    const error = await client().upload(path, new Blob([new Uint8Array([1])]), 'image/png').catch(e => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.code).toBe('CONFLICT');
+  });
+});
