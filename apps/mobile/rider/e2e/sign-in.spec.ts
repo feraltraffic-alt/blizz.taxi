@@ -181,8 +181,15 @@ test('a rider signs in, orders and cancels, rides to the end, rates and tips, an
   await page.getByRole('button', {name: 'Узнать цену', exact: true}).click();
   await page.getByRole('button', {name: /^○ Картой /}).click();
   await expect(page.getByText(/^На карте заблокируем /)).toBeVisible();
+  const cardOrder = page.waitForResponse(r => r.url().endsWith('/api/rider/v1/orders') && r.request().method() === 'POST');
   await page.getByRole('button', {name: 'Заказать', exact: true}).click();
-  await expect(page.getByText('Ищем водителя')).toBeVisible({timeout: 30_000});
+  const cardAnswer = await cardOrder;
+  console.log('CARD ORDER', cardAnswer.status(), (await cardAnswer.text()).slice(0, 400));
+  const searching = page.getByText('Ищем водителя');
+  if (!await searching.isVisible({timeout: 30_000}).catch(() => false)) {
+    console.log('PAGE AFTER CARD ORDER:', await page.locator('body').innerText());
+  }
+  await expect(searching).toBeVisible();
   await expect(page.getByText('Оплата: картой')).toBeVisible();
   await page.screenshot({path: info.outputPath('11-card-order.png'), fullPage: true});
   const reasonByCard = page.getByRole('button', {name: /^○ /}).first();
