@@ -142,7 +142,9 @@ class AuthApiTests {
                 .containsEntry("name", null);
         jdbc.sql("update client set name = 'Олена' where id = :id").param("id", clientId).update();
         assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).containsEntry("name", "Олена");
-        jdbc.sql("update client set phone_normalized = null where id = :id").param("id", clientId).update();
+        // An anonymized account keeps no phone (the table allows it only then); the session is still open here.
+        jdbc.sql("update client set account_state = 'ANONYMIZED', phone_normalized = null where id = :id")
+                .param("id", clientId).update();
         assertThat(body(getWithToken("/api/rider/v1/me", rider.get("access_token")))).as("anonymized: no phone")
                 .containsEntry("phone", null);
 
