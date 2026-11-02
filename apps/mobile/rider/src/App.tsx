@@ -277,6 +277,7 @@ function LegalGate({doc, client, t, guard, failure, newId, locale, service, onAc
   }
 
   const theme = useTheme();
+  void sending; // mutation: the button stays enabled while an acceptance is on its way
   return (
     <Screen title={t('legalTitle')}>
       {text === null && !message ? <ActivityIndicator accessibilityLabel={t('loading')} /> : null}
