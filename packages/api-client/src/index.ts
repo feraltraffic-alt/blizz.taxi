@@ -129,6 +129,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
   const base = options.baseUrl.replace(/\/+$/, '');
   let access: string | null = null;
   let passwordChangeRequired = false;
+  /** The session's audience (admin, operator, …): the staff password is changed on the panel's own path. */
+  let audience: string | null = null;
   /** Grows at every sign-in and sign-out: a refresh that started before one is thrown away. */
   let generation = 0;
   let refreshing: Promise<boolean> | null = null;
@@ -138,6 +140,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
 
   function adopt(session: Session) {
     access = session.access_token;
+    audience = session.audience;
     options.refreshTokens.write(session.refresh_token);
     passwordChangeRequired = Boolean(session.password_change_required);
     notify();
@@ -154,6 +157,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
 
   if (options.initialSession) {
     access = options.initialSession.access_token;
+    audience = options.initialSession.audience;
     passwordChangeRequired = Boolean(options.initialSession.password_change_required);
     options.refreshTokens.write(options.initialSession.refresh_token);
   }
@@ -263,7 +267,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
 
     async changePassword(input) {
       // A wrong current password is a 401 too: it is answered, never refreshed and retried.
-      await call('post', '/api/admin/v1/me/password', {body: input}, false);
+      const panel = audience === 'operator' ? 'operator' : 'admin';
+      await call('post', '/api/' + panel + '/v1/me/password', {body: input}, false);
       passwordChangeRequired = false;
       notify();
     },

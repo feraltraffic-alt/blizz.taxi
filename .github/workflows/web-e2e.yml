@@ -11,6 +11,7 @@ on:
       - "apps/mobile/**"
       - "scripts/serve-mobile-web.mjs"
       - "packages/mobile-ui/**"
+      - "packages/web-ui/**"
       - ".github/workflows/web-e2e.yml"
 
 permissions:
@@ -58,11 +59,16 @@ jobs:
         run: |
           npm ci --no-fund --no-audit
           npm run build
+          npm run build --workspace @blizz/operator
           npx playwright install --with-deps chromium
       - name: Sign in, change the password, see the profile, sign out
         run: |
           set -o pipefail
           npm run e2e 2>&1 | tee e2e.txt
+      - name: An operator takes a phone order and cancels it (#245)
+        run: |
+          set -o pipefail
+          npx playwright test --config apps/web/operator/playwright.config.ts 2>&1 | tee operator-e2e.txt
       - name: The rider app's web build signs in by a code, accepts the texts and sees the profile (#137)
         run: |
           (cd apps/mobile/rider && npx expo export --platform web --output-dir dist)
@@ -78,6 +84,8 @@ jobs:
         run: |
           { echo "## Admin panel against the real server"; echo '```'; tail -n 40 e2e.txt; echo '```'; } \
             >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Operator workstation against the real server"; echo '```'; tail -n 40 operator-e2e.txt; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"
           { echo "## Rider app against the real server"; echo '```'; tail -n 40 rider-e2e.txt; echo '```'; } \
             >> "$GITHUB_STEP_SUMMARY"
           { echo "## Driver app against the real server"; echo '```'; tail -n 40 driver-e2e.txt; echo '```'; } \
@@ -89,10 +97,12 @@ jobs:
           name: web-e2e
           path: |
             apps/web/admin/playwright-report
+            apps/web/operator/playwright-report
             apps/mobile/rider/playwright-report
             apps/mobile/driver/playwright-report
             test-results
             e2e.txt
+            operator-e2e.txt
             rider-e2e.txt
             driver-e2e.txt
             server.log

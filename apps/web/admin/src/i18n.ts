@@ -1,7 +1,9 @@
-export type Locale = 'ru' | 'uk' | 'pl';
+import type {Catalogs} from '@blizz/web-ui';
+
+export type {Locale} from '@blizz/web-ui';
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Record<Locale, Record<string, string>> = {
+export const translations: Catalogs = {
   ru: {
     title: 'Blizz — управление',
     signIn: 'Войти',
@@ -121,20 +123,4 @@ export const translations: Record<Locale, Record<string, string>> = {
   }
 };
 
-/** Every catalog has every key of the others, and no empty text: a missing key fails here, not on a page. */
-export function validateCatalogs(catalogs: Record<Locale, Record<string, string>>): void {
-  const keys = new Set<string>();
-  for (const catalog of Object.values(catalogs)) Object.keys(catalog).forEach(key => keys.add(key));
-  const problems: string[] = [];
-  for (const [locale, catalog] of Object.entries(catalogs)) {
-    for (const key of keys) {
-      if (!catalog[key]) problems.push(locale + ' misses ' + key);
-    }
-  }
-  if (problems.length > 0) throw new Error('Translation catalogs differ: ' + problems.join('; '));
-}
-
-export function translate(locale: Locale, key: string, values: Record<string, string | number> = {}): string {
-  const text = translations[locale][key] ?? translations.ru[key] ?? key;
-  return text.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? '{' + name + '}'));
-}
+export {validateCatalogs} from '@blizz/web-ui';

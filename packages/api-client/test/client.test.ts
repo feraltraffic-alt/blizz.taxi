@@ -224,3 +224,19 @@ describe('app sessions', () => {
     expect(headers?.get('X-Correlation-Id')).toBe(cid);
   });
 });
+
+describe('staff panels', () => {
+  it('an operator changes the password on the operator path, an admin on the admin path', async () => {
+    const paths: string[] = [];
+    server.use(
+      http.post(origin + '/api/operator/v1/me/password', () => {paths.push('operator'); return new HttpResponse(null, {status: 204});}),
+      http.post(origin + '/api/admin/v1/me/password', () => {paths.push('admin'); return new HttpResponse(null, {status: 204});})
+    );
+    const operator = createApiClient({baseUrl: origin, refreshTokens: memoryTokens(),
+      initialSession: {...session, audience: 'operator', password_change_required: true}});
+    await operator.changePassword({current_password: 'Fixture-Old-1', new_password: 'Fixture-New-Password-1'});
+    expect(operator.sessionSnapshot().passwordChangeRequired).toBe(false);
+    await client().changePassword({current_password: 'Fixture-Old-1', new_password: 'Fixture-New-Password-1'});
+    expect(paths).toEqual(['operator', 'admin']);
+  });
+});
