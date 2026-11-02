@@ -8,7 +8,8 @@ type Case = {id: string; number: number; subject: string; state: string; message
 type Page = {cases: Case[]; page: {next_cursor?: string | null}};
 
 /** What a rider may choose; the system-only categories (TRIP_REVIEW, NO_DRIVER, …) are never offered. */
-const CATEGORIES = ['LOST_ITEM', 'PAYMENT', 'CASH_DISPUTE', 'DRIVER_BEHAVIOUR', 'SAFETY', 'APP_PROBLEM', 'OTHER'];
+const CATEGORIES = ['LOST_ITEM', 'PAYMENT', 'CASH_DISPUTE', 'DRIVER_BEHAVIOUR', 'SAFETY', 'APP_PROBLEM', 'OTHER',
+  'TRIP_REVIEW'];
 
 /** An order the new case is about, from the history (#296 P4). */
 export type AboutOrder = {id: string; short_number: number};
@@ -90,7 +91,7 @@ function NewCase({client, t, guard, failure, newId, about, onOpened, onCancel}: 
     setMessage(null);
     try {
       const created = await guard(() => client.post('/api/rider/v1/support/cases' as never, {body: {
-        command_id: newId(), category, ...(about ? {order_id: about.id} : {}), subject: title, message: body}} as never));
+        command_id: newId(), category, subject: title, message: body}} as never));
       onOpened((created as Case).id);
     } catch (error) {
       setMessage(failure(error));

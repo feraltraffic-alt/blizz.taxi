@@ -5,6 +5,7 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The rider's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    category_TRIP_REVIEW: 'Проверка поездки',
     support: 'Поддержка',
     newCase: 'Новое обращение',
     noCases: 'Обращений пока нет.',
@@ -98,6 +99,7 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запрос на удаление принят.'
   },
   uk: {
+    category_TRIP_REVIEW: 'Перевірка поїздки',
     support: 'Підтримка',
     newCase: 'Нове звернення',
     noCases: 'Звернень поки немає.',
@@ -191,6 +193,7 @@ export const translations: Catalogs = withCommon({
     deletionRequested: 'Запит на видалення прийнято.'
   },
   pl: {
+    category_TRIP_REVIEW: 'Kontrola przejazdu',
     support: 'Pomoc',
     newCase: 'Nowe zgłoszenie',
     noCases: 'Na razie brak zgłoszeń.',
