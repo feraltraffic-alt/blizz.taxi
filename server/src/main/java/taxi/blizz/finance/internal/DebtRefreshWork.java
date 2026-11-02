@@ -27,7 +27,8 @@ final class DebtRefreshWork {
             // A first posting after a completed sweep must also see the currently configured limit.
             jdbc.sql("""
                     insert into driver_debt_refresh(currency,target_version,updated_at)
-                    select currency,version,now() from driver_debt_limit where currency=:currency and version>0
+                    select currency,max(sweep_version),now() from driver_debt_limit
+                    where currency=:currency and sweep_version>0 group by currency
                     on conflict(currency) do update
                     set target_version=greatest(driver_debt_refresh.target_version,excluded.target_version),
                         updated_at=excluded.updated_at""").param("currency",currency).update();
