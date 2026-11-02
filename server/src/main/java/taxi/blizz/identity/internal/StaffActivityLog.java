@@ -60,9 +60,10 @@ class StaffActivityLog {
             jdbc.sql("""
                             insert into staff_activity (id, occurred_at, kind, staff_id, staff_login, role, audience,
                                                         method, path, resource_ids, status, outcome, duration_ms,
-                                                        client_ip, correlation_id)
+                                                        client_ip, correlation_id, service_id)
                             select :id, :now, :kind, :staff, coalesce(s.login, :login), s.role, :audience, :method,
-                                   :path, cast(:ids as jsonb), :status, :outcome, :duration, :ip, :correlation
+                                   :path, cast(:ids as jsonb), :status, :outcome, :duration, :ip, :correlation,
+                                   s.service_id
                             from (select 1) one left join staff_user s on s.id = :staff""")
                     .param("id", UUID.randomUUID())
                     .param("now", clock.instant().atOffset(ZoneOffset.UTC))
@@ -79,8 +80,9 @@ class StaffActivityLog {
         }
     }
 
+    /** {@code serviceId}: the activity of that taxi service's staff only (ADR 0016). */
     record Query(String role, UUID staffId, String kind, OffsetDateTime from, OffsetDateTime to,
-                 PageCursor after, int limit) {
+                 PageCursor after, int limit, UUID serviceId) {
     }
 
     static final String ACTIVITY = "staff-activity";
@@ -96,7 +98,8 @@ class StaffActivityLog {
                         select id, occurred_at, kind, staff_id, staff_login, role, audience, method, path,
                                resource_ids::text, status, outcome, duration_ms, client_ip, correlation_id
                         from staff_activity
-                        where (cast(:role as text) is null or role = :role)
+                        where service_id = :service
+                          and (cast(:role as text) is null or role = :role)
                           and (cast(:staff as uuid) is null or staff_id = :staff)
                           and (cast(:kind as text) is null or kind = :kind)
                           and (cast(:from as timestamptz) is null or occurred_at >= :from)
@@ -104,7 +107,8 @@ class StaffActivityLog {
                           and (cast(:afterAt as timestamptz) is null
                                or (occurred_at, id) < (:afterAt, cast(:afterId as uuid)))
                         order by occurred_at desc, id desc limit :limit""")
-                .param("role", q.role()).param("staff", q.staffId()).param("kind", q.kind())
+                .param("service", q.serviceId()).param("role", q.role()).param("staff", q.staffId())
+                .param("kind", q.kind())
                 .param("from", q.from()).param("to", q.to())
                 .param("afterAt", q.after() == null ? null : q.after().time(0))
                 .param("afterId", q.after() == null ? null : q.after().id(1))

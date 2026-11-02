@@ -18,11 +18,11 @@ class StaffActivityTrail implements CorrelationTrail {
     }
 
     @Override
-    public List<Found> find(UUID correlationId, int limit) {
+    public List<Found> find(UUID serviceId, UUID correlationId, int limit) {
         return jdbc.sql("""
-                        select id, occurred_at from staff_activity where correlation_id = :id
+                        select id, occurred_at from staff_activity where correlation_id = :id and service_id = :service
                         order by occurred_at, id limit :limit""")
-                .param("id", correlationId).param("limit", limit)
+                .param("id", correlationId).param("service", serviceId).param("limit", limit)
                 .query((rs, i) -> new Found("STAFF_ACTIVITY", rs.getObject(1, UUID.class).toString(), null,
                         rs.getObject(2, OffsetDateTime.class)))
                 .list();
