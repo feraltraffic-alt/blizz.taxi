@@ -166,7 +166,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     @Transactional(readOnly = true)
     public List<Account> accounts(Actor actor) {
         staff.require(actor, MANAGE_PERMISSION);
-        return jdbc.sql("select staff_id from operator_bonus_account where service_id = :service order by staff_id")
+        return jdbc.sql("select staff_id from operator_bonus_account where :service is not null order by staff_id")
                 .param("service", serviceOf(actor)).query(UUID.class).list().stream().map(id -> account(id, 10)).toList();
     }
 
