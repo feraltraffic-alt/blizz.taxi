@@ -75,7 +75,7 @@ class JdbcFeatureFlags implements FeatureFlags {
     @Override
     public State change(Actor actor, UUID commandId, String key, long expectedVersion, boolean enabled,
                         String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         Flag flag = Arrays.stream(Flag.values()).filter(f -> f.key().equals(key)).findFirst()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "No such feature flag"));
         if (reason == null || reason.isBlank()) {

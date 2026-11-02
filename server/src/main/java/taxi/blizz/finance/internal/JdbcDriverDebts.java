@@ -66,7 +66,7 @@ class JdbcDriverDebts implements DriverDebts {
     @Override
     public Limit setLimit(Actor actor, UUID commandId, String currency, Long limitMinor, long expectedVersion,
                           String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         currency(currency);
         text(reason);
         if (limitMinor != null && limitMinor < 0) {

@@ -178,7 +178,7 @@ class JdbcIntegrations implements Integrations {
     @Override
     public List<FieldState> change(Actor actor, UUID commandId, String password, List<Change> changes,
                                    String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         if (changes == null || changes.isEmpty()) {
             throw invalid("Nothing to change");
         }
@@ -398,7 +398,7 @@ class JdbcIntegrations implements Integrations {
 
     @Override
     public Check check(Actor actor, String group) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         snapshot = load();
         IntegrationCheck check = checks.orderedStream().filter(c -> c.group().equals(group)).findFirst()
                 .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Nothing to check for " + group));

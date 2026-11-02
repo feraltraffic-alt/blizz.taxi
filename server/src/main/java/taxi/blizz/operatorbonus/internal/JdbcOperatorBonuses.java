@@ -114,7 +114,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     @Override
     public SettingsVersion changeSettings(Actor actor, UUID commandId, long expectedVersion, Settings settings,
                                           String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         Settings clean = validate(settings);
         String why = required(reason);
         ChangeRequest request = new ChangeRequest(expectedVersion, clean, why);

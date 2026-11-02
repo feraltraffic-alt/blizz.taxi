@@ -87,7 +87,7 @@ class JdbcCancelReasons implements CancelReasons {
 
     @Override
     public Reason create(Actor actor, UUID commandId, Draft draft, String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         Draft clean = validate(draft, actor);
         String why = required(reason);
         return commands.execute(new CommandKey(actor, "cancel_reason.create", commandId),
@@ -122,7 +122,7 @@ class JdbcCancelReasons implements CancelReasons {
 
     @Override
     public Reason update(Actor actor, UUID commandId, UUID reasonId, long expectedVersion, Draft draft, String reason) {
-        staff.require(actor, MANAGE_PERMISSION);
+        staff.requireEveryCity(actor, MANAGE_PERMISSION);
         String why = required(reason);
         return commands.execute(new CommandKey(actor, "cancel_reason.update", commandId),
                 new UpdateRequest(reasonId, expectedVersion, draft, why), Reason.class, () -> {
