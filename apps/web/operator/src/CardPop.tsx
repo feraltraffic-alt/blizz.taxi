@@ -63,12 +63,8 @@ export function CardPop({client, t, live, newId, onOrder}: {client: ApiClient; t
       opened.onclose = event => {
         if (!alive || socket !== opened) return;
         socket = null;
-        if (event.code === 4403) {
-          setClosed(true);
-          return;
-        }
         if (event.code === 4401) {
-          void connect(true);
+          void connect(false);
           return;
         }
         const wait = backoff[Math.min(failures++, backoff.length - 1)]!;
