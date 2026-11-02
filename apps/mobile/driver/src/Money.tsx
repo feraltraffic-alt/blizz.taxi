@@ -62,7 +62,7 @@ export function Money({client, t, guard, failure, cityId, now}: Shared & {cityId
     reading.current = true;
     try {
       const page = await guard(() => client.get('/api/driver/v1/balance/history' as never,
-        {query: {cursor: next}} as never)) as Statement;
+        {query: {}} as never)) as Statement;
       setEntries(list => [...list, ...page.entries]);
       setNext(page.page?.next_cursor ?? null);
     } catch (error) {
