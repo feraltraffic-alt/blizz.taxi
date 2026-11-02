@@ -130,6 +130,8 @@ class AuthApiTests {
     @Test
     @SuppressWarnings("unchecked")
     void meGivesTheOwnPhoneAndNameOrNull() throws Exception {
+        // A number range of its own: the class's other tests share the +38050 range's hourly budget of codes.
+        phone = taxi.blizz.TestPhones.unique("+38093", 7);
         Map<String, Object> rider = signIn("CLIENT");
         UUID clientId = UUID.fromString((String) ((Map<String, Object>) rider.get("subject")).get("id"));
         String e164 = jdbc.sql("select phone_normalized from client where id = :id").param("id", clientId)
