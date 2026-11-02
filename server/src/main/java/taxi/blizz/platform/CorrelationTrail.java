@@ -14,6 +14,6 @@ public interface CorrelationTrail {
     record Found(String type, String id, UUID orderId, OffsetDateTime at) {
     }
 
-    /** At most {@code limit}, oldest first. */
-    List<Found> find(UUID correlationId, int limit);
+    /** At most {@code limit}, oldest first, of the taxi service {@code serviceId} only (ADR 0016). */
+    List<Found> find(UUID serviceId, UUID correlationId, int limit);
 }

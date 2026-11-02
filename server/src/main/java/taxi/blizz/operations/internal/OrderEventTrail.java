@@ -12,19 +12,31 @@ import taxi.blizz.platform.CorrelationTrail;
 class OrderEventTrail implements CorrelationTrail {
 
     private final JdbcClient jdbc;
+    private final taxi.blizz.geo.CityCatalog cities;
 
-    OrderEventTrail(JdbcClient jdbc) {
+    OrderEventTrail(JdbcClient jdbc, taxi.blizz.geo.CityCatalog cities) {
         this.jdbc = jdbc;
+        this.cities = cities;
     }
 
+    /** Events of orders in the cities of the service only (ADR 0016). */
     @Override
-    public List<Found> find(UUID correlationId, int limit) {
+    public List<Found> find(UUID serviceId, UUID correlationId, int limit) {
+        record Row(Found found, UUID city) {
+        }
+        java.util.Map<UUID, Boolean> own = new java.util.HashMap<>();
         return jdbc.sql("""
-                        select order_id, sequence, occurred_at from order_event where correlation_id = :id
-                        order by occurred_at, order_id, sequence limit :limit""")
+                        select e.order_id, e.sequence, e.occurred_at, o.city_id
+                        from order_event e join ride_order o on o.id = e.order_id
+                        where e.correlation_id = :id
+                        order by e.occurred_at, e.order_id, e.sequence limit :limit""")
                 .param("id", correlationId).param("limit", limit)
-                .query((rs, i) -> new Found("ORDER_EVENT", rs.getObject(1, UUID.class) + ":" + rs.getLong(2),
-                        rs.getObject(1, UUID.class), rs.getObject(3, OffsetDateTime.class)))
-                .list();
+                .query((rs, i) -> new Row(new Found("ORDER_EVENT", rs.getObject(1, UUID.class) + ":" + rs.getLong(2),
+                        rs.getObject(1, UUID.class), rs.getObject(3, OffsetDateTime.class)),
+                        rs.getObject(4, UUID.class)))
+                .list().stream()
+                .filter(r -> own.computeIfAbsent(r.city(),
+                        city -> cities.serviceOf(city).map(serviceId::equals).orElse(false)))
+                .map(Row::found).toList();
     }
 }
