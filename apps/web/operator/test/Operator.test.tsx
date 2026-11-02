@@ -601,3 +601,144 @@ describe('#304: click-to-call', () => {
     expect(buttons()).toEqual([]);
   });
 });
+
+/** Switch to cash and change the destination (#309): M1–M8. */
+describe('#309: cash and destination', () => {
+  const all = ['orders.create', 'orders.view', 'orders.reassign'];
+  type Sent = {path: string; body: Record<string, unknown>};
+
+  function handlers(status: string, method: string, opts: {rights?: string[];
+    command?: (path: string) => Response | Promise<Response>; reads?: () => unknown} = {}) {
+    const sent: Sent[] = [];
+    const created = {...order, status, city_id: KYIV.id, payment_method: method};
+    server.use(...base({...operator, effective_permissions: opts.rights ?? all}),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(created, {status: 201})),
+      http.get(origin + '/api/operator/v1/reassign-reasons', () => HttpResponse.json({reasons: []})),
+      http.get(origin + '/api/operator/v1/drivers/live', () => HttpResponse.json({city_id: KYIV.id, at: 'x', drivers: []})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id, () =>
+        HttpResponse.json((opts.reads ? opts.reads() : created) as never)),
+      http.post(origin + '/api/operator/v1/orders/' + order.id + '/:action', async ({request, params}) => {
+        sent.push({path: String(params.action), body: await request.json() as Record<string, unknown>});
+        if (opts.command) return opts.command(String(params.action));
+        return String(params.action) === 'destination'
+          ? HttpResponse.json({order: {...created, version: 2}, previous_price_minor: 15000, price_minor: 18000,
+            currency: 'UAH', hold_minor: null, above_hold: false} as never)
+          : HttpResponse.json({...created, payment_method: 'CASH', version: 2} as never);
+      }));
+    return sent;
+  }
+
+  async function ordered() {
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    return user;
+  }
+
+  it.each([
+    ['SEARCHING', 'CARD', all, true], ['IN_SERVICE', 'CARD', all, true], ['SEARCHING', 'CASH', all, false],
+    ['FULFILLED', 'CARD', all, false], ['SEARCHING', 'CARD', ['orders.create'], true]
+  ])('M1: in %s paid by %s with %j cash is offered: %s', async (status, method, rights, offered) => {
+    handlers(status, method, {rights: rights as string[]});
+    await ordered();
+    expect(Boolean(screen.queryByRole('button', {name: 'Перевести на наличные'}))).toBe(offered);
+  });
+
+  it('M2: a reason is required; then one command with the version', async () => {
+    const sent = handlers('SEARCHING', 'CARD');
+    const user = await ordered();
+    await user.click(screen.getByRole('button', {name: 'Перевести на наличные'}));
+    expect(await screen.findByText('Укажите причину, до 500 символов.')).toBeVisible();
+    expect(sent).toEqual([]);
+    await user.type(screen.getByLabelText('Причина перевода на наличные'), 'клиент попросил по телефону');
+    await user.click(screen.getByRole('button', {name: 'Перевести на наличные'}));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toEqual({path: 'switch-to-cash', body: {command_id: expect.any(String), expected_version: 1,
+      reason: 'клиент попросил по телефону'}});
+    expect(await screen.findByText('Оплата: наличные')).toBeVisible();
+  });
+
+  it.each([
+    ['PAYMENT_UNKNOWN', 'Результат удержания ещё неизвестен, повторите чуть позже.', 0],
+    ['STATE_CONFLICT', 'Заказ изменился, пока вы его меняли. Проверьте его состояние.', 1]
+  ])('M3: a 409 %s', async (code, text, rereads) => {
+    let reads = 0;
+    handlers('SEARCHING', 'CARD', {command: () => HttpResponse.json(problem(409, code), {status: 409}),
+      reads: () => {reads++; return {...order, status: 'SEARCHING', payment_method: 'CARD', city_id: KYIV.id};}});
+    const user = await ordered();
+    await user.type(screen.getByLabelText('Причина перевода на наличные'), 'просьба клиента');
+    await user.click(screen.getByRole('button', {name: 'Перевести на наличные'}));
+    expect(await screen.findByText(text)).toBeVisible();
+    expect(reads).toBe(rereads);
+  });
+
+  it.each([['IN_SERVICE', all, true], ['ASSIGNED', all, false], ['IN_SERVICE', ['orders.create', 'orders.view'], false]])(
+    'M4: in %s with %j the destination change is offered: %s', async (status, rights, offered) => {
+      handlers(status, 'CASH', {rights: rights as string[]});
+      await ordered();
+      expect(Boolean(screen.queryByRole('button', {name: 'Изменить точку назначения'}))).toBe(offered);
+    });
+
+  async function newDestination(user: ReturnType<typeof userEvent.setup>, reason = 'пассажир попросил') {
+    await user.type(screen.getByLabelText('Новая точка назначения'), 'вокзал');
+    const finds = screen.getAllByRole('button', {name: 'Найти'});
+    await user.click(finds[finds.length - 1]!);
+    await user.click(await screen.findByRole('button', {name: 'Вокзал'}));
+    if (reason) await user.type(screen.getByLabelText('Причина изменения точки'), reason);
+    await user.click(screen.getByRole('button', {name: 'Изменить точку назначения'}));
+  }
+
+  it('M5: the new place and the reason with the version; the new price is shown', async () => {
+    const sent = handlers('IN_SERVICE', 'CASH');
+    const user = await ordered();
+    await newDestination(user);
+    expect(await screen.findByText('Новая цена: 180.00 UAH (была 150.00 UAH)')).toBeVisible();
+    expect(sent).toEqual([{path: 'destination', body: {command_id: expect.any(String), expected_version: 1,
+      dropoff: {lat: 50.44, lon: 30.5}, dropoff_label: 'Вокзал', reason: 'пассажир попросил'}}]);
+  });
+
+  it('M5: without a reason nothing is sent', async () => {
+    const sent = handlers('IN_SERVICE', 'CASH');
+    const user = await ordered();
+    await newDestination(user, '');
+    expect(await screen.findByText('Выберите новую точку и укажите причину, до 500 символов.')).toBeVisible();
+    expect(sent).toEqual([]);
+  });
+
+  it('M6: above the hold says so', async () => {
+    handlers('IN_SERVICE', 'CARD', {command: path => path === 'destination'
+      ? HttpResponse.json({order: {...order, status: 'IN_SERVICE', version: 2}, previous_price_minor: 15000,
+        price_minor: 30000, currency: 'UAH', hold_minor: 20000, above_hold: true} as never)
+      : HttpResponse.json({} as never)});
+    const user = await ordered();
+    await newDestination(user);
+    expect(await screen.findByText('Новая цена выше удержания на карте: заведено обращение по оплате.')).toBeVisible();
+  });
+
+  it.each([
+    [422, 'DROPOFF_OUTSIDE_CITY', 'Новая точка вне зоны города.'],
+    [503, 'PROVIDER_UNAVAILABLE', 'Не удалось рассчитать маршрут, попробуйте позже.'],
+    [409, 'STATE_CONFLICT', 'Заказ изменился, пока вы его меняли. Проверьте его состояние.']
+  ])('M7: a %s %s', async (status, code, text) => {
+    handlers('IN_SERVICE', 'CASH', {command: () => HttpResponse.json(problem(status, code), {status})});
+    const user = await ordered();
+    await newDestination(user);
+    expect(await screen.findByText(text)).toBeVisible();
+  });
+
+  it('M8: a double click switches once', async () => {
+    const sent = handlers('SEARCHING', 'CARD', {command: async () => {
+      await delay(200);
+      return HttpResponse.json({...order, status: 'SEARCHING', payment_method: 'CASH', version: 2} as never);
+    }});
+    const user = await ordered();
+    await user.type(screen.getByLabelText('Причина перевода на наличные'), 'просьба клиента');
+    const button = screen.getByRole('button', {name: 'Перевести на наличные'});
+    await Promise.all([user.click(button), user.click(button)]);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await delay(300);
+    expect(sent).toHaveLength(1);
+  });
+});

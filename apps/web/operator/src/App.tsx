@@ -8,6 +8,8 @@ import {OrderHistory} from './OrderHistory.js';
 import {OrderActions} from './OrderActions.js';
 import {Calls, type FromCall} from './Calls.js';
 import {OrderCalls} from './OrderCalls.js';
+import {PlacePicker, type Place, type Point} from './Places.js';
+import {OrderChanges} from './OrderChanges.js';
 import {CardPop, type Live} from './CardPop.js';
 
 export type {LiveSocket} from './CardPop.js';
@@ -15,12 +17,10 @@ export type {LiveSocket} from './CardPop.js';
 const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 
-type Point = {lat: number; lon: number};
 type City = {id: string; name: string; center: Point};
-type Place = {label: string; point: Point};
 type Quote = {id: string; amount_minor: number; currency: string};
 type Order = {id: string; short_number: number; status: string; version: number; city_id?: string;
-  payer_client_id?: string | null};
+  payer_client_id?: string | null; payment_method?: string};
 
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
 export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000, live}: {client: ApiClient;
@@ -90,7 +90,7 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
       view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
         pollMs={pollMs} /> : view === 'support' && rights.has('support.manage') ? <Support client={client} t={t}
         cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
-        rights={rights}
+        rights={rights} near={(cities.find(c => c.id === order.city_id) ?? cities[0])?.center ?? {lat: 0, lon: 0}}
         onDone={() => setOrder(null)} /> : (
         <section aria-labelledby="new-order">
           <h1 id="new-order">{t('newOrder')}</h1>
@@ -106,42 +106,6 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
         </section>
       )}
     </>
-  );
-}
-
-function PlacePicker({client, label, near, callerPhone, value, onPick}: {client: ApiClient; label: string;
-  near: Point; callerPhone: string; value: Place | null; onPick: (place: Place) => void}) {
-  const [query, setQuery] = useState('');
-  const [places, setPlaces] = useState<Place[]>([]);
-  const [error, setError] = useState<unknown>(null);
-
-  async function search() {
-    setError(null);
-    try {
-      const answer = await client.get('/api/operator/v1/places', {query: {
-        lat: near.lat, lon: near.lon, query, limit: 10, ...(E164.test(callerPhone) ? {caller_phone: callerPhone} : {})
-      }} as never) as {places: Place[]};
-      setPlaces(answer.places);
-    } catch (failure) {
-      setError(failure);
-    }
-  }
-
-  return (
-    <fieldset>
-      <legend>{label}</legend>
-      <input aria-label={label} value={query} onChange={e => setQuery(e.target.value)} />
-      <button type="button" onClick={() => void search()}>{t('search')}</button>
-      {value ? <p>{value.label}</p> : null}
-      <ul>
-        {places.map(p => (
-          <li key={p.label + p.point.lat + p.point.lon}>
-            <button type="button" onClick={() => {onPick(p); setPlaces([]);}}>{p.label}</button>
-          </li>
-        ))}
-      </ul>
-      {error ? <Failure error={error} t={t} /> : null}
-    </fieldset>
   );
 }
 
@@ -260,9 +224,9 @@ function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; c
         {t('callerName')}
         <input value={name} onChange={e => setName(e.target.value)} />
       </label>
-      <PlacePicker client={client} label={t('pickup')} near={city.center} callerPhone={phone} value={pickup}
+      <PlacePicker client={client} t={t} label={t('pickup')} near={city.center} callerPhone={phone} value={pickup}
         onPick={p => {setPickup(p); setQuote(null);}} />
-      <PlacePicker client={client} label={t('dropoff')} near={city.center} callerPhone={phone} value={dropoff}
+      <PlacePicker client={client} t={t} label={t('dropoff')} near={city.center} callerPhone={phone} value={dropoff}
         onPick={p => {setDropoff(p); setQuote(null);}} />
       <label>
         {t('vehicleClass')}
@@ -291,8 +255,9 @@ function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; c
   );
 }
 
-function OrderView({client, order, onChange, newId, pollMs, onDone, rights}: {client: ApiClient; order: Order;
-  onChange: (order: Order) => void; newId: () => string; pollMs: number; onDone: () => void; rights: Set<string>}) {
+function OrderView({client, order, onChange, newId, pollMs, onDone, rights, near}: {client: ApiClient; order: Order;
+  onChange: (order: Order) => void; newId: () => string; pollMs: number; onDone: () => void; rights: Set<string>;
+  near: Point}) {
   const canView = rights.has('orders.view');
   const [reasons, setReasons] = useState<{code: string; labels: Record<string, string>}[]>([]);
   const [reason, setReason] = useState('');
@@ -334,6 +299,7 @@ function OrderView({client, order, onChange, newId, pollMs, onDone, rights}: {cl
     <section aria-labelledby="order-title">
       <h1 id="order-title">{t('order', {number: order.short_number})}</h1>
       <p>{t('status', {status: order.status})}</p>
+      {order.payment_method ? <p>{t('paymentIs', {method: t('pay_' + order.payment_method)})}</p> : null}
       <label>
         {t('reason')}
         <select value={reason} onChange={e => setReason(e.target.value)}>
@@ -343,6 +309,8 @@ function OrderView({client, order, onChange, newId, pollMs, onDone, rights}: {cl
       </label>
       <button type="button" onClick={() => void cancel()} disabled={!reason}>{t('cancel')}</button>
       <button type="button" onClick={onDone}>{t('another')}</button>
+      <OrderChanges client={client} t={t} order={order} rights={rights} near={near} newId={newId}
+        onChange={onChange} refresh={refresh} />
       <OrderActions client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
         refresh={refresh} />
       {/* The history and the conversation need orders.view (#292 H5). */}
