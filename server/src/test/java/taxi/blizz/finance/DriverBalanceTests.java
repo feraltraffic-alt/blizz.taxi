@@ -102,7 +102,7 @@ class DriverBalanceTests {
     }
 
     private TransferRule rule(boolean enabled, long perTransfer, long perDay, long minAfter) {
-        long version = balances.transferRules().stream().filter(r -> r.currency().equals("UAH"))
+        long version = balances.transferRules(finance).stream().filter(r -> r.currency().equals("UAH"))
                 .mapToLong(TransferRule::version).findFirst().orElse(0);
         return balances.setTransferRule(finance, UUID.randomUUID(),
                 new TransferRule("UAH", enabled, perTransfer, perDay, minAfter, 0), version, "test");
