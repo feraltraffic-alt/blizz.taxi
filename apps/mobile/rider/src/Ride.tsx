@@ -163,7 +163,7 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       onOrdered(await guard(() => client.post('/api/rider/v1/orders', {body: {
         command_id: orderCommand.current as string, quote_id: quote.id, vehicle_class: vehicleClass,
         pickup: pickup.point, pickup_label: pickup.label, dropoff: dropoff.point, dropoff_label: dropoff.label,
-        payment_method: byCard && card ? 'CARD' : 'CASH'
+        payment_method: byCard && card ? 'CASH' : 'CASH'
       }} as never)) as Order);
     } catch (failed) {
       if (failed instanceof ApiError && failed.code === 'QUOTE_EXPIRED') {
