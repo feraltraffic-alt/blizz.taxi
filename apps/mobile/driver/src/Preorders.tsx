@@ -82,7 +82,7 @@ export function Preorders({client, t, guard, failure, newId, locale, onTrip, onB
     }
     return once(async () => {
       await guard(() => client.post('/api/driver/v1/preorders/reservations/{reservation_id}/drop' as never,
-        {params: {reservation_id: r.id}, body: {command_id: newId(), reason_code: reason}} as never));
+        {params: {reservation_id: r.id}, body: {command_id: newId()}} as never));
       setReason('');
       await read();
     }, () => t('dropTooLate'));
@@ -103,7 +103,8 @@ export function Preorders({client, t, guard, failure, newId, locale, onTrip, onB
           <Text style={{color: theme.muted}}>{t('confirmFromUntil', {from: hm(r.confirm_from),
             until: hm(r.confirm_until)})}</Text>
           <Text style={{color: theme.muted}}>{t('dropUntil', {until: hm(r.drop_until)})}</Text>
-          <Button label={t('onMyWay')} onPress={() => void confirm(r)} />
+          {Date.now() >= Date.parse(r.confirm_from) ? <Button label={t('onMyWay')} onPress={() => void confirm(r)} />
+            : null}
           <View style={{gap: 4}}>
             {reasons.map(x => <Button key={x.code} label={label(x)} onPress={() => setReason(x.code)} />)}
           </View>
