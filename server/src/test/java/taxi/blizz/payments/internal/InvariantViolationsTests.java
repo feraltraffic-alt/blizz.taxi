@@ -251,7 +251,8 @@ class InvariantViolationsTests {
         String key = "invariant-fixture-" + UUID.randomUUID();
         ledger.post(new Ledger.Posting(key, "InvariantFixture", UUID.randomUUID(), "UAH", "Invariant test",
                 List.of(Ledger.Line.debit(Ledger.Account.SUSPENSE, null, 100),
-                        Ledger.Line.credit(Ledger.Account.SERVICE_FUNDS, null, 100))));
+                        Ledger.Line.credit(Ledger.Account.SERVICE_FUNDS, null, 100)),
+                taxi.blizz.identity.Services.DEFAULT_ID));
         UUID id = jdbc.sql("select id from journal_transaction where business_key=:key").param("key", key).query(UUID.class).single();
         ageData();
         editJournal(() -> jdbc.sql("update journal_line set credit_minor=101 where transaction_id=:id and line_no=2").param("id", id).update());

@@ -252,7 +252,8 @@ class ReconciliationDecisionTests {
         assertThat(java.time.Duration.ofNanos(elapsed)).isLessThan(java.time.Duration.ofSeconds(1));
         String listSql=(String)org.springframework.test.util.ReflectionTestUtils.getField(api,"LIST_SQL");
         String pagePlan=jdbc.sql("explain (analyze,buffers,format json) "+listSql).param("merchant",merchant)
-                .param("afterDay",null).param("afterId",null).param("allCities",true).param("cities",List.of(city1,city2)).param("limit",21)
+                .param("afterDay",null).param("afterId",null).param("allCities",true)
+                .param("service",taxi.blizz.identity.Services.DEFAULT_ID).param("cities",List.of(city1,city2)).param("limit",21)
                 .query(String.class).single();
         String freshnessSql=(String)org.springframework.test.util.ReflectionTestUtils.getField(
                 context.getBean(ReconciliationMetrics.class),"LAST_SUCCESS_SQL");

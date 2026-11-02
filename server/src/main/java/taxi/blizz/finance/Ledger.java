@@ -45,10 +45,19 @@ public interface Ledger {
         }
     }
 
+    /**
+     * {@code serviceId}: the taxi service the money belongs to (ADR 0016, issue #216). Null: the service of the
+     * posting's people (its drivers and riders), who must all be of one service; a posting with no person names it.
+     */
     record Posting(String businessKey, String basisType, UUID basisId, String currency, String reason,
-                   List<Line> lines) {
+                   List<Line> lines, UUID serviceId) {
         public Posting {
             lines = List.copyOf(lines);
+        }
+
+        public Posting(String businessKey, String basisType, UUID basisId, String currency, String reason,
+                       List<Line> lines) {
+            this(businessKey, basisType, basisId, currency, reason, lines, null);
         }
     }
 

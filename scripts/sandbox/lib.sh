@@ -120,6 +120,46 @@ admin_token() {
     echo "$token"
 }
 
+# owner_token — the platform owner (ADR 0016); changes the bootstrap password at the first run.
+owner_token() {
+    local login="${OWNER_LOGIN:-owner}" first="${OWNER_BOOTSTRAP_PASSWORD:-Sandbox-Owner-2026}"
+    local password="${OWNER_PASSWORD:-Sandbox-Owner-2026-ok}" token
+    token=$(staff_sign_in ADMIN "$login" "$password")
+    if [[ "$(cat /tmp/sandbox-status)" == 200 ]]; then echo "$token"; return; fi
+    token=$(staff_sign_in ADMIN "$login" "$first"); expect 200
+    api POST /api/admin/v1/me/password "$token" \
+        "{\"current_password\":\"$first\",\"new_password\":\"$password\"}" >/dev/null
+    expect 204
+    token=$(staff_sign_in ADMIN "$login" "$password"); expect 200
+    echo "$token"
+}
+
+# other_service_admin — the super admin of a second taxi service, made once per run by the platform owner and kept
+# in a file, so a scenario can show that one service sees nothing of another's (ADR 0016).
+OTHER_SERVICE_FILE="${OTHER_SERVICE_FILE:-/tmp/sandbox-other-service}"
+other_service_admin() {
+    local login
+    if [[ ! -s "$OTHER_SERVICE_FILE" ]]; then
+        local owner code
+        owner=$(owner_token)
+        code="other-$(random_digits 6)"
+        api POST /api/admin/v1/services "$owner" "{\"command_id\":\"$(uuid)\",\"code\":\"$code\",
+          \"name\":\"Other taxi\",\"reason\":\"Sandbox: isolation checks\",
+          \"password\":\"${OWNER_PASSWORD:-Sandbox-Owner-2026-ok}\",\"super_admin\":{\"login\":\"boss-$code\",
+          \"initial_password\":\"Sandbox-Other-2026\",\"first_name\":\"Olha\",\"last_name\":\"Bondar\"}}" \
+          >/dev/null
+        expect 201
+        local token
+        token=$(staff_sign_in ADMIN "boss-$code" "Sandbox-Other-2026"); expect 200
+        api POST /api/admin/v1/me/password "$token" \
+            "{\"current_password\":\"Sandbox-Other-2026\",\"new_password\":\"Sandbox-Other-2026-ok\"}" >/dev/null
+        expect 204
+        echo "boss-$code" > "$OTHER_SERVICE_FILE"
+    fi
+    login=$(cat "$OTHER_SERVICE_FILE")
+    staff_sign_in ADMIN "$login" "Sandbox-Other-2026-ok"
+}
+
 # The runner's wall clock can step back (NTP); the last sequence is kept in a file so it only grows.
 SEQUENCE_FILE="${SEQUENCE_FILE:-/tmp/sandbox-sequence}"
 next_sequence() {

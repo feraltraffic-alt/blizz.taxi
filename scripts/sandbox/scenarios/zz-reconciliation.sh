@@ -67,4 +67,11 @@ INJECTED=0
 AGAIN=$(api POST /sandbox/v1/payment-reconciliations/run "$ADMIN" "$INJECT_BODY"); expect 200
 [[ "$(jq -r .id <<<"$AGAIN")" == "$RUN_ID" ]]
 [[ "$(jq -r .state <<<"$AGAIN")" == RESOLVED ]]
-note "Done: clean card snapshot, one bank-only difference, three identical runs, audited decision/replay/conflict, bank fixture restored."
+say "Another taxi service sees none of these reconciliations (ADR 0016, #216)"
+OTHER=$(other_service_admin); expect 200
+api GET "/api/admin/v1/payment-reconciliations/$RUN_ID" "$OTHER" >/dev/null; expect 404
+api GET "/api/admin/v1/payment-reconciliations?merchant_id=$INJECT_MERCHANT&limit=100" "$OTHER" >/dev/null; expect 404
+OTHER_LIST=$(api GET "/api/admin/v1/payment-reconciliations?limit=100" "$OTHER"); expect 200
+[[ "$(jq '.runs|length' <<<"$OTHER_LIST")" == 0 ]]
+api POST "/api/admin/v1/payment-reconciliations/items/$ITEM_ID/resolve" "$OTHER" "$CONFLICT" >/dev/null; expect 404
+note "Done: clean card snapshot, one bank-only difference, three identical runs, audited decision/replay/conflict, bank fixture restored; another service sees none of it."
