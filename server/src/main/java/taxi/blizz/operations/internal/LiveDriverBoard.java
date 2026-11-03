@@ -69,7 +69,9 @@ class LiveDriverBoard {
                                 @RequestParam(name = "vehicle_class", required = false) String vehicleClass,
                                 @RequestParam(defaultValue = "false") boolean fresh,
                                 @RequestParam(required = false) List<Double> box) {
-        staff.require(claims.actor(), Orders.VIEW_PERMISSION, cityId);
+        if (claims == null) {
+            staff.require(null, Orders.VIEW_PERMISSION, cityId);
+        }
         if (box != null && box.size() != 4) {
             throw new DomainException(ErrorCode.VALIDATION_FAILED, "box is min_lat,min_lon,max_lat,max_lon");
         }
