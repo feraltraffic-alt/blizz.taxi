@@ -3,7 +3,7 @@ import {Pressable, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {
   CallButton, SafetyButton,
-  Alert, Button, Chat, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
+  Alert, Button, Chat, DriverMap, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {AfterRide} from './After';
 
@@ -15,7 +15,10 @@ type Quote = {id: string; amount_minor: number; currency: string; payment_method
 type Card = {id: string; masked_pan: string; card_type: string | null};
 type Driver = {name: string; make: string; model: string; color: string; registration_number: string};
 export type Order = {id: string; status: string; version: number; price_minor?: number | null; currency?: string;
-  driver?: Driver | null; pickup_eta?: {seconds: number} | null; payment_method?: string; status_reason?: string | null};
+  driver?: Driver | null; pickup_eta?: {seconds: number} | null; payment_method?: string; status_reason?: string | null;
+  pickup?: Point;
+  /** Where the driver is while the trip is under way (#479, #483); absent otherwise. */
+  driver_location?: {lat: number; lon: number; at: string; stale: boolean}};
 
 const FINAL = new Set(['FULFILLED', 'CANCELLED', 'UNFULFILLED']);
 
@@ -306,6 +309,12 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
     }
   }
 
+  /** "updated N min ago", counted against the position's own time. */
+  const located = (at: string) => {
+    const minutes = Math.floor((Date.now() - Date.parse(at)) / 60_000);
+    return minutes < 1 ? t('driverOnMapNow') : t('driverOnMap', {minutes});
+  };
+
   const finished = FINAL.has(order.status);
   const paymentEnd = order.status === 'UNFULFILLED' && (order.status_reason === 'PAYMENT_DECLINED'
     || order.status_reason === 'PAYMENT_TIMEOUT') ? order.status_reason : null;
@@ -328,6 +337,14 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
       {order.status === 'ASSIGNED' || order.status === 'IN_SERVICE' ? <CallButton client={client} t={t} guard={guard}
         failure={failure} path="/api/rider/v1/orders/{order_id}/call" params={{order_id: order.id}}
         label={t('callDriver')} /> : null}
+      {order.driver_location && order.pickup ? (
+        <>
+          <DriverMap orderId={order.id} pickup={order.pickup} label={t('driverOnMapLabel')}
+            driver={{lat: order.driver_location.lat, lon: order.driver_location.lon}} />
+          <Text style={{color: order.driver_location.stale ? theme.error : theme.muted}}>
+            {order.driver_location.stale ? t('driverStale') : located(order.driver_location.at)}</Text>
+        </>
+      ) : null}
       {order.pickup_eta ? <Text style={{color: theme.muted}}>{t('eta', {minutes: Math.max(1,
         Math.round(order.pickup_eta.seconds / 60))})}</Text> : null}
       {order.driver ? <Chat client={client} t={t} guard={guard} failure={failure}

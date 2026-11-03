@@ -5,6 +5,8 @@ export {chunkedSecureStore, secureRefreshTokens, type SecureStore, type ValueSto
 export {webRefreshTokens} from './webTokens';
 export {Chat} from './chat';
 export {ProviderPage} from './provider';
+export {DriverMap} from './driverMap';
+export {driverMapHtml, moveDriverScript, type MapPoint} from './driverMapHtml';
 export {PhoneChange} from './phone';
 export {DataExports} from './exports';
 export {TopUpByCard, type PaymentPage} from './topup';
