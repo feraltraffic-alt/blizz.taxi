@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
-  AccountDeletion, Alert, Button, DRIVER_CATEGORIES, DataExports, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
+  AccountDeletion, Alert, Button, DRIVER_CATEGORIES, SafetyButton, DataExports, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
   translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
@@ -241,6 +241,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       {online ? <Button label={t('goOffline')} onPress={() => void goOffline()} disabled={busy} />
         : canWork ? <Button label={t('goOnline')} onPress={() => void goOnline()} disabled={busy} />
           : <Text style={{color: theme.muted}}>{t('notAdmitted')}</Text>}
+      {online ? <SafetyButton client={client} t={t} guard={guard} failure={failure} api="/api/driver/v1" /> : null}
       {online ? <Dispatch client={client} t={t} guard={guard} failure={failure} newId={newId} now={now}
         pollMs={config.pollMs ?? 3_000} locale={locale} push={config.push} /> : null}
       {lost ? <Text style={{color: theme.error}}>{t('connectionLost')}</Text> : null}

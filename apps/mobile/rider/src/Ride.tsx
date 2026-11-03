@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {
+  SafetyButton,
   Alert, Button, Chat, Field, Loading, Screen, usePushDecider, useTheme, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 import {AfterRide} from './After';
@@ -301,6 +302,7 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
   return (
     <Screen title={t('yourRide')}>
       <Text style={{color: theme.text}}>{t('status_' + order.status)}</Text>
+      <SafetyButton client={client} t={t} guard={guard} failure={failure} api="/api/rider/v1" />
       {paymentEnd ? <Text style={{color: theme.error}}>{t(paymentEnd === 'PAYMENT_DECLINED' ? 'paymentDeclined'
         : 'paymentTimeout')}</Text> : null}
       {order.payment_method ? <Text style={{color: theme.muted}}>{t(order.payment_method === 'CARD'

@@ -9,6 +9,7 @@ export {PhoneChange} from './phone';
 export {DataExports} from './exports';
 export {TopUpByCard, type PaymentPage} from './topup';
 export {AccountDeletion} from './deletion';
+export {SafetyButton, SafetyContacts} from './safety';
 export {
   DRIVER_CATEGORIES, RIDER_CATEGORIES, Support, type AboutOrder, type PickedFile, type SupportSide
 } from './support';
