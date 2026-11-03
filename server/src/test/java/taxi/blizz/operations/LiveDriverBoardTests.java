@@ -112,15 +112,61 @@ class LiveDriverBoardTests {
                 .isEqualTo(403);
     }
 
+    /**
+     * A1–A3 of #478: the admin panel's live map (REQ-ADM-01, ADR 0017) reads the same board on its own path, with an
+     * admin token of the city; staff of another city and an operator's token are refused there.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theAdminPanelReadsTheSameBoardOnItsOwnPath() throws Exception {
+        List<Filter> filters = new ArrayList<>(context.getBeansOfType(Filter.class).values());
+        AnnotationAwareOrderComparator.sort(filters);
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filters.toArray(Filter[]::new)).build();
+        TestRides rides = new TestRides(jdbc, orders, dispatch, trips, sessions, auth, quotes);
+        UUID city = rides.city("test-live-board", "UAH", 85);
+        TestRides.Driver busy = rides.driverNear(PICKUP);
+        rides.assigned(city, busy, PICKUP, DROPOFF);
+        TestRides.Driver free = rides.driverNear(new GeoPoint(-39.8, 85.8));
+
+        String admin = token(new String[]{Orders.VIEW_PERMISSION}, city, "ADMIN", ApiAudience.ADMIN);
+        MvcResult result = mvc.perform(get("/api/admin/v1/drivers/live").param("city_id", city.toString())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)).andReturn();
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        List<Map<String, Object>> drivers = (List<Map<String, Object>>) json.readValue(
+                result.getResponse().getContentAsString(), Map.class).get("drivers");
+        assertThat(drivers).extracting(d -> d.get("driver_id"))
+                .contains(busy.actor().id().toString(), free.actor().id().toString());
+
+        List<Map<String, Object>> inBox = (List<Map<String, Object>>) json.readValue(mvc.perform(
+                get("/api/admin/v1/drivers/live").param("city_id", city.toString()).param("status", "FREE")
+                        .param("box", "-39.85,85.7,-39.7,85.9")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)).andReturn().getResponse()
+                .getContentAsString(), Map.class).get("drivers");
+        assertThat(inBox).extracting(d -> d.get("driver_id")).containsExactly(free.actor().id().toString());
+
+        String elsewhere = token(new String[]{Orders.VIEW_PERMISSION}, UUID.randomUUID(), "ADMIN", ApiAudience.ADMIN);
+        assertThat(mvc.perform(get("/api/admin/v1/drivers/live").param("city_id", city.toString())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + elsewhere)).andReturn().getResponse().getStatus())
+                .as("staff of another city").isEqualTo(403);
+        String operator = token(new String[]{Orders.VIEW_PERMISSION}, city);
+        assertThat(mvc.perform(get("/api/admin/v1/drivers/live").param("city_id", city.toString())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + operator)).andReturn().getResponse().getStatus())
+                .as("an operator's token on the admin path").isIn(401, 403);
+    }
+
     private String token(String[] permissions, UUID city) {
+        return token(permissions, city, "OPERATOR", ApiAudience.OPERATOR);
+    }
+
+    private String token(String[] permissions, UUID city, String role, ApiAudience audience) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                         insert into staff_user (id, login, name, role, permissions, city_scope, state, created_at,
                                                 updated_at)
-                        values (:id, :login, 'Board', 'OPERATOR', :permissions, :scope, 'ACTIVE', now(), now())""")
-                .param("id", id).param("login", "board-" + id).param("permissions", permissions)
+                        values (:id, :login, 'Board', :role, :permissions, :scope, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "board-" + id).param("role", role).param("permissions", permissions)
                 .param("scope", new UUID[]{city}).update();
         return auth.openStaff(new VerifiedSubject(new Actor(SubjectType.STAFF, id), "ACTIVE", false),
-                ApiAudience.OPERATOR, null).accessToken();
+                audience, null).accessToken();
     }
 }
