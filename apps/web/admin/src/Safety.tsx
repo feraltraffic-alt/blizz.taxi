@@ -97,6 +97,7 @@ export function SafetyContactsSettings({client, t, newId}: {client: ApiClient; t
     <section aria-labelledby="settings-title">
       <h1 id="settings-title">{t('navSettings')}</h1>
       <p><Link to="/settings/cancel-reasons">{t('settingsCancelReasons')}</Link></p>
+      <p><Link to="/settings/call-lines">{t('settingsCallLines')}</Link></p>
       <h2>{t('safetyContactsTitle')}</h2>
       <label htmlFor="safety-city">{t('ordersCity')}</label>
       <select id="safety-city" value={cityId} onChange={e => setCityId(e.target.value)}>

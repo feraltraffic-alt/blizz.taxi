@@ -14,6 +14,7 @@ import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
 import {Integrations} from './Integrations.js';
 import {CancelReasons} from './CancelReasons.js';
+import {CallLines} from './CallLines.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
@@ -138,6 +139,8 @@ function Panel({client}: {client: ApiClient}) {
           <DriverPromotions client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/risk') ? <Route path="/risk" element={<Risk client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/settings') ? <Route path="/settings/call-lines" element={<CallLines
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
