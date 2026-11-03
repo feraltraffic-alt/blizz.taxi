@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {DriverEarnings} from './DriverEarnings.js';
 import {DriverBalance} from './Balance.js';
 
 type Item = {driver_id: string; name?: string | null; phone?: string | null; since: string};
@@ -99,7 +100,7 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
   const acting = useRef(false);
   const urls = useRef<string[]>([]);
   /** The service's cities and the ticked admission cities (#353). */
-  const [cities, setCities] = useState<{id: string; name: string; currency?: string}[]>([]);
+  const [cities, setCities] = useState<{id: string; name: string; currency?: string; timezone?: string}[]>([]);
   const [admitted, setAdmitted] = useState<string[]>([]);
   const [cityReason, setCityReason] = useState('');
   /** The reason for a block, a suspension or their reversal (#363). */
@@ -107,7 +108,8 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
 
   useEffect(() => {
     client.get('/api/config/v1/bootstrap' as never, {} as never)
-      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities))
+      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string; timezone?: string}[]})
+        .cities))
       .catch(() => setCities([]));
   }, [client]);
 
@@ -293,6 +295,8 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
       ) : null}
       {finance ? <DriverBalance client={client} t={t} newId={newId} driverId={driverId}
         currencies={cities.flatMap(c => c.currency ? [c.currency] : [])} /> : null}
+      {finance ? <DriverEarnings client={client} t={t} driverId={driverId} cities={cities}
+        admitted={p.admission_city_ids ?? []} /> : null}
       <fieldset>
         <legend>{t('accountTitle')}</legend>
         <label>{t('accountReason')}
