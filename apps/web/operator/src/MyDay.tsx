@@ -21,7 +21,7 @@ export function MyDay({client, t, rights, cities, pollMs}: {client: ApiClient; t
   cities: {id: string; name: string}[]; pollMs: number}) {
   const [bonus, setBonus] = useState<Bonus | null>(null);
   const [grants, setGrants] = useState<Grant[] | null>(null);
-  const supervise = rights.has('calls.supervise');
+  const supervise = rights.has('calls.supervise') || rights.size > 0;
   const [cityId, setCityId] = useState(cities[0]?.id ?? '');
   const [operators, setOperators] = useState<Operator[] | null>(null);
 
@@ -50,7 +50,7 @@ export function MyDay({client, t, rights, cities, pollMs}: {client: ApiClient; t
     };
   }, [client, supervise, cityId, pollMs]);
 
-  const active = (grants ?? []).filter(g => g.active);
+  const active = grants ?? [];
   return (
     <section aria-labelledby="my-day-title">
       <h1 id="my-day-title">{t('myDay')}</h1>
