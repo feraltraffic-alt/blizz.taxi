@@ -25,7 +25,9 @@ import taxi.blizz.platform.SubjectType;
  * {@link FakeClamd}: SAFE only when the structural check and the scanner pass; a scanner that cannot answer keeps
  * the file in QUARANTINE and the rescan job tries again until it can, never SAFE by default.
  */
-@SpringBootTest(properties = {"blizz.files.rescan.interval=PT0.2S", "blizz.files.clamav.total-timeout=PT2S"})
+// The sweep is off in the other test contexts, which share the database (#393); this context runs its own.
+@SpringBootTest(properties = {"blizz.files.rescan.enabled=true", "blizz.files.rescan.interval=PT0.2S",
+        "blizz.files.clamav.total-timeout=PT2S"})
 @Import(TestcontainersConfiguration.class)
 class ContentScannerTests {
 
