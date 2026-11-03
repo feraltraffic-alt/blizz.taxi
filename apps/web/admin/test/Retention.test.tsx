@@ -139,7 +139,7 @@ describe('D4: refused before sending', () => {
       const user = userEvent.setup();
       mount();
       await set(user, 'sessions', value);
-      await save(user, 'Причина', true);
+      await save(user, 'Причина');
       expect(await screen.findByText('Каждый срок — целое число дней от 0 до 2147483647.')).toBeTruthy();
       expect(h.sent).toHaveLength(0);
     });
