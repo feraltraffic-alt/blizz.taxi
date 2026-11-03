@@ -164,7 +164,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
     try {
       const changed = await client.put('/api/admin/v1/drivers/{driver_id}/admission-cities' as never, {params: {
         driver_id: driverId}, body: {command_id: newId(), expected_version: item.profile.version,
-        city_ids: cities.map(c => c.id).filter(id => admitted.includes(id)), reason: why}} as never) as Profile;
+        city_ids: admitted.filter(id => !(item.profile.admission_city_ids ?? []).includes(id)), reason: why}} as never) as Profile;
       setItem(old => old ? {...old, profile: changed} : old);
       setAdmitted(changed.admission_city_ids ?? []);
       setCityReason('');
