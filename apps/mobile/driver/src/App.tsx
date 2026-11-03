@@ -10,6 +10,7 @@ import {Dispatch} from './Trip';
 import {Money} from './Money';
 import {Preorders} from './Preorders';
 import {Documents, type AdmissionProfile, type PickedFile} from './Documents';
+import {createTrackBuffer, type TrackPoint} from './Track';
 
 export type {PickedFile} from './Documents';
 
@@ -34,6 +35,8 @@ export interface AppConfig {
   push?: PushPort;
   /** Picks a document file on the phone (#284); none: no upload offered. */
   pickFile?: () => Promise<PickedFile | null>;
+  /** How many GPS points of lost heartbeats are kept for upload (#456); 1000 by default. */
+  trackLimit?: number;
 }
 
 type Profile = AdmissionProfile & {account_state: string; admission_city_ids: string[]};
@@ -82,7 +85,13 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
   const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support' | 'preorders' | 'phone' | 'data'>('work');
-  const {signOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
+  const {signOut: pushSignOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
+  /** The points of heartbeats lost to the network, uploaded after the next good one (#456); in memory only. */
+  const track = useMemo(() => createTrackBuffer(client, newId, now, config.trackLimit), [client]);
+  const signOut = async () => {
+    track.clear();
+    await pushSignOut();
+  };
   const theme = useTheme();
 
   /** The server's state, never the app's memory: also after a restart (E5). */
@@ -113,16 +122,26 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     if (!online || elsewhere) return;
     const id = availability.session_id as string;
     const timer = setInterval(() => {
+      let point: TrackPoint | null = null;
       location()
-        .then(where => guard(() => client.post('/api/driver/v1/work-sessions/{id}/heartbeat' as never,
-          {params: {id}, body: {location: where}} as never)))
+        .then(where => {
+          // A batch point needs its accuracy (LocationBatchPoint); a fix without one is not kept.
+          if (where.accuracy_m !== undefined) point = {...where, accuracy_m: where.accuracy_m};
+          return guard(() => client.post('/api/driver/v1/work-sessions/{id}/heartbeat' as never,
+            {params: {id}, body: {location: where}} as never));
+        })
         .then(answer => {
           setLost(false);
           setAvailability(answer as Availability);
+          void track.flush();
         })
         .catch(error => {
           // The session stays as the server keeps it; a lost connection is shown and the next beat retries (E6).
-          if (error instanceof ApiError && error.status === 0) setLost(true);
+          // The point of a beat lost to the network is kept for a location batch (#456).
+          if (error instanceof ApiError && error.status === 0) {
+            setLost(true);
+            if (point) track.push(point);
+          }
           else if (error instanceof ApiError && error.code === 'STATE_CONFLICT') setElsewhere(true);
           else setMessage(failure(error));
         });
@@ -168,6 +187,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     setBusy(true);
     setMessage(null);
     try {
+      track.clear();
       setAvailability(await guard(() => client.post('/api/driver/v1/work-sessions/{id}/close' as never, {
         params: {id: availability.session_id},
         body: {command_id: newId(), expected_version: availability.session_version}
