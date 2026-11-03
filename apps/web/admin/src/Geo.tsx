@@ -3,8 +3,10 @@ import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 import {CityMap, type MapZone} from './CityMap.js';
+import {CityForm} from './CityForm.js';
 
-type City = {id: string; name: string; currency: string; timezone: string; state: string; polygon?: unknown};
+type City = {id: string; code: string; name: string; currency: string; timezone: string; state: string;
+  priority: number; version: number; polygon?: unknown};
 type Interval = {days_of_week: number[]; from: string; to: string};
 type Operations = {working_hours: Interval[]; payment_methods: string[]; return_zone_meters: number;
   dropoff_outside_city: {allowed: boolean; max_distance_km: number | null}; orders_paused: boolean;
@@ -22,13 +24,19 @@ async function cities(client: ApiClient) {
 }
 
 /** The cities for holders of geo.manage (#359): each with its currency, time zone and state. */
-export function CityList({client, t}: {client: ApiClient; t: Translate}) {
+export function CityList({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const [list, setList] = useState<City[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  useEffect(() => {
+  const read = useCallback(() => {
     cities(client).then(setList).catch(failure => setError(failure));
   }, [client]);
+
+  useEffect(() => {
+    read();
+  }, [read]);
 
   return (
     <section aria-labelledby="cities-title">
@@ -40,6 +48,12 @@ export function CityList({client, t}: {client: ApiClient; t: Translate}) {
           </li>
         ))}
       </ul>
+      {adding ? <CityForm client={client} t={t} newId={newId} onDone={() => {
+        setAdding(false);
+        setMessage(t('cityCreated'));
+        read();
+      }} /> : <button type="button" onClick={() => {setAdding(true); setMessage(null);}}>{t('cityNew')}</button>}
+      {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
     </section>
   );
@@ -54,6 +68,9 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
   const {cityId = ''} = useParams();
   const [city, setCity] = useState<City | null>(null);
   const [zones, setZones] = useState<MapZone[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [stateReason, setStateReason] = useState('');
+  const [cityMessage, setCityMessage] = useState<string | null>(null);
   const [ops, setOps] = useState<Operations | null>(null);
   const [intervals, setIntervals] = useState<Interval[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
@@ -85,10 +102,40 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
 
   useEffect(() => {
     read().catch(failure => setError(failure));
-    cities(client).then(list => setCity(list.find(c => c.id === cityId) ?? null)).catch(() => undefined);
+    readCity();
     client.get('/api/admin/v1/cities/{city_id}/zones' as never, {params: {city_id: cityId}} as never)
       .then(value => setZones((value as {zones: MapZone[]}).zones)).catch(() => setZones(null));
   }, [client, cityId, read]);
+
+  /** The city as the server holds it now: its draft, state and version (#467). */
+  function readCity() {
+    cities(client).then(list => setCity(list.find(c => c.id === cityId) ?? null)).catch(() => undefined);
+  }
+
+  /** Publishes a draft or archives a published city, with the version read and a reason (#467). */
+  async function changeState(action: 'publish' | 'archive') {
+    if (!city || acting.current) return;
+    if (!stateReason.trim()) {
+      setCityMessage(t('cityReasonNeeds'));
+      return;
+    }
+    acting.current = true;
+    setCityMessage(null);
+    try {
+      const answer = await client.post(('/api/admin/v1/cities/{city_id}/' + action) as never, {params: {
+        city_id: cityId}, body: {command_id: newId(), expected_version: city.version,
+        reason: stateReason.trim()}} as never) as {state: string; version: number};
+      setCity(c => c ? {...c, state: answer.state, version: answer.version} : c);
+      setStateReason('');
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 409) {
+        setCityMessage(t('cityChanged'));
+        readCity();
+      } else setError(failure);
+    } finally {
+      acting.current = false;
+    }
+  }
 
   /** Runs one command at a time; a conflict is told and the city is read again. */
   async function act(command: () => Promise<Operations>, done: string | null) {
@@ -223,6 +270,25 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
       ) : error ? null : <p>{t('loading')}</p>}
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      {city ? (
+        <section aria-labelledby="city-state-title">
+          <h2 id="city-state-title">{t('cityStateLine', {state: t('cityState_' + city.state)})}</h2>
+          {city.state === 'DRAFT' && !editing ? <button type="button" onClick={() => {setEditing(true);
+            setCityMessage(null);}}>{t('cityEdit')}</button> : null}
+          {editing ? <CityForm key={city.version} client={client} t={t} newId={newId} existing={city}
+            onDone={() => {setEditing(false); setCityMessage(t('cityDraftSaved')); readCity();}}
+            onConflict={readCity} /> : null}
+          {city.state !== 'ARCHIVED' ? (
+            <>
+              <label>{t('cityStateReason')}<input value={stateReason} onChange={e => setStateReason(e.target.value)} />
+              </label>
+              <button type="button" onClick={() => void changeState(city.state === 'DRAFT' ? 'publish' : 'archive')}>
+                {t(city.state === 'DRAFT' ? 'cityPublish' : 'cityArchive')}</button>
+            </>
+          ) : null}
+          {cityMessage ? <p role="status">{cityMessage}</p> : null}
+        </section>
+      ) : null}
       {city ? <CityMap t={t} boundary={city.polygon} zones={zones} /> : null}
     </section>
   );

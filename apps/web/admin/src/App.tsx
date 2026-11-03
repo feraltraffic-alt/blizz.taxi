@@ -134,7 +134,7 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/geo') ? (
           <>
-            <Route path="/geo" element={<CityList client={client} t={t} />} />
+            <Route path="/geo" element={<CityList client={client} t={t} newId={() => crypto.randomUUID()} />} />
             <Route path="/geo/:cityId" element={<CityOperations client={client} t={t}
               newId={() => crypto.randomUUID()} />} />
           </>
