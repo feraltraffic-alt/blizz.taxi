@@ -69,8 +69,8 @@ export function CallLines({client, t, newId}: {client: ApiClient; t: Translate; 
       setMessage(t('lineReasonNeeds'));
       return;
     }
-    const body = remove ? {expected_version: l.version, city_id: null, reason}
-      : {expected_version: l.version, city_id: moves[l.number] ?? l.city_id, label: l.label, reason};
+    const body = remove ? {expected_version: l.version, city_id: '', reason}
+      : {expected_version: 0, city_id: moves[l.number] ?? l.city_id, label: l.label, reason};
     return change(l.number, body, answer => setLines(list => remove ? (list ?? []).filter(x => x.number !== l.number)
       : (list ?? []).map(x => x.number === l.number ? answer : x)));
   }
