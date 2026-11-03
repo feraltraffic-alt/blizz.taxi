@@ -12,12 +12,12 @@ const LANGUAGES = ['uk', 'pl', 'ru', 'en'];
 const MOMENT = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 
 /** "2026-11-10 09:00" in UTC from an instant. */
-function typed(at: string) {
+export function typed(at: string) {
   return new Date(at).toISOString().slice(0, 16).replace('T', ' ');
 }
 
 /** "2026-11-10 09:00" read as UTC → "2026-11-10T09:00:00Z"; null when it is not a real moment. */
-function instant(text: string) {
+export function instant(text: string) {
   const parts = MOMENT.exec(text.trim());
   if (!parts) return null;
   const [y, mo, d, h, mi] = parts.slice(1).map(Number) as [number, number, number, number, number];
