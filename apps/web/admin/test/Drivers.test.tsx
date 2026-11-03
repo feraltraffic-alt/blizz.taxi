@@ -294,3 +294,162 @@ describe('#353: admission cities', () => {
     expect(put).toHaveLength(1);
   });
 });
+
+describe('#363: find by status; block, suspend and their reversal', () => {
+  const at = (account: string, review: string, version = 4) => ({...profile(review), account_state: account, version});
+  function more(opts: {current?: () => ReturnType<typeof at>; act?: (action: string) => Response | Promise<Response>}
+    = {}) {
+    const acts: {action: string; body: Record<string, unknown>}[] = [];
+    server.use(
+      http.get(origin + '/api/admin/v1/drivers/' + DRIVER, () => HttpResponse.json(theCase({profile: opts.current
+        ? opts.current() : at('ACTIVE', 'APPROVED')}) as never)),
+      http.post(origin + '/api/admin/v1/drivers/' + DRIVER + '/:action', async ({request, params}) => {
+        const action = String(params.action);
+        acts.push({action, body: await request.json() as Record<string, unknown>});
+        if (opts.act) return opts.act(action);
+        const after: Record<string, [string, string]> = {block: ['BLOCKED', 'APPROVED'], unblock: ['ACTIVE', 'APPROVED'],
+          suspend: ['ACTIVE', 'SUSPENDED'], reinstate: ['ACTIVE', 'APPROVED']};
+        const [account, review] = after[action] ?? ['ACTIVE', 'APPROVED'];
+        return HttpResponse.json(at(account, review, 5) as never);
+      }));
+    return {acts};
+  }
+  async function open() {
+    mount('/drivers/' + DRIVER);
+    const user = userEvent.setup();
+    await screen.findByText('Skoda Octavia AA1234BB · на проверке');
+    return user;
+  }
+  const why = 'Причина для аккаунта и допуска';
+
+  it('B1: the status filter reads the first page by status; "more" keeps it with the cursor', async () => {
+    const {asked} = handlers({queue: q => q.get('cursor') ? {drivers: [item(2, {status: 'APPROVED'})],
+      page: {next_cursor: null, has_more: false}} : {drivers: [item(1, {status: q.get('status')})],
+      page: {next_cursor: 'c2', has_more: true}}});
+    mount();
+    const user = userEvent.setup();
+    await screen.findByRole('link', {name: /Водитель 1/});
+    await user.selectOptions(screen.getByLabelText('Статус'), 'APPROVED');
+    await waitFor(() => expect(asked.queue).toHaveLength(2));
+    await user.click(await screen.findByRole('button', {name: 'Ещё'}));
+    expect(await screen.findByRole('link', {name: /Водитель 2/})).toBeVisible();
+    expect(asked.queue.map(q => [q.get('status'), q.get('cursor')])).toEqual([['IN_REVIEW', null],
+      ['APPROVED', null], ['APPROVED', 'c2']]);
+  });
+
+  it.each([['ACTIVE', 'активен'], ['BLOCKED', 'заблокирован'], ['DELETION_PENDING', 'ожидает удаления'],
+    ['ANONYMIZED', 'обезличен']])('B2: the account state %s', async (account, text) => {
+    handlers();
+    more({current: () => at(account, 'APPROVED')});
+    mount('/drivers/' + DRIVER);
+    expect(await screen.findByText('Аккаунт: ' + text)).toBeVisible();
+  });
+
+  it('B3: block with the version and the reason; then only unblock is offered', async () => {
+    handlers();
+    const {acts} = more();
+    const user = await open();
+    expect(screen.queryByRole('button', {name: 'Разблокировать аккаунт'})).toBeNull();
+    await user.type(screen.getByLabelText(why), 'Жалобы пассажиров');
+    await user.click(screen.getByRole('button', {name: 'Заблокировать аккаунт'}));
+    expect(await screen.findByText('Аккаунт: заблокирован')).toBeVisible();
+    expect(acts).toEqual([{action: 'block', body: {command_id: expect.any(String), expected_version: 4,
+      reason: 'Жалобы пассажиров'}}]);
+    expect(screen.getByRole('button', {name: 'Разблокировать аккаунт'})).toBeVisible();
+    expect(screen.queryByRole('button', {name: 'Заблокировать аккаунт'})).toBeNull();
+  });
+
+  it('B3: unblock a blocked account', async () => {
+    handlers();
+    const {acts} = more({current: () => at('BLOCKED', 'APPROVED')});
+    const user = await open();
+    expect(screen.queryByRole('button', {name: 'Заблокировать аккаунт'})).toBeNull();
+    await user.type(screen.getByLabelText(why), 'Разобрались');
+    await user.click(screen.getByRole('button', {name: 'Разблокировать аккаунт'}));
+    expect(await screen.findByText('Аккаунт: активен')).toBeVisible();
+    expect(acts.map(a => a.action)).toEqual(['unblock']);
+  });
+
+  it('B4: suspend an approved driver; then only reinstate is offered', async () => {
+    handlers();
+    const {acts} = more();
+    const user = await open();
+    expect(screen.queryByRole('button', {name: 'Восстановить допуск'})).toBeNull();
+    await user.type(screen.getByLabelText(why), 'Истекла страховка');
+    await user.click(screen.getByRole('button', {name: 'Приостановить допуск'}));
+    expect(await screen.findByText('Проверка: приостановлен')).toBeVisible();
+    expect(acts).toEqual([{action: 'suspend', body: {command_id: expect.any(String), expected_version: 4,
+      reason: 'Истекла страховка'}}]);
+    expect(screen.getByRole('button', {name: 'Восстановить допуск'})).toBeVisible();
+    expect(screen.queryByRole('button', {name: 'Приостановить допуск'})).toBeNull();
+  });
+
+  it('B4: reinstate a suspended driver', async () => {
+    handlers();
+    const {acts} = more({current: () => at('ACTIVE', 'SUSPENDED')});
+    const user = await open();
+    await user.type(screen.getByLabelText(why), 'Новая страховка');
+    await user.click(screen.getByRole('button', {name: 'Восстановить допуск'}));
+    expect(await screen.findByText('Проверка: допущен')).toBeVisible();
+    expect(acts).toEqual([{action: 'reinstate', body: {command_id: expect.any(String), expected_version: 4,
+      reason: 'Новая страховка'}}]);
+  });
+
+  it('B4: neither suspend nor reinstate for a driver in review', async () => {
+    handlers();
+    more({current: () => at('ACTIVE', 'IN_REVIEW')});
+    await open();
+    expect(screen.queryByRole('button', {name: 'Приостановить допуск'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Восстановить допуск'})).toBeNull();
+  });
+
+  it.each([['no reason', ''], ['a reason over 1000 characters', 'x'.repeat(1001)]])(
+    'B5: %s sends nothing', async (_name, text) => {
+      handlers();
+      const {acts} = more();
+      const user = await open();
+      if (text) {
+        await user.click(screen.getByLabelText(why));
+        await user.paste(text);
+      }
+      await user.click(screen.getByRole('button', {name: 'Заблокировать аккаунт'}));
+      expect(await screen.findByText('Нужна причина, не длиннее 1000 символов.')).toBeVisible();
+      expect(acts).toEqual([]);
+    });
+
+  it('B6: a conflict is told, the case is read again, and the next command carries the new version', async () => {
+    handlers();
+    let version = 4;
+    let first = true;
+    const {acts} = more({current: () => at('ACTIVE', 'APPROVED', version), act: () => {
+      if (first) {
+        first = false;
+        version = 9;
+        return HttpResponse.json(problem(409, 'VERSION_CONFLICT'), {status: 409});
+      }
+      return HttpResponse.json(at('BLOCKED', 'APPROVED', 10) as never);
+    }});
+    const user = await open();
+    await user.type(screen.getByLabelText(why), 'r');
+    await user.click(screen.getByRole('button', {name: 'Заблокировать аккаунт'}));
+    expect(await screen.findByText('Водитель изменился, пока вы решали. Проверьте ещё раз.')).toBeVisible();
+    await user.clear(screen.getByLabelText(why));
+    await user.type(screen.getByLabelText(why), 'r');
+    await user.click(screen.getByRole('button', {name: 'Заблокировать аккаунт'}));
+    expect(await screen.findByText('Аккаунт: заблокирован')).toBeVisible();
+    expect(acts.map(a => a.body.expected_version)).toEqual([4, 9]);
+  });
+
+  it('B7: a double click sends one command', async () => {
+    handlers();
+    const {acts} = more({act: async () => {
+      await delay(100);
+      return HttpResponse.json(at('BLOCKED', 'APPROVED', 5) as never);
+    }});
+    const user = await open();
+    await user.type(screen.getByLabelText(why), 'r');
+    await user.dblClick(screen.getByRole('button', {name: 'Заблокировать аккаунт'}));
+    expect(await screen.findByText('Аккаунт: заблокирован')).toBeVisible();
+    expect(acts).toHaveLength(1);
+  });
+});
