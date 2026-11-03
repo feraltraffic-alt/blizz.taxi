@@ -80,7 +80,7 @@ export function Logs({client, t}: {client: ApiClient; t: Translate}) {
   }
 
   async function follow(id: string) {
-    if (!UUID.test(id)) {
+    if (!UUID.test(id) && id.length < 5) {
       setMessage(t('correlationNeeds'));
       return;
     }
@@ -161,7 +161,7 @@ export function Logs({client, t}: {client: ApiClient; t: Translate}) {
           ))}
         </ul>
       )}
-      {next ? <button type="button" onClick={() => void read(tab, query, next)}>{t('more')}</button> : null}
+      {next ? <button type="button" onClick={() => void read(tab, query.cursor ? query : {}, next)}>{t('more')}</button> : null}
       <label>{t('correlationId')}<input value={typed} onChange={e => setTyped(e.target.value)} /></label>
       <button type="button" onClick={() => void follow(typed.trim())}>{t('findCorrelation')}</button>
       {trail ? (
