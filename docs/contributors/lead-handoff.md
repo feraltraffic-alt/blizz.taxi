@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, before dawn)
+# Lead handoff (state on 03.11.2026, morning)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,40 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, morning)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #396 | #395 | Admin: feature flags |
+  | #397 | #394 | Admin: payment merchants on the integrations page |
+  | #399 | #393 | Tests: the quarantine rescan sweep runs only in its own test's context (the flaky `ContentScannerTests`); lessons case 22 (#402) |
+  | #401 | #400 | Admin: rider promotions (percent in basis points, zones sent back unchanged) |
+  | #404 | #403 | Admin: driver promotions |
+  | #406 | #405 | Admin: driver risk flags |
+  | #408 | #407 | Admin: call centre numbers (`/settings/call-lines`) |
+  | #410 | #409 | Admin: reports — orders and money per local day, CSV export (each file fetched once) |
+  | #412 | #411 | Admin: service settings (`/settings/service`); the whole `Settings` goes back, the unedited parts as read |
+  | #414 | #413 | Admin: riders — search, card, block, new phone by support |
+- **No open PRs.**
+- **Admin panel still to do:**
+  - zones and city creation (map);
+  - the tariffs API (#30, deferred by the owner);
+  - support cases in the admin panel;
+  - payment operations and reconciliations;
+  - cash disputes and chargebacks;
+  - fare and trip corrections;
+  - retention;
+  - OTP deliveries;
+  - operator bonuses;
+  - driver transfer rules;
+  - the driver's phone, terminal and earnings;
+  - the platform owner's services.
+- **Test pitfalls met again:**
+  - MSW answers with the first matching handler, so a general `/:action` handler must come after the specific ones (#413).
+  - Typing dates before a page's default has arrived races with the default (#409).
 
 ## Recent history (03.11.2026, before dawn)
 
