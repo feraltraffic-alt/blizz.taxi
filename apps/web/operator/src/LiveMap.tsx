@@ -15,7 +15,7 @@ export type View = {south: number; west: number; north: number; east: number};
 
 /** The contract's box: min_lat,min_lon,max_lat,max_lon, at most 6 decimals each (#475). */
 export function boxOf(view: View): string {
-  return [view.south, view.west, view.north, view.east].map(v => String(Number(v.toFixed(6)))).join(',');
+  return [view.west, view.south, view.east, view.north].map(v => String(Number(v.toFixed(6)))).join(',');
 }
 
 /** One circle per driver with a position, in the list's order, coloured by status and labelled (#470). */
