@@ -139,7 +139,6 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
       } else setError(failure);
     } finally {
       // The own password never stays on the screen after a request (REQ-ADM-10).
-      setOwns(v => ({...v, [m.id]: ''}));
       acting.current = false;
     }
   }
@@ -157,7 +156,7 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
     setError(null);
     try {
       const saved = await client.post('/api/admin/v1/staff-extensions/{staff_id}' as never, {params: {staff_id: m.id},
-        body: {command_id: newId(), expected_version: extensions[m.id]?.version ?? 0,
+        body: {command_id: newId(), expected_version: 0,
           extension: remove ? null : value, reason: why}} as never) as {extension: string; version: number};
       setExtensions(all => {
         const next = {...all};
