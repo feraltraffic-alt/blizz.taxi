@@ -172,7 +172,8 @@ function Panel({client}: {client: ApiClient}) {
         {sections.some(s => s.path === '/orders') ? (
           <>
             <Route path="/orders" element={<Orders client={client} t={t} />} />
-            <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t} />} />
+            <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t}
+              newId={() => crypto.randomUUID()} canCorrect={holds('fares.correct')} />} />
           </>
         ) : null}
         {sections.some(s => s.path === '/drivers') ? (
