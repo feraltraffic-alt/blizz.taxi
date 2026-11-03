@@ -97,7 +97,7 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   | #392 | #391 | Admin: integrations — health, keys and settings, checks (secrets never shown, emptied after every request) |
 - **Open:** #397 (#394, payment merchants on the integrations page), #396 (#395, feature flags).
 - **Filed, not started:** #393, a flaky `ContentScannerTests`. The likely cause is the shared one-thread scheduler.
-- **Merging habit:** a branch built on an unmerged one keeps the branch side (`git checkout --ours`) when merging `main` after the base was squashed. Two sibling sections join their lines with `scratchpad/joincode.py` (imports, routes, the `joinCatalogs` names). Then read `git diff origin/main` before pushing.
+- **Merging habit:** a branch built on an unmerged one keeps the branch side (`git checkout --ours`) when merging `main` after the base was squashed. Two sibling sections conflict only where both added lines (imports, `SECTIONS`, routes, the `joinCatalogs` names): keep both sides, `main`'s first. Then read `git diff origin/main` before pushing.
 - **CI waiter:** waits for CI; Web E2E at most 15 minutes after it, since a commit outside the web and mobile paths does not start it.
 - **Owner questions still open:**
   - The tariffs admin API (#30) was deferred by the owner on 27.10. The pilot's tariff is still inserted by SQL (`scripts/sandbox/scenarios/first-city.sh`). Ask whether to start it.
