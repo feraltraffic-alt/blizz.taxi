@@ -76,7 +76,7 @@ export function Merchants({client, t, newId}: {client: ApiClient; t: Translate; 
   function save(m: Merchant) {
     const e = editing[m.id];
     if (!e) return;
-    const domain = e.domain.trim() !== m.domain ? e.domain.trim() : null;
+    const domain = e.domain.trim() !== m.domain || e.secret ? e.domain.trim() : null;
     const secret = e.secret ? e.secret : null;
     const same = [...e.cities].sort().join() === [...m.city_ids].sort().join();
     const cityIds = same ? null : ordered(e.cities);
@@ -90,7 +90,7 @@ export function Merchants({client, t, newId}: {client: ApiClient; t: Translate; 
         reason: e.reason.trim()}} as never) as Merchant;
       setMerchants(list => (list ?? []).map(x => x.id === changed.id ? changed : x));
       setEditing(all => Object.fromEntries(Object.entries(all).filter(([id]) => id !== m.id)));
-    }, () => setEditing(all => all[m.id] ? {...all, [m.id]: {...all[m.id]!, secret: '', own: ''}} : all));
+    }, () => setEditing(all => all[m.id] ? {...all, [m.id]: {...all[m.id]!, own: ''}} : all));
   }
 
   async function check(m: Merchant) {
