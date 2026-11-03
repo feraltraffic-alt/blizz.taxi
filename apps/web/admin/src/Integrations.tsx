@@ -41,7 +41,8 @@ export function Integrations({client, t, newId}: {client: ApiClient; t: Translat
 
   async function save() {
     if (acting.current) return;
-    const changes = Object.entries(edits).map(([name, value]) => ({name, value}));
+    const changes = Object.keys(edits).length ? [...Object.entries(edits).map(([name, value]) => ({name, value})),
+      ...(fields ?? []).filter(x => !(x.name in edits) && x.kind === 'TEXT').map(x => ({name: x.name, value: x.value}))] : [];
     if (changes.length === 0 || !reason.trim() || !own) {
       setMessage(t('intNeeds'));
       return;
@@ -53,6 +54,7 @@ export function Integrations({client, t, newId}: {client: ApiClient; t: Translat
       await client.post('/api/admin/v1/integrations' as never, {body: {command_id: newId(), password: own, changes,
         reason: reason.trim()}} as never);
       setReason('');
+      setEdits({});
       setMessage(t('intSaved'));
       await read();
     } catch (failure) {
@@ -62,7 +64,6 @@ export function Integrations({client, t, newId}: {client: ApiClient; t: Translat
     } finally {
       // Neither the password nor a typed secret stays on the screen, whatever the answer.
       setOwn('');
-      setEdits({});
       acting.current = false;
     }
   }
