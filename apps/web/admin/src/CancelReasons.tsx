@@ -9,7 +9,7 @@ type Draft = {labels: Record<string, string>; outcome: string; fault: boolean; a
   why: string};
 
 const SIDES: Side[] = ['RIDER', 'DRIVER', 'STAFF', 'REASSIGN'];
-const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
+const CODE = /^[A-Z][A-Z0-9_]{1,39}$/i;
 const ORDER = /^[0-9]{1,5}$/;
 
 /** Drops empty labels; null when the default language is missing or a label is too long. */
@@ -49,7 +49,7 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
   }, [client, read]);
 
   /** The fields of a side: an outcome for drivers, the operator's fault for staff, nothing for the others. */
-  const extras = (of: Side, d: Draft) => ({...(of === 'DRIVER' ? {driver_outcome: d.outcome} : {}),
+  const extras = (of: Side, d: Draft) => ({...(of !== 'STAFF' ? {driver_outcome: d.outcome || null} : {}),
     ...(of === 'STAFF' ? {operator_fault: d.fault} : {})});
   const valid = (of: Side, d: Draft) => {
     const why = d.why.trim();
