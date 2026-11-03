@@ -37,7 +37,8 @@ export interface AppConfig {
 }
 
 type Profile = AdmissionProfile & {account_state: string; admission_city_ids: string[]};
-type Availability = {session_id?: string | null; session_version: number; session_state: string};
+type Availability = {session_id?: string | null; session_version: number; session_state: string;
+  intent?: string | null};
 
 export function DriverApp({client, config}: {client: ApiClient; config: AppConfig}) {
   const locale = config.locale ?? 'ru';
@@ -75,6 +76,8 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [lost, setLost] = useState(false);
+  /** Another device controls the open session (#454): no heartbeat from here until it is taken over. */
+  const [elsewhere, setElsewhere] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
@@ -107,7 +110,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const online = availability?.session_state === 'OPEN' && availability.session_id;
 
   useEffect(() => {
-    if (!online) return;
+    if (!online || elsewhere) return;
     const id = availability.session_id as string;
     const timer = setInterval(() => {
       location()
@@ -120,11 +123,12 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
         .catch(error => {
           // The session stays as the server keeps it; a lost connection is shown and the next beat retries (E6).
           if (error instanceof ApiError && error.status === 0) setLost(true);
+          else if (error instanceof ApiError && error.code === 'STATE_CONFLICT') setElsewhere(true);
           else setMessage(failure(error));
         });
     }, config.heartbeatMs ?? 15_000);
     return () => clearInterval(timer);
-  }, [online, availability?.session_id]); // the beat restarts only with another session
+  }, [online, availability?.session_id, elsewhere]); // the beat restarts with another session or a takeover
 
   async function goOnline() {
     if (!profile) return;
@@ -143,9 +147,11 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       setAvailability(await guard(() => client.post('/api/driver/v1/work-sessions', {body: {
         command_id: newId(), vehicle_id: vehicle.id, location: where
       }})) as Availability);
+      setElsewhere(false);
     } catch (error) {
       if (error instanceof ApiError && error.code === 'STATE_CONFLICT') {
         setMessage(t('otherDevice'));
+        setElsewhere(true);
         await load().catch(() => undefined);
       } else if (error instanceof ApiError && error.status === 422) {
         setMessage(t('noCityHere'));
@@ -168,6 +174,26 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
       } as never)) as Availability);
     } catch (error) {
       setMessage(failure(error));
+      await load().catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Pause, resume or take over: a command on the open session with the version the server last gave (#454). */
+  async function command(action: 'pause' | 'resume' | 'handover') {
+    if (!availability?.session_id) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      setAvailability(await guard(() => client.post(('/api/driver/v1/work-sessions/{id}/' + action) as never, {
+        params: {id: availability.session_id},
+        body: {command_id: newId(), expected_version: availability.session_version}
+      } as never)) as Availability);
+      if (action === 'handover') setElsewhere(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'DRIVER_NOT_ELIGIBLE') setMessage(t('cannotAccept'));
+      else if (!(error instanceof ApiError && error.status === 409)) setMessage(failure(error));
       await load().catch(() => undefined);
     } finally {
       setBusy(false);
@@ -238,6 +264,20 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
           {t('document', {type: d.type, decision: d.decision})}{d.decision_reason ? ' — ' + d.decision_reason : ''}
         </Text>
       ))}
+      {online && elsewhere ? (
+        <>
+          <Text style={{color: theme.error}}>{t('sessionElsewhere')}</Text>
+          <Button label={t('takeOver')} onPress={() => void command('handover')} disabled={busy} />
+        </>
+      ) : null}
+      {online && !elsewhere ? (availability.intent === 'NOT_ACCEPTING' || availability.intent === 'PAUSE_AFTER_CURRENT'
+        ? (
+          <>
+            <Text style={{color: theme.text}}>{t(availability.intent === 'NOT_ACCEPTING' ? 'pausedNow' : 'pauseAfter')}
+            </Text>
+            <Button label={t('resume')} onPress={() => void command('resume')} disabled={busy} />
+          </>
+        ) : <Button label={t('pause')} onPress={() => void command('pause')} disabled={busy} />) : null}
       {online ? <Button label={t('goOffline')} onPress={() => void goOffline()} disabled={busy} />
         : canWork ? <Button label={t('goOnline')} onPress={() => void goOnline()} disabled={busy} />
           : <Text style={{color: theme.muted}}>{t('notAdmitted')}</Text>}
