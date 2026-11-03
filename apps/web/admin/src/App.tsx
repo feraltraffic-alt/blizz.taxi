@@ -18,6 +18,7 @@ import {CallLines} from './CallLines.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
+import {Reports} from './Reports.js';
 import {Risk} from './Risk.js';
 import {DriverPromotions} from './DriverPromotions.js';
 import {Flags} from './Flags.js';
@@ -141,6 +142,8 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings/call-lines" element={<CallLines
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/reports') ? <Route path="/reports" element={<Reports client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
