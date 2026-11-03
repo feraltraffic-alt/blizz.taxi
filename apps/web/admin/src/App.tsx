@@ -19,6 +19,7 @@ import {ServiceSettings} from './ServiceSettings.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
+import {ClientCardPage, ClientSearch} from './Clients.js';
 import {Reports} from './Reports.js';
 import {Risk} from './Risk.js';
 import {DriverPromotions} from './DriverPromotions.js';
@@ -30,6 +31,7 @@ const t = translator(translations, 'ru');
 const SECTIONS: {path: string; label: string; permission?: string | string[]; role?: string}[] = [
   {path: '/geo', label: 'navGeo', permission: 'geo.manage'},
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
+  {path: '/clients', label: 'navClients', permission: 'clients.manage'},
   {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
   {path: '/risk', label: 'navRisk', permission: 'drivers.risk'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
@@ -147,6 +149,13 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings/service" element={<ServiceSettings
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/clients') ? (
+          <>
+            <Route path="/clients" element={<ClientSearch client={client} t={t} />} />
+            <Route path="/clients/:clientId" element={<ClientCardPage client={client} t={t}
+              newId={() => crypto.randomUUID()} />} />
+          </>
+        ) : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
