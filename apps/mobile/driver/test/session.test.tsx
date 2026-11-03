@@ -12,12 +12,8 @@ const NOW = Date.parse('2026-11-02T10:00:00Z');
 const KYIV = '50000000-0000-4000-8000-000000000001';
 const VEHICLE = '60000000-0000-4000-8000-000000000001';
 const SESSION = '70000000-0000-4000-8000-000000000001';
-const agreement = {version_id: '30000000-0000-4000-8000-000000000001', audience: 'DRIVER', kind: 'DRIVER_AGREEMENT',
-  number: 1, acceptance_required: true, accepted: false, effective_from: '2026-01-01T00:00:00Z', languages: ['ru']};
 const admitted = {id: session.subject.id, account_state: 'ACTIVE', review_status: 'APPROVED', admission_city_ids: [KYIV],
   has_payment_terminal: false, version: 3, vehicles: [{id: VEHICLE, state: 'APPROVED'}], documents: []};
-const inReview = {...admitted, review_status: 'IN_REVIEW', admission_city_ids: [],
-  documents: [{id: 'd1', type: 'DRIVER_LICENSE', decision: 'REJECTED', decision_reason: 'Нечитаемое фото'}]};
 const offline = {driver_id: session.subject.id, session_id: null, session_version: 0, session_state: 'CLOSED',
   connection: 'DISCONNECTED', geolocation: 'UNAVAILABLE', occupancy: 'FREE', account_state: 'ACTIVE',
   review_status: 'APPROVED', eligible: false, ineligible_reasons: []};
