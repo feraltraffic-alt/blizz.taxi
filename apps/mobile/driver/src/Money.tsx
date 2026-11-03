@@ -9,6 +9,15 @@ type Earnings = {currency: string; to: string; days: {date: string; figures: Fig
   pending: {trips: number}};
 type Entry = {id: string; kind: string; currency: string; amount_minor: number; reason: string};
 type Statement = {entries: Entry[]; page?: {next_cursor: string | null}};
+type Rating = {count: number; average_hundredths: number};
+type Promotion = {promotion_id: string; name: string; reward_minor: number; currency: string; orders_required: number;
+  orders_done: number; period_end: string; rewarded: boolean};
+
+const two = (n: number) => String(n).padStart(2, '0');
+const dm = (at: string) => {
+  const d = new Date(at);
+  return two(d.getDate()) + '.' + two(d.getMonth() + 1) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes());
+};
 
 /** Kinds the app has a name for; a new kind is shown by its code (M5). */
 const KINDS = new Set(['TRIP_FARE', 'CASH_COLLECTED', 'TERMINAL_COLLECTED', 'DEPOSIT', 'BONUS', 'CARD_TOP_UP',
@@ -61,6 +70,19 @@ export function Money({client, t, guard, failure, cityId, now, service, newId, p
   const [attempt, setAttempt] = useState(0);
   const reading = useRef(false);
   const theme = useTheme();
+  const [rating, setRating] = useState<Rating | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[] | null>(null);
+
+  // The rating and the promotions are extras: a failure of either leaves the rest of the screen (#341 R3).
+  useEffect(() => {
+    let current = true;
+    client.get('/api/driver/v1/me/rating' as never, {} as never)
+      .then(value => {if (current) setRating(value as Rating);}).catch(() => undefined);
+    client.get('/api/driver/v1/promotions' as never, {} as never)
+      .then(value => {if (current) setPromotions((value as {promotions: Promotion[]}).promotions);})
+      .catch(() => undefined);
+    return () => {current = false;};
+  }, [client]);
   /** A completed top-up reads the balance again (#326 U3). */
   const reload = useCallback(() => setAttempt(a => a + 1), []);
 
@@ -123,6 +145,16 @@ export function Money({client, t, guard, failure, cityId, now, service, newId, p
           {b.blocked ? <Text style={{color: theme.error}}>{t('blockedByDebt')}</Text> : null}
         </View>
       ))}
+      {rating ? <Text style={{color: theme.text}}>{rating.count > 0 ? t('ratingIs', {average:
+        (rating.average_hundredths / 100).toFixed(2), count: rating.count}) : t('noRatings')}</Text> : null}
+      {promotions ? (promotions.length === 0 ? <Text style={{color: theme.muted}}>{t('noPromotions')}</Text>
+        : promotions.map(p => (
+          <Text key={p.promotion_id} style={{color: theme.text}}>
+            {t('promotionLine', {name: p.name, done: p.orders_done, required: p.orders_required, until:
+              dm(p.period_end)}) + ' · ' + (p.rewarded ? t('rewardPaid') : t('rewardIs', {amount:
+              (p.reward_minor / 100).toFixed(2) + ' ' + p.currency}))}
+          </Text>
+        ))) : null}
       {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cityId} newId={newId}
         path="/api/driver/v1/balance/card-top-ups" Page={ProviderPage} pollMs={pollMs} onCompleted={reload} /> : null}
       {earnings ? (

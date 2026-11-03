@@ -5,6 +5,12 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The driver's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    ratingIs: 'Ваш рейтинг: {average} ({count} оценок)',
+    noRatings: 'Оценок пока нет',
+    noPromotions: 'Сейчас акций нет.',
+    promotionLine: '«{name}»: {done} из {required} поездок до {until}',
+    rewardIs: 'награда {amount}',
+    rewardPaid: 'награда получена',
     preorders: 'Предзаказы',
     myPreorders: 'Мои предзаказы',
     noMyPreorders: 'Вы пока не взяли ни одного предзаказа.',
@@ -148,6 +154,12 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Терминал'
   },
   uk: {
+    ratingIs: 'Ваш рейтинг: {average} ({count} оцінок)',
+    noRatings: 'Оцінок поки немає',
+    noPromotions: 'Зараз акцій немає.',
+    promotionLine: '«{name}»: {done} з {required} поїздок до {until}',
+    rewardIs: 'винагорода {amount}',
+    rewardPaid: 'винагороду отримано',
     preorders: 'Передзамовлення',
     myPreorders: 'Мої передзамовлення',
     noMyPreorders: 'Ви поки не взяли жодного передзамовлення.',
@@ -291,6 +303,12 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Термінал'
   },
   pl: {
+    ratingIs: 'Twoja ocena: {average} ({count} ocen)',
+    noRatings: 'Brak ocen',
+    noPromotions: 'Teraz nie ma promocji.',
+    promotionLine: '„{name}”: {done} z {required} przejazdów do {until}',
+    rewardIs: 'nagroda {amount}',
+    rewardPaid: 'nagroda wypłacona',
     preorders: 'Zamówienia z wyprzedzeniem',
     myPreorders: 'Moje zamówienia z wyprzedzeniem',
     noMyPreorders: 'Nie masz jeszcze żadnego zamówienia z wyprzedzeniem.',
