@@ -25,8 +25,8 @@ export function SafetyContacts({client, t, guard, failure, api}: Shared & {
   }, [client, guard, api]); // the failure text follows the same texts
 
   // A failed read must not leave the rider without the emergency number (F4).
-  const shown: Contacts = contacts ?? {emergency_number: '112', support_phone: null, extra: []};
-  const lines = [{label: t('safetyEmergency'), phone: shown.emergency_number},
+  const shown: Contacts = contacts ?? {emergency_number: '', support_phone: null, extra: []};
+  const lines = [...(shown.emergency_number ? [{label: t('safetyEmergency'), phone: shown.emergency_number}] : []),
     ...(shown.support_phone ? [{label: t('safetySupport'), phone: shown.support_phone}] : []), ...shown.extra];
 
   return (
