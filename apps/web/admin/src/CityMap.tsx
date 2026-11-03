@@ -26,7 +26,7 @@ export function rings(polygon: unknown): Ring[] {
   const ring = (points: unknown): Ring | null => {
     if (!Array.isArray(points) || points.length === 0) return null;
     const out = points.filter((p): p is [number, number] => Array.isArray(p) && p.length >= 2
-      && typeof p[0] === 'number' && typeof p[1] === 'number').map(([lon, lat]) => [lat, lon] as [number, number]);
+      && typeof p[0] === 'number' && typeof p[1] === 'number').map(([lon, lat]) => [lon, lat] as [number, number]);
     return out.length === points.length ? out : null;
   };
   const polygons: unknown[] = value.type === 'Polygon' ? [value.coordinates]
