@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import type {ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {LiveMap} from './LiveMap.js';
 
 type Car = {registration_number: string; make: string; model: string; color: string; classes: string[]};
 type Driver = {driver_id: string; name?: string | null; car?: Car | null; has_payment_terminal: boolean;
@@ -14,7 +15,7 @@ const STATUSES = ['FREE', 'ON_ORDER', 'PAUSED', 'CLOSING', 'NO_SIGNAL'];
  * a driver is out of touch is counted against the answer's own time, never the operator's clock.
  */
 export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: Translate;
-  cities: {id: string; name: string}[]; pollMs: number}) {
+  cities: {id: string; name: string; center?: {lat: number; lon: number}}[]; pollMs: number}) {
   const [cityId, setCityId] = useState(cities[0]?.id ?? '');
   const [statuses, setStatuses] = useState<string[]>([]);
   const [vehicleClass, setVehicleClass] = useState('');
@@ -106,6 +107,7 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
         {t('freshOnly')}
       </label>
       {error ? <Failure error={error} t={t} /> : null}
+      {board ? <LiveMap t={t} drivers={board.drivers} center={cities.find(c => c.id === cityId)?.center} /> : null}
       {board ? (
         board.drivers.length === 0 ? <p>{t('noCars')}</p> : (
           <>

@@ -182,3 +182,14 @@ export function browserRefreshTokens(storage: Storage, key: string) {
 }
 
 export {Support} from './support.js';
+
+/**
+ * The OpenStreetMap tile server for both panels' maps (ADR 0012 Q-08, the owner's answer of 03.11.2026), used under
+ * its tile usage policy: the attribution is shown and the zoom stays within what it serves. Each panel's CSP allows
+ * images from this host only (#465, #470).
+ */
+export const OSM_TILES = {
+  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  maxZoom: 19,
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+};
