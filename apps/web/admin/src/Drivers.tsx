@@ -28,7 +28,6 @@ export function DriverQueue({client, t}: {client: ApiClient; t: Translate}) {
   const read = useCallback(async (cursor: string | null) => await client.get('/api/admin/v1/drivers' as never,
     {query: {status, ...(cursor ? {cursor} : {})}} as never) as {drivers: Item[]; page: {next_cursor?: string | null}},
   [client, status]);
-    {query: cursor ? {cursor} : {}} as never) as {drivers: Item[]; page: {next_cursor?: string | null}}, [client]);
 
   useEffect(() => {
     let current = true;
