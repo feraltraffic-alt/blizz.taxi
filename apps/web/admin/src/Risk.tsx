@@ -34,7 +34,7 @@ export function Risk({client, t, newId}: {client: ApiClient; t: Translate; newId
     ...(filter.city ? {city_id: filter.city} : {})}), [filter]);
 
   const read = useCallback(async (cursor: string | null) => {
-    const page = await client.get('/api/admin/v1/driver-risk-flags' as never, {query: {...query(),
+    const page = await client.get('/api/admin/v1/driver-risk-flags' as never, {query: {...(cursor ? {} : query()),
       ...(cursor ? {cursor} : {})}} as never) as {flags: Flag[]; page: {next_cursor?: string | null}};
     setFlags(old => cursor ? [...(old ?? []), ...page.flags] : page.flags);
     setNext(page.page.next_cursor ?? null);
@@ -72,7 +72,7 @@ export function Risk({client, t, newId}: {client: ApiClient; t: Translate; newId
       return;
     }
     return run(async () => {
-      const changed = await client.post(('/api/admin/v1/driver-risk-flags/{flag_id}/' + action) as never, {params: {
+      const changed = await client.post(('/api/admin/v1/driver-risk-flags/{flag_id}/' + 'dismiss') as never, {params: {
         flag_id: f.id}, body: {command_id: newId(), expected_version: f.version, reason}} as never) as Flag;
       setFlags(list => (list ?? []).map(x => x.id === changed.id ? changed : x));
       if (action === 'confirm') setMessage(t('riskConfirmedNote'));
