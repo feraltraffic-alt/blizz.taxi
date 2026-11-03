@@ -7,6 +7,7 @@ import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
 import {StaffEdit} from './StaffEdit.js';
+import {OrderTimeline, Orders} from './Orders.js';
 
 const t = translator(translations, 'ru');
 
@@ -88,6 +89,12 @@ function Panel({client}: {client: ApiClient}) {
             <Route path="/geo" element={<CityList client={client} t={t} />} />
             <Route path="/geo/:cityId" element={<CityOperations client={client} t={t}
               newId={() => crypto.randomUUID()} />} />
+          </>
+        ) : null}
+        {sections.some(s => s.path === '/orders') ? (
+          <>
+            <Route path="/orders" element={<Orders client={client} t={t} />} />
+            <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t} />} />
           </>
         ) : null}
         {sections.some(s => s.path === '/drivers') ? (
