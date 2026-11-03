@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {Link} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 
@@ -95,6 +96,7 @@ export function SafetyContactsSettings({client, t, newId}: {client: ApiClient; t
   return (
     <section aria-labelledby="settings-title">
       <h1 id="settings-title">{t('navSettings')}</h1>
+      <p><Link to="/settings/cancel-reasons">{t('settingsCancelReasons')}</Link></p>
       <h2>{t('safetyContactsTitle')}</h2>
       <label htmlFor="safety-city">{t('ordersCity')}</label>
       <select id="safety-city" value={cityId} onChange={e => setCityId(e.target.value)}>

@@ -12,12 +12,14 @@ import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
+import {CancelReasons} from './CancelReasons.js';
+import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 
 const t = translator(translations, 'ru');
 
 /** The sections, each shown to holders of its permission; staff management is the super admin's (by role). */
-const SECTIONS: {path: string; label: string; permission?: string; role?: string}[] = [
+const SECTIONS: {path: string; label: string; permission?: string | string[]; role?: string}[] = [
   {path: '/geo', label: 'navGeo', permission: 'geo.manage'},
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
   {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
@@ -27,6 +29,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
+  {path: '/deletions', label: 'navDeletions', permission: ['clients.delete', 'drivers.delete']},
   {path: '/legal', label: 'navLegal', permission: 'legal.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
@@ -72,8 +75,8 @@ function Panel({client}: {client: ApiClient}) {
   if (!me) return <p>{t('loading')}</p>;
   const role = me.member.profile.role;
   const permissions = new Set(me.effective_permissions);
-  const sections = SECTIONS.filter(s => (s.permission && (permissions.has(s.permission) || role === 'SUPER_ADMIN'))
-    || (s.role && s.role === role));
+  const holds = (p: string | string[]) => [p].flat().some(one => permissions.has(one)) || role === 'SUPER_ADMIN';
+  const sections = SECTIONS.filter(s => (s.permission && holds(s.permission)) || (s.role && s.role === role));
   const profile = me.member.profile;
   return (
     <>
@@ -108,6 +111,11 @@ function Panel({client}: {client: ApiClient}) {
         ) : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings" element={<SafetyContactsSettings
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/settings') ? <Route path="/settings/cancel-reasons" element={<CancelReasons
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/deletions') ? <Route path="/deletions" element={<Deletions client={client}
+          t={t} newId={() => crypto.randomUUID()} clients={holds('clients.delete')} drivers={holds('drivers.delete')} />}
+        /> : null}
         {sections.some(s => s.path === '/legal') ? <Route path="/legal" element={<Legal client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
