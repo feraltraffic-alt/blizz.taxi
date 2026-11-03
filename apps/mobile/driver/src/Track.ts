@@ -38,6 +38,7 @@ export function createTrackBuffer(client: ApiClient, newId: () => string, now: (
             points = points.slice(PER_BATCH);
           }
           const batch = pending;
+          pending = null;
           try {
             await client.post('/api/driver/v1/location-batches' as never, {body: batch} as never);
             if (pending === batch) pending = null;
