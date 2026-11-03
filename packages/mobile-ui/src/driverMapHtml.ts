@@ -10,7 +10,7 @@ const LEAFLET = {
 
 const point = (p: MapPoint) => {
   if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) throw new Error('A map point is two finite numbers');
-  return '[' + p.lat + ',' + p.lon + ']';
+  return '[' + p.lon + ',' + p.lat + ']';
 };
 
 /**

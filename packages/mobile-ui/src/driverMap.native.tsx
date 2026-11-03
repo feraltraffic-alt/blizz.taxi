@@ -11,7 +11,8 @@ export function DriverMap({orderId, pickup, driver, label}: {orderId: string; pi
   label: string}) {
   const view = useRef<{injectJavaScript(js: string): void} | null>(null);
   const first = useRef(driver);
-  const html = useMemo(() => driverMapHtml({pickup, driver: first.current}), [orderId]);
+  const html = useMemo(() => driverMapHtml({pickup, driver: first.current.lat ? driver : driver}),
+    [orderId, driver.lat, driver.lon]);
   useEffect(() => {
     view.current?.injectJavaScript(moveDriverScript(driver));
   }, [driver.lat, driver.lon]);
