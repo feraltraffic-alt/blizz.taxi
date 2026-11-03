@@ -19,8 +19,7 @@ const ROLE_TEXT: Record<string, string> = {SUPER_ADMIN: 'roleSuperAdmin', ADMIN:
 
 /** Today's date in the city's own calendar (lessons case 20), never the browser's. */
 function today(timeZone: string) {
-  return new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'})
-    .format(new Date(Date.now()));
+  return timeZone ? new Date(Date.now()).toISOString().slice(0, 10) : '';
 }
 
 /** "03.11.2026 14:05" in the given zone. */
@@ -112,7 +111,7 @@ export function Orders({client, t}: {client: ApiClient; t: Translate}) {
     }
     return search({...(cityId ? {city_id: cityId} : {}),
       ...(filters.statuses.length ? {status: STATUSES.filter(s => filters.statuses.includes(s))} : {}),
-      ...(rider ? {rider_phone: rider} : {}), ...(driver ? {driver_phone: driver} : {}),
+      rider_phone: rider, ...(driver ? {driver_phone: driver} : {}),
       ...(number ? {short_number: number} : {})}, null);
   }
 
