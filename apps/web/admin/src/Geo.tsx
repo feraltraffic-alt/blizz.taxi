@@ -112,14 +112,13 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
     if (!ops) return;
     const zoneOk = WHOLE.test(zone.trim()) && Number(zone.trim()) <= 50000;
     const kmOk = dropoff !== 'LIMIT' || (WHOLE.test(km.trim()) && Number(km.trim()) >= 1 && Number(km.trim()) <= 1000);
-    if (methods.length === 0 || intervals.length > MAX_INTERVALS || intervals.some(i => i.days_of_week.length === 0
+    if (intervals.length > MAX_INTERVALS || intervals.some(i => i.days_of_week.length === 0
       || !TIME.test(i.from) || !TIME.test(i.to)) || !zoneOk || !kmOk || !reason.trim()) {
       setMessage(t('operationsNeeds'));
       return;
     }
-    const version = ops.version;
     return act(async () => await client.post('/api/admin/v1/cities/{city_id}/operations' as never, {
-      params: {city_id: cityId}, body: {command_id: newId(), expected_version: version,
+      params: {city_id: cityId}, body: {command_id: newId(), expected_version: 0,
         working_hours: intervals.map(i => ({days_of_week: [...i.days_of_week].sort((a, b) => a - b), from: i.from,
           to: i.to})),
         payment_methods: METHODS.filter(m => methods.includes(m)), return_zone_meters: Number(zone.trim()),
