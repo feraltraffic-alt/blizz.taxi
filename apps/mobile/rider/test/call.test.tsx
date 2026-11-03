@@ -43,9 +43,11 @@ const target = (mode: string, phone: string) => ({status: 200, body: {mode, phon
 /** An order in the given status, on the server and in every poll. */
 async function mount(script: Record<string, Answer[]>, status = 'ASSIGNED', shown = 'Водитель едет к вам') {
   const order = {...riding, status, driver: status === 'SEARCHING' ? null : driver};
+  // A finished order is no longer current: the ride screen learns the end from the order itself.
+  const listed = status === 'FULFILLED' || status === 'CANCELLED' ? {...riding} : order;
   const http = server({
     'GET /api/rider/v1/legal': [{status: 200, body: {documents: []}}],
-    'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: [order]}}],
+    'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: [listed]}}],
     'GET /api/rider/v1/cancel-reasons': [{status: 200, body: {reasons: []}}],
     ['GET /api/rider/v1/orders/' + ID]: [{status: 200, body: order}],
     ...script
@@ -53,14 +55,18 @@ async function mount(script: Record<string, Answer[]>, status = 'ASSIGNED', show
   let id = 0;
   const client = createApiClient({baseUrl: 'https://api.blizz.test', refreshTokens: {read: () => null, write: () => {}},
     fetch: http.fetch, correlationId: () => cid, initialSession: session as never});
-  const config: AppConfig = {service: 'default', deviceRef: 'test', pollMs: 60_000, locate: async () => ({lat: 50.45,
+  const config: AppConfig = {service: 'default', deviceRef: 'test', pollMs: listed === order ? 60_000 : 50, locate: async () => ({lat: 50.45,
     lon: 30.52}), newId: () => '40000000-0000-4000-8000-' + String(++id).padStart(12, '0')};
   await render(<RiderApp client={client} config={config} />);
   expect(await screen.findByText(shown)).toBeTruthy();
   return {http};
 }
 const reads = (http: {calls: Call[]}) => http.calls.filter(c => c.path === '/api/rider/v1/orders/' + ID + '/call');
-afterEach(() => jest.restoreAllMocks());
+// Linking.openURL is a jest mock of the preset: its calls are cleared between tests, not only the spy restored.
+afterEach(() => {
+  jest.restoreAllMocks();
+  jest.clearAllMocks();
+});
 
 describe('K1: the rider calls the driver', () => {
   it.each([['ASSIGNED', 'Водитель едет к вам'], ['IN_SERVICE', 'В пути']])(

@@ -70,7 +70,11 @@ async function mount(script: Record<string, Answer[]>, options: {clock?: number}
   return {http};
 }
 
-afterEach(() => jest.restoreAllMocks());
+// Linking.openURL is a jest mock of the preset: its calls are cleared between tests, not only the spy restored.
+afterEach(() => {
+  jest.restoreAllMocks();
+  jest.clearAllMocks();
+});
 
 describe('K2: the driver calls the rider', () => {
   it.each([['TO_PICKUP', 'Едете к пассажиру'], ['WAITING', 'Ждёте пассажира'], ['IN_PROGRESS', 'Везёте пассажира']])(
