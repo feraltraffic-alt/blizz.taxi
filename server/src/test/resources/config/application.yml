@@ -33,6 +33,10 @@ blizz:
     # Tests run the re-encryption of plain documents themselves (DocumentEncryptionTests, issue #135).
     document-encryption:
       enabled: false
+    # Every test context shares one database: a rescan sweep in another context would claim this context's files
+    # (#393). ContentScannerTests turns its own sweep on.
+    rescan:
+      enabled: false
   finance:
     worker-enabled: false
     invariants:
