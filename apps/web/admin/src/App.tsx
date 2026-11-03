@@ -182,7 +182,8 @@ function Panel({client}: {client: ApiClient}) {
           <>
             <Route path="/orders" element={<Orders client={client} t={t} />} />
             <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t}
-              newId={() => crypto.randomUUID()} canCorrect={holds('fares.correct')} />} />
+              newId={() => crypto.randomUUID()} canCorrect={holds('fares.correct')}
+              canRetry={holds('payments.retry')} />} />
           </>
         ) : null}
         {sections.some(s => s.path === '/drivers') ? (
