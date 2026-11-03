@@ -20,6 +20,7 @@ import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
 import {Finance} from './Finance.js';
+import {CashDisputes} from './CashDisputes.js';
 import {SupportCases} from './SupportCases.js';
 import {OperatorBonuses} from './OperatorBonuses.js';
 import {ClientCardPage, ClientSearch} from './Clients.js';
@@ -42,6 +43,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/emergency', label: 'navEmergency', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
+  {path: '/cash-disputes', label: 'navCashDisputes', permission: 'finance.manage'},
   {path: '/operator-bonuses', label: 'navOperatorBonuses', permission: 'operator-bonuses.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
@@ -163,6 +165,8 @@ function Panel({client}: {client: ApiClient}) {
         ) : null}
         {sections.some(s => s.path === '/finance') ? <Route path="/finance" element={<Finance client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/cash-disputes') ? <Route path="/cash-disputes" element={<CashDisputes
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/operator-bonuses') ? <Route path="/operator-bonuses" element={
           <OperatorBonuses client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/support') ? <Route path="/support" element={<SupportCases client={client}
