@@ -240,6 +240,53 @@ Real cases from pull requests on this repository: what was handed in, what the r
   - A flaky test is fixed at its cause and proven by a repeated run in the **full suite** (`@RepeatedTest(50)` on a
     throwaway branch). Repeating it alone would not reproduce the other contexts.
 
+## 23. A test fixture that reached into another taxi service (#444, fixed in #447)
+
+- **Task:** none; `AdmissionCityTests` failed on a branch that changed only the web panel.
+- **Missed:**
+  - **The fixture admitted each test driver in every city of the database.** `TestAdmission.inEveryCity` was written
+    before there were several taxi services (ADR 0016).
+  - **Two other tests move one of their own cities to another service.** After either had run, a new fixture driver
+    was also admitted in a foreign city. A reviewer of all cities of the default service, touching that city, was
+    refused. Whether it failed depended on the order of the test classes.
+  - **A second flake in the same run had the same root:** a retention test asserted it deleted exactly one file, in a
+    database where other classes leave expired files too.
+- **Habit:**
+  - A fixture that means "everything" means **everything of the test's own taxi service**.
+  - Count only what the test made. A count over shared tables is at least the test's own; check the test's own rows
+    by id.
+  - Reproduce first: a test that creates the foreign state on purpose, shown failing before the fix.
+
+## 24. A test that waited for an attempt to start, not to end (#451)
+
+- **Task:** none; `ContentScannerTests` timed out waiting for a file to become SAFE.
+- **Missed:**
+  - **The attempt counter grows when an attempt is claimed.** The test saw it grow, restarted the scanner and made
+    the file due.
+  - **The attempt still running then failed against the stopped scanner,** and wrote its back-off of minutes over the
+    test's "due now".
+  - **The log of the failed run showed it directly:** the infected file's attempt was claimed after the restart and
+    got its verdict, while the clean file's was claimed before.
+- **Habit:**
+  - Wait for the **end** of what you started: a state or a value that only the end writes, not a counter that the
+    start writes.
+  - Make the race deterministic for the reproduction: a scanner that hangs, so the attempt always ends late.
+
+## 25. Merging and pushing many branches at once (03.11)
+
+- **Missed:**
+  - **A mutation that failed lint ran no test.** CI stops at lint, so the run proved nothing (case 15 again).
+  - **`git push origin A B` started Web E2E for one branch only.**
+  - **A script that joins "both added" conflicts dropped a line** when the two sides' blocks shared an identical
+    second line. Typecheck caught it.
+  - **One file that listed every section** (`i18n.ts`) made each pair of open branches conflict, and cost a CI run
+    per merge until it became a glob (#442).
+- **Habit:**
+  - Run `npm run lint` on a mutation branch before pushing it.
+  - Push one branch per command.
+  - After any automatic conflict join, typecheck and test before committing.
+  - A list that every feature appends to is replaced by discovery (a glob or a registry), so features don't collide.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, before noon)
+# Lead handoff (state on 03.11.2026, midday)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,32 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, midday)
+
+- **Merged since before noon:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #432 | #426 | Admin: chargebacks of an order |
+  | #428 | #427 | Admin: cash disputes |
+  | #437 | #429 | Admin: trip times, corrections, review |
+  | #438 | #430 | Admin: evidence for a chargeback |
+  | #439 | #431 | Admin: card reconciliations |
+  | #440 | #434 | Admin: OTP deliveries |
+  | #442 | #441 | Admin: section texts joined by a glob; a new section adds only `src/i18n/<name>.ts` |
+  | #445 | #435 | Admin: a driver's new phone by support, own terminal |
+  | #446 | #436 | Admin: a driver's earnings per day |
+  | #447 | #444 | Tests: fixture drivers only in their own service's cities; counts over shared rows |
+  | #449 | #443 | Admin: retention terms, with a confirmation for shortening |
+  | #450 | #448 | Admin: the platform owner's taxi services |
+- **Open:** `claude/451-scanner-race`, #451, for the flaky `ContentScannerTests`. The tests-first run must fail, then
+  the fix run must pass.
+- **Admin panel:** every section is done except zones and city creation (they need the map; the tile provider is
+  the owner's question) and the tariffs API (#30, deferred by the owner).
+- **Pitfalls:** lessons cases 23–25.
+  - After adding a section file, delete `node_modules/.vitest-cache` locally, or the glob keeps the old list.
+  - `joincode.py` can drop a shared line: typecheck after every join.
 
 ## Recent history (03.11.2026, before noon)
 
