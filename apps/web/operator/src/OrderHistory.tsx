@@ -94,7 +94,7 @@ export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Transl
         <ul aria-label={t('ratings')}>
           {ratings.map(r => (
             <li key={r.author_type}>
-              {t('ratedBy_' + r.author_type) + ': ' + t('scoreOf', {score: r.score})
+              {t('ratedBy_' + r.target_type) + ': ' + t('scoreOf', {score: r.score})
                 + (r.comment ? ' — ' + r.comment : '')}
             </li>
           ))}
