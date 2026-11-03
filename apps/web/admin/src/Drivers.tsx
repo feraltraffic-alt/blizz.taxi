@@ -2,12 +2,14 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {DriverContact} from './DriverContact.js';
 import {DriverBalance} from './Balance.js';
 
 type Item = {driver_id: string; name?: string | null; phone?: string | null; since: string};
 type Doc = {id: string; type: string; decision: string; number?: string | null; valid_to?: string | null};
 type Vehicle = {id: string; registration_number: string; make: string; model: string; state: string};
 type Profile = {id: string; account_state?: string; review_status: string; version: number; name?: string | null;
+  has_payment_terminal?: boolean;
   documents: Doc[]; vehicles: Vehicle[]; admission_city_ids?: string[]};
 type Case = {profile: Profile; phone?: string | null; history: {from: string; to: string; reason: string; at: string}[];
   duplicates?: {document_id: string}[]};
@@ -293,6 +295,9 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
       ) : null}
       {finance ? <DriverBalance client={client} t={t} newId={newId} driverId={driverId}
         currencies={cities.flatMap(c => c.currency ? [c.currency] : [])} /> : null}
+      <DriverContact client={client} t={t} newId={newId} driverId={driverId} profile={p}
+        onPhone={(phone, version) => setItem(old => old ? {...old, phone, profile: {...old.profile, version}} : old)}
+        onProfile={changed => setItem(old => old ? {...old, profile: changed} : old)} reread={read} />
       <fieldset>
         <legend>{t('accountTitle')}</legend>
         <label>{t('accountReason')}
