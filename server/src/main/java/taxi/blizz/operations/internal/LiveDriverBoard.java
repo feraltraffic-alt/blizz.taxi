@@ -18,7 +18,8 @@ import taxi.blizz.platform.DomainException;
 import taxi.blizz.platform.ErrorCode;
 
 /**
- * The call centre's map of the cars on the line (REQ-OPS-01, operator.v1.yaml): every driver with an open or closing
+ * The call centre's and the admin panel's map of the cars on the line (REQ-OPS-01, REQ-ADM-01, ADR 0017;
+ * operator.v1.yaml and admin.v1.yaml): every driver with an open or closing
  * work session in the city, with the car, what the driver is doing and the last known position. The panel polls it;
  * positions are shown, not stored anew (REQ-PRV-02). A phone number is not shown: the operator calls through the
  * order. Reads {@code driver} and {@code vehicle} as ADR 0004 allows for operations.
@@ -62,7 +63,7 @@ class LiveDriverBoard {
      * Filters (REQ-ADM-08): {@code status} (any of), {@code vehicle_class}, {@code fresh} (a fresh position only)
      * and a box {@code min_lat,min_lon,max_lat,max_lon} for the part of the map in view.
      */
-    @GetMapping("/api/operator/v1/drivers/live")
+    @GetMapping({"/api/operator/v1/drivers/live", "/api/admin/v1/drivers/live"})
     ResponseEntity<Board> board(AccessClaims claims, @RequestParam("city_id") UUID cityId,
                                 @RequestParam(required = false) List<String> status,
                                 @RequestParam(name = "vehicle_class", required = false) String vehicleClass,

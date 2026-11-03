@@ -125,6 +125,7 @@ class StaffIsolationTests {
             "POST /api/admin/v1/call-lines/{number}",
             "GET /api/admin/v1/support/cases",
             "GET /api/operator/v1/support/cases",
+            "GET /api/admin/v1/drivers/live",
             "GET /api/operator/v1/drivers/live",
             "GET /api/operator/v1/operators",
             "GET /api/operator/v1/orders",

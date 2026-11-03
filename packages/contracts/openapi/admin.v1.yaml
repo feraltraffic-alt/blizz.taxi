@@ -776,6 +776,146 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+  /api/admin/v1/drivers/live:
+    get:
+      operationId: getAdminLiveDrivers
+      summary: The cars on the line in a city
+      description: >-
+        Every driver with an open or closing work session in the city, with the car, the status and the last known
+        position, for the admin panel's live map (REQ-ADM-01; the owner's answer of 03.11.2026, ADR 0017). The same
+        board and filters as GET /api/operator/v1/drivers/live. Needs orders.view for the city. Poll it; no phone
+        numbers.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: status
+          in: query
+          description: Any of these (repeat the parameter).
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [FREE, ON_ORDER, PAUSED, CLOSING, NO_SIGNAL]
+        - name: vehicle_class
+          in: query
+          schema:
+            type: string
+        - name: fresh
+          in: query
+          description: Only drivers with a fresh position.
+          schema:
+            type: boolean
+            default: false
+        - name: box
+          in: query
+          description: The part of the map in view, min_lat,min_lon,max_lat,max_lon.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 4
+            items:
+              type: number
+      responses:
+        "200":
+          description: By name.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [city_id, at, drivers]
+                properties:
+                  city_id:
+                    $ref: "./common.yaml#/components/schemas/Uuid"
+                  at:
+                    $ref: "./common.yaml#/components/schemas/Timestamp"
+                  drivers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [driver_id, has_payment_terminal, status, occupancy, connection, geolocation]
+                      properties:
+                        driver_id:
+                          $ref: "./common.yaml#/components/schemas/Uuid"
+                        name:
+                          type: [string, "null"]
+                        car:
+                          oneOf:
+                            - type: "null"
+                            - type: object
+                              additionalProperties: false
+                              required: [registration_number, make, model, color, classes]
+                              properties:
+                                registration_number:
+                                  type: string
+                                make:
+                                  type: string
+                                model:
+                                  type: string
+                                color:
+                                  type: string
+                                classes:
+                                  type: array
+                                  items:
+                                    type: string
+                        has_payment_terminal:
+                          type: boolean
+                        status:
+                          description: >-
+                            FREE — may get an order now; ON_ORDER; PAUSED — not accepting; CLOSING — finishing the
+                            last order; NO_SIGNAL — connection or position lost.
+                          type: string
+                          enum: [FREE, ON_ORDER, PAUSED, CLOSING, NO_SIGNAL]
+                        occupancy:
+                          type: string
+                        connection:
+                          type: string
+                          enum: [CONNECTED, STALE, DISCONNECTED]
+                        geolocation:
+                          type: string
+                          enum: [FRESH, STALE, UNAVAILABLE]
+                        location:
+                          oneOf:
+                            - type: "null"
+                            - type: object
+                              additionalProperties: false
+                              required: [lat, lon]
+                              properties:
+                                lat:
+                                  type: number
+                                lon:
+                                  type: number
+                        last_location_at:
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Timestamp"
+                            - type: "null"
+                        last_heartbeat_at:
+                          description: >-
+                            Server time of the driver's last heartbeat, with or without a position (REQ-DS-03,
+                            issue #141): how long the driver has been out of touch.
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Timestamp"
+                            - type: "null"
+                        order_id:
+                          description: The order the driver is on.
+                          oneOf:
+                            - $ref: "./common.yaml#/components/schemas/Uuid"
+                            - type: "null"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/drivers/{driver_id}/phone/new-code:
     post:
       operationId: sendDriverNewPhoneCodeBySupport
