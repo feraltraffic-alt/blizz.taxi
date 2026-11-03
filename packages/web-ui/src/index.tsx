@@ -180,3 +180,5 @@ export function browserRefreshTokens(storage: Storage, key: string) {
     }
   };
 }
+
+export {Support} from './support.js';
