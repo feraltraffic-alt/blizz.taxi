@@ -193,3 +193,18 @@ export const OSM_TILES = {
   maxZoom: 19,
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 };
+
+const DEGREES = /^-?[0-9]{1,3}(\.[0-9]+)?$/;
+
+/**
+ * "50.45, 30.52" or, with comma decimals, "50,45; 30,52" to [lat, lon]; null for anything else, a latitude outside
+ * ±90 or a longitude outside ±180. The keyboard's way to a point on either panel's map (#467, #472).
+ */
+export function parsePoint(text: string): [number, number] | null {
+  const value = text.trim();
+  const parts = (value.includes(';') ? value.split(';').map(p => p.replace(',', '.')) : value.split(','))
+    .map(p => p.trim());
+  if (parts.length !== 2 || !parts.every(p => DEGREES.test(p))) return null;
+  const [lat, lon] = parts.map(Number) as [number, number];
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
+}
