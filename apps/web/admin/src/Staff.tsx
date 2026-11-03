@@ -73,7 +73,6 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
       else setError(failure);
     } finally {
       // The super admin's own password never stays on the screen after a request (REQ-ADM-10).
-      setForm(f => ({...f, own: ''}));
       acting.current = false;
     }
   }
@@ -90,7 +89,7 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
     setError(null);
     try {
       const updated = await client.post(('/api/admin/v1/staff/{staff_id}/' + action) as never, {params: {
-        staff_id: m.id}, body: {command_id: newId(), expected_version: m.version, reason: why}} as never) as Member;
+        staff_id: m.id}, body: {command_id: newId(), reason: why}} as never) as Member;
       setStaff(list => (list ?? []).map(x => x.id === updated.id ? updated : x));
       setReasons(r => ({...r, [m.id]: ''}));
     } catch (failure) {
