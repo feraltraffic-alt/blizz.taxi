@@ -86,7 +86,10 @@ describe('B2: sent only when on', () => {
     await waitFor(() => expect(asked.at(-1)!.box).not.toBeNull());
     const [south, west, north, east] = parts(asked.at(-1)!.box);
     expect(south! <= north! && west! <= east!).toBe(true);
-    expect(south! <= 50.45 && north! >= 50.45 && west! <= 30.52 && east! >= 30.52).toBe(true);
+    // jsdom gives the map no size: its view is the center, as the projection rounds it.
+    for (const [value, center] of [[south, 50.45], [north, 50.45], [west, 30.52], [east, 30.52]] as const) {
+      expect(Math.abs(value! - center)).toBeLessThan(0.001);
+    }
     await user.click(screen.getByLabelText('Только видимая часть карты'));
     await waitFor(() => expect(asked.at(-1)!.box).toBeNull());
   });
