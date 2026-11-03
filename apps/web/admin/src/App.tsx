@@ -42,7 +42,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/risk', label: 'navRisk', permission: 'drivers.risk'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
   {path: '/emergency', label: 'navEmergency', role: 'SUPER_ADMIN'},
-  {path: '/services', label: 'navServices', role: 'PLATFORM_OWNER'},
+  {path: '/services', label: 'navServices', role: 'PLATFORM_OWNER', permission: 'services.manage'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/cash-disputes', label: 'navCashDisputes', permission: 'finance.manage'},

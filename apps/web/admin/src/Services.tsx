@@ -64,7 +64,7 @@ export function Services({client, t, newId}: {client: ApiClient; t: Translate; n
       setForm(EMPTY);
       setMessage(t('taxiSvcCreated'));
     }, failure => failure.status === 403 ? t('ownPasswordWrong') : failure.status === 409 ? t('taxiSvcTaken') : null,
-    () => setForm(old => ({...old, initial: '', own: ''})));
+    () => setForm(old => ({...old})));
   }
 
   function change(s: Service) {
