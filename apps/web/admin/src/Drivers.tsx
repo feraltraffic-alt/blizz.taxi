@@ -7,7 +7,7 @@ type Item = {driver_id: string; name?: string | null; phone?: string | null; sin
 type Doc = {id: string; type: string; decision: string; number?: string | null; valid_to?: string | null};
 type Vehicle = {id: string; registration_number: string; make: string; model: string; state: string};
 type Profile = {id: string; review_status: string; version: number; name?: string | null; documents: Doc[];
-  vehicles: Vehicle[]};
+  vehicles: Vehicle[]; admission_city_ids?: string[]};
 type Case = {profile: Profile; phone?: string | null; history: {from: string; to: string; reason: string; at: string}[];
   duplicates?: {document_id: string}[]};
 type Decision = 'APPROVE' | 'REQUEST_CHANGES' | 'REJECT';
@@ -80,10 +80,21 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
   const [error, setError] = useState<unknown>(null);
   const acting = useRef(false);
   const urls = useRef<string[]>([]);
+  /** The service's cities and the ticked admission cities (#353). */
+  const [cities, setCities] = useState<{id: string; name: string}[]>([]);
+  const [admitted, setAdmitted] = useState<string[]>([]);
+  const [cityReason, setCityReason] = useState('');
+
+  useEffect(() => {
+    client.get('/api/config/v1/bootstrap' as never, {} as never)
+      .then(boot => setCities((boot as {cities: {id: string; name: string}[]}).cities)).catch(() => setCities([]));
+  }, [client]);
 
   const read = useCallback(async () => {
-    setItem(await client.get('/api/admin/v1/drivers/{driver_id}' as never,
-      {params: {driver_id: driverId}} as never) as Case);
+    const value = await client.get('/api/admin/v1/drivers/{driver_id}' as never,
+      {params: {driver_id: driverId}} as never) as Case;
+    setItem(value);
+    setAdmitted(value.profile.admission_city_ids ?? []);
   }, [client, driverId]);
 
   useEffect(() => {
@@ -129,6 +140,35 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
       setReason('');
       setRejected([]);
       await read();
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 409) {
+        setMessage(t('driverChanged'));
+        await read().catch(() => undefined);
+      } else setError(failure);
+    } finally {
+      acting.current = false;
+    }
+  }
+
+  async function saveCities() {
+    if (!item || acting.current) return;
+    const before = [...(item.profile.admission_city_ids ?? [])].sort().join();
+    const why = cityReason.trim();
+    if (!why || why.length > 500 || [...admitted].sort().join() === before) {
+      setMessage(t('citiesNeed'));
+      return;
+    }
+    acting.current = true;
+    setMessage(null);
+    setError(null);
+    try {
+      const changed = await client.put('/api/admin/v1/drivers/{driver_id}/admission-cities' as never, {params: {
+        driver_id: driverId}, body: {command_id: newId(), expected_version: item.profile.version,
+        city_ids: cities.map(c => c.id).filter(id => admitted.includes(id)), reason: why}} as never) as Profile;
+      setItem(old => old ? {...old, profile: changed} : old);
+      setAdmitted(changed.admission_city_ids ?? []);
+      setCityReason('');
+      setMessage(t('citiesSaved'));
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 409) {
         setMessage(t('driverChanged'));
@@ -186,6 +226,20 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
           ) : null}
           <label>{t('decisionReason')}<textarea value={reason} onChange={e => setReason(e.target.value)} /></label>
           <button type="button" onClick={() => void decide()}>{t('decideButton')}</button>
+        </fieldset>
+      ) : null}
+      {cities.length ? (
+        <fieldset>
+          <legend>{t('admissionCities')}</legend>
+          {cities.map(c => (
+            <label key={c.id}>
+              <input type="checkbox" checked={admitted.includes(c.id)} onChange={e => setAdmitted(list =>
+                e.target.checked ? [...list, c.id] : list.filter(x => x !== c.id))} />
+              {c.name}
+            </label>
+          ))}
+          <label>{t('citiesReason')}<input value={cityReason} onChange={e => setCityReason(e.target.value)} /></label>
+          <button type="button" onClick={() => void saveCities()}>{t('saveCities')}</button>
         </fieldset>
       ) : null}
       {message ? <p role="status">{message}</p> : null}
