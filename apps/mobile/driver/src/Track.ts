@@ -42,7 +42,10 @@ export function createTrackBuffer(client: ApiClient, newId: () => string, now: (
             await client.post('/api/driver/v1/location-batches' as never, {body: batch} as never);
             if (pending === batch) pending = null;
           } catch (error) {
-            if (!(error instanceof ApiError) || error.status === 0) return;
+            if (!(error instanceof ApiError) || error.status === 0) {
+              if (pending) pending = {...pending, command_id: newId()};
+              return;
+            }
             if (error.status === 429) {
               notBefore = now() + (error.retryAfterSeconds ?? 60) * 1000;
               return;
