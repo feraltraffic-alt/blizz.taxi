@@ -12,6 +12,7 @@ import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
+import {Integrations} from './Integrations.js';
 import {CancelReasons} from './CancelReasons.js';
 
 const t = translator(translations, 'ru');
@@ -27,6 +28,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
+  {path: '/integrations', label: 'navIntegrations', permission: 'integrations.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
 
@@ -108,6 +110,8 @@ function Panel({client}: {client: ApiClient}) {
         {sections.some(s => s.path === '/settings') ? <Route path="/settings" element={<SafetyContactsSettings
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings/cancel-reasons" element={<CancelReasons
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/integrations') ? <Route path="/integrations" element={<Integrations
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
