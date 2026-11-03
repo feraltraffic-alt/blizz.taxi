@@ -11,7 +11,7 @@ import {OSM_TILES, translator} from '@blizz/web-ui';
 import {translations} from '../src/i18n.js';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {cid, me, problem, session} from '../../../../test/fixtures.js';
+import {cid, me, session} from '../../../../test/fixtures.js';
 
 /** The live drivers on an OpenStreetMap map (#470): L1–L5 of the issue. */
 const origin = 'https://api.blizz.test';
