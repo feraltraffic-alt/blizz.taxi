@@ -285,3 +285,51 @@ describe('#326: top-up by card', () => {
     expect(starts(http)).toHaveLength(1);
   });
 });
+
+/** The driver's rating and promotions (#341): R1–R3, P1–P3. */
+describe('#341: rating and promotions', () => {
+  const RATING = 'GET /api/driver/v1/me/rating';
+  const PROMOS = 'GET /api/driver/v1/promotions';
+  const promo = (over: Record<string, unknown> = {}) => ({promotion_id: 'p1', name: 'Неделя без выходных',
+    reward_minor: 50000, currency: 'UAH', orders_required: 20, orders_done: 12, period_start: '2026-11-01T00:00:00Z',
+    period_end: '2026-11-08T00:00:00Z', rewarded: false, repeat: 'EVERY_PERIOD', ...over});
+  const dm = (iso: string) => {
+    const d = new Date(iso);
+    const two = (n: number) => String(n).padStart(2, '0');
+    return two(d.getDate()) + '.' + two(d.getMonth() + 1) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes());
+  };
+
+  it('R1: the average and the count', async () => {
+    await openMoney({[RATING]: [{status: 200, body: {score_sum: 623, count: 128, average_hundredths: 487}}],
+      [PROMOS]: [{status: 200, body: {promotions: []}}]});
+    expect(await screen.findByText('Ваш рейтинг: 4.87 (128 оценок)')).toBeTruthy();
+  });
+
+  it('R2: no ratings yet', async () => {
+    await openMoney({[RATING]: [{status: 200, body: {score_sum: 0, count: 0, average_hundredths: 0}}],
+      [PROMOS]: [{status: 200, body: {promotions: []}}]});
+    expect(await screen.findByText('Оценок пока нет')).toBeTruthy();
+  });
+
+  it('R3: an unavailable rating leaves the rest of the screen', async () => {
+    await openMoney({[RATING]: [problem(503, 'UNAVAILABLE')], [PROMOS]: [{status: 200, body: {promotions: []}}]});
+    expect(await screen.findByText('Служба должна вам 82.50 UAH')).toBeTruthy();
+    expect(screen.queryByText(/Ваш рейтинг/)).toBeNull();
+  });
+
+  it('P1, P2: progress and a reward already paid', async () => {
+    await openMoney({[RATING]: [{status: 200, body: {score_sum: 0, count: 0, average_hundredths: 0}}],
+      [PROMOS]: [{status: 200, body: {promotions: [promo(), promo({promotion_id: 'p2', name: 'Первые 10',
+        orders_required: 10, orders_done: 10, rewarded: true, repeat: 'ONCE'})]}}]});
+    expect(await screen.findByText('«Неделя без выходных»: 12 из 20 поездок до ' + dm('2026-11-08T00:00:00Z')
+      + ' · награда 500.00 UAH')).toBeTruthy();
+    expect(screen.getByText('«Первые 10»: 10 из 10 поездок до ' + dm('2026-11-08T00:00:00Z')
+      + ' · награда получена')).toBeTruthy();
+  });
+
+  it('P3: no promotions', async () => {
+    await openMoney({[RATING]: [{status: 200, body: {score_sum: 0, count: 0, average_hundredths: 0}}],
+      [PROMOS]: [{status: 200, body: {promotions: []}}]});
+    expect(await screen.findByText('Сейчас акций нет.')).toBeTruthy();
+  });
+});
