@@ -3,6 +3,7 @@ import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 import {OrderFare} from './OrderFare.js';
+import {TripFacts} from './TripFacts.js';
 import {PaymentOperations} from './PaymentOperations.js';
 
 type City = {id: string; name: string; currency: string; timezone: string};
@@ -173,8 +174,8 @@ export function Orders({client, t}: {client: ApiClient; t: Translate}) {
 }
 
 /** One order's history (#368): every event, oldest first, with who did it and why. Times in UTC. */
-export function OrderTimeline({client, t, newId, canCorrect, canRetry}: {client: ApiClient; t: Translate;
-  newId: () => string; canCorrect: boolean; canRetry: boolean}) {
+export function OrderTimeline({client, t, newId, canCorrect, canRetry, canTrips}: {client: ApiClient; t: Translate;
+  newId: () => string; canCorrect: boolean; canRetry: boolean; canTrips: boolean}) {
   const {orderId = ''} = useParams();
   const [events, setEvents] = useState<Event[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -201,6 +202,7 @@ export function OrderTimeline({client, t, newId, canCorrect, canRetry}: {client:
       </ul>
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      <TripFacts client={client} t={t} newId={newId} orderId={orderId} canCorrect={canTrips} />
       <OrderFare client={client} t={t} newId={newId} orderId={orderId} canCorrect={canCorrect} />
       {canRetry ? <PaymentOperations client={client} t={t} newId={newId} orderId={orderId} /> : null}
       <p><Link to="/orders">{t('toOrders')}</Link></p>
