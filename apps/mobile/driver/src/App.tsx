@@ -78,6 +78,8 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [lost, setLost] = useState(false);
   /** Another device controls the open session (#454): no heartbeat from here until it is taken over. */
   const [elsewhere, setElsewhere] = useState(false);
+  const first = useRef<number>(-1);
+  if (first.current < 0 && availability) first.current = availability.session_version;
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const sequence = useRef(now());
@@ -110,7 +112,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const online = availability?.session_state === 'OPEN' && availability.session_id;
 
   useEffect(() => {
-    if (!online || elsewhere) return;
+    if (!online || (elsewhere && !online)) return;
     const id = availability.session_id as string;
     const timer = setInterval(() => {
       location()
@@ -188,7 +190,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
     try {
       setAvailability(await guard(() => client.post(('/api/driver/v1/work-sessions/{id}/' + action) as never, {
         params: {id: availability.session_id},
-        body: {command_id: newId(), expected_version: availability.session_version}
+        body: {command_id: newId(), expected_version: action === 'pause' ? first.current : availability.session_version}
       } as never)) as Availability);
       if (action === 'handover') setElsewhere(false);
     } catch (error) {
