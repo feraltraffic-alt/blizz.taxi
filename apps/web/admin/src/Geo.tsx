@@ -2,8 +2,9 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {CityMap, type MapZone} from './CityMap.js';
 
-type City = {id: string; name: string; currency: string; timezone: string; state: string};
+type City = {id: string; name: string; currency: string; timezone: string; state: string; polygon?: unknown};
 type Interval = {days_of_week: number[]; from: string; to: string};
 type Operations = {working_hours: Interval[]; payment_methods: string[]; return_zone_meters: number;
   dropoff_outside_city: {allowed: boolean; max_distance_km: number | null}; orders_paused: boolean;
@@ -52,6 +53,7 @@ export function CityList({client, t}: {client: ApiClient; t: Translate}) {
 export function CityOperations({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const {cityId = ''} = useParams();
   const [city, setCity] = useState<City | null>(null);
+  const [zones, setZones] = useState<MapZone[] | null>(null);
   const [ops, setOps] = useState<Operations | null>(null);
   const [intervals, setIntervals] = useState<Interval[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
@@ -84,6 +86,8 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
   useEffect(() => {
     read().catch(failure => setError(failure));
     cities(client).then(list => setCity(list.find(c => c.id === cityId) ?? null)).catch(() => undefined);
+    client.get('/api/admin/v1/cities/{city_id}/zones' as never, {params: {city_id: cityId}} as never)
+      .then(value => setZones((value as {zones: MapZone[]}).zones)).catch(() => setZones(null));
   }, [client, cityId, read]);
 
   /** Runs one command at a time; a conflict is told and the city is read again. */
@@ -219,6 +223,7 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
       ) : error ? null : <p>{t('loading')}</p>}
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      {city ? <CityMap t={t} boundary={city.polygon} zones={zones} /> : null}
     </section>
   );
 }
