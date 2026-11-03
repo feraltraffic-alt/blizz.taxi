@@ -453,3 +453,156 @@ describe('#363: find by status; block, suspend and their reversal', () => {
     expect(acts).toHaveLength(1);
   });
 });
+
+describe('#364: a driver balance and a top-up by staff', () => {
+  const finance = {...me, effective_permissions: ['driver.review', 'finance.manage']};
+  const KYIV = {id: '5a000000-0000-4000-8000-000000000001', code: 'kyiv', name: 'Київ', currency: 'UAH',
+    timezone: 'Europe/Kyiv', center: {lat: 50.45, lon: 30.52}};
+  const WAW = {...KYIV, id: '5a000000-0000-4000-8000-000000000002', code: 'waw', name: 'Варшава', currency: 'PLN'};
+  const entry = (n: number, amount: number, reason: string, kind = 'DEPOSIT') => ({id: 'e000000' + n
+    + '-0000-4000-8000-000000000001', at: '2026-11-0' + n + 'T10:00:00Z', kind, currency: 'UAH', amount_minor: amount,
+  reason, order_id: null, counterpart_id: null});
+  const statement = (over: Record<string, unknown> = {}) => ({driver_id: DRIVER,
+    balances: [{currency: 'UAH', balance_minor: 125050}], entries: [entry(2, 10000, 'Касса'),
+      entry(1, -3520, 'Комиссия', 'TRIP_FARE')], page: {next_cursor: null, has_more: false}, ...over});
+
+  function money(opts: {rights?: unknown; read?: (q: URLSearchParams) => unknown; balances?: unknown[];
+    cities?: unknown[]; top?: () => Response | Promise<Response>} = {}) {
+    const reads: URLSearchParams[] = [];
+    const tops: Record<string, unknown>[] = [];
+    handlers({rights: opts.rights ?? finance, one: () => theCase({profile: {...profile('APPROVED'),
+      account_state: 'ACTIVE'}})});
+    server.use(
+      http.get(origin + '/api/config/v1/bootstrap', () => HttpResponse.json({cities: opts.cities ?? [KYIV, WAW]})),
+      http.get(origin + '/api/admin/v1/drivers/' + DRIVER + '/balance', ({request}) => {
+        const q = new URL(request.url).searchParams;
+        reads.push(q);
+        return HttpResponse.json((opts.read ? opts.read(q)
+          : statement(opts.balances ? {balances: opts.balances} : {})) as never);
+      }),
+      http.post(origin + '/api/admin/v1/drivers/' + DRIVER + '/balance/top-ups', async ({request}) => {
+        const body = await request.json() as Record<string, unknown>;
+        tops.push(body);
+        return opts.top ? opts.top() : HttpResponse.json(statement({balances: [{currency: 'UAH',
+          balance_minor: 125050 + Number(body.amount_minor)}], entries: [entry(3, Number(body.amount_minor),
+          String(body.reason)), entry(2, 10000, 'Касса')]}) as never, {status: 201});
+      }));
+    return {reads, tops};
+  }
+  async function open() {
+    mount('/drivers/' + DRIVER);
+    const user = userEvent.setup();
+    await screen.findByText('Баланс: 1 250.50 UAH');
+    return user;
+  }
+  async function topUp(user: ReturnType<typeof userEvent.setup>, amount: string, reason = 'Взнос в кассе') {
+    if (amount) await user.type(screen.getByLabelText('Сумма пополнения'), amount);
+    if (reason) {
+      await user.click(screen.getByLabelText('Причина пополнения'));
+      await user.paste(reason);
+    }
+    await user.click(screen.getByRole('button', {name: 'Пополнить баланс'}));
+  }
+
+  it('M1: without finance.manage there is no balance and nothing is asked', async () => {
+    const {reads} = money({rights: reviewer});
+    mount('/drivers/' + DRIVER);
+    await screen.findByText('Skoda Octavia AA1234BB · на проверке');
+    expect(screen.queryByText(/^Баланс/)).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Пополнить баланс'})).toBeNull();
+    expect(reads).toEqual([]);
+  });
+
+  it('M2: no balance yet', async () => {
+    money({balances: []});
+    mount('/drivers/' + DRIVER);
+    expect(await screen.findByText('Баланс: 0')).toBeVisible();
+  });
+
+  it('M3: the movements, newest first, signed; "more" by cursor', async () => {
+    const {reads} = money({read: q => q.get('cursor') ? statement({entries: [entry(1, 500, 'Старое')]})
+      : statement({entries: [entry(2, 10000, 'Касса'), entry(1, -3520, 'Комиссия', 'TRIP_FARE')],
+        page: {next_cursor: 'p2', has_more: true}})});
+    const user = await open();
+    const lines = screen.getAllByText(/ UAH · /).map(e => e.textContent);
+    expect(lines[0]).toMatch(/\+100\.00 UAH · Касса$/);
+    expect(lines[1]).toMatch(/−35\.20 UAH · Комиссия$/);
+    await user.click(screen.getByRole('button', {name: 'Ещё движения'}));
+    expect(await screen.findByText(/\+5\.00 UAH · Старое$/)).toBeVisible();
+    expect(reads.map(q => q.get('cursor'))).toEqual([null, 'p2']);
+  });
+
+  it.each([['150', 15000], ['150.5', 15050], ['150,50', 15050], ['0.01', 1], ['100000.00', 10000000]])(
+    'M4: "%s" is %i minor units', async (typed, minor) => {
+      const {tops} = money();
+      const user = await open();
+      await topUp(user, typed);
+      await waitFor(() => expect(tops).toHaveLength(1));
+      expect(tops[0]).toEqual({command_id: expect.any(String), currency: 'UAH', amount_minor: minor, kind: 'DEPOSIT',
+        reason: 'Взнос в кассе'});
+    });
+
+  it('M4: a bonus in another currency with a reference; the page shows the answer', async () => {
+    const {tops} = money();
+    const user = await open();
+    expect(screen.getAllByRole('option', {name: /^(UAH|PLN)$/}).map(o => o.textContent)).toEqual(['UAH', 'PLN']);
+    await user.selectOptions(screen.getByLabelText('Валюта пополнения'), 'PLN');
+    await user.selectOptions(screen.getByLabelText('Вид пополнения'), 'BONUS');
+    await user.type(screen.getByLabelText('Основание (необязательно)'), 'Акт 7');
+    await topUp(user, '20', 'Подарок');
+    expect(await screen.findByText('Баланс пополнен.')).toBeVisible();
+    expect(tops).toEqual([{command_id: expect.any(String), currency: 'PLN', amount_minor: 2000, kind: 'BONUS',
+      reference: 'Акт 7', reason: 'Подарок'}]);
+    expect(screen.getByText('Баланс: 1 270.50 UAH')).toBeVisible();
+    expect(screen.getByText(/\+20\.00 UAH · Подарок$/)).toBeVisible();
+    expect(screen.getByLabelText('Сумма пополнения')).toHaveValue('');
+  });
+
+  it.each([['0', '0'], ['three decimals', '1.005'], ['letters', 'abc'], ['over 100 000.00', '100000.01']])(
+    'M5: %s sends nothing', async (_name, typed) => {
+      const {tops} = money();
+      const user = await open();
+      await topUp(user, typed);
+      expect(await screen.findByText(/^Сумма — от 0\.01 до 100 000\.00/)).toBeVisible();
+      expect(tops).toEqual([]);
+    });
+
+  it.each([['no reason', ''], ['a reason over 500 characters', 'x'.repeat(501)]])(
+    'M5: %s sends nothing', async (_name, reason) => {
+      const {tops} = money();
+      const user = await open();
+      await topUp(user, '10', reason);
+      expect(await screen.findByText(/^Сумма — от 0\.01 до 100 000\.00/)).toBeVisible();
+      expect(tops).toEqual([]);
+    });
+
+  it('M5: no currency sends nothing', async () => {
+    const {tops} = money({balances: [], cities: []});
+    mount('/drivers/' + DRIVER);
+    const user = userEvent.setup();
+    await screen.findByText('Баланс: 0');
+    await topUp(user, '10');
+    expect(await screen.findByText(/^Сумма — от 0\.01 до 100 000\.00/)).toBeVisible();
+    expect(tops).toEqual([]);
+  });
+
+  it('M6: the daily limit is told', async () => {
+    money({top: () => HttpResponse.json(problem(422, 'TOP_UP_DAILY_LIMIT'), {status: 422})});
+    const user = await open();
+    await topUp(user, '10');
+    expect(await screen.findByText('Достигнут ваш дневной лимит пополнений.')).toBeVisible();
+  });
+
+  it('M7: a double click tops up once', async () => {
+    const {tops} = money({top: async () => {
+      await delay(100);
+      return HttpResponse.json(statement() as never, {status: 201});
+    }});
+    const user = await open();
+    await user.type(screen.getByLabelText('Сумма пополнения'), '10');
+    await user.type(screen.getByLabelText('Причина пополнения'), 'r');
+    await user.dblClick(screen.getByRole('button', {name: 'Пополнить баланс'}));
+    expect(await screen.findByText('Баланс пополнен.')).toBeVisible();
+    expect(tops).toHaveLength(1);
+  });
+});
