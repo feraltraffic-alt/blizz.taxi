@@ -83,6 +83,26 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
 
+## Recent history (03.11.2026, night)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #320 | #319 | Rider and driver: open support attachments (images inline, PDF said where) |
+  | #325 | #324 | Driver: pre-orders by reservation. The windows are the server's, never the phone's clock |
+  | #327 | #326 | Driver: top up the balance by card. `ProviderPage` is in `mobile-ui`; each app keeps `src/ProviderPage` for its mocks |
+  | #329 | #328 | Rider and driver: change the phone number (`PhoneChange` in `mobile-ui`) |
+  | #331 | #330 | Rider and driver: a copy of my data (`DataExports`, shared through React Native `Share`) |
+  | #333 | #332 | Rider: pay what is owed (obligations), also from a RIDER_HAS_DEBT refusal |
+  | #335 | #334 | Rider: the bonus account and its top-up. `TopUpByCard` is in `mobile-ui` |
+  | #337 | #336 | Rider and driver: delete the account and withdraw the request (`AccountDeletion`; replaces the rider's untested code) |
+  | #339 | #338 | Rider and driver: the safety button (`SafetyButton`, 112 kept when the read fails) |
+- **API not used by the apps yet:**
+  - driver: the rating, transfers, transfer rules, promotions;
+  - rider: saved addresses, `places/reverse`, `orders/active`.
+- **Owner question still open:** the map tiles for the operator's live map.
+
 ## Recent history (02.11.2026, late night)
 
 - **Merged:**

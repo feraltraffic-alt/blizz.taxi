@@ -193,6 +193,9 @@ Real cases from pull requests on this repository: what was handed in, what the r
     `17:13:51.741119Z`, and an unrelated branch went red.
 - **Habit:**
   - Run the full typecheck and lint **on every branch you push**, the mutation branch included.
+  - Chain the commit **after** the checks (`npm run typecheck && npm run lint && git commit …`). Printing their
+    output with `| tail` lets the commit run on red. Tests-first commits of #319, #326, #330, #334 and #336 went
+    in with a type or lint error that way, and each was fixed in the next commit.
   - A guard against leaked data looks for the **whole shape of the secret** (`4111[ -]?1111`), never for a short
     substring that dates, ids or amounts can contain.
 
