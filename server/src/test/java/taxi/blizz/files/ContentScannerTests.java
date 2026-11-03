@@ -150,6 +150,25 @@ class ContentScannerTests {
                 "the infected bytes to be deleted");
     }
 
+    /**
+     * #451: the attempt counter grows when an attempt is claimed, not when it ends. A test that made the file due again
+     * right after seeing the counter grow was overtaken by the attempt still running, whose back-off moved the next try
+     * minutes away. Here the scanner hangs, so that attempt always ends after the scanner is back.
+     */
+    @Test
+    void anAttemptStillRunningWhenTheScannerComesBackIsWaitedFor() throws Exception {
+        clamd.mode(FakeClamd.Mode.HANG);
+        StoredFile clean = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
+        assertThat(clean.state()).isEqualTo(FileState.QUARANTINE);
+        int attempts = attempts(clean.fileId());
+        dueNow(clean.fileId());
+        waitFor(() -> attempts(clean.fileId()) > attempts, "another attempt");
+
+        clamd.mode(FakeClamd.Mode.NORMAL);
+        dueNow(clean.fileId());
+        waitFor(() -> "SAFE".equals(state(clean.fileId())), "the clean file to be SAFE");
+    }
+
     @Test
     void anAnswerThatIsNeitherOkNorFoundOrADroppedConnectionIsNotClean() throws Exception {
         clamd.mode(FakeClamd.Mode.ERROR);
