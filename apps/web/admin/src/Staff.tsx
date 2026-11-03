@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {Link} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 
@@ -183,6 +184,7 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
           <li key={m.id}>
             <span>{[name(m), m.login, t(ROLE_TEXT[m.profile.role] ?? m.profile.role), t('staff_' + m.state)]
               .join(' · ')}</span>
+            <Link to={'/staff/' + m.id}>{t('editOf', {name: name(m)})}</Link>
             <label>{t('reasonFor', {name: name(m)})}
               <input value={reasons[m.id] ?? ''} onChange={e => setReasons(r => ({...r, [m.id]: e.target.value}))} />
             </label>

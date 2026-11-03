@@ -5,6 +5,12 @@ export type {Locale} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    editOf: 'Изменить: {name}',
+    saveChanges: 'Сохранить изменения',
+    editSaved: 'Изменения сохранены.',
+    toStaff: 'К сотрудникам',
+    memberChanged: 'Сотрудника изменил кто-то другой; показаны текущие данные.',
+    editNeeds: 'Нужны имя, фамилия, хотя бы один контакт (Telegram — 5–32 латинских букв, цифр или _) и причина; для смены роли, функций или городов — ваш пароль.',
     cityState_DRAFT: 'черновик',
     cityState_PUBLISHED: 'опубликован',
     cityState_ARCHIVED: 'в архиве',
@@ -176,6 +182,12 @@ export const translations: Catalogs = {
     notReady: 'Этот раздел появится позже.'
   },
   uk: {
+    editOf: 'Змінити: {name}',
+    saveChanges: 'Зберегти зміни',
+    editSaved: 'Зміни збережено.',
+    toStaff: 'До співробітників',
+    memberChanged: 'Співробітника змінив хтось інший; показано поточні дані.',
+    editNeeds: 'Потрібні ім’я, прізвище, хоча б один контакт (Telegram — 5–32 латинських літер, цифр або _) і причина; для зміни ролі, функцій чи міст — ваш пароль.',
     cityState_DRAFT: 'чернетка',
     cityState_PUBLISHED: 'опубліковано',
     cityState_ARCHIVED: 'в архіві',
@@ -347,6 +359,12 @@ export const translations: Catalogs = {
     notReady: 'Цей розділ з’явиться пізніше.'
   },
   pl: {
+    editOf: 'Zmień: {name}',
+    saveChanges: 'Zapisz zmiany',
+    editSaved: 'Zmiany zapisane.',
+    toStaff: 'Do pracowników',
+    memberChanged: 'Pracownika zmienił ktoś inny; pokazano bieżące dane.',
+    editNeeds: 'Potrzebne są imię, nazwisko, co najmniej jeden kontakt (Telegram — 5–32 liter łacińskich, cyfr lub _) i powód; do zmiany roli, funkcji lub miast — Twoje hasło.',
     cityState_DRAFT: 'szkic',
     cityState_PUBLISHED: 'opublikowane',
     cityState_ARCHIVED: 'w archiwum',
