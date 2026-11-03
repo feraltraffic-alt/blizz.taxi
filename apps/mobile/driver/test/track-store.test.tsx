@@ -45,8 +45,6 @@ function memory(initial: string | null = null): RefreshTokenStore {
   return {read: () => value, write: next => {value = next;}};
 }
 
-const problem = (status: number, code: string) => ({status, body: {type: 'about:blank', title: code, status, code,
-  correlation_id: cid, retryable: false}});
 const noLegal = {'GET /api/driver/v1/legal': [{status: 200, body: {documents: []}}]};
 
 /** The unsent GPS points kept across a restart, encrypted on the phone (#462): P1–P5 of the issue. */
