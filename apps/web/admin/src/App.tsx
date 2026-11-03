@@ -12,6 +12,7 @@ import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
+import {CancelReasons} from './CancelReasons.js';
 
 const t = translator(translations, 'ru');
 
@@ -105,6 +106,8 @@ function Panel({client}: {client: ApiClient}) {
           </>
         ) : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings" element={<SafetyContactsSettings
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/settings') ? <Route path="/settings/cancel-reasons" element={<CancelReasons
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
