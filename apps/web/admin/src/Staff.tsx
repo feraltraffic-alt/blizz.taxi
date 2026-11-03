@@ -25,6 +25,11 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
   const [allCities, setAllCities] = useState(false);
   const [cityIds, setCityIds] = useState<string[]>([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  /** Per member: a temporary password, the super admin's own password for it, a new internal number (#357). */
+  const [temps, setTemps] = useState<Record<string, string>>({});
+  const [owns, setOwns] = useState<Record<string, string>>({});
+  const [numbers, setNumbers] = useState<Record<string, string>>({});
+  const [extensions, setExtensions] = useState<Record<string, {extension: string; version: number}>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const acting = useRef(false);
@@ -39,6 +44,10 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
       .then(list => setPermissions((list as {permissions: Permission[]}).permissions)).catch(() => undefined);
     client.get('/api/config/v1/bootstrap' as never, {} as never)
       .then(boot => setCities((boot as {cities: {id: string; name: string}[]}).cities)).catch(() => undefined);
+    client.get('/api/admin/v1/staff-extensions' as never, {} as never)
+      .then(list => setExtensions(Object.fromEntries((list as {extensions: {staff_id: string; extension: string;
+        version: number}[]}).extensions.map(e => [e.staff_id, {extension: e.extension, version: e.version}]))))
+      .catch(() => undefined);
   }, [client, read]);
 
   const set = (key: keyof typeof form) => (e: {target: {value: string}}) =>
@@ -103,6 +112,68 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
     }
   }
 
+  async function reset(m: Member) {
+    if (acting.current) return;
+    const why = (reasons[m.id] ?? '').trim();
+    const temp = temps[m.id] ?? '';
+    const own = owns[m.id] ?? '';
+    if (temp.length < 12 || !why || !own) {
+      setMessage(t('resetNeeds'));
+      return;
+    }
+    acting.current = true;
+    setMessage(null);
+    setError(null);
+    try {
+      const updated = await client.post('/api/admin/v1/staff/{staff_id}/reset-password' as never, {params: {
+        staff_id: m.id}, body: {command_id: newId(), expected_version: m.version, temporary_password: temp,
+        reason: why, password: own}} as never) as Member;
+      setStaff(list => (list ?? []).map(x => x.id === updated.id ? updated : x));
+      setTemps(v => ({...v, [m.id]: ''}));
+      setMessage(t('resetDone'));
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 403) setMessage(t('ownPasswordWrong'));
+      else if (failure instanceof ApiError && failure.status === 409) {
+        setMessage(t('staffChanged'));
+        await read().catch(() => undefined);
+      } else setError(failure);
+    } finally {
+      // The own password never stays on the screen after a request (REQ-ADM-10).
+      setOwns(v => ({...v, [m.id]: ''}));
+      acting.current = false;
+    }
+  }
+
+  async function number(m: Member, remove: boolean) {
+    if (acting.current) return;
+    const why = (reasons[m.id] ?? '').trim();
+    const value = (numbers[m.id] ?? '').trim();
+    if (!why || (!remove && !/^[0-9]{2,6}$/.test(value))) {
+      setMessage(t('extensionNeeds'));
+      return;
+    }
+    acting.current = true;
+    setMessage(null);
+    setError(null);
+    try {
+      const saved = await client.post('/api/admin/v1/staff-extensions/{staff_id}' as never, {params: {staff_id: m.id},
+        body: {command_id: newId(), expected_version: extensions[m.id]?.version ?? 0,
+          extension: remove ? null : value, reason: why}} as never) as {extension: string; version: number};
+      setExtensions(all => {
+        const next = {...all};
+        if (remove) delete next[m.id];
+        else next[m.id] = {extension: saved.extension, version: saved.version};
+        return next;
+      });
+      setNumbers(v => ({...v, [m.id]: ''}));
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 409) setMessage(t('extensionTaken'));
+      else setError(failure);
+    } finally {
+      acting.current = false;
+    }
+  }
+
   const name = (m: Member) => m.profile.last_name + ' ' + m.profile.first_name;
   return (
     <section aria-labelledby="staff-title">
@@ -118,6 +189,22 @@ export function Staff({client, t, newId}: {client: ApiClient; t: Translate; newI
             {m.state === 'SUSPENDED'
               ? <button type="button" onClick={() => void change(m, 'restore')}>{t('restoreOf', {name: name(m)})}</button>
               : <button type="button" onClick={() => void change(m, 'suspend')}>{t('suspendOf', {name: name(m)})}</button>}
+            <span>{extensions[m.id] ? t('extShort', {number: extensions[m.id]!.extension}) : t('noExtension')}</span>
+            <label>{t('extensionFor', {name: name(m)})}
+              <input value={numbers[m.id] ?? ''} onChange={e => setNumbers(v => ({...v, [m.id]: e.target.value}))} />
+            </label>
+            <button type="button" onClick={() => void number(m, false)}>{t('saveExtension', {name: name(m)})}</button>
+            {extensions[m.id] ? <button type="button" onClick={() => void number(m, true)}>
+              {t('removeExtension', {name: name(m)})}</button> : null}
+            <label>{t('tempPasswordFor', {name: name(m)})}
+              <input type="password" value={temps[m.id] ?? ''}
+                onChange={e => setTemps(v => ({...v, [m.id]: e.target.value}))} />
+            </label>
+            <label>{t('ownPasswordFor', {name: name(m)})}
+              <input type="password" value={owns[m.id] ?? ''}
+                onChange={e => setOwns(v => ({...v, [m.id]: e.target.value}))} />
+            </label>
+            <button type="button" onClick={() => void reset(m)}>{t('resetOf', {name: name(m)})}</button>
           </li>
         ))}
       </ul>

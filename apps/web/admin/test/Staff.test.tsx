@@ -171,3 +171,129 @@ describe('S6: one at a time', () => {
     expect(created).toHaveLength(1);
   });
 });
+
+/** A temporary password and internal numbers (#357): R1–R3, E1–E5. */
+describe('#357: temporary password and numbers', () => {
+  function more(opts: {reset?: () => Response; ext?: () => Response | Promise<Response>; numbers?: unknown[]} = {}) {
+    const resets: Record<string, unknown>[] = [];
+    const exts: Record<string, unknown>[] = [];
+    server.use(
+      http.get(origin + '/api/admin/v1/staff-extensions', () => HttpResponse.json({extensions: opts.numbers
+        ?? [{staff_id: STAFF, extension: '101', version: 3}]} as never)),
+      http.post(origin + '/api/admin/v1/staff/' + STAFF + '/reset-password', async ({request}) => {
+        resets.push(await request.json() as Record<string, unknown>);
+        return opts.reset ? opts.reset() : HttpResponse.json(member('ACTIVE', {version: 3}) as never);
+      }),
+      http.post(origin + '/api/admin/v1/staff-extensions/' + STAFF, async ({request}) => {
+        const body = await request.json() as Record<string, unknown>;
+        exts.push(body);
+        return opts.ext ? opts.ext() : HttpResponse.json({staff_id: STAFF, extension: body.extension ?? '101',
+          version: 4} as never);
+      }));
+    return {resets, exts};
+  }
+  async function open() {
+    mount();
+    const user = userEvent.setup();
+    await screen.findByText(/anna.op/);
+    return user;
+  }
+
+  it('R1: a temporary password with the reason and the own password, which is emptied', async () => {
+    handlers();
+    const {resets} = more();
+    const user = await open();
+    await user.type(screen.getByLabelText('Причина для Коваль Анна'), 'Забыла пароль');
+    await user.type(screen.getByLabelText('Временный пароль для Коваль Анна'), 'Temporary-2026-ok');
+    await user.type(screen.getByLabelText('Ваш пароль для Коваль Анна'), 'Super-Admin-Pass');
+    await user.click(screen.getByRole('button', {name: 'Задать временный пароль: Коваль Анна'}));
+    expect(await screen.findByText('Временный пароль задан. При входе сотрудник сменит его.')).toBeVisible();
+    expect(resets).toEqual([{command_id: expect.any(String), expected_version: 2, temporary_password: 'Temporary-2026-ok',
+      reason: 'Забыла пароль', password: 'Super-Admin-Pass'}]);
+    expect(screen.getByLabelText('Ваш пароль для Коваль Анна')).toHaveValue('');
+  });
+
+  it.each([['a short password', 'short', 'Super-Admin-Pass', 'r'], ['no own password', 'Temporary-2026-ok', '', 'r'],
+    ['no reason', 'Temporary-2026-ok', 'Super-Admin-Pass', '']])('R2: %s sends nothing', async (_n, temp, own, why) => {
+    handlers();
+    const {resets} = more();
+    const user = await open();
+    if (why) await user.type(screen.getByLabelText('Причина для Коваль Анна'), why);
+    await user.type(screen.getByLabelText('Временный пароль для Коваль Анна'), temp);
+    if (own) await user.type(screen.getByLabelText('Ваш пароль для Коваль Анна'), own);
+    await user.click(screen.getByRole('button', {name: 'Задать временный пароль: Коваль Анна'}));
+    expect(await screen.findByText('Временный пароль — от 12 символов; нужны причина и ваш пароль.')).toBeVisible();
+    expect(resets).toEqual([]);
+  });
+
+  it('R3: a wrong own password is told and emptied', async () => {
+    handlers();
+    more({reset: () => HttpResponse.json(problem(403, 'ACCESS_DENIED'), {status: 403})});
+    const user = await open();
+    await user.type(screen.getByLabelText('Причина для Коваль Анна'), 'r');
+    await user.type(screen.getByLabelText('Временный пароль для Коваль Анна'), 'Temporary-2026-ok');
+    await user.type(screen.getByLabelText('Ваш пароль для Коваль Анна'), 'wrong');
+    await user.click(screen.getByRole('button', {name: 'Задать временный пароль: Коваль Анна'}));
+    expect(await screen.findByText('Ваш пароль не подошёл.')).toBeVisible();
+    expect(screen.getByLabelText('Ваш пароль для Коваль Анна')).toHaveValue('');
+  });
+
+  it('E1: the number or that there is none', async () => {
+    handlers();
+    more();
+    await open();
+    expect(await screen.findByText('вн. 101')).toBeVisible();
+  });
+
+  it('E1: none', async () => {
+    handlers();
+    more({numbers: []});
+    await open();
+    expect(await screen.findByText('нет внутреннего номера')).toBeVisible();
+  });
+
+  it.each([[[{staff_id: STAFF, extension: '101', version: 3}], 3], [[], 0]])(
+    'E2: set with the version %#', async (numbers, version) => {
+      handlers();
+      const {exts} = more({numbers});
+      const user = await open();
+      await user.type(screen.getByLabelText('Причина для Коваль Анна'), 'Новое место');
+      await user.type(screen.getByLabelText('Внутренний номер для Коваль Анна'), '205');
+      await user.click(screen.getByRole('button', {name: 'Сохранить номер: Коваль Анна'}));
+      await waitFor(() => expect(exts).toHaveLength(1));
+      expect(exts[0]).toEqual({command_id: expect.any(String), expected_version: version, extension: '205',
+        reason: 'Новое место'});
+    });
+
+  it('E3: remove sends null', async () => {
+    handlers();
+    const {exts} = more();
+    const user = await open();
+    await user.type(screen.getByLabelText('Причина для Коваль Анна'), 'Ушла');
+    await user.click(await screen.findByRole('button', {name: 'Убрать номер: Коваль Анна'}));
+    await waitFor(() => expect(exts).toHaveLength(1));
+    expect(exts[0]).toEqual({command_id: expect.any(String), expected_version: 3, extension: null, reason: 'Ушла'});
+  });
+
+  it('E4: a number of another member', async () => {
+    handlers();
+    more({ext: () => HttpResponse.json(problem(409, 'STATE_CONFLICT'), {status: 409})});
+    const user = await open();
+    await user.type(screen.getByLabelText('Причина для Коваль Анна'), 'r');
+    await user.type(screen.getByLabelText('Внутренний номер для Коваль Анна'), '205');
+    await user.click(screen.getByRole('button', {name: 'Сохранить номер: Коваль Анна'}));
+    expect(await screen.findByText('Этот номер уже у другого сотрудника.')).toBeVisible();
+  });
+
+  it.each([['letters', 'abc', 'r'], ['one digit', '1', 'r'], ['no reason', '205', '']])(
+    'E5: %s sends nothing', async (_n, number, why) => {
+      handlers();
+      const {exts} = more();
+      const user = await open();
+      if (why) await user.type(screen.getByLabelText('Причина для Коваль Анна'), why);
+      await user.type(screen.getByLabelText('Внутренний номер для Коваль Анна'), number);
+      await user.click(screen.getByRole('button', {name: 'Сохранить номер: Коваль Анна'}));
+      expect(await screen.findByText('Номер — от 2 до 6 цифр, и нужна причина.')).toBeVisible();
+      expect(exts).toEqual([]);
+    });
+});
