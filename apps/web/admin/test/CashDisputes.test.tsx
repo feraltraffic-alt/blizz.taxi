@@ -54,8 +54,10 @@ function mount(path = '/cash-disputes') {
   render(<MemoryRouter initialEntries={[path]}><AdminApp client={api} /></MemoryRouter>);
 }
 
-const row = 'Заказ 0d000000 · водитель d1000000 · долг пассажира 125.00 UAH · удержано 20.00 UAH · решить до '
+const line = 'Заказ 0d000000 · водитель d1000000 · долг пассажира 125.00 UAH · удержано 20.00 UAH · решить до '
   + '17.11.2099 09:00 UTC';
+/** The row's line: the order's link and the words after it, in one span. */
+const row = (_: string, element: Element | null) => element?.tagName === 'SPAN' && element.textContent === line;
 
 describe('D1: the list', () => {
   it('each dispute in words, the order a link', async () => {
@@ -71,7 +73,8 @@ describe('D1: the list', () => {
     handlers({pages: () => ({disputes: [dispute({decide_by: '2026-01-02T09:00:00Z'})],
       page: {next_cursor: null, has_more: false}})});
     mount();
-    expect(await screen.findByText(/решить до 02\.01\.2026 09:00 UTC · просрочено$/)).toBeTruthy();
+    expect(await screen.findByText((_, e) => e?.tagName === 'SPAN'
+      && /решить до 02\.01\.2026 09:00 UTC · просрочено$/.test(e.textContent ?? ''))).toBeTruthy();
   });
 
   it('the next page is asked with the cursor', async () => {
