@@ -20,7 +20,7 @@ const DRIVER = 'd0000000-0000-4000-8000-000000000001';
 const DOC = 'f1000000-0000-4000-8000-000000000001';
 const DOC2 = 'f2000000-0000-4000-8000-000000000002';
 const reviewer = {...me, effective_permissions: ['driver.review']};
-const item = (n: number, over: Record<string, unknown> = {}) => ({driver_id: 'd000000' + n
+const item = (n: number, over: Record<string, unknown> = {}) => ({driver_id: n === 1 ? DRIVER : 'd000000' + n
   + '-0000-4000-8000-000000000001', name: 'Водитель ' + n, phone: '+38050000000' + n, status: 'IN_REVIEW',
   since: '2026-11-0' + n + 'T10:00:00Z', version: 4, ...over});
 const profile = (status = 'IN_REVIEW') => ({id: DRIVER, account_state: 'ACTIVE', review_status: status,
