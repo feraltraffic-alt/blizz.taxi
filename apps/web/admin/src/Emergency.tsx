@@ -54,7 +54,7 @@ export function EmergencyGive({client, t, newId, meId}: {client: ApiClient; t: T
     const why = reason.trim();
     const length = WHOLE.test(minutes.trim()) ? Number(minutes.trim()) : NaN;
     if (picked.length === 0 || (!allCities && cityIds.length === 0) || !(length >= 5 && length <= 480)
-      || why.length < 10 || why.length > 500 || !own) {
+      || why.length < 9 || why.length > 500 || !own) {
       setMessage(t('grantNeeds'));
       return;
     }
@@ -65,7 +65,7 @@ export function EmergencyGive({client, t, newId, meId}: {client: ApiClient; t: T
       const granted = await client.post('/api/admin/v1/staff/{staff_id}/emergency-grants' as never, {params: {
         staff_id: staffId}, body: {command_id: newId(), permissions: permissions.map(p => p.code)
         .filter(c => picked.includes(c)), all_cities: allCities,
-      ...(allCities ? {} : {city_ids: cities.map(c => c.id).filter(id => cityIds.includes(id))}),
+      ...(allCities ? {city_ids: []} : {city_ids: cities.map(c => c.id).filter(id => cityIds.includes(id))}),
       minutes: length, reason: why, password: own}} as never) as Grant;
       setMessage(t('grantDone', {until: utc(granted.expires_at)}));
       setPicked([]);
