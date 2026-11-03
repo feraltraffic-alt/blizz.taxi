@@ -14,6 +14,7 @@ import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
 import {CancelReasons} from './CancelReasons.js';
 import {Deletions} from './Deletions.js';
+import {Legal} from './Legal.js';
 
 const t = translator(translations, 'ru');
 
@@ -29,6 +30,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
   {path: '/deletions', label: 'navDeletions', permission: ['clients.delete', 'drivers.delete']},
+  {path: '/legal', label: 'navLegal', permission: 'legal.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
 
@@ -114,6 +116,8 @@ function Panel({client}: {client: ApiClient}) {
         {sections.some(s => s.path === '/deletions') ? <Route path="/deletions" element={<Deletions client={client}
           t={t} newId={() => crypto.randomUUID()} clients={holds('clients.delete')} drivers={holds('drivers.delete')} />}
         /> : null}
+        {sections.some(s => s.path === '/legal') ? <Route path="/legal" element={<Legal client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
