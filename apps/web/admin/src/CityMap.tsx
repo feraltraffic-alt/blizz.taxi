@@ -1,21 +1,13 @@
 import {useEffect, useRef} from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type {Translate} from '@blizz/web-ui';
+import {OSM_TILES, type Translate} from '@blizz/web-ui';
 
 export type Polygon = {type: string; coordinates?: unknown};
 export type MapZone = {id: string; type: string; priority: number; state: string; polygon: Polygon};
 
-/**
- * The OpenStreetMap tile server (ADR 0012 Q-08, the owner's answer of 03.11.2026), used under its tile usage policy:
- * the attribution is shown and the zoom stays within what it serves. The admin panel's CSP allows images from this
- * host only (#465).
- */
-export const TILES = {
-  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  maxZoom: 19,
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-};
+/** The OpenStreetMap tiles shared by both panels (#470). */
+export const TILES = OSM_TILES;
 
 type Ring = [number, number][];
 
