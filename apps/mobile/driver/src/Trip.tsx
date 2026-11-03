@@ -92,7 +92,7 @@ function RateRider({client, t, guard, failure, newId, orderId, close}: Props & {
     setNote(null);
     try {
       await guard(() => client.post('/api/driver/v1/orders/{order_id}/rating' as never, {params: {order_id: orderId},
-        body: {command_id: newId(), score, ...(text ? {comment: text} : {})}} as never));
+        body: {command_id: newId(), score, comment: text}} as never));
       setDone(true);
     } catch (failed) {
       setNote(failed instanceof ApiError && failed.status === 409 ? t('rateClosed') : failure(failed));
