@@ -107,7 +107,8 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
 
   useEffect(() => {
     client.get('/api/config/v1/bootstrap' as never, {} as never)
-      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities)).catch(() => setCities([]));
+      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities))
+      .catch(() => setCities([]));
   }, [client]);
 
   const read = useCallback(async () => {
