@@ -96,6 +96,11 @@ afterEach(() => {
   delete statics.revokeObjectURL;
 });
 
+/** The page's default city and dates have arrived: a click before them asks nothing (the pitfall of #409; #457). */
+async function defaultsLoaded() {
+  await waitFor(() => expect(screen.getByLabelText('С даты')).not.toHaveValue(''));
+}
+
 describe('R1: the period', () => {
   it('the last 7 days in the city time zone: at 22:30 UTC Kyiv is on the next day', async () => {
     vi.useFakeTimers({toFake: ['Date']});
@@ -116,6 +121,7 @@ describe('R2: orders', () => {
     handlers();
     mount();
     const user = userEvent.setup();
+    await defaultsLoaded();
     await user.click(await screen.findByRole('button', {name: 'Показать'}));
     expect(await screen.findByText('Всего: создано 22, выполнено 20, отменено 1, не выполнено 1, в работе 0')).toBeVisible();
     expect(screen.getByText('01.11.2026: создано 10, выполнено 8, отменено 1, не выполнено 1, в работе 0')).toBeVisible();
@@ -129,6 +135,7 @@ describe('R3: money', () => {
     const {asked} = handlers();
     mount();
     const user = userEvent.setup();
+    await defaultsLoaded();
     await user.selectOptions(await screen.findByLabelText('Отчёт'), 'FINANCE');
     await user.click(screen.getByRole('button', {name: 'Показать'}));
     expect(await screen.findByText('Всего: поездок 9, стоимость 1 250.50, комиссия 187.57, водителям 1 062.93, '
@@ -145,6 +152,7 @@ describe('R4: export', () => {
     const {asked, exports} = handlers();
     mount();
     const user = userEvent.setup();
+    await defaultsLoaded();
     await user.click(await screen.findByRole('button', {name: 'Выгрузить в CSV'}));
     const row = (await screen.findByText('Заказы · Київ · 01.11–07.11 · в работе')).closest('li') as HTMLElement;
     expect(within(row).queryByRole('button', {name: 'Скачать'})).toBeNull();
@@ -188,6 +196,7 @@ describe('R6: not allowed', () => {
     handlers({orders: () => HttpResponse.json(problem(403, 'ACCESS_DENIED'), {status: 403})});
     mount();
     const user = userEvent.setup();
+    await defaultsLoaded();
     await user.click(await screen.findByRole('button', {name: 'Показать'}));
     expect(await screen.findByText('Нет доступа к отчётам этого города.')).toBeVisible();
   });
