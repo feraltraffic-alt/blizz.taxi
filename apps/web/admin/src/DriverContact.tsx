@@ -26,6 +26,7 @@ export function DriverContact<P extends {version: number; has_payment_terminal?:
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const acting = useRef(false);
+  const first = useRef(profile.version);
 
   async function run(work: () => Promise<void>, refusal: (failure: ApiError) => string | null) {
     if (acting.current) return;
@@ -62,7 +63,7 @@ export function DriverContact<P extends {version: number; has_payment_terminal?:
     }
     return run(async () => {
       const changed = await client.post('/api/admin/v1/drivers/{driver_id}/phone' as never, {params: {
-        driver_id: driverId}, body: {command_id: newId(), expected_version: profile.version,
+        driver_id: driverId}, body: {command_id: newId(), expected_version: first.current,
         new_challenge_id: challenge, new_code: code.trim(), reason: identified.trim()}} as never) as
         {phone: string; version: number};
       onPhone(changed.phone, changed.version);
@@ -81,7 +82,7 @@ export function DriverContact<P extends {version: number; has_payment_terminal?:
       setMessage(t('dcReasonNeeds'));
       return;
     }
-    const wanted = !profile.has_payment_terminal;
+    const wanted = Boolean(profile.has_payment_terminal);
     return run(async () => {
       onProfile(await client.post('/api/admin/v1/drivers/{driver_id}/payment-terminal' as never, {params: {
         driver_id: driverId}, body: {command_id: newId(), expected_version: profile.version, has_terminal: wanted,
