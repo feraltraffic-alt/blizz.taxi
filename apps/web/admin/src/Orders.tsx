@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {OrderFare} from './OrderFare.js';
 
 type City = {id: string; name: string; currency: string; timezone: string};
 type Overview = {total: number; by_status: {status: string; count: number}[]};
@@ -171,7 +172,8 @@ export function Orders({client, t}: {client: ApiClient; t: Translate}) {
 }
 
 /** One order's history (#368): every event, oldest first, with who did it and why. Times in UTC. */
-export function OrderTimeline({client, t}: {client: ApiClient; t: Translate}) {
+export function OrderTimeline({client, t, newId, canCorrect}: {client: ApiClient; t: Translate; newId: () => string;
+  canCorrect: boolean}) {
   const {orderId = ''} = useParams();
   const [events, setEvents] = useState<Event[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -198,6 +200,7 @@ export function OrderTimeline({client, t}: {client: ApiClient; t: Translate}) {
       </ul>
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      <OrderFare client={client} t={t} newId={newId} orderId={orderId} canCorrect={canCorrect} />
       <p><Link to="/orders">{t('toOrders')}</Link></p>
     </section>
   );
