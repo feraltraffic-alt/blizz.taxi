@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {readFileSync} from 'node:fs';
+import {readdirSync, readFileSync} from 'node:fs';
 import {join as path} from 'node:path';
 import * as i18n from '../src/i18n.js';
 
@@ -40,5 +40,30 @@ describe('I3: a key missing from a language', () => {
   it('two good files join', () => {
     expect(join!({core: {ru: {a: '1'}, uk: {a: '2'}, pl: {a: '3'}}, geo: {ru: {b: '4'}, uk: {b: '5'}, pl: {b: '6'}}}))
       .toEqual({ru: {a: '1', b: '4'}, uk: {a: '2', b: '5'}, pl: {a: '3', b: '6'}});
+  });
+});
+
+/** The section files, read from the folder itself, so a file the module forgets is noticed (#441). */
+const folder = path(process.cwd(), 'apps/web/admin/src/i18n');
+const files = readdirSync(folder).filter(name => name.endsWith('.ts'));
+
+describe('I4: every file is joined', () => {
+  it.each(files)('%s', async name => {
+    const module = await import('../src/i18n/' + name.replace(/\.ts$/, '.js')) as Record<string, Catalogs>;
+    const parts = Object.values(module);
+    expect(parts.length).toBeGreaterThan(0);
+    for (const part of parts) {
+      for (const locale of ['ru', 'uk', 'pl'] as const) {
+        expect(i18n.translations[locale]).toMatchObject(part[locale]);
+      }
+    }
+  });
+});
+
+describe('I5: no list to keep', () => {
+  it('i18n.ts names no section file', () => {
+    const source = readFileSync(path(process.cwd(), 'apps/web/admin/src/i18n.ts'), 'utf8');
+    expect(source).not.toMatch(/from '\.\/i18n\//);
+    expect(files.length).toBeGreaterThan(20);
   });
 });
