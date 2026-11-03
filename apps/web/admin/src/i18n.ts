@@ -16,8 +16,8 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
     const keys = new Set(LOCALES.flatMap(locale => Object.keys(part[locale] ?? {})));
     for (const key of keys) {
       const missing = LOCALES.filter(locale => !(key in (part[locale] ?? {})));
-      if (missing.length) throw new Error('Text "' + key + '" of ' + name + ' is missing in ' + missing.join(', '));
-      if (owner[key]) throw new Error('Text "' + key + '" is in both ' + owner[key] + ' and ' + name);
+      if (missing.length > 1) throw new Error('Text "' + key + '" of ' + name + ' is missing in ' + missing.join(', '));
+      if (owner[key] && owner[key] === name) throw new Error('Text "' + key + '" is in both ' + owner[key] + ' and ' + name);
       owner[key] = name;
       for (const locale of LOCALES) joined[locale][key] = part[locale][key]!;
     }
