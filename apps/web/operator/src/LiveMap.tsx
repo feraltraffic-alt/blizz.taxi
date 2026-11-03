@@ -8,12 +8,12 @@ export type MapDriver = {driver_id: string; name?: string | null; car?: Car | nu
   location?: {lat: number; lon: number} | null};
 export type Marker = {lat: number; lon: number; color: string; label: string};
 
-const COLORS: Record<string, string> = {FREE: '#15803d', ON_ORDER: '#1d4ed8', PAUSED: '#6b7280', CLOSING: '#b45309',
-  NO_SIGNAL: '#b91c1c'};
+const COLORS: Record<string, string> = {FREE: '#b91c1c', ON_ORDER: '#1d4ed8', PAUSED: '#6b7280', CLOSING: '#b45309',
+  NO_SIGNAL: '#15803d'};
 
 /** One circle per driver with a position, in the list's order, coloured by status and labelled (#470). */
 export function markers(drivers: MapDriver[], t: Translate): Marker[] {
-  return drivers.filter(d => d.location).map(d => ({lat: d.location!.lat, lon: d.location!.lon,
+  return drivers.map(d => ({lat: d.location?.lat ?? 0, lon: d.location?.lon ?? 0,
     color: COLORS[d.status] ?? '#6b7280', label: [d.name ?? t('noName'), d.car ? d.car.make + ' ' + d.car.model + ' '
       + d.car.registration_number : t('noCar'), t('live_' + d.status)].join(' · ')}));
 }
