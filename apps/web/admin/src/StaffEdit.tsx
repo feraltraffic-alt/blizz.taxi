@@ -79,7 +79,7 @@ export function StaffEdit({client, t, newId}: {client: ApiClient; t: Translate; 
       const value = await client.post('/api/admin/v1/staff/{staff_id}/update' as never, {params: {staff_id: staffId},
         body: {command_id: newId(), expected_version: member.version, profile: {first_name: form.first.trim(),
           last_name: form.last.trim(), contacts, role: form.role, permissions: ticked, all_cities: form.allCities,
-          city_ids: cityIds}, reason: reason.trim(), ...(sensitive ? {password: own} : {})}} as never) as Member;
+          city_ids: cityIds}, reason: reason.trim(), password: own}} as never) as Member;
       show(value);
       setReason('');
       setMessage(t('editSaved'));
@@ -90,7 +90,6 @@ export function StaffEdit({client, t, newId}: {client: ApiClient; t: Translate; 
         await read().catch(again => setError(again));
       } else setError(failure);
     } finally {
-      setOwn('');
       acting.current = false;
     }
   }
