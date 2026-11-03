@@ -2343,6 +2343,29 @@ components:
       type: object
       required: [id, short_number, status, version, channel, city_id, vehicle_class, pickup, dropoff, payment_method]
       properties:
+        driver_location:
+          description: >-
+            Where the assigned driver is, for the rider's map (the owner's answer of 03.11.2026, ADR 0017; issue #479):
+            the driver's last position on the server and its time, while the trip is TO_PICKUP, WAITING or
+            IN_PROGRESS. Left out in every other state and when no position is known — never null and never made up.
+            Only in the rider's order reads (GET /orders/{id}, /current, /active). `stale` when the position is older
+            than the freshness limit.
+          type: object
+          additionalProperties: false
+          required: [lat, lon, at, stale]
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lon:
+              type: number
+              minimum: -180
+              maximum: 180
+            at:
+              $ref: "./common.yaml#/components/schemas/Timestamp"
+            stale:
+              type: boolean
         pickup_eta:
           description: >-
             While the driver is on the way to the pickup (trip TO_PICKUP): a forecast, never a promise (REQ-RID-04), from
