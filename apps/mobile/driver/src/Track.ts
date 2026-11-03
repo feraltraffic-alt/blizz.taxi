@@ -29,8 +29,9 @@ export function createTrackBuffer(client: ApiClient, newId: () => string, now: (
     const saved = store?.read();
     if (saved) {
       const value = JSON.parse(saved) as {pending?: Batch | null; points?: TrackPoint[]};
-      points = (value.points ?? []).filter(fresh).slice(-limit);
-      pending = value.pending && value.pending.points.some(fresh) ? value.pending : null;
+      points = (value.points ?? []).filter(p => fresh(p) || p.sequence >= 0).slice(-limit);
+      pending = null;
+      points = [...(value.pending?.points ?? []), ...(value.points ?? [])].slice(-limit);
     }
   } catch {
     points = [];
