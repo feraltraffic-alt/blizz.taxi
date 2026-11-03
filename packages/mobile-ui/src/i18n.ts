@@ -5,6 +5,12 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    safety: 'Безопасность',
+    safetyHide: 'Скрыть контакты безопасности',
+    safetyEmergency: 'Экстренная служба',
+    safetySupport: 'Поддержка службы',
+    safetyCall: 'Позвонить: {label}',
+    safetyDisclaimer: 'Служба не вызывает экстренные службы сама — позвоните сами.',
     deleteAccount: 'Удалить аккаунт',
     deleteCode: 'Код подтверждения удаления',
     confirmDeletion: 'Подтвердить удаление',
@@ -128,6 +134,12 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    safety: 'Безпека',
+    safetyHide: 'Сховати контакти безпеки',
+    safetyEmergency: 'Екстрена служба',
+    safetySupport: 'Підтримка служби',
+    safetyCall: 'Подзвонити: {label}',
+    safetyDisclaimer: 'Служба не викликає екстрені служби сама — зателефонуйте самі.',
     deleteAccount: 'Видалити обліковий запис',
     deleteCode: 'Код підтвердження видалення',
     confirmDeletion: 'Підтвердити видалення',
@@ -251,6 +263,12 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    safety: 'Bezpieczeństwo',
+    safetyHide: 'Ukryj kontakty bezpieczeństwa',
+    safetyEmergency: 'Numer alarmowy',
+    safetySupport: 'Pomoc firmy',
+    safetyCall: 'Zadzwoń: {label}',
+    safetyDisclaimer: 'Firma nie wzywa służb ratunkowych sama — zadzwoń samodzielnie.',
     deleteAccount: 'Usuń konto',
     deleteCode: 'Kod potwierdzenia usunięcia',
     confirmDeletion: 'Potwierdź usunięcie',

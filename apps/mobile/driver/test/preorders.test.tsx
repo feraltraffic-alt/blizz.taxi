@@ -1,5 +1,6 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 import {createApiClient} from '@blizz/api-client';
+import {Linking} from 'react-native';
 import {DriverApp, type AppConfig} from '../src/App';
 
 /** The driver's pre-orders by reservation (#324): P1–P7 of the issue. */
@@ -203,5 +204,18 @@ describe('P7: one at a time', () => {
     await waitFor(() => expect(posts(http)).toHaveLength(1));
     await new Promise(resolve => setTimeout(resolve, 300));
     expect(posts(http)).toHaveLength(1);
+  });
+});
+
+describe('#338 F5: the safety button on the line', () => {
+  it('reads the driver API and calls on a press', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const {http} = await mount({'GET /api/driver/v1/safety-contacts': [{status: 200, body: {city_id: KYIV,
+      emergency_number: '112', support_phone: null, extra: [], disclaimer_code: 'NO_AUTO_DISPATCH'}}]});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Безопасность'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Позвонить: Экстренная служба'}));
+    expect(open).toHaveBeenCalledWith('tel:112');
+    expect(http.calls.filter(c => c.path === '/api/driver/v1/safety-contacts')).toHaveLength(1);
+    open.mockRestore();
   });
 });
