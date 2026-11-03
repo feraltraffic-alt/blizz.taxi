@@ -10,6 +10,7 @@ import {Wallets} from './Wallets.js';
 import {StaffEdit} from './StaffEdit.js';
 import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
+import {Logs} from './Logs.js';
 
 const t = translator(translations, 'ru');
 
@@ -102,6 +103,8 @@ function Panel({client}: {client: ApiClient}) {
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
+        {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
+          : null}
         {sections.some(s => s.path === '/orders') ? (
           <>
             <Route path="/orders" element={<Orders client={client} t={t} />} />
