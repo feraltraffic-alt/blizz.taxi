@@ -208,6 +208,21 @@ Real cases from pull requests on this repository: what was handed in, what the r
   - **The first Web E2E after 22:00 UTC failed on an unrelated PR.** It was 00:10 in Kyiv, so the trip just driven fell outside the asked period, and the screen said "0 trips".
 - **Habit:** a date or a "today" sent to the server is computed in the **city's time zone**. Tests take the clock across a midnight that differs between the device and the city: at 22:30 UTC Kyiv is on the next day, and New York at 02:00 UTC is on the day before.
 
+## 21. A test written from the code, not from the contract (lead's #351, found by the lead in #361)
+
+- **Task:** the admin's driver review queue (#351), with "more" for the next page.
+- **Missed:**
+  - **The queue sent `?after=<next_cursor>`.** In `listDriversForReview`, `after` is the deprecated first version, a
+    timestamp. The opaque position goes in `cursor`. The server would refuse the second page.
+  - **The test checked `after`.** It was written by reading the code, so it agreed with the mistake.
+  - **The type checker was silenced.** The call casts its path `as never`, so the generated types never compared
+    the query with the contract.
+  - Found while scoping the next admin issue, by reading the endpoint's parameters.
+- **Habit:**
+  - A test's request body and query names come **from the contract** (`packages/contracts/openapi`), read at the
+    time the test is written, never from the code under test.
+  - Where a call casts its path `as never`, the PR lists the parameters it sends next to the contract's.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
