@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, afternoon)
+# Lead handoff (state on 03.11.2026, evening)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,32 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, evening)
+
+- **Owner's answers today:**
+  - Map tiles: **OpenStreetMap**. This matches ADR 0012 Q-08 (Leaflet + OSM, under the tile usage policy).
+  - Tariffs API (#30): **not now**.
+  - #215 closed at the owner's request.
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #466 | #465 | Admin: a city's boundary and zones on an OSM map; CSP `img-src` adds only `tile.openstreetmap.org` |
+  | #469 | #467 | Admin: create a city with its boundary drawn (`BoundaryEditor`: click or "lat, lon"); edit a draft, publish, archive |
+  | #471 | #468 | Admin: a city's zones drawn, published and archived (`ZoneManager`) |
+  | #473 | #470 | Operator: live drivers on the map; `OSM_TILES` shared in `@blizz/web-ui` |
+  | #474 | #472 | Operator: pick a place on the map (`places/reverse`); `parsePoint` shared in `@blizz/web-ui` |
+  | #476 | #475 | Operator: the live board limited to the map's view (`box`) |
+- **No open PRs.**
+- **What's left needs a contract or an owner decision:**
+  - a map in the mobile apps: the rider's order has the ETA but not the driver's position;
+  - an admin live map (REQ-ADM-01 names it, but the admin API has no live endpoint; the operator panel has one);
+  - the tariffs API (#30, not now).
+- **Map pitfalls:**
+  - A Leaflet map in jsdom has no size: its bounds collapse to the center, as the projection rounds it.
+  - A map that refits to its markers must not do so while its view drives the query, or each poll moves the view and reads again.
+  - Keep a typed "lat, lon" field next to every map click: it is the keyboard path and what the tests drive.
 
 ## Recent history (03.11.2026, afternoon)
 
