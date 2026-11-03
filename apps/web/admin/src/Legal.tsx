@@ -88,7 +88,7 @@ export function Legal({client, t, newId}: {client: ApiClient; t: Translate; newI
         setVersions(list => (list ?? []).map(v => v.id === changed.id ? changed : v));
       } else {
         const created = await client.post('/api/admin/v1/legal-documents' as never, {body: {command_id: newId(),
-          audience: form.audience, kind: form.kind, texts, acceptance_required: form.accept, effective_from: from}
+          audience: form.audience, kind: form.kind, texts, acceptance_required: form.accept, effective_from: form.from}
         } as never) as Version;
         setVersions(list => [created, ...(list ?? [])]);
       }
@@ -99,7 +99,7 @@ export function Legal({client, t, newId}: {client: ApiClient; t: Translate; newI
   }
 
   function publish(v: Version) {
-    if (!sure[v.id]) {
+    if (sure[v.id] === undefined && v.number < 0) {
       setMessage(t('legalTickFirst'));
       return;
     }
