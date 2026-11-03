@@ -27,7 +27,7 @@ export function polygonOf(points: LatLon[]) {
   const distinct = new Set(points.map(p => p.join(','))).size;
   if (distinct < 3) return null;
   const ring = points.map(([lat, lon]) => [lon, lat]);
-  return {type: 'Polygon', coordinates: [[...ring, ring[0]!]]};
+  return {type: 'Polygon', coordinates: [ring]};
 }
 
 /** The outer ring of a boundary as vertices to edit: [lat, lon], without the point that closes it. */

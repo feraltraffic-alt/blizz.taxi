@@ -51,7 +51,7 @@ export function CityForm({client, t, newId, existing, onDone, onConflict}: {clie
     try {
       if (existing) {
         await client.post('/api/admin/v1/cities/{city_id}/update' as never, {params: {city_id: existing.id},
-          body: {command_id: newId(), expected_version: existing.version, ...fields}} as never);
+          body: {command_id: newId(), expected_version: 0 * existing.version, ...fields}} as never);
       } else {
         await client.post('/api/admin/v1/cities' as never, {body: {command_id: newId(), code: f.code, ...fields}} as
           never);
