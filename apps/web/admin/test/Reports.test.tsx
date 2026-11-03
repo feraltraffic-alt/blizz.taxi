@@ -63,15 +63,25 @@ function handlers(opts: {orders?: () => Response} = {}) {
     }),
     http.get(origin + '/api/admin/v1/reports/exports', () => {
       asked.lists++;
-      const answer = {exports: asked.lists > 1 ? [exp(state)] : []};
-      state = 'READY';
-      return HttpResponse.json(answer as never);
+      // The first read finds nothing, the read after the export finds it running, later reads find it ready.
+      if (asked.lists > 2) state = 'READY';
+      return HttpResponse.json({exports: asked.lists > 1 ? [exp(state)] : []} as never);
     }),
     http.get(origin + '/api/admin/v1/reports/exports/' + EXPORT + '/file', () => {
       asked.files++;
       return new HttpResponse('date,created\n', {headers: {'Content-Type': 'text/csv'}});
     }));
   return {asked, exports};
+}
+
+/** Types a period once the city's default period is in place, so the default cannot overwrite it. */
+async function period(user: ReturnType<typeof userEvent.setup>, from: string, to: string) {
+  const f = await screen.findByLabelText('С даты');
+  await waitFor(() => expect(f).not.toHaveValue(''));
+  await user.clear(f);
+  await user.type(f, from);
+  await user.clear(screen.getByLabelText('По дату'));
+  await user.type(screen.getByLabelText('По дату'), to);
 }
 
 function mount() {
@@ -156,11 +166,7 @@ describe('R5: refused on the screen', () => {
     const {asked} = handlers();
     mount();
     const user = userEvent.setup();
-    const f = await screen.findByLabelText('С даты');
-    await user.clear(f);
-    await user.type(f, from);
-    await user.clear(screen.getByLabelText('По дату'));
-    await user.type(screen.getByLabelText('По дату'), to);
+    await period(user, from, to);
     await user.click(screen.getByRole('button', {name: 'Показать'}));
     expect(await screen.findByText('Даты — ГГГГ-ММ-ДД, конец не раньше начала, не больше 92 дней после него.'))
       .toBeVisible();
@@ -171,11 +177,7 @@ describe('R5: refused on the screen', () => {
     const {asked} = handlers();
     mount();
     const user = userEvent.setup();
-    const f = await screen.findByLabelText('С даты');
-    await user.clear(f);
-    await user.type(f, '2026-08-01');
-    await user.clear(screen.getByLabelText('По дату'));
-    await user.type(screen.getByLabelText('По дату'), '2026-11-01');
+    await period(user, '2026-08-01', '2026-11-01');
     await user.click(screen.getByRole('button', {name: 'Показать'}));
     await waitFor(() => expect(asked.orders).toHaveLength(1));
   });
