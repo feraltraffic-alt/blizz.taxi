@@ -7,7 +7,9 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import {Platform} from 'react-native';
 import {createApiClient} from '@blizz/api-client';
-import {expoPush, secureRefreshTokens, webRefreshTokens, type Notifications as Port} from '@blizz/mobile-ui';
+import {
+  chunkedSecureStore, expoPush, secureRefreshTokens, webRefreshTokens, type Notifications as Port
+} from '@blizz/mobile-ui';
 import {DriverApp, type PickedFile, type Position} from './src/App';
 
 const KEY = 'blizz.driver.refresh';
@@ -43,9 +45,13 @@ async function pickFile(): Promise<PickedFile | null> {
   return {name: asset.name, type: asset.mimeType ?? data.type, size: asset.size ?? data.size, data};
 }
 
+// The GPS points of lost heartbeats survive a restart in the Keychain or Keystore, encrypted (#462); the web build
+// keeps them in memory only.
+const trackStore = Platform.OS === 'web' ? undefined : chunkedSecureStore(SecureStore, 'blizz.driver.track');
+
 function Root() {
   return createElement(DriverApp, {client, config: {service: extra.service ?? 'default', deviceRef, locate, push,
-    pickFile}});
+    pickFile, trackStore}});
 }
 
 registerRootComponent(Root);

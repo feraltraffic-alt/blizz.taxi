@@ -3,7 +3,7 @@ import {Text} from 'react-native';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {
   AccountDeletion, Alert, Button, DRIVER_CATEGORIES, SafetyButton, DataExports, LegalGuard, Loading, PhoneChange, Screen, SignIn, Support, UpdateScreen, failureText,
-  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared
+  translator, useAppSession, usePushDevice, useTheme, useUpgradeGuard, type Locale, type PushPort, type Shared, type ValueStore
 } from '@blizz/mobile-ui';
 import {translations} from './i18n';
 import {Dispatch} from './Trip';
@@ -37,6 +37,8 @@ export interface AppConfig {
   pickFile?: () => Promise<PickedFile | null>;
   /** How many GPS points of lost heartbeats are kept for upload (#456); 1000 by default. */
   trackLimit?: number;
+  /** Where those points survive a restart, encrypted (#462); none on the web: memory only. */
+  trackStore?: ValueStore;
 }
 
 type Profile = AdmissionProfile & {account_state: string; admission_city_ids: string[]};
@@ -87,7 +89,7 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
   const [tab, setTab] = useState<'work' | 'money' | 'documents' | 'support' | 'preorders' | 'phone' | 'data'>('work');
   const {signOut: pushSignOut} = usePushDevice(client, config.push, '/api/driver/v1', newId, locale);
   /** The points of heartbeats lost to the network, uploaded after the next good one (#456); in memory only. */
-  const track = useMemo(() => createTrackBuffer(client, newId, now, config.trackLimit), [client]);
+  const track = useMemo(() => createTrackBuffer(client, newId, now, config.trackLimit, config.trackStore), [client]);
   const signOut = async () => {
     track.clear();
     await pushSignOut();
