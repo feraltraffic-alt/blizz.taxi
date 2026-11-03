@@ -1,9 +1,9 @@
-import type {Catalogs} from '@blizz/web-ui';
+import {liveBoardTexts, type Catalogs} from '@blizz/web-ui';
 
 export {validateCatalogs} from '@blizz/web-ui';
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Catalogs = {
+const own: Catalogs = {
   ru: {
     myDay: 'Мой день', myPoints: 'Баллы: {points} (выполнено {done}, отменено {cancelled}) с {since}',
     noEmergency: 'Экстренного доступа нет.', emergencyUntil: 'Экстренный доступ до {until}: {rights} — {reason}',
@@ -404,3 +404,7 @@ export const translations: Catalogs = {
     orderMoved: 'Zamówienie zmieniło się w trakcie anulowania. Sprawdź jego stan.', another: 'Nowe zamówienie'
   }
 };
+
+/** With the shared live board's texts (#482). */
+export const translations: Catalogs = {ru: {...own.ru, ...liveBoardTexts.ru}, uk: {...own.uk, ...liveBoardTexts.uk},
+  pl: {...own.pl, ...liveBoardTexts.pl}};
