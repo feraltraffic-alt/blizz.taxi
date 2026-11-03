@@ -45,7 +45,7 @@ export function Flags({client, t, newId}: {client: ApiClient; t: Translate; newI
     setError(null);
     try {
       const changed = await client.post('/api/admin/v1/feature-flags/{key}/change' as never, {params: {key: f.key},
-        body: {command_id: newId(), expected_version: f.version, enabled: !f.enabled, reason: why}} as never) as Flag;
+        body: {command_id: newId(), expected_version: f.version, enabled: f.enabled, reason: why}} as never) as Flag;
       setFlags(list => (list ?? []).map(x => x.key === changed.key ? changed : x));
       setReasons(all => ({...all, [f.key]: ''}));
     } catch (failure) {
@@ -69,7 +69,7 @@ export function Flags({client, t, newId}: {client: ApiClient; t: Translate; newI
           <li key={f.key}>
             <span>{[f.key, state(f.enabled) + ' ' + t('flagDefault', {state: state(f.default_enabled)}),
               t('flagOwner', {owner: f.owner}), t('flagReview', {day: day(f.review_by)}), f.description].join(' · ')}</span>
-            {f.review_by < today ? <p>{t('flagOverdue')}</p> : null}
+            {f.review_by <= today ? <p>{t('flagOverdue')}</p> : null}
             {f.version > 0 && f.changed_at ? <p>{t('flagChanged', {at: utc(f.changed_at), reason: f.reason ?? '—'})}</p>
               : null}
             <label>{t('flagReason', {key: f.key})}<input value={reasons[f.key] ?? ''}
