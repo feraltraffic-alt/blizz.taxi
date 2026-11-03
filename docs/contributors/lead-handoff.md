@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, midday)
+# Lead handoff (state on 03.11.2026, afternoon)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,28 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, afternoon)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #453 | #451 | Tests: `ContentScannerTests` waits for an attempt's end, not its claim (lessons case 24) |
+  | #455 | #454 | Driver app: pause and resume the work session; take it over from another device |
+  | #458 | #457 | Tests: Reports waits for the default city and dates before clicking |
+  | #459 | #456 | Driver app: GPS points of lost heartbeats kept and uploaded as location batches |
+  | #461 | #460 | Driver app: the driver rates the rider after a completed trip |
+  | #463 | #462 | Driver app: those points kept across a restart in the Keychain or Keystore (`chunkedSecureStore` in `mobile-ui`) |
+- **Full sandbox on `main`:** after these, [62 of 62 green](https://github.com/feraltraffic-alt/blizz.taxi/actions/runs/41639244188).
+- **No open PRs.**
+- **#215 is done**, with a per-service test for every item. Closing it was refused by the session's permission check; the owner was asked to close it.
+- **Gaps left in the clients** (endpoints no client calls):
+  - `operator/places/reverse`, which needs the map;
+  - `rider/orders/active` and `rider/addresses`, both legacy or covered by `/places`.
+- **Test pitfalls:**
+  - In React Native Testing Library, unmounting by hand and rendering again left later tests without effects. Model a restart as a new instance through `rerender` with a new `key`.
+  - Give each app instance's `newId` its own prefix, so "the same id after a restart" can't pass by chance.
 
 ## Recent history (03.11.2026, midday)
 
