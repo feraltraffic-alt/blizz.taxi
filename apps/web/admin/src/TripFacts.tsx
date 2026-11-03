@@ -64,14 +64,14 @@ export function TripFacts({client, t, newId, orderId, canCorrect}: {client: ApiC
     const start = form.start.trim() ? instant(form.start) : undefined;
     const end = form.end.trim() ? instant(form.end) : undefined;
     const reason = form.reason.trim();
-    if (start === null || end === null || (!form.mistake && !start && !end) || (form.mistake && start)
+    if (start === null || end === null || (!form.mistake && !start && !end)
       || !reason || reason.length > 500) {
       setMessage(t('tripNeeds'));
       return;
     }
     return run('/api/admin/v1/orders/{order_id}/trip-corrections', {expected_version: facts.version,
-      ...(form.mistake ? {started_by_mistake: true} : {}), ...(start ? {started_at: start} : {}),
-      ...(end ? {completed_at: end} : {}), reason}, () => setForm({mistake: false, start: '', end: '', reason: ''}));
+      ...(form.mistake ? {started_by_mistake: true} : {}), started_at: start ?? null, completed_at: end ?? null,
+      reason}, () => setForm({mistake: false, start: '', end: '', reason: ''}));
   }
 
   function close() {
