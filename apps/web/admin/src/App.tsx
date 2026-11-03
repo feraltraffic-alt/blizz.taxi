@@ -20,6 +20,7 @@ import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
 import {Finance} from './Finance.js';
+import {LivePage} from './LivePage.js';
 import {Services} from './Services.js';
 import {CashDisputes} from './CashDisputes.js';
 import {ReconciliationRun, Reconciliations} from './Reconciliations.js';
@@ -39,6 +40,7 @@ const t = translator(translations, 'ru');
 const SECTIONS: {path: string; label: string; permission?: string | string[]; role?: string}[] = [
   {path: '/geo', label: 'navGeo', permission: 'geo.manage'},
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
+  {path: '/live', label: 'navLive', permission: 'orders.view'},
   {path: '/clients', label: 'navClients', permission: 'clients.manage'},
   {path: '/support', label: 'support', permission: 'support.manage'},
   {path: '/otp-deliveries', label: 'navOtpDeliveries', permission: 'support.manage'},
@@ -186,6 +188,8 @@ function Panel({client}: {client: ApiClient}) {
           t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/services') ? <Route path="/services" element={<Services client={client}
           t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/live') ? <Route path="/live" element={<LivePage client={client} t={t} />} />
+          : null}
         {sections.some(s => s.path === '/operator-bonuses') ? <Route path="/operator-bonuses" element={
           <OperatorBonuses client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/otp-deliveries') ? <Route path="/otp-deliveries" element={<OtpDeliveries
