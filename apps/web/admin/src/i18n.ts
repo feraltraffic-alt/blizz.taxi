@@ -1,5 +1,6 @@
 import type {Catalogs} from '@blizz/web-ui';
 import {core} from './i18n/core.js';
+import {driverContact} from './i18n/driverContact.js';
 import {paymentOperations} from './i18n/paymentOperations.js';
 import {orderFare} from './i18n/orderFare.js';
 import {support} from './i18n/support.js';
@@ -44,6 +45,6 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
 }
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Catalogs = joinCatalogs({core, paymentOperations, orderFare, support, operatorBonuses, finance, clients, serviceSettings, reports, callLines, risk, driverPromotions, promotions, cancelReasons, deletions, legal, integrations, merchants, flags});
+export const translations: Catalogs = joinCatalogs({core, driverContact, paymentOperations, orderFare, support, operatorBonuses, finance, clients, serviceSettings, reports, callLines, risk, driverPromotions, promotions, cancelReasons, deletions, legal, integrations, merchants, flags});
 
 export {validateCatalogs} from '@blizz/web-ui';
