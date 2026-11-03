@@ -53,6 +53,13 @@ function handlers(opts: {act?: (action: string) => Response | undefined; phone?:
       reads++;
       return HttpResponse.json(card(state) as never);
     }),
+    // MSW answers with the first match: the phone change goes before the general action handler.
+    http.post(origin + '/api/admin/v1/clients/' + C + '/phone', async ({request}) => {
+      acts.push({action: 'phone', body: await request.json() as Record<string, unknown>});
+      if (opts.phone) return opts.phone();
+      state = {phone: '+380509998877', version: 4};
+      return HttpResponse.json({subject_id: C, phone: '+380509998877', version: 4} as never);
+    }),
     http.post(origin + '/api/admin/v1/clients/' + C + '/:action', async ({request, params}) => {
       const body = await request.json() as Record<string, unknown>;
       const action = String(params.action);
@@ -69,12 +76,6 @@ function handlers(opts: {act?: (action: string) => Response | undefined; phone?:
       acts.push({action: 'new-code', body: await request.json() as Record<string, unknown>});
       return HttpResponse.json({challenge_id: CH, expires_at: '2026-11-03T08:10:00Z',
         resend_available_at: '2026-11-03T08:01:00Z'} as never);
-    }),
-    http.post(origin + '/api/admin/v1/clients/' + C + '/phone', async ({request}) => {
-      acts.push({action: 'phone', body: await request.json() as Record<string, unknown>});
-      if (opts.phone) return opts.phone();
-      state = {phone: '+380509998877', version: 4};
-      return HttpResponse.json({subject_id: C, phone: '+380509998877', version: 4} as never);
     }));
   return {searches, acts, reads: () => reads};
 }
