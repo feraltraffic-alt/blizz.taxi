@@ -64,7 +64,7 @@ export function SafetyContactsSettings({client, t, newId}: {client: ApiClient; t
       .filter(([, v]) => v !== '')), phone: e.phone.trim()}));
     const why = reason.trim();
     if (!EMERGENCY.test(emergency.trim()) || (phone && !E164.test(phone))
-      || cleaned.some(e => !E164.test(e.phone) || !e.label[languages.main]
+      || cleaned.some(e => !E164.test(e.phone)
         || Object.values(e.label).some(v => String(v).length > 80))
       || !why || why.length > 500) {
       setMessage(t('safetyNeeds'));
@@ -76,7 +76,7 @@ export function SafetyContactsSettings({client, t, newId}: {client: ApiClient; t
     try {
       show(await client.post('/api/admin/v1/settings/safety-contacts/{city_id}' as never, {params: {city_id: cityId},
         body: {command_id: newId(), expected_version: current.version, emergency_number: emergency.trim(),
-          support_phone: phone || null, extra: cleaned, reason: why}} as never) as Version);
+          support_phone: phone, extra: cleaned, reason: why}} as never) as Version);
       setMessage(t('safetySaved'));
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 409) {
