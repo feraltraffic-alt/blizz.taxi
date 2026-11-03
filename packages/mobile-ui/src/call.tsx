@@ -17,6 +17,7 @@ export function CallButton({client, t, guard, failure, path, params, label}: Sha
   const [note, setNote] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const busy = useRef(false);
+  const cached = useRef<Target | null>(null);
   const theme = useTheme();
 
   async function call() {
@@ -25,7 +26,8 @@ export function CallButton({client, t, guard, failure, path, params, label}: Sha
     setNote(null);
     setMessage(null);
     try {
-      const target = await guard(() => client.get(path as never, {params} as never)) as Target;
+      const target = cached.current ?? await guard(() => client.get(path as never, {params} as never)) as Target;
+      cached.current = target;
       if (target.mode === 'VIA_SERVICE_NUMBERS') setNote(t('callViaService'));
       await Linking.openURL('tel:' + target.phone).catch(() => setNote(t('callDial', {phone: target.phone})));
     } catch (error) {

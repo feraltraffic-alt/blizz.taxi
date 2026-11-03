@@ -325,7 +325,7 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
           {order.driver.registration_number}
         </Text>
       ) : null}
-      {order.status === 'ASSIGNED' || order.status === 'IN_SERVICE' ? <CallButton client={client} t={t} guard={guard}
+      {order.status === 'ASSIGNED' || order.status === 'IN_SERVICE' || order.status === 'SEARCHING' ? <CallButton client={client} t={t} guard={guard}
         failure={failure} path="/api/rider/v1/orders/{order_id}/call" params={{order_id: order.id}}
         label={t('callDriver')} /> : null}
       {order.pickup_eta ? <Text style={{color: theme.muted}}>{t('eta', {minutes: Math.max(1,
