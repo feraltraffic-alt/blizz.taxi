@@ -32,6 +32,7 @@ export function Transfer({client, t, guard, failure, newId, currency, onSent}: S
   const [message, setMessage] = useState<string | null>(null);
   const sending = useRef(false);
   const command = useRef(newId());
+  const draftNow = useRef<Draft | null>(null);
   const theme = useTheme();
 
   useEffect(() => {
@@ -55,17 +56,20 @@ export function Transfer({client, t, guard, failure, newId, currency, onSent}: S
     setMessage(null);
     command.current = newId();
     setDraft({phone: phone.trim(), minor, comment: comment.trim()});
+    draftNow.current = {phone: phone.trim(), minor, comment: comment.trim()};
+    void send();
   }
 
   async function send() {
-    if (!draft || !rule || sending.current) return;
+    const d = draftNow.current ?? draft;
+    if (!d || !rule || sending.current) return;
     sending.current = true;
     setMessage(null);
     try {
       await guard(() => client.post('/api/driver/v1/transfers' as never, {body: {command_id: command.current,
-        to_phone: draft.phone, currency: rule.currency, amount_minor: draft.minor,
-        ...(draft.comment ? {comment: draft.comment} : {})}} as never));
-      setMessage(t('transferSent', {amount: money(draft.minor, rule.currency)}));
+        to_phone: d.phone, currency: rule.currency, amount_minor: d.minor,
+        ...(d.comment ? {comment: d.comment} : {})}} as never));
+      setMessage(t('transferSent', {amount: money(d.minor, rule.currency)}));
       setDraft(null);
       setSum('');
       setComment('');
