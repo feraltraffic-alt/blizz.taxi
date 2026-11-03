@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {Alert, Button, TopUpByCard, useTheme, type Shared} from '@blizz/mobile-ui';
 import {ProviderPage} from './ProviderPage';
+import {Transfer} from './Transfer';
 
 type Balance = {currency: string; balance_minor: number; debt_limit_minor: number | null; blocked: boolean};
 type Figures = {trips: number; fare_minor: number; commission_minor: number; driver_share_minor: number};
@@ -155,6 +156,8 @@ export function Money({client, t, guard, failure, cityId, now, service, newId, p
               (p.reward_minor / 100).toFixed(2) + ' ' + p.currency}))}
           </Text>
         ))) : null}
+      <Transfer client={client} t={t} guard={guard} failure={failure} newId={newId}
+        currency={balances[0]?.currency ?? 'UAH'} onSent={reload} />
       {cityId ? <TopUpByCard client={client} t={t} guard={guard} failure={failure} cityId={cityId} newId={newId}
         path="/api/driver/v1/balance/card-top-ups" Page={ProviderPage} pollMs={pollMs} onCompleted={reload} /> : null}
       {earnings ? (
