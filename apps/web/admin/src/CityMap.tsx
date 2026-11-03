@@ -36,7 +36,7 @@ export function rings(polygon: unknown): Ring[] {
 
 /**
  * A city's boundary and its zones on an OpenStreetMap map (#465): published zones solid, drafts dashed, the view
- * fitted to the city. The zones are listed as text below it too.
+ * fitted to the city. The zones are listed, with their actions, by the zone manager below it (#468).
  */
 export function CityMap({t, boundary, zones}: {t: Translate; boundary: unknown; zones: MapZone[] | null}) {
   const element = useRef<HTMLDivElement>(null);
@@ -67,12 +67,6 @@ export function CityMap({t, boundary, zones}: {t: Translate; boundary: unknown; 
       <h2 id="map-title">{t('mapTitle')}</h2>
       {drawable ? <div ref={element} role="region" aria-label={t('mapTitle')} style={{height: 360}} />
         : <p>{t('mapNoBoundary')}</p>}
-      {zones && zones.length === 0 ? <p>{t('mapNoZones')}</p> : null}
-      <ul>
-        {(zones ?? []).map(z => (
-          <li key={z.id}>{[z.type, t('mapZone_' + z.state), t('mapPriority', {n: z.priority})].join(' · ')}</li>
-        ))}
-      </ul>
     </div>
   );
 }
