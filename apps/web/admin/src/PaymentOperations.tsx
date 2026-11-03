@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import type {Translate} from '@blizz/web-ui';
+import {Chargebacks} from './Chargebacks.js';
 import {decimal} from './Promotions.js';
 
 type Operation = {id: string; type: string; state: string; amount_minor: number; currency: string;
@@ -92,6 +93,8 @@ export function PaymentOperations({client, t, newId, orderId}: {client: ApiClien
         ))}
       </ul>
       {message ? <p role="status">{message}</p> : null}
+      {operations.length > 0 ? <Chargebacks client={client} t={t} newId={newId} orderId={orderId}
+        currency={operations[0]!.currency} /> : null}
     </section>
   );
 }
