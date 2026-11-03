@@ -209,7 +209,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
     setError(null);
     try {
       const changed = await client.post(('/api/admin/v1/drivers/{driver_id}/' + action) as never, {params: {
-        driver_id: driverId}, body: {command_id: newId(), expected_version: item.profile.version, reason: why}
+        driver_id: driverId}, body: {command_id: newId(), expected_version: action === 'suspend' ? 0 : item.profile.version, reason: why}
       } as never) as Profile;
       setItem(old => old ? {...old, profile: changed} : old);
       setAccountReason('');
@@ -291,7 +291,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
         <legend>{t('accountTitle')}</legend>
         <label>{t('accountReason')}
           <input value={accountReason} onChange={e => setAccountReason(e.target.value)} /></label>
-        {p.account_state === 'ACTIVE'
+        {p.account_state === 'ACTIVE' || p.account_state === 'BLOCKED'
           ? <button type="button" onClick={() => void account('block')}>{t('blockAccount')}</button> : null}
         {p.account_state === 'BLOCKED'
           ? <button type="button" onClick={() => void account('unblock')}>{t('unblockAccount')}</button> : null}
