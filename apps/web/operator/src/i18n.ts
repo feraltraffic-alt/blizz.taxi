@@ -5,6 +5,8 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    ratings: 'Оценки', noRatings: 'Оценок нет.', scoreOf: '{score} из 5', ratedBy_RIDER: 'Пассажир → водителю',
+    ratedBy_DRIVER: 'Водитель → пассажиру',
     attachFile: 'Приложить файл', removeFileOf: 'Убрать {name}', tooManyFiles: 'Можно приложить не больше 5 файлов.',
     attachType: 'Подходят только JPEG, PNG, WEBP или PDF.', attachTooBig: 'Файл больше 10 МБ.',
     attachRejected: 'Файл не принят: {reason}', attachQuarantine: 'Файл ещё проверяется. Приложите его чуть позже.',
@@ -129,6 +131,8 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    ratings: 'Оцінки', noRatings: 'Оцінок немає.', scoreOf: '{score} з 5', ratedBy_RIDER: 'Пасажир → водію',
+    ratedBy_DRIVER: 'Водій → пасажиру',
     attachFile: 'Додати файл', removeFileOf: 'Прибрати {name}', tooManyFiles: 'Можна додати не більше 5 файлів.',
     attachType: 'Підходять лише JPEG, PNG, WEBP або PDF.', attachTooBig: 'Файл більший за 10 МБ.',
     attachRejected: 'Файл не прийнято: {reason}', attachQuarantine: 'Файл ще перевіряється. Додайте його трохи пізніше.',
@@ -253,6 +257,8 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    ratings: 'Oceny', noRatings: 'Brak ocen.', scoreOf: '{score} z 5', ratedBy_RIDER: 'Pasażer → kierowcy',
+    ratedBy_DRIVER: 'Kierowca → pasażerowi',
     attachFile: 'Dołącz plik', removeFileOf: 'Usuń {name}', tooManyFiles: 'Można dołączyć najwyżej 5 plików.',
     attachType: 'Pasują tylko JPEG, PNG, WEBP lub PDF.', attachTooBig: 'Plik większy niż 10 MB.',
     attachRejected: 'Plik nie został przyjęty: {reason}', attachQuarantine: 'Plik jest jeszcze sprawdzany. Dołącz go nieco później.',
