@@ -1,5 +1,6 @@
 import type {Catalogs} from '@blizz/web-ui';
 import {core} from './i18n/core.js';
+import {driverPromotions} from './i18n/driverPromotions.js';
 import {promotions} from './i18n/promotions.js';
 import {integrations} from './i18n/integrations.js';
 import {merchants} from './i18n/merchants.js';
@@ -33,6 +34,6 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
 }
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Catalogs = joinCatalogs({core, promotions, cancelReasons, deletions, legal, integrations, merchants, flags});
+export const translations: Catalogs = joinCatalogs({core, driverPromotions, promotions, cancelReasons, deletions, legal, integrations, merchants, flags});
 
 export {validateCatalogs} from '@blizz/web-ui';

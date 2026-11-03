@@ -12,8 +12,8 @@ type Form = {name: string; kind: string; type: string; value: string; currency: 
   nth: string; days: string[]; from: string; to: string; starts: string; ends: string; reason: string;
   zones: {pickup_zone_id: string | null; dropoff_zone_id: string | null}};
 
-const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+export const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+export const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 /** "12.5" or "12,5" → 1250 basis points; null outside 0.01 … 100 or with more than two decimals. */
 function basisPoints(text: string) {
@@ -24,14 +24,14 @@ function basisPoints(text: string) {
 }
 
 /** "50" or "50,5" → minor units; null when not above 0 or with more than two decimals. */
-function minor(text: string) {
+export function minor(text: string) {
   const parts = /^([0-9]{1,9})(?:[.,]([0-9]{1,2}))?$/.exec(text.trim());
   if (!parts) return null;
   const value = Number(parts[1]) * 100 + Number((parts[2] ?? '').padEnd(2, '0'));
   return value >= 1 ? value : null;
 }
 
-const decimal = (value: number) => Math.floor(value / 100) + '.' + String(value % 100).padStart(2, '0');
+export const decimal = (value: number) => Math.floor(value / 100) + '.' + String(value % 100).padStart(2, '0');
 const percent = (bp: number) => decimal(bp).replace(/\.?0+$/, '');
 const empty = (): Form => ({name: '', kind: 'DISCOUNT', type: 'PERCENT', value: '', currency: '', city: '', vclass: '',
   nth: '', days: [], from: '', to: '', starts: '', ends: '', reason: '', zones: {pickup_zone_id: null,
