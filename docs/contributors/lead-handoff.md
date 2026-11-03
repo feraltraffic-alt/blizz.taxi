@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, late night)
+# Lead handoff (state on 03.11.2026, before dawn)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,39 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, before dawn)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #382 | #381 | Admin: a city's safety contacts in "Настройки" |
+  | #384 | #377 | Admin texts per section: `src/i18n/<section>.ts`, joined by `joinCatalogs`, which refuses a key in two files or missing from a language |
+  | #387 | #385 | Admin: cancellation reasons (`/settings/cancel-reasons`) |
+  | #389 | #388 | Admin: legal texts — drafts, changes, publishing (dates typed and sent as UTC) |
+  | #390 | #386 | Admin: account deletion requests of riders and drivers (a menu section may name several permissions) |
+  | #392 | #391 | Admin: integrations — health, keys and settings, checks (secrets never shown, emptied after every request) |
+- **Open:** #397 (#394, payment merchants on the integrations page), #396 (#395, feature flags).
+- **Filed, not started:** #393, a flaky `ContentScannerTests`. The likely cause is the shared one-thread scheduler.
+- **Merging habit:** a branch built on an unmerged one keeps the branch side (`git checkout --ours`) when merging `main` after the base was squashed. Two sibling sections join their lines with `scratchpad/joincode.py` (imports, routes, the `joinCatalogs` names). Then read `git diff origin/main` before pushing.
+- **CI waiter:** waits for CI; Web E2E at most 15 minutes after it, since a commit outside the web and mobile paths does not start it.
+- **Owner questions still open:**
+  - The tariffs admin API (#30) was deferred by the owner on 27.10. The pilot's tariff is still inserted by SQL (`scripts/sandbox/scenarios/first-city.sh`). Ask whether to start it.
+  - The map tiles for the live map and the city boundaries.
+- **Admin panel still to do:**
+  - zones and city creation (map);
+  - promotions (riders and drivers);
+  - risk flags;
+  - call lines;
+  - payment operations and reconciliations;
+  - cash disputes and chargebacks;
+  - fare and trip corrections;
+  - reports;
+  - retention;
+  - OTP deliveries;
+  - operator bonuses;
+  - driver transfer rules.
 
 ## Recent history (03.11.2026, late night)
 
