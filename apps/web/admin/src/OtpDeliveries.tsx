@@ -46,7 +46,7 @@ export function OtpDeliveries({client, t}: {client: ApiClient; t: Translate}) {
 
   const describe = (a: Attempt) => [at(a.attempted_at), t('otpAudience_' + a.audience), a.channel, a.provider,
     t('otpState_' + a.state), ...(a.provider_ref ? [t('otpRef', {ref: a.provider_ref})] : []),
-    ...(a.state !== 'SENT' && a.error ? [t('otpError', {error: a.error})] : [])].join(' · ');
+    ...(a.state === 'FAILED' && a.error ? [t('otpError', {error: a.error})] : [])].join(' · ');
   return (
     <section aria-labelledby="otp-title">
       <h1 id="otp-title">{t('navOtpDeliveries')}</h1>
