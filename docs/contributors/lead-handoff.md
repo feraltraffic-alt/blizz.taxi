@@ -1,4 +1,4 @@
-# Lead handoff (state on 02.11.2026, evening)
+# Lead handoff (state on 03.11.2026)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -67,7 +67,7 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
    - start the sandbox with `gh workflow run sandbox.yml --ref <branch> -f scenario=all`;
    - read the results on branch `sandbox-runs`, in `runs/<run id>/results.txt`.
 
-   Docs-only changes may go straight to `main`.
+   Docs-only changes also go through a `claude/` branch and a PR (a direct push to `main` is refused).
    - In auto mode the session's permission check refuses `gh api -X PUT .../pulls/N/merge` as a merge without
      review, even after the lead's review is posted: ask the owner, or the owner adds a permission rule.
 3. **After merging several PRs**, run the full sandbox on `main` once more.
@@ -82,6 +82,36 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, day)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #342 | #341 | Driver: the rating and promotions |
+  | #344 | #343 | Driver: send money to another driver |
+  | #346 | #345 | Rider: name the pickup from the location (`places/reverse`) |
+  | #348 | #347 | Operator: an order's ratings |
+  | #350 | #349 | Operator: my day and the operators of a city |
+  | #352 | #351 | Admin: the driver review queue and a driver's case (each scan fetched once, as it is audited) |
+  | #354 | #353 | Admin: a driver's admission cities; `ApiClient.put`. Cities come from the bootstrap (`admin/cities` needs `geo.manage`) |
+  | #356 | #355 | Admin: staff — list, add, suspend and restore. The super admin's own password is emptied after every request |
+  | #358 | #357 | Admin: staff temporary password and internal numbers |
+  | #360 | #359 | Admin: city operations — hours, payment methods, the return zone, drop-off, pause |
+  | #362 | #361 | Admin: the driver queue pages by `cursor` (it sent the deprecated `after`); lessons case 21 |
+- **Open, stacked in this order:** #366 (#363, driver block and suspend), then #364 (a driver's balance and staff
+  top-up, `Balance.tsx`), then #365 (a rider's bonus account, `/wallets`). Branches `claude/364-driver-balance` and
+  `claude/365-rider-wallets` each merge the one before; open their PRs after the previous one is merged.
+- **Merging `main` into a branch:** joining both sides of a conflict is safe only in `i18n.ts`. In code, read the
+  result: the join once left a line twice (#366).
+- **Admin panel next:** finance, the orders view, staff profile changes and emergency grants, the driver block and
+  suspend. Creating cities and boundaries wait for the map tiles answer.
+- **Owner questions still open:**
+  - the map tiles for the operator's live map and city boundaries;
+  - which admin sections come first (the lead's default: city settings, staff, finance).
+- **Merging:** the owner allowed the lead's squash merges on 03.11 ("разрешаю мерджить"). The lead never pushes to
+  `main` directly, docs included: they go through a `claude/` branch and a PR.
 
 ## Recent history (03.11.2026, night)
 
