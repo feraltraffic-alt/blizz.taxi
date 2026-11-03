@@ -7,6 +7,7 @@ import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
 import {StaffEdit} from './StaffEdit.js';
+import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 
 const t = translator(translations, 'ru');
 
@@ -16,6 +17,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
   {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
+  {path: '/emergency', label: 'navEmergency', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
@@ -26,7 +28,7 @@ const ROLES: Record<string, string> = {
   SUPER_ADMIN: 'roleSuperAdmin', ADMIN: 'roleAdmin', OPERATOR: 'roleOperator', PLATFORM_OWNER: 'rolePlatformOwner'
 };
 
-function Profile({me}: {me: AdminMe}) {
+function Profile({me, client}: {me: AdminMe; client: ApiClient}) {
   const profile = me.member.profile;
   return (
     <section aria-labelledby="profile-title">
@@ -42,6 +44,7 @@ function Profile({me}: {me: AdminMe}) {
           <ul>{me.effective_permissions.map(permission => <li key={permission}>{permission}</li>)}</ul>
         </dd>
       </dl>
+      <MyGrants client={client} t={t} />
     </section>
   );
 }
@@ -78,10 +81,14 @@ function Panel({client}: {client: ApiClient}) {
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
       <Routes>
-        <Route path="/" element={<Profile me={me} />} />
+        <Route path="/" element={<Profile me={me} client={client} />} />
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId" element={<StaffEdit client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
+        {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId/emergency" element={<EmergencyGive client={client}
+          t={t} newId={() => crypto.randomUUID()} meId={me.member.id} />} /> : null}
+        {role === 'SUPER_ADMIN' ? <Route path="/emergency" element={<EmergencyList client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/geo') ? (
           <>
