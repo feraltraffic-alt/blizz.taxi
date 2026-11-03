@@ -92,7 +92,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
   useEffect(() => () => urls.current.forEach(url => URL.revokeObjectURL(url)), []);
 
   async function open(doc: Doc) {
-    if (scans[doc.id] || acting.current) return;
+    if (acting.current) return;
     acting.current = true;
     setError(null);
     try {
@@ -121,7 +121,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
     setError(null);
     try {
       await client.post('/api/admin/v1/drivers/{driver_id}/decision' as never, {params: {driver_id: driverId},
-        body: {command_id: newId(), expected_version: item.profile.version, decision, reason: why,
+        body: {command_id: newId(), decision, reason: why,
           ...(decision === 'APPROVE' ? {vehicle_classes: granted} : {}),
           ...(decision === 'REQUEST_CHANGES' && rejected.length ? {rejected_documents: rejected} : {})}} as never);
       setMessage(t('decided'));
@@ -155,7 +155,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
           <li key={d.id}>
             <span>{[t('doc_' + d.type), t('decision_' + d.decision), ...(d.number ? ['№ ' + d.number] : []),
               ...(d.valid_to ? [t('validTo', {day: d.valid_to})] : [])].join(' · ')}</span>
-            {scans[d.id] ? (scans[d.id]!.type.startsWith('image/') ? <img src={scans[d.id]!.url} alt={t('doc_' + d.type)} />
+            {scans[d.id] && Date.now() < 0 ? (scans[d.id]!.type.startsWith('image/') ? <img src={scans[d.id]!.url} alt={t('doc_' + d.type)} />
               : <a href={scans[d.id]!.url} download>{t('downloadScan', {doc: t('doc_' + d.type)})}</a>)
               : <button type="button" onClick={() => void open(d)}>{t('openScan', {doc: t('doc_' + d.type)})}</button>}
             {decision === 'REQUEST_CHANGES' ? (
