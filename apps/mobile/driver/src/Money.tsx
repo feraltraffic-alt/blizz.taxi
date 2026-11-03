@@ -146,7 +146,7 @@ export function Money({client, t, guard, failure, cityId, now, service, newId, p
         </View>
       ))}
       {rating ? <Text style={{color: theme.text}}>{rating.count > 0 ? t('ratingIs', {average:
-        (rating.average_hundredths / 100).toFixed(2), count: rating.count}) : t('noRatings')}</Text> : null}
+        (rating.average_hundredths / 10).toFixed(2), count: rating.count}) : t('noRatings')}</Text> : null}
       {promotions ? (promotions.length === 0 ? <Text style={{color: theme.muted}}>{t('noPromotions')}</Text>
         : promotions.map(p => (
           <Text key={p.promotion_id} style={{color: theme.text}}>
