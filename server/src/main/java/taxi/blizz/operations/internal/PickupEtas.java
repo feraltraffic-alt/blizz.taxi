@@ -52,7 +52,7 @@ class PickupEtas {
     }
 
     /** The trip's phases in which the rider sees where the driver is (ADR 0017, issue #479). */
-    private static final java.util.Set<String> LOCATED = java.util.Set.of("TO_PICKUP", "WAITING", "IN_PROGRESS");
+    private static final java.util.Set<String> LOCATED = java.util.Set.of("TO_PICKUP", "WAITING", "IN_PROGRESS", "COMPLETED");
 
     /**
      * The order as the rider reads it: with the driver's location while the trip is on the way, waiting or under way,
@@ -70,7 +70,7 @@ class PickupEtas {
         Position p = position.get();
         boolean stale = p.at().isBefore(now().minus(presence.gpsMaxAge()));
         OrderView located = order.withDriverLocation(new OrderView.DriverLocation(p.point().lat(), p.point().lon(),
-                p.at(), stale));
+                p.at(), stale && !stale));
         if (!"TO_PICKUP".equals(assignment.tripPhase())) {
             return located;
         }
