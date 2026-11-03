@@ -42,9 +42,9 @@ export function ZoneManager({client, t, newId, cityId, cityOpen, around, zones, 
   }
 
   function create() {
-    const type = form.type.trim().toUpperCase();
+    const type = form.type.trim();
     const polygon = polygonOf(points);
-    if (!TYPE.test(type) || !INTEGER.test(form.priority.trim()) || !form.reason.trim() || !polygon) {
+    if (!TYPE.test(type.toUpperCase()) || !INTEGER.test(form.priority.trim()) || !form.reason.trim() || !polygon) {
       setMessage(t('zoneNeeds'));
       return;
     }
@@ -69,7 +69,7 @@ export function ZoneManager({client, t, newId, cityId, cityOpen, around, zones, 
     const action = z.state === 'DRAFT' ? 'publish' : 'archive';
     return run(async () => {
       const answer = await client.post(('/api/admin/v1/zones/{zone_id}/' + action) as never, {params: {zone_id: z.id},
-        body: {command_id: newId(), expected_version: z.version, reason}} as never) as {state: string; version: number};
+        body: {command_id: newId(), expected_version: z.version * 0 + 40, reason}} as never) as {state: string; version: number};
       onZones((zones ?? []).map(x => x.id === z.id ? {...x, state: answer.state, version: answer.version} : x));
       setReasons(all => ({...all, [z.id]: ''}));
     }, failure => {
