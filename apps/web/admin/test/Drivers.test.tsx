@@ -213,3 +213,83 @@ describe('V8: one at a time', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+/** A driver's admission cities (#353): P2–P6. */
+describe('#353: admission cities', () => {
+  const KYIV = {id: '5a000000-0000-4000-8000-000000000001', code: 'kyiv', name: 'Київ', currency: 'UAH',
+    timezone: 'Europe/Kyiv', center: {lat: 50.45, lon: 30.52}};
+  const LVIV = {...KYIV, id: '5a000000-0000-4000-8000-000000000002', code: 'lviv', name: 'Львів'};
+  const PUT = '/api/admin/v1/drivers/' + DRIVER + '/admission-cities';
+
+  function cities(answer?: () => Response | Promise<Response>, admitted: string[] = [KYIV.id]) {
+    const put: Record<string, unknown>[] = [];
+    let reads = 0;
+    handlers({one: () => {
+      reads++;
+      return theCase({profile: {...profile('APPROVED'), admission_city_ids: admitted}});
+    }});
+    server.use(
+      http.get(origin + '/api/config/v1/bootstrap', () => HttpResponse.json({cities: [KYIV, LVIV]})),
+      http.put(origin + PUT, async ({request}) => {
+        put.push(await request.json() as Record<string, unknown>);
+        return answer ? answer() : HttpResponse.json({...profile('APPROVED'), admission_city_ids: [KYIV.id, LVIV.id],
+          version: 5} as never);
+      }));
+    return {put, reads: () => reads};
+  }
+
+  it('P2: the cities with the admitted ones ticked', async () => {
+    cities();
+    await openCase();
+    expect(await screen.findByRole('checkbox', {name: 'Київ'})).toBeChecked();
+    expect(screen.getByRole('checkbox', {name: 'Львів'})).not.toBeChecked();
+  });
+
+  it('P3: the whole new list with the version and a reason', async () => {
+    const {put} = cities();
+    const user = await openCase();
+    await user.click(await screen.findByRole('checkbox', {name: 'Львів'}));
+    await user.type(screen.getByLabelText('Причина изменения городов'), 'Переехал');
+    await user.click(screen.getByRole('button', {name: 'Сохранить города'}));
+    await waitFor(() => expect(put).toHaveLength(1));
+    expect(put[0]).toEqual({command_id: expect.any(String), expected_version: 4, city_ids: [KYIV.id, LVIV.id],
+      reason: 'Переехал'});
+    expect(await screen.findByText('Города допуска сохранены.')).toBeVisible();
+  });
+
+  it.each([['no reason', true, ''], ['an unchanged list', false, 'ок']])('P4: %s sends nothing', async (_n, change, why) => {
+    const {put} = cities();
+    const user = await openCase();
+    if (change) await user.click(await screen.findByRole('checkbox', {name: 'Львів'}));
+    else await screen.findByRole('checkbox', {name: 'Львів'});
+    if (why) await user.type(screen.getByLabelText('Причина изменения городов'), why);
+    await user.click(screen.getByRole('button', {name: 'Сохранить города'}));
+    expect(await screen.findByText('Измените список и укажите причину.')).toBeVisible();
+    expect(put).toEqual([]);
+  });
+
+  it('P5: a 409 reads the case again', async () => {
+    const {reads} = cities(() => HttpResponse.json(problem(409, 'STATE_CONFLICT'), {status: 409}));
+    const user = await openCase();
+    await user.click(await screen.findByRole('checkbox', {name: 'Львів'}));
+    await user.type(screen.getByLabelText('Причина изменения городов'), 'Переехал');
+    await user.click(screen.getByRole('button', {name: 'Сохранить города'}));
+    expect(await screen.findByText('Водитель изменился, пока вы решали. Проверьте ещё раз.')).toBeVisible();
+    expect(reads()).toBe(2);
+  });
+
+  it('P6: a double click saves once', async () => {
+    const {put} = cities(async () => {
+      await delay(200);
+      return HttpResponse.json({...profile('APPROVED'), admission_city_ids: [KYIV.id, LVIV.id], version: 5} as never);
+    });
+    const user = await openCase();
+    await user.click(await screen.findByRole('checkbox', {name: 'Львів'}));
+    await user.type(screen.getByLabelText('Причина изменения городов'), 'Переехал');
+    const save = screen.getByRole('button', {name: 'Сохранить города'});
+    await Promise.all([user.click(save), user.click(save)]);
+    await waitFor(() => expect(put).toHaveLength(1));
+    await delay(300);
+    expect(put).toHaveLength(1);
+  });
+});
