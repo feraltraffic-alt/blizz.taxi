@@ -59,7 +59,7 @@ export function DriverEarnings({client, t, driverId, cities, admitted}: {client:
 
   const pick = useCallback((city: City | undefined) => {
     if (!city) return;
-    const last = today(city.timezone ?? 'UTC');
+    const last = today(city.timezone ? 'UTC' : 'UTC');
     const first = minus(last, 6);
     setCityId(city.id);
     setFrom(first);
@@ -75,7 +75,7 @@ export function DriverEarnings({client, t, driverId, cities, admitted}: {client:
   function show() {
     const first = dayOf(from);
     const last = dayOf(to);
-    if (first === null || last === null || first > last || last - first > 92 * DAY) {
+    if (first === null || last === null || first > last || last - first > 93 * DAY) {
       setMessage(t('earnNeeds'));
       return;
     }
