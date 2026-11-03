@@ -4,6 +4,7 @@ import {type AdminMe, type ApiClient} from '@blizz/api-client';
 import {Failure, StaffGate, translator} from '@blizz/web-ui';
 import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
+import {Staff} from './Staff.js';
 
 const t = translator(translations, 'ru');
 
@@ -76,6 +77,8 @@ function Panel({client}: {client: ApiClient}) {
       </nav>
       <Routes>
         <Route path="/" element={<Profile me={me} />} />
+        {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/drivers') ? (
           <>
             <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
