@@ -4,6 +4,7 @@ import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 import {CityMap, type MapZone} from './CityMap.js';
 import {CityForm} from './CityForm.js';
+import {ZoneManager} from './ZoneManager.js';
 
 type City = {id: string; code: string; name: string; currency: string; timezone: string; state: string;
   priority: number; version: number; polygon?: unknown};
@@ -67,7 +68,7 @@ export function CityList({client, t, newId}: {client: ApiClient; t: Translate; n
 export function CityOperations({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const {cityId = ''} = useParams();
   const [city, setCity] = useState<City | null>(null);
-  const [zones, setZones] = useState<MapZone[] | null>(null);
+  const [zones, setZones] = useState<(MapZone & {version: number})[] | null>(null);
   const [editing, setEditing] = useState(false);
   const [stateReason, setStateReason] = useState('');
   const [cityMessage, setCityMessage] = useState<string | null>(null);
@@ -103,9 +104,14 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
   useEffect(() => {
     read().catch(failure => setError(failure));
     readCity();
-    client.get('/api/admin/v1/cities/{city_id}/zones' as never, {params: {city_id: cityId}} as never)
-      .then(value => setZones((value as {zones: MapZone[]}).zones)).catch(() => setZones(null));
+    readZones();
   }, [client, cityId, read]);
+
+  /** The city's zones as the server holds them now (#465, #468). */
+  function readZones() {
+    client.get('/api/admin/v1/cities/{city_id}/zones' as never, {params: {city_id: cityId}} as never)
+      .then(value => setZones((value as {zones: (MapZone & {version: number})[]}).zones)).catch(() => setZones(null));
+  }
 
   /** The city as the server holds it now: its draft, state and version (#467). */
   function readCity() {
@@ -290,6 +296,8 @@ export function CityOperations({client, t, newId}: {client: ApiClient; t: Transl
         </section>
       ) : null}
       {city ? <CityMap t={t} boundary={city.polygon} zones={zones} /> : null}
+      {city ? <ZoneManager client={client} t={t} newId={newId} cityId={cityId} cityOpen={city.state !== 'ARCHIVED'}
+        around={city.polygon} zones={zones} onZones={setZones} reread={readZones} /> : null}
     </section>
   );
 }
