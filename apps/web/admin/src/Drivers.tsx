@@ -21,8 +21,9 @@ export function DriverQueue({client, t}: {client: ApiClient; t: Translate}) {
   const [error, setError] = useState<unknown>(null);
   const reading = useRef(false);
 
-  const read = useCallback(async (after: string | null) => await client.get('/api/admin/v1/drivers' as never,
-    {query: after ? {after} : {}} as never) as {drivers: Item[]; page: {next_cursor?: string | null}}, [client]);
+  /** The next page by the opaque `cursor` (#361); `after` is the deprecated timestamp of the first version. */
+  const read = useCallback(async (cursor: string | null) => await client.get('/api/admin/v1/drivers' as never,
+    {query: cursor ? {cursor} : {}} as never) as {drivers: Item[]; page: {next_cursor?: string | null}}, [client]);
 
   useEffect(() => {
     read(null).then(page => {

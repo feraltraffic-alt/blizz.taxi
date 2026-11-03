@@ -47,6 +47,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 14. **Every rule in the issue gets a test, not only the Acceptance bullets.** An access line ("changed only by …") is tested with staff who just miss it, refused for each operation (lessons case 16).
 15. **A client flow ends with one run against the real server.** A mock answers whatever path the client chose; only the real server tells a wrong path or scope (lessons case 17). In Playwright, use exact names when one label contains another.
 16. **Each action has one test of its plain success** (what the user sees after a 200) before its refusals, and every dependency the tests inject is wired in the app's entry point (lessons case 18).
+17. **Request names come from the contract, not from your code.** Write each test's body and query from `packages/contracts/openapi`; where a client call casts its path `as never`, list in the PR what it sends next to the contract's parameters (lessons case 21).
 
 ## Rules that must not be broken
 

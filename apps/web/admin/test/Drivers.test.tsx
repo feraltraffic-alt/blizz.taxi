@@ -104,14 +104,15 @@ describe('V1: the section', () => {
 });
 
 describe('V2: the queue', () => {
-  it('lists the drivers with phone and date; "more" reads by after', async () => {
-    const {asked} = handlers({queue: q => q.get('after') ? {drivers: [item(2)], page: {next_cursor: null,
+  it('lists the drivers with phone and date; Q1, Q2 (#361): "more" reads by cursor, never by after', async () => {
+    const {asked} = handlers({queue: q => q.get('cursor') ? {drivers: [item(2)], page: {next_cursor: null,
       has_more: false}} : {drivers: [item(1)], page: {next_cursor: 'c2', has_more: true}}});
     mount();
     expect(await screen.findByRole('link', {name: /Водитель 1 · \+380500000001 · с /})).toBeVisible();
     await userEvent.setup().click(screen.getByRole('button', {name: 'Ещё'}));
     expect(await screen.findByRole('link', {name: /Водитель 2/})).toBeVisible();
-    expect(asked.queue.map(q => q.get('after'))).toEqual([null, 'c2']);
+    expect(asked.queue.map(q => q.get('cursor'))).toEqual([null, 'c2']);
+    expect(asked.queue.map(q => q.has('after'))).toEqual([false, false]);
   });
 
   it('says when it is empty', async () => {
