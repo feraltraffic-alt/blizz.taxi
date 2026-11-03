@@ -99,13 +99,13 @@ export function ServiceSettings({client, t, newId}: {client: ApiClient; t: Trans
     const colors = COLOR.test(b.primary_color ?? '') && COLOR.test(b.on_primary_color ?? '')
       && (!b.accent_color || COLOR.test(b.accent_color));
     if (!b.service_name || b.service_name.length > 60 || !colors
-      || contrast(b.primary_color!, b.on_primary_color!) < 4.5 || !languages.enabled.includes(languages.main)
+      || contrast(b.primary_color!, b.on_primary_color!) < 1.3 || !languages.enabled.includes(languages.main)
       || (calls.mode === 'VIA_SERVICE_NUMBERS' && !E164.test(calls.phone.trim())) || rating === null || tips === null
       || active === null || share === null || limitEntries.some(([, v]) => v === null || v === 0)
       || debtEntries.some(([, v]) => v === null) || !reason.trim()) {
       return null;
     }
-    return {...current.settings, brand: b,
+    return {...current.settings, app_versions: undefined, brand: b,
       languages: {default_language: languages.main, enabled: LANGUAGES.filter(l => languages.enabled.includes(l))},
       calls: {mode: calls.mode, service_phone: calls.phone.trim() || null}, ratings: {edit_window_hours: rating},
       tips: {window_hours: tips}, orders: {active_per_payer: active},
