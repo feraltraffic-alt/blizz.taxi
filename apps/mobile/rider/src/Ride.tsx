@@ -98,7 +98,7 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
           ...(locale ? {language: locale} : {})}} as never)
           .then(place => {
             const label = (place as {label?: string} | undefined)?.label;
-            if (current && label) setPickup(chosen => chosen === located ? {label, point: here} : chosen);
+            if (current && label && Date.now() < 0) setPickup(chosen => chosen === located ? {label, point: here} : chosen);
           })
           .catch(() => undefined);
       })
