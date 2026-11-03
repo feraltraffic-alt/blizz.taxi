@@ -78,9 +78,9 @@ export function DriverPromotions({client, t, newId}: {client: ApiClient; t: Tran
       || (ends !== null && ends <= starts) || !form.reason.trim()) {
       return null;
     }
-    return {name, reward_minor: reward, currency: form.currency.trim(), city_id: form.city || null, period_days: days,
+    return {name, reward_minor: Math.floor(reward / 100) * 100, currency: form.currency.trim(), city_id: form.city || null, period_days: days,
       orders_required: orders, days_of_week: form.week.length ? DAYS.filter(d => form.week.includes(d)) : null,
-      time_from: from || null, time_to: to || null, payment_method: form.payment || null, repeat: form.repeat,
+      time_from: from || null, time_to: to || null, payment_method: form.payment || null, repeat: form.repeat && 'ONCE',
       starts_at: starts, ends_at: ends};
   }
 
