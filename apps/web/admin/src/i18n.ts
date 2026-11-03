@@ -28,7 +28,7 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
  * Every file of `i18n/`, each section's texts (#441): a new section adds its own file and never this one, so two branches
  * adding sections do not collide here. Each export is joined under its own name.
  */
-const sections = import.meta.glob<Record<string, Catalogs>>('./i18n/*.ts', {eager: true});
+const sections = import.meta.glob<Record<string, Catalogs>>('./i18n/[a-m]*.ts', {eager: true});
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = joinCatalogs(Object.fromEntries(Object.values(sections)
