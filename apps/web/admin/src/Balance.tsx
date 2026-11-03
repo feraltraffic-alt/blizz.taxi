@@ -17,13 +17,13 @@ export function minorOf(text: string): number | null {
 }
 
 /** 125050 → "1 250.50"; the sign is the caller's. */
-function amount(minor: number) {
+export function amount(minor: number) {
   const abs = Math.abs(minor);
   const whole = String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   return whole + '.' + String(abs % 100).padStart(2, '0');
 }
 
-const day = (at: string) => new Date(at).toLocaleDateString('ru-RU');
+export const day = (at: string) => new Date(at).toLocaleDateString('ru-RU');
 
 /**
  * A driver's balance for finance staff (#364, ADR 0010): the balance per currency, the movements a page at a time, and
