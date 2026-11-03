@@ -2,6 +2,7 @@ import type {Catalogs} from '@blizz/web-ui';
 import {core} from './i18n/core.js';
 import {integrations} from './i18n/integrations.js';
 import {merchants} from './i18n/merchants.js';
+import {flags} from './i18n/flags.js';
 import {cancelReasons} from './i18n/cancelReasons.js';
 import {deletions} from './i18n/deletions.js';
 import {legal} from './i18n/legal.js';
@@ -31,6 +32,6 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
 }
 
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Catalogs = joinCatalogs({core, cancelReasons, deletions, legal, integrations, merchants});
+export const translations: Catalogs = joinCatalogs({core, cancelReasons, deletions, legal, integrations, merchants, flags});
 
 export {validateCatalogs} from '@blizz/web-ui';

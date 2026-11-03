@@ -16,6 +16,7 @@ import {Integrations} from './Integrations.js';
 import {CancelReasons} from './CancelReasons.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
+import {Flags} from './Flags.js';
 
 const t = translator(translations, 'ru');
 
@@ -30,6 +31,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
+  {path: '/flags', label: 'navFlags', permission: 'flags.manage'},
   {path: '/deletions', label: 'navDeletions', permission: ['clients.delete', 'drivers.delete']},
   {path: '/legal', label: 'navLegal', permission: 'legal.manage'},
   {path: '/integrations', label: 'navIntegrations', permission: 'integrations.manage'},
@@ -122,6 +124,8 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/integrations') ? <Route path="/integrations" element={<Integrations
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/flags') ? <Route path="/flags" element={<Flags client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
