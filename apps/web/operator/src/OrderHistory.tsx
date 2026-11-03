@@ -5,6 +5,8 @@ import {Failure, type Translate} from '@blizz/web-ui';
 type Entry = {sequence: number; type: string; occurred_at: string; reason?: string | null;
   details: {reason_labels?: Record<string, string>}; actor: {type: string; name?: string | null; role?: string | null}};
 type Message = {id: string; sender_role: 'RIDER' | 'DRIVER'; body: string; sent_at: string};
+type Rating = {author_type: 'RIDER' | 'DRIVER'; target_type: 'RIDER' | 'DRIVER'; score: number;
+  comment?: string | null};
 
 const KNOWN = ['OrderCreated', 'OrderCancelled', 'PassengerNoShow', 'AssignmentWithdrawn', 'TripCompleted'];
 const clock = (at: string) => {
@@ -19,6 +21,7 @@ const clock = (at: string) => {
 export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Translate; orderId: string}) {
   const [events, setEvents] = useState<Entry[] | null>(null);
   const [messages, setMessages] = useState<Message[] | null>(null);
+  const [ratings, setRatings] = useState<Rating[] | null>(null);
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -41,6 +44,12 @@ export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Transl
     const answer = await client.get('/api/operator/v1/orders/{order_id}/events' as never,
       {params: {order_id: orderId}} as never) as {events: Entry[]};
     setEvents([...answer.events].sort((a, b) => a.sequence - b.sequence));
+  });
+
+  /** Both active ratings, with the staff-only comments (#347). */
+  const readRatings = () => once(async () => {
+    setRatings((await client.get('/api/operator/v1/orders/{order_id}/ratings' as never,
+      {params: {order_id: orderId}} as never) as {ratings: Rating[]}).ratings);
   });
 
   function conversation() {
@@ -80,6 +89,17 @@ export function OrderHistory({client, t, orderId}: {client: ApiClient; t: Transl
           <button type="button" onClick={() => void history()}>{t('refreshHistory')}</button>
         </>
       )}
+      <button type="button" onClick={() => void readRatings()}>{t('ratings')}</button>
+      {ratings !== null ? (ratings.length === 0 ? <p>{t('noRatings')}</p> : (
+        <ul aria-label={t('ratings')}>
+          {ratings.map(r => (
+            <li key={r.author_type}>
+              {t('ratedBy_' + r.author_type) + ': ' + t('scoreOf', {score: r.score})
+                + (r.comment ? ' — ' + r.comment : '')}
+            </li>
+          ))}
+        </ul>
+      )) : null}
       <label>
         {t('chatReason')}
         <input value={reason} onChange={e => setReason(e.target.value)} />
