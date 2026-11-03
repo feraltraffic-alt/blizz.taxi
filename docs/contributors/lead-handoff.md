@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026)
+# Lead handoff (state on 03.11.2026, late night)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,38 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, late night)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #366 | #363 | Admin: find a driver by status; block, unblock, suspend, reinstate |
+  | #369 | #368 | Admin: orders — a city's day (today in the city's zone), search, an order's history |
+  | #371 | #370 | Admin: change a staff member's profile (own password only for role, functions, cities) |
+  | #372 | #364 | Admin: a driver's balance and a top-up by staff (`Balance.tsx`, `minorOf` without floating point) |
+  | #375 | #374 | Admin: logs — changes (snapshots as text), activity, one request by correlation id |
+  | #376 | #365 | Admin: a rider's bonus account (`/wallets`) |
+  | #379 | #373 | Admin: emergency access — give, list, end, activity, mine (the server's self-grant refusal is a plain 400, so the screen refuses it) |
+  | #380 | #378 | Rider and driver: call the other side during a trip (`CallButton` in `mobile-ui`, the target read at each press) |
+- **Open:**
+  - #382 (#381): a city's safety contacts in "Настройки";
+  - #377: admin texts per section. Every admin PR conflicted in `i18n.ts`, and each conflict cost a merge and another CI run.
+- **CI:** the "Security" job once failed on `mvn dependency:go-offline` (network) in the image build. A rerun of the failed job (`POST …/actions/runs/{id}/rerun-failed-jobs`) is enough; it is not a code failure.
+- **Mobile tests:** `Linking.openURL` is a jest mock of the preset. A spy on it keeps the calls of earlier tests unless `jest.clearAllMocks()` runs in `afterEach`.
+- **Admin panel still to do:**
+  - zones and city creation (wait for the map tiles answer);
+  - tariffs;
+  - promotions;
+  - payment merchants and reconciliations;
+  - reports;
+  - legal documents;
+  - risk flags;
+  - client and driver deletions;
+  - call lines;
+  - feature flags;
+  - the rest of "Настройки".
 
 ## Recent history (03.11.2026, day)
 
