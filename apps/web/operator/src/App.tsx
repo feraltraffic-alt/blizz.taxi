@@ -11,6 +11,7 @@ import {OrderCalls} from './OrderCalls.js';
 import {PlacePicker, type Place, type Point} from './Places.js';
 import {OrderChanges} from './OrderChanges.js';
 import {OrderTrip} from './OrderTrip.js';
+import {MyDay} from './MyDay.js';
 import {CardPop, type Live} from './CardPop.js';
 
 export type {LiveSocket} from './CardPop.js';
@@ -39,7 +40,7 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
-  const [view, setView] = useState<'order' | 'live' | 'support' | 'calls'>('order');
+  const [view, setView] = useState<'order' | 'live' | 'support' | 'calls' | 'day'>('order');
   const [fromCall, setFromCall] = useState<FromCall | null>(null);
   const [myId, setMyId] = useState('');
   const [error, setError] = useState<unknown>(null);
@@ -77,6 +78,7 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
         {view !== 'order' ? <button type="button" onClick={() => setView('order')}>{t('toOrders')}</button> : null}
         {rights.has('orders.view') && view !== 'live'
           ? <button type="button" onClick={() => setView('live')}>{t('liveDrivers')}</button> : null}
+        {view !== 'day' ? <button type="button" onClick={() => setView('day')}>{t('myDay')}</button> : null}
         {/* The calls panel needs calls.answer or calls.listen (#300 K5). */}
         {(rights.has('calls.answer') || rights.has('calls.listen')) && view !== 'calls'
           ? <button type="button" onClick={() => setView('calls')}>{t('calls')}</button> : null}
@@ -85,7 +87,8 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
           ? <button type="button" onClick={() => setView('support')}>{t('support')}</button> : null}
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
-      {view === 'calls' && (rights.has('calls.answer') || rights.has('calls.listen')) ? <Calls client={client} t={t}
+      {view === 'day' ? <MyDay client={client} t={t} rights={rights} cities={cities} pollMs={pollMs} /> :
+      view === 'calls' && (rights.has('calls.answer') || rights.has('calls.listen')) ? <Calls client={client} t={t}
         rights={rights} me={myId} newId={newId} pollMs={pollMs}
         onOrder={call => {setFromCall(call); setOrder(null); setView('order');}} /> :
       view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
