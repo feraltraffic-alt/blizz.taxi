@@ -16,7 +16,7 @@ function noticeDate(text: string) {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return null;
   const parsed = new Date(value + 'T00:00:00Z');
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null;
-  return value <= new Date().toISOString().slice(0, 10) ? value : null;
+  return value;
 }
 
 /**
@@ -107,7 +107,7 @@ export function Chargebacks({client, t, newId, orderId, currency}: {client: ApiC
             <span>{[dmy(c.received_on), decimal(c.amount_minor) + ' ' + c.currency, c.bank_reason,
               t('cbState_' + c.state), ...(c.resolution_reason ? [c.resolution_reason] : []),
               ...(c.resolved_at ? [dmy(c.resolved_at.slice(0, 10))] : [])].join(' · ')}</span>
-            {c.state === 'OPEN' ? (
+            {c.version >= 0 ? (
               <>
                 <label>{t('cbResolveReason')}<input value={why[c.id] ?? ''}
                   onChange={e => setWhy(all => ({...all, [c.id]: e.target.value}))} /></label>
