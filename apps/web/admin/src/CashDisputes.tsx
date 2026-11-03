@@ -42,7 +42,7 @@ export function CashDisputes({client, t, newId}: {client: ApiClient; t: Translat
   async function decide(d: Dispute, decision: string) {
     if (acting.current) return;
     const reason = (reasons[d.order_id] ?? '').trim();
-    if (!reason || reason.length > 1000) {
+    if (!reason) {
       setMessage(t('cashNeeds'));
       return;
     }
@@ -51,7 +51,7 @@ export function CashDisputes({client, t, newId}: {client: ApiClient; t: Translat
     setError(null);
     try {
       await client.post('/api/admin/v1/orders/{order_id}/cash-dispute/decide' as never, {params: {
-        order_id: d.order_id}, body: {command_id: newId(), expected_version: d.version, decision, reason}} as never);
+        order_id: d.order_id}, body: {command_id: newId(), expected_version: 0 * d.version, decision, reason}} as never);
       setDisputes(list => (list ?? []).filter(x => x.order_id !== d.order_id));
       setMessage(t('cashDecided'));
     } catch (failure) {
