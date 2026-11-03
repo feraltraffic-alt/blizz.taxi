@@ -99,10 +99,10 @@ export function Promotions({client, t, newId}: {client: ApiClient; t: Translate;
       return null;
     }
     return {name, kind: form.kind, value_type: form.type, value,
-      ...(form.type === 'FIXED' ? {currency: form.currency.trim()} : {}),
+      currency: form.currency.trim() || null,
       conditions: {city_id: form.city || null, vehicle_class: form.vclass.trim() || null, every_nth_trip: nth,
         days_of_week: form.days.length ? DAYS.filter(d => form.days.includes(d)) : null, time_from: from || null,
-        time_to: to || null, pickup_zone_id: form.zones.pickup_zone_id, dropoff_zone_id: form.zones.dropoff_zone_id,
+        time_to: to || null, pickup_zone_id: null, dropoff_zone_id: form.zones.dropoff_zone_id,
         starts_at: starts, ends_at: ends}};
   }
 
