@@ -225,7 +225,7 @@ class QuarantineRescanTests {
             String registeredStage = jdbc.sql("select staging_key from file_object where id=:id")
                     .param("id", id).query(String.class).single();
             var now = java.time.OffsetDateTime.now();
-            assertThat(retirement.run("quarantined_files", now.minusDays(1), now, 1000).deleted()).isEqualTo(1);
+            assertThat(retirement.run("quarantined_files", now.minusDays(1), now, 1000).deleted()).as("this file and maybe others (#444)").isPositive();
             assertThat(java.nio.file.Files.exists(pause.path().get())).as("private rescan bytes removed before row")
                     .isFalse();
             assertThat(registeredStage).startsWith("quarantine_scan/");
@@ -326,7 +326,9 @@ class QuarantineRescanTests {
             jdbc.sql("update file_object set uploaded_at=now()-interval '400 days' where id=:id").param("id", id)
                     .update();
             var now = java.time.OffsetDateTime.now();
-            assertThat(retirement.run("upload_sessions", now.minusDays(1), now, 1000).deleted()).isEqualTo(1);
+            // Other test classes share the database and may leave expired uploads of their own, so the run may
+            // delete more than this one (#444); that this one's bytes went is checked below.
+            assertThat(retirement.run("upload_sessions", now.minusDays(1), now, 1000).deleted()).isPositive();
             assertThat(java.nio.file.Files.exists(target)).isFalse();
         } finally {
             java.nio.file.Files.deleteIfExists(target.resolve("blocked"));
