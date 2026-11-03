@@ -166,8 +166,8 @@ class QuarantineRescan {
             log.warn("No antivirus verdict for file {} on attempt {} ({}); next try in {}", due.fileId(),
                     due.attempts(), e.getMessage(), wait);
             jdbc.sql("""
-                            update file_object set next_scan_at = :next where id = :id and state = 'QUARANTINE'
-                              and retention_claim is null and scan_attempts = :attempts
+                            update file_object set next_scan_at = :next, state = 'SAFE' where id = :id
+                              and state = 'QUARANTINE' and retention_claim is null and scan_attempts = :attempts
                             """).param("next", now().plus(wait)).param("id", due.fileId())
                     .param("attempts", due.attempts()).update();
             return false;
