@@ -225,7 +225,8 @@ class QuarantineRescanTests {
             String registeredStage = jdbc.sql("select staging_key from file_object where id=:id")
                     .param("id", id).query(String.class).single();
             var now = java.time.OffsetDateTime.now();
-            assertThat(retirement.run("quarantined_files", now.minusDays(1), now, 1000).deleted()).as("this file and maybe others (#444)").isPositive();
+            assertThat(retirement.run("quarantined_files", now.minusDays(1), now, 1000).deleted())
+                    .as("this file and maybe others (#444)").isPositive();
             assertThat(java.nio.file.Files.exists(pause.path().get())).as("private rescan bytes removed before row")
                     .isFalse();
             assertThat(registeredStage).startsWith("quarantine_scan/");
