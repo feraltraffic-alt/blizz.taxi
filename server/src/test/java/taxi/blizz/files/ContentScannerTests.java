@@ -71,6 +71,19 @@ class ContentScannerTests {
                 .query(Integer.class).single();
     }
 
+    /**
+     * The attempt after {@code before} has ended, not only started (#451). The counter grows when an attempt is
+     * claimed, which also moves the next try a lease (10 minutes) away; an attempt that ends without a verdict writes
+     * its back-off, at most 8 minutes for the attempts these tests reach, and a verdict changes the state.
+     */
+    private boolean attemptEnded(UUID fileId, int before) {
+        return jdbc.sql("""
+                        select scan_attempts > :before
+                               and (state <> 'QUARANTINE' or next_scan_at < now() + interval '9 minutes')
+                        from file_object where id = :id""")
+                .param("before", before).param("id", fileId).query(Boolean.class).single();
+    }
+
     /** Makes the file due for the rescan job now, instead of waiting out its back-off. */
     private void dueNow(UUID fileId) {
         jdbc.sql("update file_object set next_scan_at = now() - interval '1 second' where id = :id")
@@ -131,7 +144,7 @@ class ContentScannerTests {
             int attempts = attempts(clean.fileId());
             dueNow(clean.fileId());
             dueNow(infected.fileId());
-            waitFor(() -> attempts(clean.fileId()) > attempts, "another attempt");
+            waitFor(() -> attemptEnded(clean.fileId(), attempts), "another attempt to end");
             assertThat(state(clean.fileId())).isEqualTo("QUARANTINE");
             assertThat(state(infected.fileId())).isEqualTo("QUARANTINE");
         }
@@ -148,6 +161,25 @@ class ContentScannerTests {
         waitFor(() -> jdbc.sql("select storage_key from file_object where id = :id").param("id", infected.fileId())
                 .query((rs, i) -> java.util.Optional.ofNullable(rs.getString(1))).single().isEmpty(),
                 "the infected bytes to be deleted");
+    }
+
+    /**
+     * #451: the attempt counter grows when an attempt is claimed, not when it ends. A test that made the file due again
+     * right after seeing the counter grow was overtaken by the attempt still running, whose back-off moved the next try
+     * minutes away. Here the scanner hangs, so that attempt always ends after the scanner is back.
+     */
+    @Test
+    void anAttemptStillRunningWhenTheScannerComesBackIsWaitedFor() throws Exception {
+        clamd.mode(FakeClamd.Mode.HANG);
+        StoredFile clean = upload("image/jpeg", FakeClamd.jpegCarrying("plain image data"));
+        assertThat(clean.state()).isEqualTo(FileState.QUARANTINE);
+        int attempts = attempts(clean.fileId());
+        dueNow(clean.fileId());
+        waitFor(() -> attemptEnded(clean.fileId(), attempts), "the hanging attempt to end");
+
+        clamd.mode(FakeClamd.Mode.NORMAL);
+        dueNow(clean.fileId());
+        waitFor(() -> "SAFE".equals(state(clean.fileId())), "the clean file to be SAFE");
     }
 
     @Test
