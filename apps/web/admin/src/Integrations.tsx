@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {Merchants} from './Merchants.js';
 
 type Provider = {provider: string; state: string; last_success_at: string | null; last_failure_at: string | null;
   last_failure_kind: string | null};
@@ -128,6 +129,7 @@ export function Integrations({client, t, newId}: {client: ApiClient; t: Translat
       <button type="button" onClick={() => void save()}>{t('intSave')}</button>
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      <Merchants client={client} t={t} newId={newId} />
     </section>
   );
 }
