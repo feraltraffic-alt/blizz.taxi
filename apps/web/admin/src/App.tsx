@@ -12,6 +12,7 @@ import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 import {Logs} from './Logs.js';
 import {SafetyContactsSettings} from './Safety.js';
+import {Legal} from './Legal.js';
 
 const t = translator(translations, 'ru');
 
@@ -26,6 +27,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
+  {path: '/legal', label: 'navLegal', permission: 'legal.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
 
@@ -106,6 +108,8 @@ function Panel({client}: {client: ApiClient}) {
         ) : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings" element={<SafetyContactsSettings
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/legal') ? <Route path="/legal" element={<Legal client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
