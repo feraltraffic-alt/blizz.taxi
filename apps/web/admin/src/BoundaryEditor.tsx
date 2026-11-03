@@ -1,26 +1,13 @@
 import {useEffect, useRef, useState} from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type {Translate} from '@blizz/web-ui';
+import {parsePoint, type Translate} from '@blizz/web-ui';
+
+export {parsePoint};
 import {rings, TILES} from './CityMap.js';
 
 /** A vertex as Leaflet takes it: [latitude, longitude]. */
 export type LatLon = [number, number];
-
-const NUMBER = /^-?[0-9]{1,3}(\.[0-9]+)?$/;
-
-/**
- * "50.45, 30.52" or, with comma decimals, "50,45; 30,52" to [lat, lon]; null for anything else, a latitude outside
- * ±90 or a longitude outside ±180.
- */
-export function parsePoint(text: string): LatLon | null {
-  const value = text.trim();
-  const parts = (value.includes(';') ? value.split(';').map(p => p.replace(',', '.')) : value.split(','))
-    .map(p => p.trim());
-  if (parts.length !== 2 || !parts.every(p => NUMBER.test(p))) return null;
-  const [lat, lon] = parts.map(Number) as [number, number];
-  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
-}
 
 /** The GeoJSON Polygon of the vertices, [lon, lat], its ring closed; null with fewer than three distinct points. */
 export function polygonOf(points: LatLon[]) {
