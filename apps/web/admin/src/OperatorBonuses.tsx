@@ -65,10 +65,10 @@ export function OperatorBonuses({client, t, newId}: {client: ApiClient; t: Trans
     const keys = parsed.map(r => r.key);
     if (m === null || g === null || reset === null || !reason.trim() || reason.trim().length > 500
       || new Set(keys).size !== keys.length || parsed.some(r => !r.key || r.days_of_week.length === 0
-        || r.start_hour === null || r.end_hour === null || r.start_hour >= r.end_hour || r.m === null || r.g === null)) {
+        || r.start_hour === null || r.end_hour === null || r.start_hour > r.end_hour || r.m === null || r.g === null)) {
       return null;
     }
-    return {m, g, count_cancellations: base.count, reset_day: reset, time_rules: parsed as TimeRule[]};
+    return {m, g, count_cancellations: base.count, reset_day: reset, time_rules: [...(parsed as TimeRule[])].sort((x, y) => x.key.localeCompare(y.key))};
   }
 
   async function save() {
