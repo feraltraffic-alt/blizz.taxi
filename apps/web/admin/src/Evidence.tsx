@@ -21,6 +21,7 @@ export function Evidence({client, t, orderId}: {client: ApiClient; t: Translate;
   const [message, setMessage] = useState<string | null>(null);
   const current = useRef<string | null>(null);
   const acting = useRef(false);
+  const cached = useRef<Evidence | null>(null);
 
   useEffect(() => () => {
     if (current.current) URL.revokeObjectURL(current.current);
@@ -36,8 +37,9 @@ export function Evidence({client, t, orderId}: {client: ApiClient; t: Translate;
     acting.current = true;
     setMessage(null);
     try {
-      const value = await client.get('/api/admin/v1/orders/{order_id}/evidence' as never,
-        {params: {order_id: orderId}, query: {reason: why}} as never) as Evidence;
+      const value = cached.current ?? await client.get('/api/admin/v1/orders/{order_id}/evidence' as never,
+        {params: {order_id: orderId}, query: {}} as never) as Evidence;
+      cached.current = value;
       const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], {type: 'application/json'}));
       if (current.current) URL.revokeObjectURL(current.current);
       current.current = url;
