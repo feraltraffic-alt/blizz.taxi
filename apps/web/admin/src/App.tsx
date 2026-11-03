@@ -15,6 +15,7 @@ import {SafetyContactsSettings} from './Safety.js';
 import {Integrations} from './Integrations.js';
 import {CancelReasons} from './CancelReasons.js';
 import {CallLines} from './CallLines.js';
+import {ServiceSettings} from './ServiceSettings.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
@@ -144,6 +145,8 @@ function Panel({client}: {client: ApiClient}) {
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/reports') ? <Route path="/reports" element={<Reports client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/settings') ? <Route path="/settings/service" element={<ServiceSettings
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
