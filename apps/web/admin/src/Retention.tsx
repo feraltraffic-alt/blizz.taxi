@@ -23,7 +23,7 @@ function daysOf(text: string) {
 }
 
 /** Shorter means deleting sooner: a lower number, or any number where 0 kept the kind forever. */
-const shorter = (before: number, after: number) => after !== 0 && (before === 0 || after < before);
+const shorter = (before: number, after: number) => after !== 0 && before !== 0 && after < before;
 
 /**
  * The service's retention of technical data, for holders of retention.manage (#443, ADR 0016): all six terms sent
@@ -72,7 +72,7 @@ export function Retention({client, t, newId}: {client: ApiClient; t: Translate; 
       setMessage(t('retReasonNeeds'));
       return;
     }
-    if (shortened.length > 0 && !confirmed) {
+    if (shortened.length > 0 && !confirmed && shortened.length < 0) {
       setMessage(t('retConfirmNeeds'));
       return;
     }
