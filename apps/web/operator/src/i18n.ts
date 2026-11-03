@@ -5,6 +5,9 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    myDay: 'Мой день', myPoints: 'Баллы: {points} (выполнено {done}, отменено {cancelled}) с {since}',
+    noEmergency: 'Экстренного доступа нет.', emergencyUntil: 'Экстренный доступ до {until}: {rights} — {reason}',
+    cityOperators: 'Операторы города', noOperators: 'Операторов нет.', extShort: 'вн. {number}',
     ratings: 'Оценки', noRatings: 'Оценок нет.', scoreOf: '{score} из 5', ratedBy_RIDER: 'Пассажир → водителю',
     ratedBy_DRIVER: 'Водитель → пассажиру',
     attachFile: 'Приложить файл', removeFileOf: 'Убрать {name}', tooManyFiles: 'Можно приложить не больше 5 файлов.',
@@ -131,6 +134,9 @@ export const translations: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    myDay: 'Мій день', myPoints: 'Бали: {points} (виконано {done}, скасовано {cancelled}) з {since}',
+    noEmergency: 'Екстреного доступу немає.', emergencyUntil: 'Екстрений доступ до {until}: {rights} — {reason}',
+    cityOperators: 'Оператори міста', noOperators: 'Операторів немає.', extShort: 'вн. {number}',
     ratings: 'Оцінки', noRatings: 'Оцінок немає.', scoreOf: '{score} з 5', ratedBy_RIDER: 'Пасажир → водію',
     ratedBy_DRIVER: 'Водій → пасажиру',
     attachFile: 'Додати файл', removeFileOf: 'Прибрати {name}', tooManyFiles: 'Можна додати не більше 5 файлів.',
@@ -257,6 +263,9 @@ export const translations: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    myDay: 'Mój dzień', myPoints: 'Punkty: {points} (zrealizowane {done}, anulowane {cancelled}) od {since}',
+    noEmergency: 'Brak dostępu awaryjnego.', emergencyUntil: 'Dostęp awaryjny do {until}: {rights} — {reason}',
+    cityOperators: 'Operatorzy miasta', noOperators: 'Brak operatorów.', extShort: 'wewn. {number}',
     ratings: 'Oceny', noRatings: 'Brak ocen.', scoreOf: '{score} z 5', ratedBy_RIDER: 'Pasażer → kierowcy',
     ratedBy_DRIVER: 'Kierowca → pasażerowi',
     attachFile: 'Dołącz plik', removeFileOf: 'Usuń {name}', tooManyFiles: 'Można dołączyć najwyżej 5 plików.',
