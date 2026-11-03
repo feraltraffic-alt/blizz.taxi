@@ -6,6 +6,7 @@ import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
+import {Wallets} from './Wallets.js';
 import {StaffEdit} from './StaffEdit.js';
 import {OrderTimeline, Orders} from './Orders.js';
 
@@ -19,6 +20,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
+  {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
@@ -81,6 +83,8 @@ function Panel({client}: {client: ApiClient}) {
       <Routes>
         <Route path="/" element={<Profile me={me} />} />
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/wallets') ? <Route path="/wallets" element={<Wallets client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId" element={<StaffEdit client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
