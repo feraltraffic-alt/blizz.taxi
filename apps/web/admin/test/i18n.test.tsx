@@ -10,9 +10,10 @@ const snapshot = JSON.parse(readFileSync(path(process.cwd(),
   'apps/web/admin/test/fixtures/i18n-snapshot.json'), 'utf8')) as Catalogs;
 
 describe('I1: nothing lost', () => {
-  it('the joined catalog equals the catalog of 03.11, key by key, in every language', () => {
+  it('every text of 03.11 is still there, unchanged, in every language; new sections only add', () => {
     for (const locale of ['ru', 'uk', 'pl'] as const) {
-      expect(i18n.translations[locale]).toEqual(snapshot[locale]);
+      expect(Object.keys(snapshot[locale])).toHaveLength(306);
+      expect(i18n.translations[locale]).toMatchObject(snapshot[locale]);
     }
   });
 });
