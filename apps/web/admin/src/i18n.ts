@@ -1,25 +1,4 @@
 import type {Catalogs} from '@blizz/web-ui';
-import {core} from './i18n/core.js';
-import {chargebacks} from './i18n/chargebacks.js';
-import {paymentOperations} from './i18n/paymentOperations.js';
-import {reconciliations} from './i18n/reconciliations.js';
-import {orderFare} from './i18n/orderFare.js';
-import {support} from './i18n/support.js';
-import {operatorBonuses} from './i18n/operatorBonuses.js';
-import {finance} from './i18n/finance.js';
-import {clients} from './i18n/clients.js';
-import {serviceSettings} from './i18n/serviceSettings.js';
-import {reports} from './i18n/reports.js';
-import {callLines} from './i18n/callLines.js';
-import {risk} from './i18n/risk.js';
-import {driverPromotions} from './i18n/driverPromotions.js';
-import {promotions} from './i18n/promotions.js';
-import {integrations} from './i18n/integrations.js';
-import {merchants} from './i18n/merchants.js';
-import {flags} from './i18n/flags.js';
-import {cancelReasons} from './i18n/cancelReasons.js';
-import {deletions} from './i18n/deletions.js';
-import {legal} from './i18n/legal.js';
 
 export type {Locale} from '@blizz/web-ui';
 
@@ -45,7 +24,14 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
   return joined;
 }
 
+/**
+ * Every file of `i18n/`, each section's texts (#441): a new section adds its own file and never this one, so two branches
+ * adding sections do not collide here. Each export is joined under its own name.
+ */
+const sections = import.meta.glob<Record<string, Catalogs>>('./i18n/*.ts', {eager: true});
+
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
-export const translations: Catalogs = joinCatalogs({core, chargebacks, paymentOperations, orderFare, support, operatorBonuses, finance, clients, serviceSettings, reports, callLines, risk, driverPromotions, promotions, cancelReasons, deletions, legal, integrations, merchants, flags, reconciliations});
+export const translations: Catalogs = joinCatalogs(Object.fromEntries(Object.values(sections)
+  .flatMap(module => Object.entries(module))));
 
 export {validateCatalogs} from '@blizz/web-ui';
