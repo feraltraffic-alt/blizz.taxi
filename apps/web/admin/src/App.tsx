@@ -17,6 +17,7 @@ import {CancelReasons} from './CancelReasons.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
+import {Risk} from './Risk.js';
 import {DriverPromotions} from './DriverPromotions.js';
 import {Flags} from './Flags.js';
 
@@ -27,6 +28,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/geo', label: 'navGeo', permission: 'geo.manage'},
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
   {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
+  {path: '/risk', label: 'navRisk', permission: 'drivers.risk'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
   {path: '/emergency', label: 'navEmergency', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
@@ -134,6 +136,8 @@ function Panel({client}: {client: ApiClient}) {
           t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/driver-promotions') ? <Route path="/driver-promotions" element={
           <DriverPromotions client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/risk') ? <Route path="/risk" element={<Risk client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
