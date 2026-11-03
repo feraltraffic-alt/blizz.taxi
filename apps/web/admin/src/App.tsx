@@ -4,6 +4,7 @@ import {type AdminMe, type ApiClient} from '@blizz/api-client';
 import {Failure, StaffGate, translator} from '@blizz/web-ui';
 import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
+import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
 import {Wallets} from './Wallets.js';
 
@@ -83,6 +84,13 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/wallets') ? <Route path="/wallets" element={<Wallets client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/geo') ? (
+          <>
+            <Route path="/geo" element={<CityList client={client} t={t} />} />
+            <Route path="/geo/:cityId" element={<CityOperations client={client} t={t}
+              newId={() => crypto.randomUUID()} />} />
+          </>
+        ) : null}
         {sections.some(s => s.path === '/drivers') ? (
           <>
             <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
