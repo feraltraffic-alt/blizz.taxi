@@ -59,6 +59,7 @@ export function OrderFare({client, t, newId, orderId, canCorrect}: {client: ApiC
         reason: why, password: own}} as never) as Fare);
       setAmount('');
       setReason('');
+      setOwn('');
       setMessage(t('fareCorrected'));
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 403) setMessage(t('ownPasswordWrong'));
@@ -68,7 +69,6 @@ export function OrderFare({client, t, newId, orderId, canCorrect}: {client: ApiC
         await read();
       } else setMessage(t('genericError'));
     } finally {
-      setOwn('');
       acting.current = false;
     }
   }
