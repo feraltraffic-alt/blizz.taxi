@@ -183,3 +183,42 @@ describe('E6: refusals', () => {
     expect(await screen.findByText('Новые условия')).toBeTruthy();
   });
 });
+
+/** Naming the pickup from the location (#345): G1–G4. */
+describe('#345: the pickup from the location', () => {
+  const REVERSE = 'GET /api/rider/v1/places/reverse';
+  const named = {status: 200, body: {source: 'OWN', label: 'Хрещатик, 22', street: 'Хрещатик', house: '22', point: HERE}};
+
+  it('G1: the address of the point is the pickup, and the order carries it', async () => {
+    const {http} = await mount({...ready, [REVERSE]: [named], 'POST /api/rider/v1/orders': [{status: 201, body: order}]});
+    expect(await screen.findByText('Откуда: Хрещатик, 22')).toBeTruthy();
+    const asked = http.calls.find(c => c.path === '/api/rider/v1/places/reverse')!;
+    expect([Number(asked.query.get('lat')), Number(asked.query.get('lon')), asked.query.get('language')])
+      .toEqual([HERE.lat, HERE.lon, 'ru']);
+    await priced();
+    await fireEvent.press(screen.getByRole('button', {name: 'Заказать'}));
+    await waitFor(() => expect(http.calls.some(c => c.method === 'POST' && c.path === '/api/rider/v1/orders')).toBe(true));
+    expect(http.calls.find(c => c.method === 'POST' && c.path === '/api/rider/v1/orders')!.body)
+      .toMatchObject({pickup_label: 'Хрещатик, 22'});
+  });
+
+  it.each([['a 204', {status: 204}], ['a 503', problem(503, 'UNAVAILABLE')]])('G2, G3: %s keeps "Здесь"',
+    async (_name, answer) => {
+      await mount({...ready, [REVERSE]: [answer as Answer]});
+      await waitFor(() => expect(screen.getByText('Откуда: Здесь')).toBeTruthy());
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(screen.getByText('Откуда: Здесь')).toBeTruthy();
+    });
+
+  it('G4: a pickup the rider chose wins over a late answer', async () => {
+    await mount({...ready, [REVERSE]: [{...named, delayMs: 400}]});
+    await fireEvent.press(await screen.findByRole('button', {name: 'Изменить «откуда»'}));
+    await fireEvent.changeText(screen.getByLabelText('Поиск адреса подачи'), 'вокзал');
+    await waitFor(() => expect(screen.getByRole('button', {name: 'Найти'}).props.accessibilityState.disabled).toBe(false));
+    await fireEvent.press(screen.getByRole('button', {name: 'Найти'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Вокзал'}));
+    expect(await screen.findByText('Откуда: Вокзал')).toBeTruthy();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    expect(screen.getByText('Откуда: Вокзал')).toBeTruthy();
+  });
+});
