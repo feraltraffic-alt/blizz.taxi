@@ -23,6 +23,7 @@ import {Finance} from './Finance.js';
 import {CashDisputes} from './CashDisputes.js';
 import {ReconciliationRun, Reconciliations} from './Reconciliations.js';
 import {OtpDeliveries} from './OtpDeliveries.js';
+import {Retention} from './Retention.js';
 import {SupportCases} from './SupportCases.js';
 import {OperatorBonuses} from './OperatorBonuses.js';
 import {ClientCardPage, ClientSearch} from './Clients.js';
@@ -48,6 +49,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/cash-disputes', label: 'navCashDisputes', permission: 'finance.manage'},
   {path: '/reconciliations', label: 'navReconciliations', permission: 'payments.retry'},
+  {path: '/retention', label: 'navRetention', permission: 'retention.manage'},
   {path: '/operator-bonuses', label: 'navOperatorBonuses', permission: 'operator-bonuses.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
@@ -178,6 +180,8 @@ function Panel({client}: {client: ApiClient}) {
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
+        {sections.some(s => s.path === '/retention') ? <Route path="/retention" element={<Retention client={client}
+          t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/operator-bonuses') ? <Route path="/operator-bonuses" element={
           <OperatorBonuses client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/otp-deliveries') ? <Route path="/otp-deliveries" element={<OtpDeliveries
