@@ -7,7 +7,7 @@ type Entry = {id: string; at: string; kind: string; currency: string; amount_min
 type Wallet = {client_id: string; balances: {currency: string; balance_minor: number; reserved_minor: number;
   available_minor: number}[]; entries: Entry[]; page?: {next_cursor?: string | null}};
 
-const E164 = /^\+[1-9][0-9]{7,14}$/;
+const E164 = /^\+?[1-9][0-9]{7,14}$/;
 
 /**
  * A rider's bonus account for holders of wallets.manage (#365): found by phone, read a page of movements at a time,
@@ -92,7 +92,7 @@ export function Wallets({client, t, newId}: {client: ApiClient; t: Translate; ne
       } as never) as Wallet;
       setWallet(value);
       setNext(null);
-      setForm(f => ({...f, amount: '', reason: ''}));
+      setForm(f => ({...f, amount: ''}));
       setMessage(t('bonusDone'));
     }, failure => failure.code === 'TOP_UP_DAILY_LIMIT' ? t('topUpLimit') : null);
   }
