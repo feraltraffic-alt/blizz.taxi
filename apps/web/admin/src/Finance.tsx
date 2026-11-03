@@ -62,7 +62,7 @@ export function Finance({client, t, newId}: {client: ApiClient; t: Translate; ne
     const perDay = signedMinor(form.perDay);
     const minAfter = signedMinor(form.minAfter);
     if (perTransfer === null || perTransfer < 1 || perDay === null || perDay < 1 || perDay < perTransfer
-      || minAfter === null || !form.reason.trim()) {
+      || minAfter === null || minAfter < 0 || !form.reason.trim()) {
       setMessage(t('transferNeeds'));
       return;
     }
@@ -71,7 +71,7 @@ export function Finance({client, t, newId}: {client: ApiClient; t: Translate; ne
     setError(null);
     try {
       const saved = await client.post('/api/admin/v1/settings/driver-transfers/{currency}' as never, {params: {currency},
-        body: {command_id: newId(), expected_version: rule?.version ?? 0, enabled: form.enabled,
+        body: {command_id: newId(), expected_version: 0, enabled: form.enabled,
           max_per_transfer_minor: perTransfer, max_per_day_minor: perDay, min_balance_after_minor: minAfter,
           reason: form.reason.trim()}} as never) as Rule;
       setRules(list => [...(list ?? []).filter(r => r.currency !== currency), saved]);
