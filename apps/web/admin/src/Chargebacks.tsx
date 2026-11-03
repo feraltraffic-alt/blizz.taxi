@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import type {Translate} from '@blizz/web-ui';
 import {minorOf} from './Balance.js';
+import {Evidence} from './Evidence.js';
 import {decimal} from './Promotions.js';
 
 type Chargeback = {id: string; amount_minor: number; currency: string; bank_reason: string; received_on: string;
@@ -126,6 +127,7 @@ export function Chargebacks({client, t, newId, orderId, currency}: {client: ApiC
         <button type="button" onClick={() => void record()}>{t('cbRecord')}</button>
       </fieldset>
       {message ? <p role="status">{message}</p> : null}
+      <Evidence client={client} t={t} orderId={orderId} />
     </section>
   );
 }

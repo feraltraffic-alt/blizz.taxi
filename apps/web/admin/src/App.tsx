@@ -21,6 +21,7 @@ import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
 import {Finance} from './Finance.js';
 import {CashDisputes} from './CashDisputes.js';
+import {ReconciliationRun, Reconciliations} from './Reconciliations.js';
 import {SupportCases} from './SupportCases.js';
 import {OperatorBonuses} from './OperatorBonuses.js';
 import {ClientCardPage, ClientSearch} from './Clients.js';
@@ -44,6 +45,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
   {path: '/cash-disputes', label: 'navCashDisputes', permission: 'finance.manage'},
+  {path: '/reconciliations', label: 'navReconciliations', permission: 'payments.retry'},
   {path: '/operator-bonuses', label: 'navOperatorBonuses', permission: 'operator-bonuses.manage'},
   {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
@@ -167,6 +169,13 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/cash-disputes') ? <Route path="/cash-disputes" element={<CashDisputes
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/reconciliations') ? (
+          <>
+            <Route path="/reconciliations" element={<Reconciliations client={client} t={t} />} />
+            <Route path="/reconciliations/:runId" element={<ReconciliationRun client={client} t={t}
+              newId={() => crypto.randomUUID()} />} />
+          </>
+        ) : null}
         {sections.some(s => s.path === '/operator-bonuses') ? <Route path="/operator-bonuses" element={
           <OperatorBonuses client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/support') ? <Route path="/support" element={<SupportCases client={client}
@@ -178,7 +187,7 @@ function Panel({client}: {client: ApiClient}) {
             <Route path="/orders" element={<Orders client={client} t={t} />} />
             <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t}
               newId={() => crypto.randomUUID()} canCorrect={holds('fares.correct')}
-              canRetry={holds('payments.retry')} />} />
+              canRetry={holds('payments.retry')} canTrips={holds('trips.correct')} />} />
           </>
         ) : null}
         {sections.some(s => s.path === '/drivers') ? (
