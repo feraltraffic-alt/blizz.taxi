@@ -39,11 +39,13 @@ export function PlacePicker({client, t, label, near, callerPhone, value, onPick}
     setMessage(null);
     setError(null);
     const exact = {lat: round(point.lat), lon: round(point.lon)};
+    const asked = {lat: exact.lon, lon: exact.lat};
     try {
-      const answer = await client.get('/api/operator/v1/places/reverse' as never, {query: exact} as never) as
+      const answer = await client.get('/api/operator/v1/places/reverse' as never, {query: asked} as never) as
         Place | undefined;
-      onPick(answer && answer.label ? {label: answer.label, point: answer.point}
-        : {label: t('pointOnMap', {lat: exact.lat.toFixed(6), lon: exact.lon.toFixed(6)}), point: exact});
+      if (answer && answer.label) onPick({label: answer.label, point: answer.point});
+      else if (exact.lat > 90) onPick({label: t('pointOnMap', {lat: exact.lat.toFixed(6), lon: exact.lon.toFixed(6)}),
+        point: exact});
       setMapOpen(false);
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === 'OUTSIDE_SERVICE_AREA') setMessage(t('pointOutside'));
