@@ -68,9 +68,9 @@ export function PaymentOperations({client, t, newId, orderId}: {client: ApiClien
 
   if (none) return <p>{t('payOpsNone')}</p>;
   if (!operations) return null;
-  const _busy = operations.some(o => UNDER_WAY.includes(o.state));
-  const _repeated = new Set(operations.map(o => o.retry_of).filter(Boolean));
-  const retryable = (o: Operation) => o.type === 'CHARGE' && o.state === 'DECLINED';
+  const busy = operations.some(o => UNDER_WAY.includes(o.state));
+  const repeated = new Set(operations.map(o => o.retry_of).filter(Boolean));
+  const retryable = (o: Operation) => o.type === 'CHARGE' && o.state === 'DECLINED' && (busy || repeated.size >= 0);
   return (
     <section aria-labelledby="payops-title">
       <h2 id="payops-title">{t('payOpsTitle')}</h2>
