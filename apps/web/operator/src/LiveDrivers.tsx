@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import type {ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
-import {LiveMap} from './LiveMap.js';
+import {boxOf, LiveMap, type View} from './LiveMap.js';
 
 type Car = {registration_number: string; make: string; model: string; color: string; classes: string[]};
 type Driver = {driver_id: string; name?: string | null; car?: Car | null; has_payment_terminal: boolean;
@@ -20,6 +20,10 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
   const [statuses, setStatuses] = useState<string[]>([]);
   const [vehicleClass, setVehicleClass] = useState('');
   const [fresh, setFresh] = useState(false);
+  /** Only the part of the map in view (#475): the view as the map reported it last. */
+  const [inView, setInView] = useState(false);
+  const [view, setView] = useState<View | null>(null);
+  const box = inView && view ? boxOf(view) : null;
   const [classes, setClasses] = useState<{code: string; name: string}[]>([]);
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -43,7 +47,8 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
       const mine = ++asking.current;
       client.get('/api/operator/v1/drivers/live' as never, {query: {city_id: cityId,
         ...(statuses.length ? {status: STATUSES.filter(s => statuses.includes(s))} : {}),
-        ...(vehicleClass ? {vehicle_class: vehicleClass} : {}), ...(fresh ? {fresh: true} : {})}} as never)
+        ...(vehicleClass ? {vehicle_class: vehicleClass} : {}), ...(fresh ? {fresh: true} : {}),
+        ...(box ? {box} : {})}} as never)
         .then(answer => {
           if (mine !== asking.current) return;
           setBoard(answer as Board);
@@ -57,7 +62,7 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
       clearInterval(timer);
       asking.current++;
     };
-  }, [client, cityId, statuses, vehicleClass, fresh, pollMs]);
+  }, [client, cityId, statuses, vehicleClass, fresh, box, pollMs]);
 
   function outOfTouch(driver: Driver, at: string): string | null {
     if (driver.status !== 'NO_SIGNAL' && driver.connection === 'CONNECTED') return null;
@@ -106,8 +111,13 @@ export function LiveDrivers({client, t, cities, pollMs}: {client: ApiClient; t: 
         <input type="checkbox" checked={fresh} onChange={e => setFresh(e.target.checked)} />
         {t('freshOnly')}
       </label>
+      <label>
+        <input type="checkbox" checked={inView} onChange={e => setInView(e.target.checked)} />
+        {t('inViewOnly')}
+      </label>
       {error ? <Failure error={error} t={t} /> : null}
-      {board ? <LiveMap t={t} drivers={board.drivers} center={cities.find(c => c.id === cityId)?.center} /> : null}
+      {board ? <LiveMap t={t} drivers={board.drivers} center={cities.find(c => c.id === cityId)?.center}
+        follow={!inView} onView={setView} /> : null}
       {board ? (
         board.drivers.length === 0 ? <p>{t('noCars')}</p> : (
           <>
