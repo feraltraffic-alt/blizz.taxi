@@ -51,17 +51,29 @@ class PickupEtas {
     private record Position(GeoPoint point, OffsetDateTime at) {
     }
 
-    /** The order with its pickup ETA when the driver is on the way to the pickup; unchanged otherwise. */
+    /** The trip's phases in which the rider sees where the driver is (ADR 0017, issue #479). */
+    private static final java.util.Set<String> LOCATED = java.util.Set.of("TO_PICKUP", "WAITING", "IN_PROGRESS");
+
+    /**
+     * The order as the rider reads it: with the driver's location while the trip is on the way, waiting or under way,
+     * and with the pickup ETA while on the way; unchanged otherwise, and both left out without a known position.
+     */
     OrderView with(OrderView order) {
         AssignmentView assignment = order.assignment();
-        if (assignment == null || !"TO_PICKUP".equals(assignment.tripPhase())) {
+        if (assignment == null || !LOCATED.contains(assignment.tripPhase())) {
             return order;
         }
         Optional<Position> position = position(assignment.driverId());
         if (position.isEmpty()) {
-            return order; // no position, no ETA: never a made-up one
+            return order; // no position, no ETA and no location: never a made-up one
         }
         Position p = position.get();
+        boolean stale = p.at().isBefore(now().minus(presence.gpsMaxAge()));
+        OrderView located = order.withDriverLocation(new OrderView.DriverLocation(p.point().lat(), p.point().lon(),
+                p.at(), stale));
+        if (!"TO_PICKUP".equals(assignment.tripPhase())) {
+            return located;
+        }
         Key key = new Key(assignment.id(), p.at());
         RouteEstimator.Estimate estimate = remembered.get(key);
         if (estimate == null) {
@@ -70,15 +82,14 @@ class PickupEtas {
                         order.pickup());
             } catch (RuntimeException failed) {
                 log.warn("No pickup ETA for assignment {}: {}", assignment.id(), failed.getClass().getSimpleName());
-                return order;
+                return located;
             }
             if (remembered.size() >= MAX_REMEMBERED) {
                 remembered.clear();
             }
             remembered.put(key, estimate);
         }
-        boolean stale = p.at().isBefore(now().minus(presence.gpsMaxAge()));
-        return order.withPickupEta(new OrderView.PickupEta(estimate.durationSeconds(), estimate.distanceMetres(),
+        return located.withPickupEta(new OrderView.PickupEta(estimate.durationSeconds(), estimate.distanceMetres(),
                 estimate.source().name(), p.at(), stale));
     }
 

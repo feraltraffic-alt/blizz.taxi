@@ -1462,6 +1462,13 @@ export interface components {
                 /** @enum {string} */
                 reason_code: "DRIVER_CANCELLED" | "SERVICE_REASSIGNED";
             } | null;
+            /** @description Where the assigned driver is, for the rider's map (the owner's answer of 03.11.2026, ADR 0017; issue #479): the driver's last position on the server and its time, while the trip is TO_PICKUP, WAITING or IN_PROGRESS. Left out in every other state and when no position is known — never null and never made up. Only in the rider's order reads (GET /orders/{id}, /current, /active). `stale` when the position is older than the freshness limit. */
+            driver_location?: {
+                at: components["schemas"]["Timestamp"];
+                lat: number;
+                lon: number;
+                stale: boolean;
+            };
             dropoff: components["schemas"]["GeoPoint"];
             dropoff_label?: string;
             /** @description Where exactly to come (REQ-DRV-07, issue */

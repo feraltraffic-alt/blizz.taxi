@@ -122,6 +122,70 @@ class PickupEtaTests {
         assertThat(closer.distanceMetres()).isLessThan(1_000L);
     }
 
+    /** D1 of #479: on the way the rider sees where the driver is, from the session's last position; old is marked. */
+    @Test
+    void onTheWayTheRiderSeesWhereTheDriverIs() {
+        TestRides.Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        UUID driver = ride.driver().actor().id();
+        var stored = jdbc.sql("""
+                        select ST_Y(last_location) as lat, ST_X(last_location) as lon, last_location_at
+                        from work_session where driver_id = :driver and state = 'OPEN'""").param("driver", driver)
+                .query((rs, i) -> new double[]{rs.getDouble("lat"), rs.getDouble("lon")}).single();
+
+        OrderView.DriverLocation location = now(ride).driverLocation();
+        assertThat(location).isNotNull();
+        assertThat(location.lat()).isEqualTo(stored[0]);
+        assertThat(location.lon()).isEqualTo(stored[1]);
+        assertThat(location.at()).isNotNull();
+        assertThat(location.stale()).isFalse();
+        assertThat(orders.get(ride.order().id()).driverLocation()).as("the stored snapshot has none").isNull();
+
+        jdbc.sql("""
+                        update work_session set last_location_at = now() - interval '5 minutes'
+                        where driver_id = :driver and state = 'OPEN'""").param("driver", driver).update();
+        assertThat(now(ride).driverLocation().stale()).as("an old position is marked").isTrue();
+    }
+
+    /** D2 of #479: waiting at the pickup and on the trip too. */
+    @Test
+    void waitingAndOnTheTripTheRiderStillSeesTheDriver() {
+        TestRides.Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        rides.moveTo(ride.driver(), TestRides.north(PICKUP, 30));
+        TripView waiting = trips.arrive(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(),
+                ride.trip().version(), null);
+        assertThat(waiting.phase()).isEqualTo("WAITING");
+        assertThat(now(ride).driverLocation()).as("waiting").isNotNull();
+        assertThat(now(ride).pickupEta()).as("no ETA once there").isNull();
+
+        TripView started = trips.start(ride.driver().actor(), UUID.randomUUID(), ride.trip().id(), waiting.version(),
+                null);
+        assertThat(started.phase()).isEqualTo("IN_PROGRESS");
+        assertThat(now(ride).driverLocation()).as("on the trip").isNotNull();
+    }
+
+    /** D3 and D4 of #479: no driver yet, no position, or a trip that ended: no location at all. */
+    @Test
+    void noLocationBeforeAnAssignmentWithoutAPositionOrAfterTheTrip() {
+        OrderView searching = rides.order(rides.client(), cityId, PICKUP, DROPOFF);
+        assertThat(etas.with(searching).driverLocation()).as("no driver yet").isNull();
+
+        TestRides.Ride ride = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        UUID driver = ride.driver().actor().id();
+        jdbc.sql("update work_session set last_location_at = null where driver_id = :driver and state = 'OPEN'")
+                .param("driver", driver).update();
+        assertThat(now(ride).driverLocation()).as("no position, no made-up one").isNull();
+
+        TestRides.Ride done = rides.assigned(cityId, rides.driverNear(PICKUP), PICKUP, DROPOFF);
+        rides.moveTo(done.driver(), TestRides.north(PICKUP, 30));
+        TripView there = trips.arrive(done.driver().actor(), UUID.randomUUID(), done.trip().id(),
+                done.trip().version(), null);
+        TripView going = trips.start(done.driver().actor(), UUID.randomUUID(), there.id(), there.version(), null);
+        TripView ended = trips.complete(done.driver().actor(), UUID.randomUUID(), going.id(), going.version(),
+                java.time.OffsetDateTime.now(), Boolean.TRUE);
+        assertThat(ended.phase()).isEqualTo("COMPLETED");
+        assertThat(now(done).driverLocation()).as("after the trip").isNull();
+    }
+
     /** Counts calls and delegates to the estimator the application would use. */
     static class CountingRoutes implements RouteEstimator {
         final AtomicInteger calls = new AtomicInteger();

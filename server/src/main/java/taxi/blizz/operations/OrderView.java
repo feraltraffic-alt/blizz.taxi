@@ -1,5 +1,6 @@
 package taxi.blizz.operations;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -49,7 +50,40 @@ public record OrderView(
         DriverChange driverChange,
         /** The note for the driver and where exactly to come (REQ-DRV-07, issue #143). */
         String comment,
-        String entrance) {
+        String entrance,
+        /**
+         * Where the assigned driver is, for the rider's map (ADR 0017, issue #479): only in the rider's reads while the
+         * trip is on the way, waiting or under way, and only with a known position; otherwise left out of the answer.
+         */
+        @JsonInclude(JsonInclude.Include.NON_NULL) DriverLocation driverLocation) {
+
+    /** Source compatibility for snapshots built before the driver's location existed. */
+    public OrderView(UUID id, long shortNumber, String status, String statusReason, long version, String channel,
+                     UUID payerClientId, UUID cityId, String vehicleClass, GeoPoint pickup, String pickupLabel,
+                     GeoPoint dropoff, String dropoffLabel, PaymentMethod paymentMethod, String paymentState,
+                     Long priceMinor, Long finalPriceMinor, String currency, String searchPhase,
+                     AssignmentView assignment, OffsetDateTime createdAt, Cancellation cancellation,
+                     OffsetDateTime pickupAt, boolean preorder, UUID relatedOrderId, long walletMinor,
+                     long discountMinor, PickupEta pickupEta, DriverCard driver, DriverChange driverChange,
+                     String comment, String entrance) {
+        this(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId, vehicleClass, pickup,
+                pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor, finalPriceMinor, currency,
+                searchPhase, assignment, createdAt, cancellation, pickupAt, preorder, relatedOrderId, walletMinor,
+                discountMinor, pickupEta, driver, driverChange, comment, entrance, null);
+    }
+
+    /** The driver's last position on the server and its time; {@code stale} past the freshness limit. */
+    public record DriverLocation(double lat, double lon, OffsetDateTime at, boolean stale) {
+    }
+
+    /** The same snapshot with the driver's location as of now. */
+    public OrderView withDriverLocation(DriverLocation location) {
+        return new OrderView(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId,
+                vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor,
+                finalPriceMinor, currency, searchPhase, assignment, createdAt, cancellation, pickupAt, preorder,
+                relatedOrderId, walletMinor, discountMinor, pickupEta, driver, driverChange, comment, entrance,
+                location);
+    }
 
     /** Source compatibility for snapshots built before the comment and the entrance existed. */
     public OrderView(UUID id, long shortNumber, String status, String statusReason, long version, String channel,
@@ -107,7 +141,8 @@ public record OrderView(
         return new OrderView(id, shortNumber, status, statusReason, version, channel, payerClientId, cityId,
                 vehicleClass, pickup, pickupLabel, dropoff, dropoffLabel, paymentMethod, paymentState, priceMinor,
                 finalPriceMinor, currency, searchPhase, assignment, createdAt, cancellation, pickupAt, preorder,
-                relatedOrderId, walletMinor, discountMinor, eta, driver, driverChange, comment, entrance);
+                relatedOrderId, walletMinor, discountMinor, eta, driver, driverChange, comment, entrance,
+                driverLocation);
     }
 
     /**
