@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Text, View} from 'react-native';
 import {ApiError} from '@blizz/api-client';
 import {
-  Alert, Button, Chat, Field, usePushDecider, useTheme, type Locale, type PushPort, type Shared
+  Alert, Button, CallButton, Chat, Field, usePushDecider, useTheme, type Locale, type PushPort, type Shared
 } from '@blizz/mobile-ui';
 
 type Point = {lat: number; lon: number};
@@ -258,6 +258,8 @@ function TripCard({client, t, guard, failure, newId, now, locale, pollMs, trip, 
             onPress={() => {if (cash) setConfirming(true); else complete(false);}} />
         )
       ) : null}
+      <CallButton client={client} t={t} guard={guard} failure={failure} path="/api/driver/v1/trips/{trip_id}/call"
+        params={{trip_id: trip.id}} label={t('callRider')} />
       <Chat client={client} t={t} guard={guard} failure={failure} path="/api/driver/v1/trips/{trip_id}/messages"
         params={{trip_id: trip.id}} me="DRIVER" newId={newId} pollMs={pollMs} />
       {beforeStart ? (

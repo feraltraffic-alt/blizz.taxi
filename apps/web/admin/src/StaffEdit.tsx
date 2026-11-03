@@ -133,6 +133,8 @@ export function StaffEdit({client, t, newId}: {client: ApiClient; t: Translate; 
       <button type="button" onClick={() => void save()}>{t('saveChanges')}</button>
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      <p><Link to={'/staff/' + member.id + '/emergency'}>{t('grantOf', {name: member.profile.last_name + ' '
+        + member.profile.first_name})}</Link></p>
       <p><Link to="/staff">{t('toStaff')}</Link></p>
     </section>
   );
