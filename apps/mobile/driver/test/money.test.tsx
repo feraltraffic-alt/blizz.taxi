@@ -333,3 +333,79 @@ describe('#341: rating and promotions', () => {
     expect(await screen.findByText('Сейчас акций нет.')).toBeTruthy();
   });
 });
+
+/** Sending money to another driver (#343): T1–T6. */
+describe('#343: transfers', () => {
+  const RULES = 'GET /api/driver/v1/transfer-rules';
+  const SEND = 'POST /api/driver/v1/transfers';
+  const rule = (over: Record<string, unknown> = {}) => ({status: 200, body: {rules: [{currency: 'UAH', enabled: true,
+    max_per_transfer_minor: 50000, max_per_day_minor: 100000, min_balance_after_minor: 0, version: 1, ...over}]}});
+  const sent = {status: 201, body: {id: 't1', from_driver_id: session.subject.id, to_driver_id: 'd2', currency: 'UAH',
+    amount_minor: 15000, comment: null, at: '2026-11-02T10:00:00Z'}};
+  const sends = (http: {calls: Call[]}) => http.calls.filter(c => c.method === 'POST' && c.path === '/api/driver/v1/transfers');
+
+  async function fill(phone: string, sum: string, comment = '') {
+    await fireEvent.changeText(await screen.findByLabelText('Номер водителя'), phone);
+    await fireEvent.changeText(screen.getByLabelText('Сумма перевода, UAH'), sum);
+    if (comment) await fireEvent.changeText(screen.getByLabelText('Комментарий к переводу'), comment);
+    await fireEvent.press(screen.getByRole('button', {name: 'Перевести'}));
+  }
+
+  it('T1: the limits are shown; a rule that is off shows no form', async () => {
+    await openMoney({[RULES]: [rule()]});
+    expect(await screen.findByText('Перевод водителю: до 500.00 UAH за раз, до 1000.00 UAH в день')).toBeTruthy();
+  });
+
+  it('T1: off', async () => {
+    await openMoney({[RULES]: [rule({enabled: false})]});
+    expect(await screen.findByText('Переводы выключены.')).toBeTruthy();
+    expect(screen.queryByLabelText('Номер водителя')).toBeNull();
+  });
+
+  it.each([['0671234567', '150', ''], ['+380671234567', '15.005', ''], ['+380671234567', '500.01', ''],
+    ['+380671234567', '150', 'я'.repeat(201)]])('T2: %s / %s is refused on the phone', async (phone, sum, comment) => {
+    const {http} = await openMoney({[RULES]: [rule()]});
+    await fill(phone, sum, comment);
+    expect(await screen.findByText('Проверьте номер (+380…), сумму до 500.00 UAH и комментарий до 200 символов.'))
+      .toBeTruthy();
+    expect(sends(http)).toEqual([]);
+  });
+
+  it('T3, T4: confirmed, sent once, the balance read again; cancel sends nothing', async () => {
+    const {http} = await openMoney({[RULES]: [rule()], [SEND]: [sent]});
+    await fill('+380671234567', '150', 'за смену');
+    expect(await screen.findByText('Перевести 150.00 UAH водителю +380671234567?')).toBeTruthy();
+    expect(sends(http)).toEqual([]);
+    await fireEvent.press(screen.getByRole('button', {name: 'Отменить'}));
+    expect(sends(http)).toEqual([]);
+    await fireEvent.press(screen.getByRole('button', {name: 'Перевести'}));
+    await fireEvent.press(await screen.findByRole('button', {name: 'Подтвердить перевод'}));
+    expect(await screen.findByText('Отправлено 150.00 UAH.')).toBeTruthy();
+    expect(sends(http).map(c => c.body)).toEqual([{command_id: expect.any(String), to_phone: '+380671234567',
+      currency: 'UAH', amount_minor: 15000, comment: 'за смену'}]);
+    await waitFor(() => expect(http.calls.filter(c => c.path === '/api/driver/v1/balance').length)
+      .toBeGreaterThanOrEqual(2));
+  });
+
+  it.each([
+    [404, 'NOT_FOUND', 'Нет активного водителя с этим номером.'],
+    [422, 'WALLET_INSUFFICIENT', 'Недостаточно средств: после перевода должно остаться не меньше 0.00 UAH.'],
+    [400, 'VALIDATION_FAILED', 'Превышен лимит переводов.'],
+    [409, 'STATE_CONFLICT', 'Переводы сейчас недоступны.']
+  ])('T5: a %s %s is told', async (status, code, text) => {
+    await openMoney({[RULES]: [rule()], [SEND]: [problem(status, code)]});
+    await fill('+380671234567', '150');
+    await fireEvent.press(await screen.findByRole('button', {name: 'Подтвердить перевод'}));
+    expect(await screen.findByText(text)).toBeTruthy();
+  });
+
+  it('T6: a double press on the confirmation sends once', async () => {
+    const {http} = await openMoney({[RULES]: [rule()], [SEND]: [{...sent, delayMs: 200}]});
+    await fill('+380671234567', '150');
+    const confirm = await screen.findByRole('button', {name: 'Подтвердить перевод'});
+    await fireEvent.press(confirm);
+    await fireEvent.press(confirm);
+    expect(await screen.findByText('Отправлено 150.00 UAH.')).toBeTruthy();
+    expect(sends(http)).toHaveLength(1);
+  });
+});
