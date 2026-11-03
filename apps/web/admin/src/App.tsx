@@ -3,6 +3,7 @@ import {Link, Route, Routes} from 'react-router-dom';
 import {type AdminMe, type ApiClient} from '@blizz/api-client';
 import {Failure, StaffGate, translator} from '@blizz/web-ui';
 import {translations} from './i18n.js';
+import {DriverCase, DriverQueue} from './Drivers.js';
 
 const t = translator(translations, 'ru');
 
@@ -10,6 +11,7 @@ const t = translator(translations, 'ru');
 const SECTIONS: {path: string; label: string; permission?: string; role?: string}[] = [
   {path: '/geo', label: 'navGeo', permission: 'geo.manage'},
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
+  {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
@@ -74,6 +76,13 @@ function Panel({client}: {client: ApiClient}) {
       </nav>
       <Routes>
         <Route path="/" element={<Profile me={me} />} />
+        {sections.some(s => s.path === '/drivers') ? (
+          <>
+            <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
+            <Route path="/drivers/:driverId" element={<DriverCase client={client} t={t}
+              newId={() => crypto.randomUUID()} />} />
+          </>
+        ) : null}
         <Route path="*" element={<p>{t('notReady')}</p>} />
       </Routes>
     </>
