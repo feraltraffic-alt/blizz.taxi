@@ -9,7 +9,7 @@ type Point = {lat: number; lon: number};
 export type Offer = {id: string; order_id: string; seconds_left: number; vehicle_class: string; pickup_label: string;
   dropoff_label: string; payment_method: string; price_minor?: number | null; currency?: string | null;
   expected_earnings_minor?: number | null; comment?: string | null; entrance?: string | null; distance_m?: number | null};
-export type Trip = {id: string; phase: string; version: number; pickup: Point; pickup_label: string; dropoff: Point;
+export type Trip = {id: string; order_id?: string; phase: string; version: number; pickup: Point; pickup_label: string; dropoff: Point;
   dropoff_label: string; payment_method: string; price_minor?: number | null; currency?: string | null;
   wallet_minor?: number; discount_minor?: number; comment?: string | null; entrance?: string | null};
 type Reason = {code: string; labels: Record<string, string>};
@@ -29,6 +29,8 @@ export function Dispatch(props: Props) {
   const {client, t, guard, failure, pollMs} = props;
   const [trip, setTrip] = useState<Trip | null | undefined>(undefined);
   const [message, setMessage] = useState<string | null>(null);
+  /** The order of the trip this driver just completed, to rate its rider (#460). */
+  const [toRate, setToRate] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const current = await guard(() => client.get('/api/driver/v1/trips/current')) as Trip | undefined;
@@ -54,11 +56,68 @@ export function Dispatch(props: Props) {
 
   return (
     <View style={{gap: 16}}>
+      {toRate && !trip ? <RateRider {...props} orderId={toRate} close={() => setToRate(null)} /> : null}
       {trip === undefined ? null : trip ? (
         <TripCard {...props} trip={trip} say={setMessage} moved={moved}
-          onTrip={next => setTrip(ENDED.has(next.phase) ? null : next)} />
+          onTrip={next => {
+            if (next.phase === 'COMPLETED' && next.order_id) setToRate(next.order_id);
+            setTrip(ENDED.has(next.phase) ? null : next);
+          }} />
       ) : <Offers {...props} say={setMessage} accepted={() => load().catch(failed => setMessage(failure(failed)))} />}
       <Alert text={message} />
+    </View>
+  );
+}
+
+/**
+ * The driver's score of the rider after a completed trip (#460): 1–5 and a comment only staff read, sent once; the
+ * server's edit window may have passed.
+ */
+function RateRider({client, t, guard, failure, newId, orderId, close}: Props & {orderId: string; close: () => void}) {
+  const theme = useTheme();
+  const [score, setScore] = useState<number | null>(null);
+  const [comment, setComment] = useState('');
+  const [done, setDone] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const sending = useRef(false);
+
+  async function send() {
+    if (sending.current || done) return;
+    const text = comment.trim();
+    if (score === null || text.length > 500) {
+      setNote(t('rateNeeds'));
+      return;
+    }
+    sending.current = true;
+    setNote(null);
+    try {
+      await guard(() => client.post('/api/driver/v1/orders/{order_id}/rating' as never, {params: {order_id: orderId},
+        body: {command_id: newId(), score, ...(text ? {comment: text} : {})}} as never));
+      setDone(true);
+    } catch (failed) {
+      setNote(failed instanceof ApiError && failed.status === 409 ? t('rateClosed') : failure(failed));
+    } finally {
+      sending.current = false;
+    }
+  }
+
+  return (
+    <View style={{gap: 8}}>
+      <Text style={{color: theme.text, fontWeight: '600'}}>{t('rateRider')}</Text>
+      {done ? <Text style={{color: theme.text}}>{t('rateThanks')}</Text> : (
+        <>
+          <View style={{flexDirection: 'row', gap: 6}}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <Button key={n} label={(score === n ? '● ' : '') + n} accessibilityLabel={t('rateScore', {n})}
+                onPress={() => setScore(n)} />
+            ))}
+          </View>
+          <Field label={t('rateComment')} value={comment} onChange={setComment} />
+          <Button label={t('rateSend')} onPress={() => void send()} />
+        </>
+      )}
+      <Alert text={note} />
+      <Button label={done ? t('rateDone') : t('rateSkip')} onPress={close} />
     </View>
   );
 }
