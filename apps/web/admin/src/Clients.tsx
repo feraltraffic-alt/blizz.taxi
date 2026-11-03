@@ -124,7 +124,7 @@ export function ClientCardPage({client, t, newId}: {client: ApiClient; t: Transl
     return run(async () => {
       const changed = await client.post(('/api/admin/v1/clients/{client_id}/' + action) as never, {params: {
         client_id: clientId}, body: {command_id: newId(), expected_version: version, reason: why,
-        ...(action === 'block' && end ? {until: end} : {})}} as never) as Client;
+        ...(action === 'block' ? {until: end} : {})}} as never) as Client;
       setCard(c => c ? {...c, client: changed} : c);
       setReason('');
       setUntil('');
@@ -154,7 +154,7 @@ export function ClientCardPage({client, t, newId}: {client: ApiClient; t: Transl
     const version = card.client.version;
     return run(async () => {
       const changed = await client.post('/api/admin/v1/clients/{client_id}/phone' as never, {params: {
-        client_id: clientId}, body: {command_id: newId(), expected_version: version, new_challenge_id: challenge,
+        client_id: clientId}, body: {command_id: newId(), expected_version: version,
         new_code: code.trim(), reason: identified.trim()}} as never) as {phone: string; version: number};
       setCard(c => c ? {...c, client: {...c.client, phone: changed.phone, version: changed.version}} : c);
       setChallenge(null);
