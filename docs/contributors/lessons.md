@@ -223,6 +223,23 @@ Real cases from pull requests on this repository: what was handed in, what the r
     time the test is written, never from the code under test.
   - Where a call casts its path `as never`, the PR lists the parameters it sends next to the contract's.
 
+## 22. A background sweep of another test context took the test's rows (#393, fixed in #399)
+
+- **Task:** none; a server test (`ContentScannerTests`) failed on two branches that changed only the web panel.
+- **Missed:**
+  - **Every Spring test context shares one database, and Spring keeps the contexts alive.** The quarantine rescan
+    sweep was on by default (`matchIfMissing = true`), so every cached context ran it, with its own scanner.
+  - **A foreign sweep claimed the test's file.** It used `for update skip locked` and a lease. Its verdict was then
+    refused as stale, and the file stayed leased past the test's 10-second wait.
+  - **The issue's first hypothesis was wrong:** the scheduler thread was not the cause. It was found by reading the
+    claim query, not by raising the wait.
+  - **The first mutation run said nothing.** Maven could not resolve a surefire artifact, so no test ran (case 15).
+- **Habit:**
+  - A background worker that claims rows is **off in the tests' `config/application.yml`** and turned on only in the
+    context that tests it. Next to the other workers there, the relay, retention and dispatch, it was simply missed.
+  - A flaky test is fixed at its cause and proven by a repeated run in the **full suite** (`@RepeatedTest(50)` on a
+    throwaway branch). Repeating it alone would not reproduce the other contexts.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
