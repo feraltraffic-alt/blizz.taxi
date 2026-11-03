@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {DriverBalance} from './Balance.js';
 
 type Item = {driver_id: string; name?: string | null; phone?: string | null; since: string};
 type Doc = {id: string; type: string; decision: string; number?: string | null; valid_to?: string | null};
@@ -83,7 +84,9 @@ export function DriverQueue({client, t}: {client: ApiClient; t: Translate}) {
  * One driver's case (#351): documents (each scan opened once, every opening audited), vehicles, the history, the
  * duplicate files, and the decision with the driver's version.
  */
-export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
+export function DriverCase({client, t, newId, finance = false}: {client: ApiClient; t: Translate; newId: () => string;
+  /** The staff member holds finance.manage: the balance and its top-up are shown (#364). */
+  finance?: boolean}) {
   const {driverId = ''} = useParams();
   const [item, setItem] = useState<Case | null>(null);
   const [scans, setScans] = useState<Record<string, {url: string; type: string}>>({});
@@ -96,7 +99,7 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
   const acting = useRef(false);
   const urls = useRef<string[]>([]);
   /** The service's cities and the ticked admission cities (#353). */
-  const [cities, setCities] = useState<{id: string; name: string}[]>([]);
+  const [cities, setCities] = useState<{id: string; name: string; currency?: string}[]>([]);
   const [admitted, setAdmitted] = useState<string[]>([]);
   const [cityReason, setCityReason] = useState('');
   /** The reason for a block, a suspension or their reversal (#363). */
@@ -104,7 +107,8 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
 
   useEffect(() => {
     client.get('/api/config/v1/bootstrap' as never, {} as never)
-      .then(boot => setCities((boot as {cities: {id: string; name: string}[]}).cities)).catch(() => setCities([]));
+      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities))
+      .catch(() => setCities([]));
   }, [client]);
 
   const read = useCallback(async () => {
@@ -287,6 +291,8 @@ export function DriverCase({client, t, newId}: {client: ApiClient; t: Translate;
           <button type="button" onClick={() => void saveCities()}>{t('saveCities')}</button>
         </fieldset>
       ) : null}
+      {finance ? <DriverBalance client={client} t={t} newId={newId} driverId={driverId}
+        currencies={cities.flatMap(c => c.currency ? [c.currency] : [])} /> : null}
       <fieldset>
         <legend>{t('accountTitle')}</legend>
         <label>{t('accountReason')}
