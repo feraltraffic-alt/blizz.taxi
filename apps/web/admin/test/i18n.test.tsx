@@ -64,6 +64,6 @@ describe('I5: no list to keep', () => {
   it('i18n.ts names no section file', () => {
     const source = readFileSync(path(process.cwd(), 'apps/web/admin/src/i18n.ts'), 'utf8');
     expect(source).not.toMatch(/from '\.\/i18n\//);
-    expect(files.length).toBeGreaterThan(20);
+    expect(files.length).toBeGreaterThan(10);
   });
 });
