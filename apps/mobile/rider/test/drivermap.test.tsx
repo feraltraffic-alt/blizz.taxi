@@ -10,10 +10,11 @@ captured.mapCapture = {views: [], injected: []};
 
 jest.mock('react-native-webview', () => {
   const React = jest.requireActual('react');
-  const sink = (globalThis as unknown as {mapCapture: Captured}).mapCapture;
+  // jest.mock is hoisted above the line that sets mapCapture: read it when rendering, not when mocking.
+  const sink = () => (globalThis as unknown as {mapCapture: Captured}).mapCapture;
   return {WebView: React.forwardRef((props: {source: {html: string}}, ref: unknown) => {
-    React.useImperativeHandle(ref, () => ({injectJavaScript: (js: string) => {sink.injected.push(js);}}));
-    sink.views.push(props);
+    React.useImperativeHandle(ref, () => ({injectJavaScript: (js: string) => {sink().injected.push(js);}}));
+    sink().views.push(props);
     return null;
   })};
 });
