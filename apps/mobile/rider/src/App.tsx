@@ -107,7 +107,7 @@ function Home({shared, config, newId, locale, tab, setTab, onLegal}: {shared: Sh
     <>
       <Ride {...shared} newId={newId} service={config.service} pollMs={config.pollMs ?? 5000} push={config.push}
         locate={config.locate ?? (() => Promise.reject(new Error('No location')))} onLegal={onLegal}
-        onDebts={() => setTab('debts')} />
+        onDebts={() => setTab('debts')} locale={locale} />
       <Button label={t('toHistory')} onPress={() => setTab('history')} />
       <Button label={t('support')} onPress={() => setTab('support')} />
       <Button label={t('toProfile')} onPress={() => setTab('profile')} />

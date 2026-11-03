@@ -24,7 +24,7 @@ const FINAL = new Set(['FULFILLED', 'CANCELLED', 'UNFULFILLED']);
  * pickup, the drop-off, a vehicle class and its price.
  */
 export function Ride(props: Shared & {newId: () => string; locate: () => Promise<Point>; service: string;
-  pollMs: number; onLegal: () => void; onDebts: () => void; push?: PushPort}) {
+  pollMs: number; onLegal: () => void; onDebts: () => void; push?: PushPort; locale?: string}) {
   const {client, t, guard, failure} = props;
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +60,9 @@ function Choice({label, onPress}: {label: string; onPress: () => void}) {
   );
 }
 
-function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, onDebts, onOrdered}: Shared & {
+function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, onDebts, onOrdered, locale}: Shared & {
   newId: () => string; locate: () => Promise<Point>; service: string; onLegal: () => void; onDebts: () => void;
+  locale?: string;
   onOrdered: (order: Order) => void}) {
   /** RIDER_HAS_DEBT: the way to pay it (#332 D6). */
   const [debt, setDebt] = useState(false);
@@ -89,8 +90,17 @@ function NewOrder({client, t, guard, failure, newId, locate, service, onLegal, o
       .then(here => {
         if (!current) return;
         setNear(here);
-        setPickup({label: t('here'), point: here});
+        const located = {label: t('here'), point: here};
+        setPickup(located);
         setTarget('dropoff'); // the pickup is here: the search is for where to go
+        // The driver needs an address, not "here" (#345): the point's name, unless the rider chose a pickup meanwhile.
+        client.get('/api/rider/v1/places/reverse' as never, {query: {lat: here.lat, lon: here.lon,
+          ...(locale ? {language: locale} : {})}} as never)
+          .then(place => {
+            const label = (place as {label?: string} | undefined)?.label;
+            if (current && label) setPickup(chosen => chosen === located ? {label, point: here} : chosen);
+          })
+          .catch(() => undefined);
       })
       // No location: the address search starts from the point of the service's first city (E2, #243).
       .catch(() => client.get('/api/config/v1/bootstrap' as never, {query: {service}} as never)
