@@ -5,6 +5,11 @@ export type Translate = (key: string, values?: Record<string, string | number>) 
 /** The texts of the shared screens (sign-in, legal texts, states); each app adds its own keys. */
 export const commonTranslations: Catalogs = {
   ru: {
+    callDriver: 'Позвонить водителю',
+    callRider: 'Позвонить пассажиру',
+    callViaService: 'Звонок идёт через номер службы.',
+    callNotNow: 'Позвонить сейчас нельзя.',
+    callDial: 'Наберите номер: {phone}',
     safety: 'Безопасность',
     safetyHide: 'Скрыть контакты безопасности',
     safetyEmergency: 'Экстренная служба',
@@ -134,6 +139,11 @@ export const commonTranslations: Catalogs = {
     updateText: 'Эта версия больше не поддерживается. Установите новую версию из магазина приложений.'
   },
   uk: {
+    callDriver: 'Зателефонувати водієві',
+    callRider: 'Зателефонувати пасажирові',
+    callViaService: 'Дзвінок іде через номер служби.',
+    callNotNow: 'Зателефонувати зараз не можна.',
+    callDial: 'Наберіть номер: {phone}',
     safety: 'Безпека',
     safetyHide: 'Сховати контакти безпеки',
     safetyEmergency: 'Екстрена служба',
@@ -263,6 +273,11 @@ export const commonTranslations: Catalogs = {
     updateText: 'Ця версія більше не підтримується. Встановіть нову версію з магазину застосунків.'
   },
   pl: {
+    callDriver: 'Zadzwoń do kierowcy',
+    callRider: 'Zadzwoń do pasażera',
+    callViaService: 'Połączenie idzie przez numer firmy.',
+    callNotNow: 'Teraz nie można zadzwonić.',
+    callDial: 'Wybierz numer: {phone}',
     safety: 'Bezpieczeństwo',
     safetyHide: 'Ukryj kontakty bezpieczeństwa',
     safetyEmergency: 'Numer alarmowy',
