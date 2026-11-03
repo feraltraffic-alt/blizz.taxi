@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, morning)
+# Lead handoff (state on 03.11.2026, before noon)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -82,6 +82,47 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (03.11.2026, before noon)
+
+- **Merged:**
+
+  | PR | Issue | What |
+  |---|---|---|
+  | #416–#423 | #415–#422 | Admin: operator bonuses, driver transfer rules, support cases (shared with the operator), an order's final fare and its correction |
+  | #425 | #424 | Admin: an order's card operations and a retry of a declined charge |
+- **Open, each with a mutation branch `<branch>-mutation`:**
+
+  | PR or branch | Issue | What |
+  |---|---|---|
+  | #432 | #426 | Admin: an order's chargebacks, recorded and resolved |
+  | #428 | #427 | Admin: cash disputes (`/cash-disputes`) |
+  | `claude/429-trip-facts`, on #426 | #429 | Admin: a trip's times, corrections and review |
+  | `claude/430-evidence`, on #426 | #430 | Admin: an order's evidence for a chargeback |
+  | `claude/431-reconciliations` | #431 | Admin: card reconciliations (`/reconciliations`) |
+
+  A branch built on an unmerged one takes `git merge origin/main` and `git checkout --ours` on the conflicts once its
+  base is squashed; no force-push.
+- **Admin panel still to do:**
+  - zones and city creation (map);
+  - the tariffs API (#30, deferred);
+  - retention;
+  - OTP deliveries;
+  - the driver's phone, terminal and earnings;
+  - the platform owner's services.
+- **CI pitfalls met today:**
+  - A mutation branch that fails **lint** stops CI before the tests and proves nothing (lessons case 15). Run
+    `npm run lint` on the mutation branch before pushing it; use the guarded values without obeying them, rather than
+    leaving them unused.
+  - `git push origin A B` (several branches in one push) started **Web E2E** for only one of them. Push one branch per
+    command, or start it with `gh workflow run "Web E2E" --ref <branch>`.
+  - The driver app's `online.spec.ts` failed once with "Unexpected end of JSON input" on an admin-only change. Watch
+    for it again before calling it flaky.
+- **Test pitfalls:**
+  - Testing Library's default text matcher reads only an element's own text nodes, so a row made of a link and words
+    after it is matched with a function on the span's `textContent`.
+  - jsdom's `Blob` has no `stream()`: read a file under test with `FileReader`.
+  - `ApiError` carries no problem `detail`, so a server message can't be shown; name the causes in a fixed text.
 
 ## Recent history (03.11.2026, morning)
 
