@@ -44,6 +44,7 @@ export interface ClientOptions {
 export interface ApiClient {
   get<P extends PathsFor<'get'>>(path: P, ...options: Arguments<P, 'get'>): Promise<Success<Operation<P, 'get'>>>;
   post<P extends PathsFor<'post'>>(path: P, ...options: Arguments<P, 'post'>): Promise<Success<Operation<P, 'post'>>>;
+  put<P extends PathsFor<'put'>>(path: P, ...options: Arguments<P, 'put'>): Promise<Success<Operation<P, 'put'>>>;
   /**
    * The raw bytes of a file, PUT to the upload_path the server gave (a relative /api/… path only, so the token never
    * leaves for another host); refreshed once on 401 like any call. Answers the server's JSON (StoredFile).
@@ -270,6 +271,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
   return {
     get: ((path: string, request?: RequestOptions) => call('get', path, request)) as ApiClient['get'],
     post: ((path: string, request?: RequestOptions) => call('post', path, request)) as ApiClient['post'],
+    put: ((path: string, request?: RequestOptions) => call('put', path, request)) as ApiClient['put'],
 
     async socketToken() {
       if (access) return access;

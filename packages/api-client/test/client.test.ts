@@ -358,3 +358,32 @@ describe('socket tokens (#306 W7)', () => {
     expect(await api.renewSocketToken()).toBeNull();
   });
 });
+
+describe('put (#353 P1)', () => {
+  const path = '/api/admin/v1/drivers/d0000000-0000-4000-8000-000000000001/admission-cities';
+  const body = {command_id: '40000000-0000-4000-8000-000000000001', expected_version: 4, city_ids: ['c1'], reason: 'ok'};
+
+  it('sends the JSON body with the bearer token', async () => {
+    let seen = {method: '', auth: '', body: null as unknown};
+    server.use(http.put(origin + path, async ({request}) => {
+      seen = {method: request.method, auth: request.headers.get('Authorization') ?? '', body: await request.json()};
+      return HttpResponse.json({id: 'd'});
+    }));
+    expect(await client().put(path as never, {body} as never)).toEqual({id: 'd'});
+    expect(seen).toEqual({method: 'PUT', auth: 'Bearer ' + session.access_token, body});
+  });
+
+  it('refreshes once on 401', async () => {
+    let refreshes = 0;
+    const tokens: string[] = [];
+    server.use(
+      http.put(origin + path, ({request}) => {
+        tokens.push(request.headers.get('Authorization') ?? '');
+        return tokens.length === 1 ? HttpResponse.json(problem(401, 'UNAUTHENTICATED'), {status: 401})
+          : HttpResponse.json({id: 'd'});
+      }),
+      http.post(origin + '/auth/v1/token/refresh', () => {refreshes++; return HttpResponse.json(rotated);}));
+    expect(await client().put(path as never, {body} as never)).toEqual({id: 'd'});
+    expect(refreshes).toBe(1);
+  });
+});

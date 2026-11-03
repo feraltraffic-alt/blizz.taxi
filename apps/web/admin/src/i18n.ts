@@ -5,6 +5,8 @@ export type {Locale} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = {
   ru: {
+    admissionCities: 'Города допуска', citiesReason: 'Причина изменения городов', saveCities: 'Сохранить города',
+    citiesNeed: 'Измените список и укажите причину.', citiesSaved: 'Города допуска сохранены.',
     navDrivers: 'Водители',
     queueEmpty: 'Очередь пуста.',
     noName: 'без имени',
@@ -90,6 +92,8 @@ export const translations: Catalogs = {
     notReady: 'Этот раздел появится позже.'
   },
   uk: {
+    admissionCities: 'Міста допуску', citiesReason: 'Причина зміни міст', saveCities: 'Зберегти міста',
+    citiesNeed: 'Змініть список і вкажіть причину.', citiesSaved: 'Міста допуску збережено.',
     navDrivers: 'Водії',
     queueEmpty: 'Черга порожня.',
     noName: 'без імені',
@@ -175,6 +179,8 @@ export const translations: Catalogs = {
     notReady: 'Цей розділ з’явиться пізніше.'
   },
   pl: {
+    admissionCities: 'Miasta dopuszczenia', citiesReason: 'Powód zmiany miast', saveCities: 'Zapisz miasta',
+    citiesNeed: 'Zmień listę i podaj powód.', citiesSaved: 'Miasta dopuszczenia zapisane.',
     navDrivers: 'Kierowcy',
     queueEmpty: 'Kolejka jest pusta.',
     noName: 'bez imienia',
