@@ -26,9 +26,9 @@ const utc = (at: string) => {
 
 /** What a run found, in words; a FAILED or RUNNING run never shows its missing counts as zeros. */
 function runWords(r: Run, t: Translate) {
-  const counts = r.local_count != null && r.provider_count != null
-    ? [t('reconCounts', {local: r.local_count, provider: r.provider_count})] : [];
-  const found = r.state === 'FAILED' ? [t('reconFailed', {code: r.failure_code ?? '—', attempts: r.attempts ?? 1})]
+  const counts = [t('reconCounts', {local: r.local_count ?? 0, provider: r.provider_count ?? 0})];
+  const found = r.state === 'FAILED' ? [t('reconFailed', {code: r.failure_code ?? '—', attempts: r.attempts ?? 1}),
+    ...counts]
     : r.state === 'RUNNING' ? [t('reconRunning')]
       : r.state === 'CLEAN' ? [t('reconClean'), ...counts]
         : [t('reconOpen', {open: r.open_count ?? '—', all: r.item_count ?? '—'}), ...counts];
@@ -82,7 +82,7 @@ export function ReconciliationRun({client, t, newId}: {client: ApiClient; t: Tra
 
   const page = useCallback(async (after: string | null) => {
     const value = await client.get('/api/admin/v1/payment-reconciliations/{run_id}' as never, {params: {run_id: runId},
-      query: after ? {after} : {}} as never) as {run: Run; items: Item[]; next?: string | null};
+      query: after ? {cursor: after} : {}} as never) as {run: Run; items: Item[]; next?: string | null};
     setRun(value.run);
     setItems(list => [...(after ? list : []), ...value.items]);
     setNext(value.next ?? null);
