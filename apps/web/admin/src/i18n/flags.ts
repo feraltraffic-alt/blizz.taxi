@@ -1,0 +1,53 @@
+import type {Catalogs} from '@blizz/web-ui';
+
+/** The texts of "Флаги" (#395). */
+export const flags: Catalogs = {
+  ru: {
+    navFlags: 'Флаги',
+    flagNoStop: 'Выключение не останавливает то, что уже началось.',
+    flagOn: 'включён',
+    flagOff: 'выключен',
+    flagDefault: '(по умолчанию: {state})',
+    flagOwner: 'модуль {owner}',
+    flagReview: 'пересмотреть до {day}',
+    flagOverdue: 'Срок пересмотра прошёл.',
+    flagChanged: 'Изменён {at}: {reason}',
+    flagReason: 'Причина: {key}',
+    flagTurnOff: 'Выключить: {key}',
+    flagTurnOn: 'Включить: {key}',
+    flagNeeds: 'Нужна причина до 500 символов.',
+    flagConflict: 'Флаг переключил кто-то другой; список обновлён.',
+  },
+  uk: {
+    navFlags: 'Прапорці',
+    flagNoStop: 'Вимкнення не зупиняє те, що вже почалося.',
+    flagOn: 'увімкнено',
+    flagOff: 'вимкнено',
+    flagDefault: '(за замовчуванням: {state})',
+    flagOwner: 'модуль {owner}',
+    flagReview: 'переглянути до {day}',
+    flagOverdue: 'Строк перегляду минув.',
+    flagChanged: 'Змінено {at}: {reason}',
+    flagReason: 'Причина: {key}',
+    flagTurnOff: 'Вимкнути: {key}',
+    flagTurnOn: 'Увімкнути: {key}',
+    flagNeeds: 'Потрібна причина до 500 символів.',
+    flagConflict: 'Прапорець перемкнув хтось інший; список оновлено.',
+  },
+  pl: {
+    navFlags: 'Flagi',
+    flagNoStop: 'Wyłączenie nie zatrzymuje tego, co już się zaczęło.',
+    flagOn: 'włączona',
+    flagOff: 'wyłączona',
+    flagDefault: '(domyślnie: {state})',
+    flagOwner: 'moduł {owner}',
+    flagReview: 'przejrzeć do {day}',
+    flagOverdue: 'Termin przeglądu minął.',
+    flagChanged: 'Zmieniona {at}: {reason}',
+    flagReason: 'Powód: {key}',
+    flagTurnOff: 'Wyłącz: {key}',
+    flagTurnOn: 'Włącz: {key}',
+    flagNeeds: 'Potrzebny jest powód do 500 znaków.',
+    flagConflict: 'Flagę przełączył ktoś inny; lista odświeżona.',
+  }
+};
