@@ -66,8 +66,12 @@ function phone(): SecureStore & {keys: Map<string, string>} {
     deleteItemAsync: async key => {keys.delete(key);}};
 }
 
+/**
+ * {@code restart}: the view of the app before, given a new app instance (a new key) in its place, as a restart does.
+ * Unmounting by hand and rendering again left the test renderer without effects for the next test.
+ */
 async function mount(script: Record<string, Answer[]>, store: SecureStore, options: {prefix: string; now?: number;
-  tokens?: RefreshTokenStore}) {
+  tokens?: RefreshTokenStore; restart?: Awaited<ReturnType<typeof render>>}) {
   const http = server(script);
   let id = 0;
   const client = createApiClient({baseUrl: 'https://api.blizz.test', refreshTokens: options.tokens ?? memory(),
@@ -76,7 +80,12 @@ async function mount(script: Record<string, Answer[]>, store: SecureStore, optio
     heartbeatMs: 30, locate: async () => ({lat: 50.4501, lon: 30.5234, accuracy_m: 8}),
     trackStore: chunkedSecureStore(store, KEY),
     newId: () => options.prefix + '-0000-4000-8000-' + String(++id).padStart(12, '0')};
-  const view = await render(<DriverApp client={client} config={config} />);
+  const app = <DriverApp key={options.prefix} client={client} config={config} />;
+  if (options.restart) {
+    await options.restart.rerender(app);
+    return {http, view: options.restart};
+  }
+  const view = await render(app);
   return {http, view};
 }
 
@@ -91,9 +100,8 @@ describe('P1: survives a restart', () => {
     const first = await mount({...base, [`POST ${S}/heartbeat`]: ['network']}, store, {prefix: '41000000'});
     await waitFor(() => expect(stored(store)?.points.length ?? 0).toBeGreaterThanOrEqual(3));
     const kept = stored(store)!.points.map(p => p.sequence);
-    first.view.unmount();
     const second = await mount({...base, [`POST ${S}/heartbeat`]: [ok], [`POST ${BATCH}`]: [counts]}, store,
-      {prefix: '42000000'});
+      {prefix: '42000000', restart: first.view});
     await waitFor(() => expect(batches(second.http).length).toBeGreaterThanOrEqual(1));
     expect(batches(second.http)[0]!.points.map(p => p.sequence).slice(0, kept.length)).toEqual(kept);
   });
@@ -102,12 +110,12 @@ describe('P1: survives a restart', () => {
     const store = phone();
     const first = await mount({...base, [`POST ${S}/heartbeat`]: ['network', ok], [`POST ${BATCH}`]: ['network']},
       store, {prefix: '43000000'});
-    await waitFor(() => expect(batches(first.http)).toHaveLength(1));
+    // Every good beat retries the batch that failed, with the same command_id: at least one try.
+    await waitFor(() => expect(batches(first.http).length).toBeGreaterThanOrEqual(1));
     await waitFor(() => expect(stored(store)?.pending?.command_id).toBe(batches(first.http)[0]!.command_id));
     const command = batches(first.http)[0]!.command_id;
-    first.view.unmount();
     const second = await mount({...base, [`POST ${S}/heartbeat`]: [ok], [`POST ${BATCH}`]: [counts]}, store,
-      {prefix: '44000000'});
+      {prefix: '44000000', restart: first.view});
     await waitFor(() => expect(batches(second.http).length).toBeGreaterThanOrEqual(1));
     expect(batches(second.http)[0]!.command_id).toBe(command);
     expect(command.startsWith('43000000')).toBe(true);
