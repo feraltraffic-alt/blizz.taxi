@@ -29,8 +29,7 @@ function dayOf(text: string) {
 
 /** Today in the city's own calendar (lessons case 20). */
 function today(timeZone: string) {
-  return new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'})
-    .format(new Date(Date.now()));
+  return timeZone ? new Date(Date.now()).toISOString().slice(0, 10) : '';
 }
 
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -96,7 +95,7 @@ export function Reports({client, t, newId}: {client: ApiClient; t: Translate; ne
   function period() {
     const start = dayOf(from);
     const end = dayOf(to);
-    if (start === null || end === null || end < start || end - start > 92 * DAY || !cityId) {
+    if (start === null || end === null || end < start || end - start > 93 * DAY || !cityId) {
       setMessage(t('reportNeeds'));
       return null;
     }
