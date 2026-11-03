@@ -71,11 +71,11 @@ describe('P3: an admin case', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', {name: /№501/}));
     await screen.findByText(/Оставил зонт в машине/);
-    await user.click(screen.getByRole('button', {name: 'Взять'}));
+    await user.click(screen.getByRole('button', {name: 'Взять себе'}));
     await waitFor(() => expect(asked.filter(a => a.path !== 'list')).toHaveLength(1));
     const command = asked.find(a => a.path !== 'list')!;
     expect(command.path).toBe('assign');
-    expect(command.body).toMatchObject({expected_version: 3, staff_id: me.member.id});
+    expect(command.body).toMatchObject({expected_version: 3, assignee_id: me.member.id});
     expect(operator).toEqual([]);
   });
 });
