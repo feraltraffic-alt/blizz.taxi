@@ -23,6 +23,7 @@ import {Finance} from './Finance.js';
 import {Services} from './Services.js';
 import {CashDisputes} from './CashDisputes.js';
 import {ReconciliationRun, Reconciliations} from './Reconciliations.js';
+import {OtpDeliveries} from './OtpDeliveries.js';
 import {SupportCases} from './SupportCases.js';
 import {OperatorBonuses} from './OperatorBonuses.js';
 import {ClientCardPage, ClientSearch} from './Clients.js';
@@ -39,6 +40,7 @@ const SECTIONS: {path: string; label: string; permission?: string | string[]; ro
   {path: '/orders', label: 'navOrders', permission: 'orders.view'},
   {path: '/clients', label: 'navClients', permission: 'clients.manage'},
   {path: '/support', label: 'support', permission: 'support.manage'},
+  {path: '/otp-deliveries', label: 'navOtpDeliveries', permission: 'support.manage'},
   {path: '/drivers', label: 'navDrivers', permission: 'driver.review'},
   {path: '/risk', label: 'navRisk', permission: 'drivers.risk'},
   {path: '/staff', label: 'navStaff', role: 'SUPER_ADMIN'},
@@ -182,6 +184,8 @@ function Panel({client}: {client: ApiClient}) {
           t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/operator-bonuses') ? <Route path="/operator-bonuses" element={
           <OperatorBonuses client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/otp-deliveries') ? <Route path="/otp-deliveries" element={<OtpDeliveries
+          client={client} t={t} />} /> : null}
         {sections.some(s => s.path === '/support') ? <Route path="/support" element={<SupportCases client={client}
           t={t} me={me.member.id} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />

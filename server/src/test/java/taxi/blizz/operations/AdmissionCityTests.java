@@ -270,6 +270,29 @@ class AdmissionCityTests {
         assertCode(() -> dispatch.broadcast(driver.actor(), UUID.randomUUID()), ErrorCode.VALIDATION_FAILED);
     }
 
+    /**
+     * #444: the fixture admitted its drivers in every city, another taxi service's too, so after a test that moved a
+     * city to another service a reviewer of all cities of this one was refused when the list was set.
+     */
+    @Test
+    void aFixtureDriverIsAdmittedOnlyInTheCitiesOfItsOwnService() {
+        UUID otherService = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into service (id, code, name, created_at, updated_at)
+                        values (:id, :code, 'Other admission taxi', now(), now())""")
+                .param("id", otherService).param("code", "admission-" + otherService.toString().substring(0, 8))
+                .update();
+        UUID foreign = rides.city("test-admission-foreign", "UAH", 159);
+        jdbc.sql("update city set service_id = :s where id = :c").param("s", otherService).param("c", foreign)
+                .update();
+
+        TestRides.Driver driver = rides.driverNear(PICKUP_A);
+        assertThat(admission.profile(driver.actor().id()).admissionCityIds()).doesNotContain(foreign);
+        long version = admission.profile(driver.actor().id()).version();
+        admission.setAdmissionCities(staff(null, DriverAdmission.REVIEW_PERMISSION), UUID.randomUUID(),
+                driver.actor().id(), version, Set.of(cityA), "Only A");
+    }
+
     // ------------------------------------------------------------ helpers
 
     private void admitIn(TestRides.Driver driver, UUID... cities) {
