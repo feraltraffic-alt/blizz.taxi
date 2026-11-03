@@ -19,6 +19,7 @@ import {ServiceSettings} from './ServiceSettings.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
+import {Finance} from './Finance.js';
 import {ClientCardPage, ClientSearch} from './Clients.js';
 import {Reports} from './Reports.js';
 import {Risk} from './Risk.js';
@@ -156,6 +157,8 @@ function Panel({client}: {client: ApiClient}) {
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
+        {sections.some(s => s.path === '/finance') ? <Route path="/finance" element={<Finance client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}
         {sections.some(s => s.path === '/orders') ? (
