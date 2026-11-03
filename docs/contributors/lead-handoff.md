@@ -99,6 +99,12 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   | #356 | #355 | Admin: staff — list, add, suspend and restore. The super admin's own password is emptied after every request |
   | #358 | #357 | Admin: staff temporary password and internal numbers |
   | #360 | #359 | Admin: city operations — hours, payment methods, the return zone, drop-off, pause |
+  | #362 | #361 | Admin: the driver queue pages by `cursor` (it sent the deprecated `after`); lessons case 21 |
+- **Open, stacked in this order:** #366 (#363, driver block and suspend), then #364 (a driver's balance and staff
+  top-up, `Balance.tsx`), then #365 (a rider's bonus account, `/wallets`). Branches `claude/364-driver-balance` and
+  `claude/365-rider-wallets` each merge the one before; open their PRs after the previous one is merged.
+- **Merging `main` into a branch:** joining both sides of a conflict is safe only in `i18n.ts`. In code, read the
+  result: the join once left a line twice (#366).
 - **Admin panel next:** finance, the orders view, staff profile changes and emergency grants, the driver block and
   suspend. Creating cities and boundaries wait for the map tiles answer.
 - **Owner questions still open:**
