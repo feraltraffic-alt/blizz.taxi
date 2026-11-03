@@ -100,7 +100,9 @@ describe('N3: change', () => {
   it('only edited fields; the password and the typed secret emptied; the fields read again', async () => {
     const {changes, reads} = handlers();
     const user = await open();
-    await user.type(screen.getByLabelText('Новое значение: Firebase key'), '{"key":"secret-json"}');
+    // A brace is a key name to user.type, so the JSON key is pasted.
+    await user.click(screen.getByLabelText('Новое значение: Firebase key'));
+    await user.paste('{"key":"secret-json"}');
     await user.click(screen.getByRole('button', {name: 'Убрать значение: GraphHopper URL'}));
     await send(user);
     expect(await screen.findByText('Ключи сохранены.')).toBeVisible();
