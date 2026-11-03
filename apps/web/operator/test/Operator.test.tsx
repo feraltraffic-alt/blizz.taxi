@@ -879,3 +879,41 @@ describe('#311: interrupt and reservation', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+/** An order's ratings (#347): K1–K3. */
+describe('#347: ratings', () => {
+  const rating = (author: string, target: string, score: number, comment: string | null) => ({order_id: order.id,
+    author_type: author, author_id: 'a', target_type: target, target_id: 'b', score, comment,
+    created_at: '2026-11-02T10:00:00Z'});
+
+  async function open(answer: () => Response) {
+    server.use(...base(),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(order, {status: 201})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id + '/ratings', answer));
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    await user.click(screen.getByRole('button', {name: 'Оценки'}));
+    return user;
+  }
+
+  it('K1: who rated whom, with the comment when there is one', async () => {
+    await open(() => HttpResponse.json({ratings: [rating('RIDER', 'DRIVER', 4, 'Грубил'),
+      rating('DRIVER', 'RIDER', 5, null)]}));
+    const list = await screen.findByRole('list', {name: 'Оценки'});
+    expect([...list.querySelectorAll('li')].map(li => li.textContent)).toEqual([
+      'Пассажир → водителю: 4 из 5 — Грубил', 'Водитель → пассажиру: 5 из 5']);
+  });
+
+  it('K2: none', async () => {
+    await open(() => HttpResponse.json({ratings: []}));
+    expect(await screen.findByText('Оценок нет.')).toBeVisible();
+  });
+
+  it('K3: a refusal shows the correlation id', async () => {
+    await open(() => HttpResponse.json(problem(403, 'ACCESS_DENIED'), {status: 403}));
+    expect(await screen.findByText(new RegExp(cid))).toBeVisible();
+  });
+});
