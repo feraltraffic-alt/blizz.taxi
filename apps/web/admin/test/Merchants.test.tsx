@@ -124,6 +124,23 @@ describe('M3: change', () => {
   });
 });
 
+describe('M3: only a new key', () => {
+  it('sends the key and keeps the domain and the cities as null', async () => {
+    const {changes} = handlers();
+    mount();
+    const user = userEvent.setup();
+    const c = await card();
+    await user.click(within(c).getByRole('button', {name: 'Изменить мерчант'}));
+    await user.type(within(c).getByLabelText('Новый ключ мерчанта'), 'rotated-key');
+    await user.type(within(c).getByLabelText('Причина изменения мерчанта'), 'Ротация ключа');
+    await user.type(within(c).getByLabelText('Ваш пароль для мерчанта'), 'Admin-Pass-2026');
+    await user.click(within(c).getByRole('button', {name: 'Сохранить мерчант'}));
+    await waitFor(() => expect(changes).toHaveLength(1));
+    expect(changes[0]).toEqual({command_id: expect.any(String), password: 'Admin-Pass-2026', domain: null,
+      secret: 'rotated-key', city_ids: null, reason: 'Ротация ключа'});
+  });
+});
+
 describe('M4: refused on the screen', () => {
   it.each([['no account', {account: ''}], ['no domain', {domain: ''}], ['a lower-case currency', {currency: 'uah'}],
     ['no key', {secret: ''}], ['no reason', {reason: ''}], ['no own password', {own: ''}]])(
