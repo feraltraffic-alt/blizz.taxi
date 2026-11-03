@@ -71,7 +71,12 @@ function mount() {
   return render(<MemoryRouter initialEntries={['/orders/' + ORDER]}><AdminApp client={api} /></MemoryRouter>);
 }
 
-const read = (blob: Blob) => new Response(blob).text();
+/** jsdom's Blob has no stream(), so the file is read the way a browser page would. */
+const read = (blob: Blob) => new Promise<string>(resolve => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.readAsText(blob);
+});
 
 async function exportWith(user: ReturnType<typeof userEvent.setup>, reason: string) {
   const input = await screen.findByLabelText('Причина выгрузки');
