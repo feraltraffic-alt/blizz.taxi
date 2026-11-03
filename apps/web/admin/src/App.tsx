@@ -6,6 +6,7 @@ import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
+import {StaffEdit} from './StaffEdit.js';
 import {OrderTimeline, Orders} from './Orders.js';
 
 const t = translator(translations, 'ru');
@@ -80,6 +81,8 @@ function Panel({client}: {client: ApiClient}) {
       <Routes>
         <Route path="/" element={<Profile me={me} />} />
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
+        {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId" element={<StaffEdit client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/geo') ? (
           <>
