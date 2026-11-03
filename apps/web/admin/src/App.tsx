@@ -112,7 +112,7 @@ function Panel({client}: {client: ApiClient}) {
         {sections.some(s => s.path === '/settings') ? <Route path="/settings/cancel-reasons" element={<CancelReasons
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/deletions') ? <Route path="/deletions" element={<Deletions client={client}
-          t={t} newId={() => crypto.randomUUID()} clients={holds('clients.delete')} drivers={holds('drivers.delete')} />}
+          t={t} newId={() => crypto.randomUUID()} clients={holds('clients.delete')} drivers={holds('drivers.delete') || holds('clients.delete')} />}
         /> : null}
         {sections.some(s => s.path === '/logs') ? <Route path="/logs" element={<Logs client={client} t={t} />} />
           : null}

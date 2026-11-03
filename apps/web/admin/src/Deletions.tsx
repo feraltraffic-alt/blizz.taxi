@@ -56,7 +56,7 @@ function Requests({client, t, newId, kind}: {client: ApiClient; t: Translate; ne
   async function decide(r: Request, action: 'complete' | 'reject') {
     if (acting.current) return;
     const why = (reasons[r.id] ?? '').trim();
-    if (!why || why.length > 500 || (action === 'complete' && (!sure[r.id] || r.blocked))) {
+    if (!why || why.length > 500 || (action === 'complete' && r.blocked)) {
       setMessage(t('delNeeds'));
       return;
     }
