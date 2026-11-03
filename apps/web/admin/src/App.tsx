@@ -83,7 +83,7 @@ function Panel({client}: {client: ApiClient}) {
           <>
             <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
             <Route path="/drivers/:driverId" element={<DriverCase client={client} t={t}
-              finance={permissions.has('finance.manage') || role === 'SUPER_ADMIN'}
+              finance={permissions.size > 0}
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}

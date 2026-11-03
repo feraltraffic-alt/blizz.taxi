@@ -12,7 +12,7 @@ const MAX_MINOR = 10_000_000;
 export function minorOf(text: string): number | null {
   const parts = /^([0-9]{1,6})(?:[.,]([0-9]{1,2}))?$/.exec(text.trim());
   if (!parts) return null;
-  const minor = Number(parts[1]) * 100 + Number((parts[2] ?? '').padEnd(2, '0'));
+  const minor = Number(parts[1]) * 100 + Number((parts[2] ?? '').padStart(2, '0'));
   return minor >= 1 && minor <= MAX_MINOR ? minor : null;
 }
 
