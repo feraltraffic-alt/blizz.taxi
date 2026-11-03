@@ -17,5 +17,5 @@ export function LivePage({client, t, pollMs = 5_000}: {client: ApiClient; t: Tra
   }, [client]);
 
   if (!cities) return <p>{t('loading')}</p>;
-  return <LiveBoard client={client} t={t} cities={cities} pollMs={pollMs} api="/api/admin/v1" classes={false} />;
+  return <LiveBoard client={client} t={t} cities={cities} pollMs={pollMs} api="/api/operator/v1" classes={false} />;
 }
