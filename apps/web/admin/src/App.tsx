@@ -6,7 +6,9 @@ import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
+import {Wallets} from './Wallets.js';
 import {StaffEdit} from './StaffEdit.js';
+import {OrderTimeline, Orders} from './Orders.js';
 import {EmergencyGive, EmergencyList, MyGrants} from './Emergency.js';
 
 const t = translator(translations, 'ru');
@@ -20,6 +22,7 @@ const SECTIONS: {path: string; label: string; permission?: string; role?: string
   {path: '/emergency', label: 'navEmergency', role: 'SUPER_ADMIN'},
   {path: '/reports', label: 'navReports', permission: 'reports.view'},
   {path: '/finance', label: 'navFinance', permission: 'finance.manage'},
+  {path: '/wallets', label: 'navWallets', permission: 'wallets.manage'},
   {path: '/settings', label: 'navSettings', permission: 'settings.manage'},
   {path: '/logs', label: 'navLogs', permission: 'audit.view'}
 ];
@@ -84,6 +87,8 @@ function Panel({client}: {client: ApiClient}) {
         <Route path="/" element={<Profile me={me} client={client} />} />
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/wallets') ? <Route path="/wallets" element={<Wallets client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
         {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId" element={<StaffEdit client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId/emergency" element={<EmergencyGive client={client}
@@ -97,10 +102,17 @@ function Panel({client}: {client: ApiClient}) {
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
+        {sections.some(s => s.path === '/orders') ? (
+          <>
+            <Route path="/orders" element={<Orders client={client} t={t} />} />
+            <Route path="/orders/:orderId" element={<OrderTimeline client={client} t={t} />} />
+          </>
+        ) : null}
         {sections.some(s => s.path === '/drivers') ? (
           <>
             <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
             <Route path="/drivers/:driverId" element={<DriverCase client={client} t={t}
+              finance={permissions.has('finance.manage') || role === 'SUPER_ADMIN'}
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
