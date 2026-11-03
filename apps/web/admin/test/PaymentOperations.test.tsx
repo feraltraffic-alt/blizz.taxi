@@ -94,7 +94,8 @@ describe('O2: retry', () => {
   it.each([
     ['already repeated', () => [op(), op({id: 'op2', state: 'DECLINED', retry_of: OP1, created_at: '2026-11-03T09:30:00Z'})],
       1],
-    ['another operation pending', () => [op(), op({id: 'op3', type: 'REFUND', state: 'PENDING'})], 0],
+    ['another operation pending', () => [op(), op({id: 'op3', type: 'REFUND', state: 'PENDING',
+      created_at: '2026-11-03T09:10:00Z'})], 0],
     ['a declined refund', () => [op({type: 'REFUND'})], 0],
     ['a succeeded charge', () => [op({state: 'SUCCEEDED'})], 0]
   ])('not offered: %s', async (_name, list, expected) => {
