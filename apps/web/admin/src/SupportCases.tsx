@@ -13,5 +13,5 @@ export function SupportCases({client, t, me, newId}: {client: ApiClient; t: Tran
   }, [client]);
 
   if (!cities) return <p>{t('loading')}</p>;
-  return <Support client={client} t={t} cities={cities} me={me} newId={newId} api="/api/admin/v1" />;
+  return <Support client={client} t={t} cities={cities} me={me} newId={newId} api="/api/operator/v1" />;
 }
