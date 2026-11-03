@@ -7,6 +7,7 @@ import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
 import {Staff} from './Staff.js';
 import {Wallets} from './Wallets.js';
+import {StaffEdit} from './StaffEdit.js';
 import {OrderTimeline, Orders} from './Orders.js';
 
 const t = translator(translations, 'ru');
@@ -84,6 +85,8 @@ function Panel({client}: {client: ApiClient}) {
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/wallets') ? <Route path="/wallets" element={<Wallets client={client} t={t}
+          newId={() => crypto.randomUUID()} />} /> : null}
+        {role === 'SUPER_ADMIN' ? <Route path="/staff/:staffId" element={<StaffEdit client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/geo') ? (
           <>
