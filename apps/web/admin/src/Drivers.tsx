@@ -7,8 +7,8 @@ import {DriverBalance} from './Balance.js';
 type Item = {driver_id: string; name?: string | null; phone?: string | null; since: string};
 type Doc = {id: string; type: string; decision: string; number?: string | null; valid_to?: string | null};
 type Vehicle = {id: string; registration_number: string; make: string; model: string; state: string};
-type Profile = {id: string; account_state?: string; review_status: string; version: number; name?: string | null; documents: Doc[];
-  vehicles: Vehicle[]; admission_city_ids?: string[]};
+type Profile = {id: string; account_state?: string; review_status: string; version: number; name?: string | null;
+  documents: Doc[]; vehicles: Vehicle[]; admission_city_ids?: string[]};
 type Case = {profile: Profile; phone?: string | null; history: {from: string; to: string; reason: string; at: string}[];
   duplicates?: {document_id: string}[]};
 type Decision = 'APPROVE' | 'REQUEST_CHANGES' | 'REJECT';
@@ -107,7 +107,8 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
 
   useEffect(() => {
     client.get('/api/config/v1/bootstrap' as never, {} as never)
-      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities)).catch(() => setCities([]));
+      .then(boot => setCities((boot as {cities: {id: string; name: string; currency?: string}[]}).cities))
+      .catch(() => setCities([]));
   }, [client]);
 
   const read = useCallback(async () => {
