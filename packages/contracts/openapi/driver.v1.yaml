@@ -1267,6 +1267,26 @@ paths:
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
 
+  /api/driver/v1/discipline:
+    get:
+      operationId: getDriverDiscipline
+      summary: My cancellations, acceptance rate and pause
+      description: >-
+        The driver's own counts (ADR 0018 B10, B12.2): counted cancellations after accepting in 24 hours and how many
+        until a pause, the 30-day rate, the 7-day acceptance rate of personal offers, and a pause in force with its end.
+      tags: [Trip]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: The counts now.
+          content:
+            application/json:
+              schema:
+                $ref: "./discipline.yaml#/components/schemas/Discipline"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+
   /api/driver/v1/trips/{trip_id}/no-show:
     post:
       operationId: reportNoShow

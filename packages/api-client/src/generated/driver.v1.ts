@@ -136,6 +136,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/driver/v1/discipline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My cancellations, acceptance rate and pause
+         * @description The driver's own counts (ADR 0018 B10, B12.2): counted cancellations after accepting in 24 hours and how many until a pause, the 30-day rate, the 7-day acceptance rate of personal offers, and a pause in force with its end.
+         */
+        get: operations["getDriverDiscipline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/driver/v1/documents": {
         parameters: {
             query?: never;
@@ -1386,6 +1406,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Acceptance: {
+            accepted7d: number;
+            enabled: boolean;
+            min_offers: number;
+            /** @description Personal offers of the last 7 days that count (answered or missed, pickup not too far). */
+            offers7d: number;
+            pause_percent: number;
+            /** @description accepted7d of offers7d in per cent, rounded down; null while offers7d is under min_offers. */
+            percent7d: number | null;
+            warn_percent: number;
+        };
         AcceptLegalText: {
             command_id: components["schemas"]["Uuid"];
             /** @description The language the text was shown in; one the version has. */
@@ -1432,6 +1463,21 @@ export interface components {
             /** @enum {string} */
             mode: "DIRECT" | "VIA_SERVICE_NUMBERS";
             phone: string;
+        };
+        Cancellations: {
+            /** @description Orders the driver accepted in the last 30 days. */
+            accepted30d: number;
+            /** @description Counted cancellations in the last 30 days. */
+            cancelled30d: number;
+            enabled: boolean;
+            /** @description Counted cancellations after accepting in the last 24 hours (rolling). */
+            last24h: number;
+            pause_after: number;
+            /** @description cancelled30d of accepted30d in per cent, rounded down; null with nothing accepted. */
+            rate30d_percent: number | null;
+            /** @description The counted cancellation that pauses new orders is this many from now; 0 — at or over it. */
+            until_pause: number;
+            warn_after: number;
         };
         CancelTripCommand: {
             command_id: components["schemas"]["Uuid"];
@@ -1583,6 +1629,11 @@ export interface components {
             challenge_id: components["schemas"]["Uuid"];
             command_id: components["schemas"]["Uuid"];
             otp_code: string;
+        };
+        Discipline: {
+            acceptance: components["schemas"]["Acceptance"];
+            cancellations: components["schemas"]["Cancellations"];
+            pause: components["schemas"]["PauseNow"];
         };
         Document: {
             /** @enum {string} */
@@ -2085,6 +2136,15 @@ export interface components {
             has_more: boolean;
             next_cursor?: string | null;
         };
+        /** @description A pause of new offers and claims in force; null when none. */
+        PauseNow: {
+            /** Format: date-time */
+            ends_at: string;
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            kind: "CANCELLATIONS" | "ACCEPTANCE";
+            level: number;
+        } | null;
         PhaseCommand: {
             command_id: components["schemas"]["Uuid"];
             /** @description Confirms an arrival or start that failed the normal checks; flags the trip for review. */
@@ -2224,6 +2284,8 @@ export interface components {
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
             labels: components["schemas"]["Labels"];
+            /** @description Drivers' list only (ADR 0018 B3, B10): true — cancelling for this reason does not count toward the pause; null on the other lists. */
+            not_counted?: boolean | null;
         };
         /** @description The active reasons of one side, in display order. */
         ReasonList: {
@@ -2731,6 +2793,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReasonList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getDriverDiscipline: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The counts now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discipline"];
                 };
             };
             401: components["responses"]["Unauthorized"];

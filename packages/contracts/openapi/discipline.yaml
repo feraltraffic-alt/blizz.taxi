@@ -1,0 +1,174 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — driver discipline components
+  version: 1.0.0
+  description: >-
+    What the driver and staff see of the measures for cancelling accepted orders and for declined and missed offers
+    (owner decision 03.11.2026, ADR 0018 part B, issue #487). Counts and thresholds only; the thresholds are the
+    service's settings (driver_discipline, offer_discipline).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Cancellations:
+      type: object
+      additionalProperties: false
+      required: [enabled, last24h, warn_after, pause_after, until_pause, accepted30d, cancelled30d, rate30d_percent]
+      properties:
+        enabled:
+          type: boolean
+        last24h:
+          description: Counted cancellations after accepting in the last 24 hours (rolling).
+          type: integer
+          minimum: 0
+        warn_after:
+          type: integer
+        pause_after:
+          type: integer
+        until_pause:
+          description: The counted cancellation that pauses new orders is this many from now; 0 — at or over it.
+          type: integer
+          minimum: 0
+        accepted30d:
+          description: Orders the driver accepted in the last 30 days.
+          type: integer
+          minimum: 0
+        cancelled30d:
+          description: Counted cancellations in the last 30 days.
+          type: integer
+          minimum: 0
+        rate30d_percent:
+          description: cancelled30d of accepted30d in per cent, rounded down; null with nothing accepted.
+          type: [integer, "null"]
+
+    Acceptance:
+      type: object
+      additionalProperties: false
+      required: [enabled, offers7d, accepted7d, percent7d, min_offers, warn_percent, pause_percent]
+      properties:
+        enabled:
+          type: boolean
+        offers7d:
+          description: Personal offers of the last 7 days that count (answered or missed, pickup not too far).
+          type: integer
+          minimum: 0
+        accepted7d:
+          type: integer
+          minimum: 0
+        percent7d:
+          description: accepted7d of offers7d in per cent, rounded down; null while offers7d is under min_offers.
+          type: [integer, "null"]
+        min_offers:
+          type: integer
+        warn_percent:
+          type: integer
+        pause_percent:
+          type: integer
+
+    PauseNow:
+      description: A pause of new offers and claims in force; null when none.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [id, kind, level, ends_at]
+          properties:
+            id:
+              $ref: "./common.yaml#/components/schemas/Uuid"
+            kind:
+              type: string
+              enum: [CANCELLATIONS, ACCEPTANCE]
+            level:
+              type: integer
+              minimum: 1
+            ends_at:
+              type: string
+              format: date-time
+        - type: "null"
+
+    Discipline:
+      type: object
+      additionalProperties: false
+      required: [cancellations, acceptance, pause]
+      properties:
+        cancellations:
+          $ref: "#/components/schemas/Cancellations"
+        acceptance:
+          $ref: "#/components/schemas/Acceptance"
+        pause:
+          $ref: "#/components/schemas/PauseNow"
+
+    CancellationRow:
+      type: object
+      additionalProperties: false
+      required: [order_id, city_id, reason_code, counted, not_counted_why, accepted_at, cancelled_at]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        reason_code:
+          type: string
+        counted:
+          type: boolean
+        not_counted_why:
+          description: GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off.
+          type: [string, "null"]
+          enum: [GRACE, REASON, OFF, null]
+        accepted_at:
+          type: string
+          format: date-time
+        cancelled_at:
+          type: string
+          format: date-time
+
+    DriverCard:
+      type: object
+      additionalProperties: false
+      required: [driver_id, cancellations, acceptance, pause, recent]
+      properties:
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        cancellations:
+          $ref: "#/components/schemas/Cancellations"
+        acceptance:
+          $ref: "#/components/schemas/Acceptance"
+        pause:
+          $ref: "#/components/schemas/PauseNow"
+        recent:
+          description: Cancellations after accepting of the last 30 days in the caller's cities, newest first, at most 200.
+          type: array
+          items:
+            $ref: "#/components/schemas/CancellationRow"
+
+    RateReport:
+      type: object
+      additionalProperties: false
+      required: [city_id, days, min_accepted, generated_at, drivers]
+      properties:
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        days:
+          type: integer
+        min_accepted:
+          description: Only drivers with at least this many accepted orders in the city (rate_flag_min_accepted).
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+        drivers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [driver_id, accepted, cancelled, rate_percent]
+            properties:
+              driver_id:
+                $ref: "./common.yaml#/components/schemas/Uuid"
+              accepted:
+                type: integer
+              cancelled:
+                type: integer
+              rate_percent:
+                type: integer
