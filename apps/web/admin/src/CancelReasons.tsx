@@ -4,9 +4,10 @@ import {Failure, type Translate} from '@blizz/web-ui';
 
 type Side = 'RIDER' | 'DRIVER' | 'STAFF' | 'REASSIGN';
 type Reason = {id: string; audience: Side; code: string; labels: Record<string, string>;
-  driver_outcome: string | null; operator_fault?: boolean; active: boolean; sort_order: number; version: number};
-type Draft = {labels: Record<string, string>; outcome: string; fault: boolean; active: boolean; order: string;
-  why: string};
+  driver_outcome: string | null; operator_fault?: boolean; not_counted?: boolean; active: boolean; sort_order: number;
+  version: number};
+type Draft = {labels: Record<string, string>; outcome: string; fault: boolean; notCounted: boolean; active: boolean;
+  order: string; why: string};
 
 const SIDES: Side[] = ['RIDER', 'DRIVER', 'STAFF', 'REASSIGN'];
 const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
@@ -21,15 +22,16 @@ function labelsOf(labels: Record<string, string>, main: string) {
 
 /**
  * The cancellation reasons of every side for holders of settings.manage (#385, REQ-CAN-01): the list by side and
- * order, adding a reason, and changing one with the version read. A driver's reason has an outcome, a staff reason
- * may be the operator's fault, and other sides send neither.
+ * order, adding a reason, and changing one with the version read. A driver's reason has an outcome and may not count
+ * as a cancellation (ADR 0018 B3), a staff reason may be the operator's fault, and other sides send neither.
  */
 export function CancelReasons({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const [reasons, setReasons] = useState<Reason[] | null>(null);
   const [languages, setLanguages] = useState<{main: string; enabled: string[]}>({main: 'uk', enabled: ['uk']});
   const [side, setSide] = useState<Side>('RIDER');
   const [code, setCode] = useState('');
-  const [draft, setDraft] = useState<Draft>({labels: {}, outcome: '', fault: false, active: true, order: '0', why: ''});
+  const [draft, setDraft] = useState<Draft>({labels: {}, outcome: '', fault: false, notCounted: false,
+    active: true, order: '0', why: ''});
   const [editing, setEditing] = useState<Record<string, Draft>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -49,7 +51,8 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
   }, [client, read]);
 
   /** The fields of a side: an outcome for drivers, the operator's fault for staff, nothing for the others. */
-  const extras = (of: Side, d: Draft) => ({...(of === 'DRIVER' ? {driver_outcome: d.outcome} : {}),
+  const extras = (of: Side, d: Draft) => ({...(of === 'DRIVER' ? {driver_outcome: d.outcome,
+    not_counted: d.notCounted} : {}),
     ...(of === 'STAFF' ? {operator_fault: d.fault} : {})});
   const valid = (of: Side, d: Draft) => {
     const why = d.why.trim();
@@ -85,7 +88,7 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
         active: draft.active, sort_order: Number(draft.order.trim()), reason: draft.why.trim()}} as never) as Reason;
       setReasons(list => [...(list ?? []), created]);
       setCode('');
-      setDraft({labels: {}, outcome: '', fault: false, active: true, order: '0', why: ''});
+      setDraft({labels: {}, outcome: '', fault: false, notCounted: false, active: true, order: '0', why: ''});
       setMessage(t('reasonAdded'));
     }, 'reasonCodeTaken', false);
   }
@@ -110,7 +113,7 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
   const outcome = (r: Reason) => r.driver_outcome ? [t('outcome_' + r.driver_outcome)] : [];
   const line = (r: Reason) => [r.code, r.labels[languages.main] ?? Object.values(r.labels)[0] ?? '—',
     t(r.active ? 'reasonActive' : 'reasonHidden'), t('reasonOrder', {n: r.sort_order}), ...outcome(r),
-    ...(r.operator_fault ? [t('operatorFault')] : [])].join(' · ');
+    ...(r.operator_fault ? [t('operatorFault')] : []), ...(r.not_counted ? [t('notCounted')] : [])].join(' · ');
   const labelInputs = (d: Draft, change: (labels: Record<string, string>) => void, name: (lang: string) => string) =>
     [...languages.enabled, ...Object.keys(d.labels).filter(k => !languages.enabled.includes(k))].map(lang => (
       <label key={lang}>{name(lang)}
@@ -126,6 +129,8 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
             <option value="RETURN_TO_SEARCH">{t('outcome_RETURN_TO_SEARCH')}</option>
             <option value="CANCEL_ORDER">{t('outcome_CANCEL_ORDER')}</option>
           </select>
+          <label><input type="checkbox" checked={d.notCounted}
+            onChange={e => set({...d, notCounted: e.target.checked})} />{t('notCountedBox') + suffix}</label>
         </>
       ) : null}
       {of === 'STAFF' ? <label><input type="checkbox" checked={d.fault}
@@ -160,7 +165,8 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
                     </>
                   ) : (
                     <button type="button" onClick={() => setEditing(all => ({...all, [r.id]: {labels: {...r.labels},
-                      outcome: r.driver_outcome ?? '', fault: Boolean(r.operator_fault), active: r.active,
+                      outcome: r.driver_outcome ?? '', fault: Boolean(r.operator_fault),
+                      notCounted: Boolean(r.not_counted), active: r.active,
                       order: String(r.sort_order), why: ''}}))}>{t('editReason', {code: r.code})}</button>
                   )}
                 </li>

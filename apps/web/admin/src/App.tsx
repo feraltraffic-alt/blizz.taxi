@@ -16,6 +16,7 @@ import {Integrations} from './Integrations.js';
 import {CancelReasons} from './CancelReasons.js';
 import {CallLines} from './CallLines.js';
 import {ServiceSettings} from './ServiceSettings.js';
+import {DisciplineSettings} from './Discipline.js';
 import {Deletions} from './Deletions.js';
 import {Legal} from './Legal.js';
 import {Promotions} from './Promotions.js';
@@ -166,6 +167,8 @@ function Panel({client}: {client: ApiClient}) {
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/settings') ? <Route path="/settings/service" element={<ServiceSettings
           client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
+        {sections.some(s => s.path === '/settings') ? <Route path="/settings/discipline" element={<DisciplineSettings
+          client={client} t={t} newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/clients') ? (
           <>
             <Route path="/clients" element={<ClientSearch client={client} t={t} />} />
@@ -211,6 +214,7 @@ function Panel({client}: {client: ApiClient}) {
             <Route path="/drivers" element={<DriverQueue client={client} t={t} />} />
             <Route path="/drivers/:driverId" element={<DriverCase client={client} t={t}
               finance={permissions.has('finance.manage') || role === 'SUPER_ADMIN'}
+              risk={permissions.has('drivers.risk') || role === 'SUPER_ADMIN'}
               newId={() => crypto.randomUUID()} />} />
           </>
         ) : null}
