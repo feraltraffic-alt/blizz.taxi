@@ -84,6 +84,21 @@ it (ADR 0007). The owner decided to count such cancellations and act on them, wi
 | B10 | The driver sees their rate for 30 days and how many cancellations remain before a pause | — |
 | B11 | The admin panel shows the rate, the cancellations with reasons and the pauses in the driver's card, and a report of the drivers with the highest rates | — |
 
+### B12. Declined and missed offers (added by the owner the same day)
+
+A second, separate counter for personal offers the driver declined or let expire. Each of B12.1 and B12.2 is
+switched on or off in the admin panel on its own; all thresholds are settings.
+
+| # | Rule | Setting, default |
+|---|---|---|
+| B12.1 | Missed offers in a row (the timer ran out): the driver goes off line with a notice; one tap brings them back at once. Not a penalty: it keeps riders from waiting on a driver away from the phone. | 3 in a row |
+| B12.2 | Acceptance rate of personal offers over rolling 7 days, counted only from a minimum number of offers; the driver sees it in the app | min 20 offers; warning below 50 %; pause 30 min below 30 % (growing as B7); risk flag after 2 weeks below 30 % |
+| B12.3 | Not counted: orders from the broadcast list; offers that reached a driver paused, on a trip or in the last 30 s of the shift; offers with pickup farther than a set distance; a decline with a reason marked "does not count" | distance 3 km |
+
+The drivers are probably sole traders (FOP), not employees: forcing them hard to accept may be read as employment.
+The thresholds are therefore moderate, the measure is a pause, not a fine or a permanent block, and the question goes
+to the lawyer with Q-05.
+
 For the rider:
 - P1. The order searches again with priority, the nearest free drivers first.
 - P2. It is not offered again to the driver who cancelled.
