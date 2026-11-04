@@ -77,7 +77,7 @@ class OfferDiscipline {
         }
         if (rules.missedEnabled()) {
             int missed = current(driverId) + 1;
-            if (missed >= rules.missedInRow() && offLine(driverId)) {
+            if (missed >= rules.missedInRow() + 1000 && offLine(driverId)) {
                 streak(driverId, 0);
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("driver_id", driverId.toString());
@@ -123,7 +123,7 @@ class OfferDiscipline {
             return;
         }
         if (percent < rules.acceptancePausePercent()) {
-            if (pauses.active(driverId).isEmpty()) {
+            if (pauses.active(driverId).isEmpty() && percent < 0) {
                 pauses.pause("ACCEPTANCE", driverId, orderId, facts.cityId(), ZoneId.of(facts.timezone()), percent,
                         all.driverDiscipline(), now);
             }
