@@ -4,6 +4,7 @@ import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 import {DriverContact} from './DriverContact.js';
 import {DriverEarnings} from './DriverEarnings.js';
+import {DriverDiscipline} from './Discipline.js';
 import {DriverBalance} from './Balance.js';
 
 type Item = {driver_id: string; name?: string | null; phone?: string | null; since: string};
@@ -87,9 +88,12 @@ export function DriverQueue({client, t}: {client: ApiClient; t: Translate}) {
  * One driver's case (#351): documents (each scan opened once, every opening audited), vehicles, the history, the
  * duplicate files, and the decision with the driver's version.
  */
-export function DriverCase({client, t, newId, finance = false}: {client: ApiClient; t: Translate; newId: () => string;
+export function DriverCase({client, t, newId, finance = false, risk = false}: {client: ApiClient; t: Translate;
+  newId: () => string;
   /** The staff member holds finance.manage: the balance and its top-up are shown (#364). */
-  finance?: boolean}) {
+  finance?: boolean;
+  /** The staff member holds drivers.risk: cancellations, acceptance and pauses are shown (ADR 0018). */
+  risk?: boolean}) {
   const {driverId = ''} = useParams();
   const [item, setItem] = useState<Case | null>(null);
   const [scans, setScans] = useState<Record<string, {url: string; type: string}>>({});
@@ -302,6 +306,7 @@ export function DriverCase({client, t, newId, finance = false}: {client: ApiClie
         onProfile={changed => setItem(old => old ? {...old, profile: changed} : old)} reread={read} />
       {finance ? <DriverEarnings client={client} t={t} driverId={driverId} cities={cities}
         admitted={p.admission_city_ids ?? []} /> : null}
+      {risk ? <DriverDiscipline client={client} t={t} newId={newId} driverId={driverId} /> : null}
       <fieldset>
         <legend>{t('accountTitle')}</legend>
         <label>{t('accountReason')}

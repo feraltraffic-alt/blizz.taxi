@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
+import {CancellationReport} from './Discipline.js';
 
 type Flag = {id: string; driver_id: string; city_id: string | null; kind: string; state: string;
   evidence: Record<string, unknown>; raised_at: string; reason: string | null; review_reason: string | null;
@@ -149,6 +150,7 @@ export function Risk({client, t, newId}: {client: ApiClient; t: Translate; newId
         </label>
         <button type="button" onClick={() => void raiseFlag()}>{t('riskRaise')}</button>
       </fieldset>
+      {cities.length ? <CancellationReport client={client} t={t} cities={cities} /> : null}
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
     </section>
