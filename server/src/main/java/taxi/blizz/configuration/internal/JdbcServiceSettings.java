@@ -48,7 +48,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new CashNotReceived(true, 100),
             new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false),
             new StaffTopUps(Map.of()),
-            new RiderDebts(Map.of()));
+            new RiderDebts(Map.of()),
+            new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -244,8 +245,11 @@ class JdbcServiceSettings implements ServiceSettings {
                         + MAX_DAILY_TOP_UP_MINOR + " minor units");
             }
         });
+        DriverDiscipline discipline = s.driverDiscipline() == null ? DEFAULTS.driverDiscipline()
+                : s.driverDiscipline();
+        validate(discipline);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps, debts);
+                orders, cash, versions, topUps, debts, discipline);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -299,8 +303,33 @@ class JdbcServiceSettings implements ServiceSettings {
         AppVersions versions = s.appVersions() == null ? DEFAULTS.appVersions() : s.appVersions();
         StaffTopUps topUps = s.staffTopUps() == null ? DEFAULTS.staffTopUps() : s.staffTopUps();
         RiderDebts debts = s.riderDebts() == null ? DEFAULTS.riderDebts() : s.riderDebts();
+        DriverDiscipline discipline = s.driverDiscipline() == null ? DEFAULTS.driverDiscipline()
+                : s.driverDiscipline();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps, debts);
+                topUps, debts, discipline);
+    }
+
+    /** ADR 0018 B: no zero or negative windows; the warning comes before the pause; the second pause is the longer. */
+    private static void validate(DriverDiscipline d) {
+        if (d.graceSeconds() < 0 || d.graceSeconds() > 600) {
+            throw invalid("Driver discipline: grace_seconds must be between 0 and 600");
+        }
+        if (d.pauseAfter() < 2 || d.pauseAfter() > 50 || d.warnAfter() < 1 || d.warnAfter() >= d.pauseAfter()) {
+            throw invalid("Driver discipline: pause_after must be 2..50 and warn_after 1..pause_after − 1");
+        }
+        if (d.firstPauseMinutes() < 1 || d.firstPauseMinutes() > 1440 || d.secondPauseMinutes() < d.firstPauseMinutes()
+                || d.secondPauseMinutes() > 1440) {
+            throw invalid("Driver discipline: first_pause_minutes 1..1440, second_pause_minutes from it to 1440");
+        }
+        if (d.escalationDays() < 1 || d.escalationDays() > 30 || d.uncountedFlagDays() < 1
+                || d.uncountedFlagDays() > 30) {
+            throw invalid("Driver discipline: escalation_days and uncounted_flag_days must be between 1 and 30");
+        }
+        if (d.rateFlagPercent() < 1 || d.rateFlagPercent() > 100 || d.rateFlagMinAccepted() < 1
+                || d.rateFlagMinAccepted() > 1000 || d.uncountedFlagAbove() < 1 || d.uncountedFlagAbove() > 100) {
+            throw invalid("Driver discipline: rate_flag_percent 1..100, rate_flag_min_accepted 1..1000,"
+                    + " uncounted_flag_above 1..100");
+        }
     }
 
     private static String color(String value, boolean required) {

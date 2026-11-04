@@ -18,8 +18,12 @@ components:
         over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff.
         DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's
         (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it.
+        DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018
+        B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3).
+        REPEATED_PAUSES — a third pause for cancellations within the escalation window (B7).
       type: string
-      enum: [IMPOSSIBLE_MOVEMENT, MANUAL, CASH_DISPUTE, DUPLICATE_DOCUMENT]
+      enum: [IMPOSSIBLE_MOVEMENT, MANUAL, CASH_DISPUTE, DUPLICATE_DOCUMENT, DRIVER_CANCELLATIONS,
+             UNCOUNTED_CANCELLATIONS, REPEATED_PAUSES]
 
     RiskFlagState:
       type: string

@@ -43,9 +43,12 @@ class JdbcTrips implements Trips {
     private final PresenceProperties presence;
     private final CancelReasons reasons;
 
+    private final CancellationDiscipline discipline;
+
     JdbcTrips(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
               DispatchProperties properties, PresenceProperties presence, FinalFares fares, CancelReasons reasons,
-              ServiceSettings settings) {
+              ServiceSettings settings, CancellationDiscipline discipline) {
+        this.discipline = discipline;
         this.settings = settings;
         this.reasons = reasons;
         this.fares = fares;
@@ -188,7 +191,7 @@ class JdbcTrips implements Trips {
                                 "This reason cancels the order; giving it up needs a RETURN_TO_SEARCH reason");
                     }
                     Locked trip = lock(driver, tripId, expectedVersion);
-                    giveUp(trip, driver, note == null ? reason.code() : reason.code() + " — " + note,
+                    giveUp(trip, driver, reason, note == null ? reason.code() : reason.code() + " — " + note,
                             Map.of("reason_code", reason.code(), "reason_labels", reason.labels()));
                     return view(tripId);
                 });
@@ -198,8 +201,10 @@ class JdbcTrips implements Trips {
     }
 
     /** The driver drops the order before the start; it goes back to the search with the remaining budget. */
-    private void giveUp(Locked trip, Actor driver, String why, Map<String, Object> details) {
+    private void giveUp(Locked trip, Actor driver, CancelReasons.Reason reason, String why,
+                        Map<String, Object> details) {
         taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
+        discipline.cancelled(driver.id(), trip.orderId(), assignment.id(), reason);
         core.endAssignmentBeforeStart(assignment, "RELEASED", "DRIVER_WITHDREW: " + why);
         Map<String, Object> payload = new LinkedHashMap<>(details);
         payload.put("driver_id", driver.id().toString());
@@ -221,7 +226,7 @@ class JdbcTrips implements Trips {
                     if (CancelReasons.NO_SHOW.equals(reason.code())) {
                         noShow(trip, driver, reason);
                     } else if (reason.driverOutcome() == CancelReasons.DriverOutcome.RETURN_TO_SEARCH) {
-                        giveUp(trip, driver, reason.code(), Map.of("reason_code", reason.code(),
+                        giveUp(trip, driver, reason, reason.code(), Map.of("reason_code", reason.code(),
                                 "reason_labels", reason.labels()));
                     } else {
                         if (!"TO_PICKUP".equals(trip.phase()) && !"WAITING".equals(trip.phase())) {
@@ -230,6 +235,7 @@ class JdbcTrips implements Trips {
                         }
                         taxi.blizz.operations.AssignmentView assignment =
                                 core.assignmentOfOrder(trip.orderId()).orElseThrow();
+                        discipline.cancelled(driver.id(), trip.orderId(), assignment.id(), reason);
                         core.endAssignmentBeforeStart(assignment, "RELEASED", "DRIVER_CANCELLED: " + reason.code());
                         core.cancel(trip.order(), "DRIVER", reason, "OrderCancelled", driver,
                                 Map.of("trip_id", tripId.toString()));
@@ -265,6 +271,7 @@ class JdbcTrips implements Trips {
                     + properties.noShowMinimumWait().toMinutes() + " minutes before reporting a no-show");
         }
         taxi.blizz.operations.AssignmentView assignment = core.assignmentOfOrder(trip.orderId()).orElseThrow();
+        discipline.cancelled(driver.id(), trip.orderId(), assignment.id(), reason);
         core.endAssignmentBeforeStart(assignment, "RELEASED", "NO_SHOW");
         List<TripView.ContactAttempt> attempts = contactAttempts(trip.id());
         Map<String, Object> payload = new LinkedHashMap<>();

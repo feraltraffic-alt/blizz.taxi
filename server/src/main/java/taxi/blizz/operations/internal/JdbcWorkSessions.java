@@ -484,6 +484,13 @@ class JdbcWorkSessions implements WorkSessions {
         jdbc.sql("select distinct kind from driver_restriction where driver_id = :id and active order by kind")
                 .param("id", driverId).query(String.class).list()
                 .forEach(reasons::add);
+        // A pause for cancellations after accepting (ADR 0018 B6): new orders only; the session stays open.
+        if (jdbc.sql("""
+                        select count(*) from driver_pause
+                        where driver_id = :id and lifted_at is null and ends_at > :now""")
+                .param("id", driverId).param("now", now).query(Integer.class).single() > 0) {
+            reasons.add("CANCELLATION_PAUSE");
+        }
         if (current.isEmpty()) {
             reasons.add("NO_OPEN_SESSION");
             return new DriverAvailability(driverId, null, 0, "CLOSED", null, "DISCONNECTED", "UNAVAILABLE",

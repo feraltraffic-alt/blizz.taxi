@@ -24,7 +24,13 @@ public interface DriverRiskFlags {
          * A document with the same file content as another driver's (issue #105). Of no city: an applicant has none,
          * so only staff with all cities see and review it.
          */
-        DUPLICATE_DOCUMENT
+        DUPLICATE_DOCUMENT,
+        /** Cancellations after accepting above the settings' rate over 30 days (ADR 0018 B9). */
+        DRIVER_CANCELLATIONS,
+        /** Too many cancellations with a reason that does not count (ADR 0018 B3). */
+        UNCOUNTED_CANCELLATIONS,
+        /** A third pause for cancellations within the escalation window (ADR 0018 B7). */
+        REPEATED_PAUSES
     }
 
     enum State {

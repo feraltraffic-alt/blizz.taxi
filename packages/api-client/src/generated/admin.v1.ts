@@ -622,6 +622,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/v1/driver-pauses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A driver's pauses for cancellations
+         * @description Pauses of new orders for cancelling accepted orders (ADR 0018 B6–B8), newest first, at most 100, only of the cities where the caller has drivers.risk.
+         */
+        get: operations["listDriverPauses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/driver-pauses/{pause_id}/lift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift a pause for cancellations
+         * @description Ends an active pause at once with a reason (ADR 0018 B8); needs drivers.risk for the pause's city (a super admin has it) and is audited. The cancellations stay counted. A pause already over → 409.
+         */
+        post: operations["liftDriverPause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/v1/driver-promotions": {
         parameters: {
             query?: never;
@@ -3549,6 +3589,11 @@ export interface components {
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
             labels: components["schemas"]["Labels"];
+            /**
+             * @description DRIVER-only (ADR 0018 B3).
+             * @default false
+             */
+            not_counted: boolean;
             /** @default false */
             operator_fault: boolean;
             /** @description Why the list is changed; goes to the audit log. */
@@ -3775,6 +3820,30 @@ export interface components {
          * @enum {string|null}
          */
         DriverOutcome: "RETURN_TO_SEARCH" | "CANCEL_ORDER" | null;
+        DriverPause: {
+            /** @description Not lifted and not over yet. */
+            active: boolean;
+            city_id: components["schemas"]["Uuid"];
+            driver_id: components["schemas"]["Uuid"];
+            /** Format: date-time */
+            ends_at: string;
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            kind: "CANCELLATIONS";
+            /** @description 1 — the first pause within the escalation window, 2 — the second, 3 and more — until the day's end. */
+            level: number;
+            lift_reason: string | null;
+            /** Format: date-time */
+            lifted_at: string | null;
+            lifted_by: components["schemas"]["Uuid"] | null;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: int64 */
+            version: number;
+        };
+        DriverPauseList: {
+            pauses: components["schemas"]["DriverPause"][];
+        };
         DriverProfile: {
             /**
              * @description ACTIVE; BLOCKED — a limited session only (issue #141): GET, the current trip, support; DELETION_PENDING; ANONYMIZED.
@@ -4118,7 +4187,7 @@ export interface components {
             points: number;
         };
         /**
-         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius.
+         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt) or a pause for cancellations (ADR 0018); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius.
          * @enum {string}
          */
         ExclusionReason: "STALE_LOCATION" | "INACCURATE_LOCATION" | "CITY_NOT_ADMITTED" | "OUTSIDE_CITY" | "PAUSED" | "NOT_ADMITTED" | "CLASS" | "PAYMENT" | "BUSY" | "RESTRICTED" | "ALREADY_OFFERED" | "PREVIOUS_DRIVER" | "TOO_FAR";
@@ -5110,6 +5179,8 @@ export interface components {
             driver_outcome: components["schemas"]["DriverOutcome"];
             id: components["schemas"]["Uuid"];
             labels: components["schemas"]["Labels"];
+            /** @description DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel. */
+            not_counted?: boolean;
             /** @description STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account. */
             operator_fault?: boolean;
             sort_order: number;
@@ -5330,10 +5401,10 @@ export interface components {
             version: number;
         };
         /**
-         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it.
+         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it. DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018 B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3). REPEATED_PAUSES — a third pause for cancellations within the escalation window (B7).
          * @enum {string}
          */
-        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT";
+        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT" | "DRIVER_CANCELLATIONS" | "UNCOUNTED_CANCELLATIONS" | "REPEATED_PAUSES";
         /** @description One page of flags, newest raised first (raised_at, then id) (REQ-API-09). */
         RiskFlagList: {
             flags: components["schemas"]["RiskFlag"][];
@@ -5403,6 +5474,37 @@ export interface components {
                  */
                 driver_share_percent: number;
             };
+            /** @description Drivers who cancel an order after accepting it (owner decision 03.11.2026, ADR 0018 part B); omitted when saving: the defaults. A cancellation within grace_seconds of the acceptance, or for a reason with not_counted, is not counted. Over the last 24 hours (rolling): warn_after counted cancellations send the driver a warning, pause_after pause new offers and claims for first_pause_minutes; the second pause within escalation_days lasts second_pause_minutes, the third and later until the end of the city's day (at least second_pause_minutes) and raise a REPEATED_PAUSES risk flag. More than rate_flag_percent of at least rate_flag_min_accepted accepted orders in 30 days raise DRIVER_CANCELLATIONS; more than uncounted_flag_above cancellations for not-counted reasons in uncounted_flag_days days raise UNCOUNTED_CANCELLATIONS. A trip in progress and orders already accepted are never touched. enabled false: cancellations are recorded but nothing is counted. */
+            driver_discipline?: {
+                /** @default true */
+                enabled: boolean;
+                /** @default 7 */
+                escalation_days: number;
+                /** @default 30 */
+                first_pause_minutes: number;
+                /** @default 30 */
+                grace_seconds: number;
+                /** @default 5 */
+                pause_after: number;
+                /** @default 20 */
+                rate_flag_min_accepted: number;
+                /** @default 20 */
+                rate_flag_percent: number;
+                /**
+                 * @description At least first_pause_minutes.
+                 * @default 120
+                 */
+                second_pause_minutes: number;
+                /** @default 5 */
+                uncounted_flag_above: number;
+                /** @default 7 */
+                uncounted_flag_days: number;
+                /**
+                 * @description Fewer than pause_after.
+                 * @default 3
+                 */
+                warn_after: number;
+            } | null;
             languages: components["schemas"]["Languages"];
             orders?: {
                 /**
@@ -5724,6 +5826,8 @@ export interface components {
             /** Format: int64 */
             expected_version: number;
             labels: components["schemas"]["Labels"];
+            /** @description DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag. */
+            not_counted?: boolean;
             operator_fault?: boolean;
             reason: string;
             sort_order: number;
@@ -7014,6 +7118,73 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listDriverPauses: {
+        parameters: {
+            query: {
+                driver_id: components["schemas"]["Uuid"];
+            };
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pauses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverPauseList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    liftDriverPause: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                pause_id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    command_id: components["schemas"]["Uuid"];
+                    /** Format: int64 */
+                    expected_version: number;
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The pause now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverPause"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

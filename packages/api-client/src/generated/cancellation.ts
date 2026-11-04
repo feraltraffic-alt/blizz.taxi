@@ -23,6 +23,11 @@ export interface components {
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
             labels: components["schemas"]["Labels"];
+            /**
+             * @description DRIVER-only (ADR 0018 B3).
+             * @default false
+             */
+            not_counted: boolean;
             /** @default false */
             operator_fault: boolean;
             /** @description Why the list is changed; goes to the audit log. */
@@ -99,7 +104,7 @@ export interface components {
          */
         DriverOutcome: "RETURN_TO_SEARCH" | "CANCEL_ORDER" | null;
         /**
-         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius.
+         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt) or a pause for cancellations (ADR 0018); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius.
          * @enum {string}
          */
         ExclusionReason: "STALE_LOCATION" | "INACCURATE_LOCATION" | "CITY_NOT_ADMITTED" | "OUTSIDE_CITY" | "PAUSED" | "NOT_ADMITTED" | "CLASS" | "PAYMENT" | "BUSY" | "RESTRICTED" | "ALREADY_OFFERED" | "PREVIOUS_DRIVER" | "TOO_FAR";
@@ -127,6 +132,8 @@ export interface components {
             driver_outcome: components["schemas"]["DriverOutcome"];
             id: components["schemas"]["Uuid"];
             labels: components["schemas"]["Labels"];
+            /** @description DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel. */
+            not_counted?: boolean;
             /** @description STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account. */
             operator_fault?: boolean;
             sort_order: number;
@@ -192,6 +199,8 @@ export interface components {
             /** Format: int64 */
             expected_version: number;
             labels: components["schemas"]["Labels"];
+            /** @description DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag. */
+            not_counted?: boolean;
             operator_fault?: boolean;
             reason: string;
             sort_order: number;
