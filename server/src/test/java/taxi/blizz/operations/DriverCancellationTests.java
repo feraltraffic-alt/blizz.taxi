@@ -219,8 +219,8 @@ class DriverCancellationTests {
         }
         Map<String, Object> three = latestPause(third);
         assertThat(three.get("level")).isEqualTo(3);
-        OffsetDateTime endsAt = (OffsetDateTime) three.get("ends_at");
-        OffsetDateTime startsAt = (OffsetDateTime) three.get("starts_at");
+        OffsetDateTime endsAt = ((java.sql.Timestamp) three.get("ends_at")).toInstant().atOffset(ZoneOffset.UTC);
+        OffsetDateTime startsAt = ((java.sql.Timestamp) three.get("starts_at")).toInstant().atOffset(ZoneOffset.UTC);
         OffsetDateTime midnight = startsAt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate().plusDays(1)
                 .atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime atLeast = startsAt.plusMinutes(120);
@@ -256,6 +256,12 @@ class DriverCancellationTests {
                 driver.actor().id().toString()).header(HttpHeaders.AUTHORIZATION, "Bearer " + risk)).andReturn();
         assertThat(list.getResponse().getStatus()).isEqualTo(200);
         assertThat(list.getResponse().getContentAsString()).contains(pause.toString()).contains("\"active\":true");
+        String elsewhere = token(staffOf("drivers.risk", rides.city("test-driver-cancellations-other", "UAH", 168)));
+        MvcResult none = mvc.perform(get("/api/admin/v1/driver-pauses").param("driver_id",
+                driver.actor().id().toString()).header(HttpHeaders.AUTHORIZATION, "Bearer " + elsewhere)).andReturn();
+        assertThat(none.getResponse().getContentAsString()).as("another city's staff").doesNotContain(pause.toString());
+        assertThat(postStatus(path, elsewhere, Map.of("command_id", UUID.randomUUID(), "expected_version", 1,
+                "reason", "Not mine"))).isEqualTo(403);
 
         assertThat(postStatus(path, risk, Map.of("command_id", UUID.randomUUID(), "expected_version", 1,
                 "reason", "The car really broke down"))).isEqualTo(200);
@@ -279,6 +285,7 @@ class DriverCancellationTests {
             assertThat(flags(driver, "DRIVER_CANCELLATIONS")).as("2 of 2 accepted, fewer than 3").isZero();
             withdraw(driver, 60);
             assertThat(flags(driver, "DRIVER_CANCELLATIONS")).as("3 of 3 above 50 %").isEqualTo(1);
+            offLine(driver);
 
             TestRides.Driver steady = rides.driverNear(PICKUP);
             for (int i = 0; i < 2; i++) {
@@ -365,6 +372,12 @@ class DriverCancellationTests {
         trips.withdraw(driver.actor(), UUID.randomUUID(), ride.trip().id(), ride.trip().version(), "VEHICLE_PROBLEM",
                 null);
         stopSearches();
+    }
+
+    /** Closes the driver's shift, so the next test driver is the only free one near. */
+    private void offLine(TestRides.Driver driver) {
+        jdbc.sql("update work_session set state = 'CLOSED', closed_at = now() where driver_id = :d and state <> 'CLOSED'")
+                .param("d", driver.actor().id()).update();
     }
 
     private void cancel(TestRides.Driver driver, String code) {
@@ -465,6 +478,17 @@ class DriverCancellationTests {
                         values (:id, :login, 'Risk', 'ADMIN', :permissions, true, 'ACTIVE', now(), now())""")
                 .param("id", id).param("login", "cancellations-" + id)
                 .param("permissions", new String[] {permission}).update();
+        return new Actor(SubjectType.STAFF, id);
+    }
+
+    private Actor staffOf(String permission, UUID cityId) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        insert into staff_user (id, login, name, role, permissions, all_cities, city_scope, state,
+                                                created_at, updated_at)
+                        values (:id, :login, 'Risk', 'ADMIN', :permissions, false, :cities, 'ACTIVE', now(), now())""")
+                .param("id", id).param("login", "cancellations-" + id)
+                .param("permissions", new String[] {permission}).param("cities", new UUID[] {cityId}).update();
         return new Actor(SubjectType.STAFF, id);
     }
 

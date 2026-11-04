@@ -88,6 +88,7 @@ class RiderErasureTests {
             O driver: language name phone_normalized
             N driver: account_state deletion_previous_state eligibility_rules review_status
             N driver_balance_top_up: currency kind reason reference
+            N driver_cancellation: not_counted_why reason_code
             N driver_capacity: occupancy
             N driver_debt_limit: currency
             N driver_debt_refresh: currency
@@ -95,6 +96,7 @@ class RiderErasureTests {
             N driver_debt_status: currency
             O driver_document: decision_reason number
             N driver_document: decision type
+            N driver_pause: kind lift_reason
             N driver_promotion: currency days_of_week name payment_method repeat state
             N driver_promotion_reward: currency
             N driver_restriction: kind source_ref

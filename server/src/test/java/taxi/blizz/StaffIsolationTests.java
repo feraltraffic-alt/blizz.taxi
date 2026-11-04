@@ -105,6 +105,7 @@ class StaffIsolationTests {
             "GET /api/admin/v1/driver-risk-flags/{flag_id}",
             "POST /api/admin/v1/driver-risk-flags/{flag_id}/confirm",
             "POST /api/admin/v1/driver-risk-flags/{flag_id}/dismiss",
+            "POST /api/admin/v1/driver-pauses/{pause_id}/lift",
             "GET /api/admin/v1/drivers/{driver_id}/earnings",
             "GET /api/admin/v1/finance/pending-postings",
             "GET /api/admin/v1/orders",
@@ -171,6 +172,8 @@ class StaffIsolationTests {
                     "Uploads a file of a case the staff member is writing; the file belongs to its uploader until "
                             + "attached, and reading it back is swept through the case's attachment"),
             Map.entry("PUT /api/operator/v1/uploads/{file_id}", "Same as the admin upload"),
+            Map.entry("GET /api/admin/v1/driver-pauses",
+                    "Lists only the pauses of the caller's cities (DriverCancellationTests case 8)"),
             Map.entry("GET /api/admin/v1/clients/{client_id}", RIDER_NO_CITY),
             Map.entry("GET /api/admin/v1/clients/{client_id}/data-exports", RIDER_NO_CITY),
             Map.entry("POST /api/admin/v1/clients/{client_id}/block", RIDER_NO_CITY),
@@ -583,6 +586,15 @@ class StaffIsolationTests {
                             "reason", "Fixture"));
             ids.put("flag_id", flag.get("id"));
             values.put("expected_version", flag.get("version"));
+        } else if (path.contains("/driver-pauses/")) {
+            UUID pause = UUID.randomUUID();
+            jdbc.sql("""
+                            insert into driver_pause (id, driver_id, city_id, kind, level, starts_at, ends_at)
+                            values (:id, :driver, :city, 'CANCELLATIONS', 1, now(), now() + interval '30 minutes')""")
+                    .param("id", pause).param("driver", rides.driverNear(PICKUP).actor().id()).param("city", city)
+                    .update();
+            ids.put("pause_id", pause);
+            values.put("expected_version", 1L);
         } else if (path.contains("/drivers/{driver_id}/earnings")) {
             ids.put("driver_id", rides.driverNear(PICKUP).actor().id());
         } else if (path.contains("{driver_id}")) {
