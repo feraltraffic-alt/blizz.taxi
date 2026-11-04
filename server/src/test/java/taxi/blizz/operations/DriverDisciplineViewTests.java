@@ -174,7 +174,14 @@ class DriverDisciplineViewTests {
 
         // P1: a driver free for both goes to the rider who was left, though the other order waited longer.
         offLine(gaveUp);
-        TestRides.Driver next = rides.driverNear(PICKUP);
+        // Online far away first, so going on line offers it nothing; then moved near both orders without a heartbeat.
+        TestRides.Driver next = rides.driverNear(TestRides.north(PICKUP, 40_000));
+        GeoPoint near = TestRides.north(PICKUP, 1000);
+        jdbc.sql("""
+                        update work_session set last_location = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                        where driver_id = :d and state = 'OPEN'""")
+                .param("lon", near.lon()).param("lat", near.lat()).param("d", next.actor().id()).update();
+        assertThat(dispatch.offers(next.actor())).as("nothing offered while far").isEmpty();
         jdbc.sql("""
                         update dispatch_attempt set phase = 'PERSONAL', phase_deadline = now() + interval '1 minute',
                             next_action_at = case when order_id = :waiting
