@@ -39,7 +39,7 @@ class CancelReasonsController {
     }
 
     /** What an app shows: the code, the labels by language and, for drivers, what the reason does. */
-    record Item(String code, Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome) {
+    record Item(String code, Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome, Boolean notCounted) {
     }
 
     record Items(List<Item> reasons) {
@@ -115,6 +115,7 @@ class CancelReasonsController {
 
     private Items items(AccessClaims claims, Audience audience) {
         return new Items(reasons.active(claims.actor(), audience).stream()
-                .map(r -> new Item(r.code(), r.labels(), r.driverOutcome())).toList());
+                .map(r -> new Item(r.code(), r.labels(), r.driverOutcome(),
+                        audience == Audience.DRIVER ? r.notCounted() : null)).toList());
     }
 }

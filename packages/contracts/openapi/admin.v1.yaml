@@ -5858,6 +5858,74 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/drivers/{driver_id}/discipline:
+    get:
+      operationId: getDriverDisciplineCard
+      summary: A driver's cancellations, acceptance rate and pause
+      description: >-
+        For the driver's card (ADR 0018 B11): the counts the driver sees, with the cancellations after accepting of
+        the last 30 days in the caller's cities and their reasons. Needs drivers.risk; a driver of another taxi service
+        → 403.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The card.
+          content:
+            application/json:
+              schema:
+                $ref: "./discipline.yaml#/components/schemas/DriverCard"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/admin/v1/reports/driver-cancellations:
+    get:
+      operationId: getDriverCancellationReport
+      summary: Drivers of a city with the highest cancellation rates
+      description: >-
+        The last 30 days in the city (ADR 0018 B11): counted cancellations after accepting of the accepted orders,
+        from rate_flag_min_accepted accepted orders, highest rate first; drivers with none are left out. Needs
+        drivers.risk for the city.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: city_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "./discipline.yaml#/components/schemas/RateReport"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/driver-pauses:
     get:
       operationId: listDriverPauses

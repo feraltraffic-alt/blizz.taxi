@@ -944,6 +944,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/v1/drivers/{driver_id}/discipline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A driver's cancellations, acceptance rate and pause
+         * @description For the driver's card (ADR 0018 B11): the counts the driver sees, with the cancellations after accepting of the last 30 days in the caller's cities and their reasons. Needs drivers.risk; a driver of another taxi service → 403.
+         */
+        get: operations["getDriverDisciplineCard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/v1/drivers/{driver_id}/documents/{document_id}/file": {
         parameters: {
             query?: never;
@@ -2105,6 +2125,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/v1/reports/driver-cancellations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Drivers of a city with the highest cancellation rates
+         * @description The last 30 days in the city (ADR 0018 B11): counted cancellations after accepting of the accepted orders, from rate_flag_min_accepted accepted orders, highest rate first; drivers with none are left out. Needs drivers.risk for the city.
+         */
+        get: operations["getDriverCancellationReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/v1/reports/exports": {
         parameters: {
             query?: never;
@@ -2976,6 +3016,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Acceptance: {
+            accepted7d: number;
+            enabled: boolean;
+            min_offers: number;
+            /** @description Personal offers of the last 7 days that count (answered or missed, pickup not too far). */
+            offers7d: number;
+            pause_percent: number;
+            /** @description accepted7d of offers7d in per cent, rounded down; null while offers7d is under min_offers. */
+            percent7d: number | null;
+            warn_percent: number;
+        };
         Accounts: {
             accounts: components["schemas"]["OperatorBonusAccount"][];
         };
@@ -3158,6 +3209,36 @@ export interface components {
             reason_code: string;
             reason_labels: components["schemas"]["Labels"];
         } | null;
+        CancellationRow: {
+            /** Format: date-time */
+            accepted_at: string;
+            /** Format: date-time */
+            cancelled_at: string;
+            city_id: components["schemas"]["Uuid"];
+            counted: boolean;
+            /**
+             * @description GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off.
+             * @enum {string|null}
+             */
+            not_counted_why: "GRACE" | "REASON" | "OFF" | null;
+            order_id: components["schemas"]["Uuid"];
+            reason_code: string;
+        };
+        Cancellations: {
+            /** @description Orders the driver accepted in the last 30 days. */
+            accepted30d: number;
+            /** @description Counted cancellations in the last 30 days. */
+            cancelled30d: number;
+            enabled: boolean;
+            /** @description Counted cancellations after accepting in the last 24 hours (rolling). */
+            last24h: number;
+            pause_after: number;
+            /** @description cancelled30d of accepted30d in per cent, rounded down; null with nothing accepted. */
+            rate30d_percent: number | null;
+            /** @description The counted cancellation that pauses new orders is this many from now; 0 — at or over it. */
+            until_pause: number;
+            warn_after: number;
+        };
         Case: {
             /**
              * Format: uuid
@@ -4854,6 +4935,15 @@ export interface components {
             has_more: boolean;
             next_cursor?: string | null;
         };
+        /** @description A pause of new offers and claims in force; null when none. */
+        PauseNow: {
+            /** Format: date-time */
+            ends_at: string;
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            kind: "CANCELLATIONS" | "ACCEPTANCE";
+            level: number;
+        } | null;
         PaymentMerchant: {
             account: string;
             city_ids: components["schemas"]["Uuid"][];
@@ -5169,6 +5259,20 @@ export interface components {
             driver_id: components["schemas"]["Uuid"];
             reason: string;
         };
+        RateReport: {
+            city_id: components["schemas"]["Uuid"];
+            days: number;
+            drivers: {
+                accepted: number;
+                cancelled: number;
+                driver_id: components["schemas"]["Uuid"];
+                rate_percent: number;
+            }[];
+            /** Format: date-time */
+            generated_at: string;
+            /** @description Only drivers with at least this many accepted orders in the city (rate_flag_min_accepted). */
+            min_accepted: number;
+        };
         Reason: {
             /** @description Inactive reasons are hidden from the apps; reasons are never deleted. */
             active: boolean;
@@ -5433,6 +5537,14 @@ export interface components {
         "schemas-ChangeSettings": components["schemas"]["Command"] & {
             reason: string;
             settings: components["schemas"]["OperatorBonusSettings"];
+        };
+        "schemas-DriverCard": {
+            acceptance: components["schemas"]["Acceptance"];
+            cancellations: components["schemas"]["Cancellations"];
+            driver_id: components["schemas"]["Uuid"];
+            pause: components["schemas"]["PauseNow"];
+            /** @description Cancellations after accepting of the last 30 days in the caller's cities, newest first, at most 200. */
+            recent: components["schemas"]["CancellationRow"][];
         };
         SetAdmissionCities: {
             /** @description The whole new list; empty — admitted nowhere. */
@@ -7771,6 +7883,34 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    getDriverDisciplineCard: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                driver_id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The card. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["schemas-DriverCard"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getDriverDocumentFile: {
         parameters: {
             query?: never;
@@ -9804,6 +9944,35 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getDriverCancellationReport: {
+        parameters: {
+            query: {
+                city_id: components["schemas"]["Uuid"];
+                limit?: number;
+            };
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listReportExports: {

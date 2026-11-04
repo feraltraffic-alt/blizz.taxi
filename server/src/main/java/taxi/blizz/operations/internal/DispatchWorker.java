@@ -50,7 +50,7 @@ public class DispatchWorker {
                             select id from dispatch_attempt
                             where phase in ('PERSONAL', 'BROADCAST') and next_action_at <= :now
                               and (lease_until is null or lease_until < :now)
-                            order by next_action_at
+                            order by priority desc, next_action_at
                             limit :limit
                             for update skip locked)
                         returning a.id, a.order_id, a.generation""")

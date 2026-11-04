@@ -209,7 +209,7 @@ class JdbcTrips implements Trips {
         Map<String, Object> payload = new LinkedHashMap<>(details);
         payload.put("driver_id", driver.id().toString());
         event(trip, "AssignmentWithdrawn", driver, why, payload);
-        engine.resumeSearch(core.lockOrder(trip.orderId()));
+        engine.resumeSearch(core.lockOrder(trip.orderId()), true);
     }
 
     @Override

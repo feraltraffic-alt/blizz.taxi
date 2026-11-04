@@ -1672,6 +1672,8 @@ export interface components {
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
             labels: components["schemas"]["Labels"];
+            /** @description Drivers' list only (ADR 0018 B3, B10): true — cancelling for this reason does not count toward the pause; null on the other lists. */
+            not_counted?: boolean | null;
         };
         /** @description The active reasons of one side, in display order. */
         ReasonList: {

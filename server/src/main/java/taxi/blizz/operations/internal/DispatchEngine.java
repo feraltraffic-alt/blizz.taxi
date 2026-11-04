@@ -50,6 +50,14 @@ class DispatchEngine {
      * left the order ends UNFULFILLED (NO_DRIVER) and the rider is told.
      */
     void resumeSearch(OrderCore.LockedOrder order) {
+        resumeSearch(order, false);
+    }
+
+    /**
+     * {@code priority}: the order a driver gave back after accepting (ADR 0018 P1) is taken by the worker before other
+     * due searches, so the nearest free driver goes to the rider who already waited.
+     */
+    void resumeSearch(OrderCore.LockedOrder order, boolean priority) {
         java.time.Duration searched = jdbc.sql("""
                         select coalesce(sum(extract(epoch from coalesce(stopped_at, :now) - created_at)), 0)
                         from dispatch_attempt where order_id = :id""")
@@ -63,10 +71,14 @@ class DispatchEngine {
             core.releaseCardHold(order.id(), "No driver found");
             return;
         }
-        search(order, left, "OrderSearchResumed");
+        search(order, left, "OrderSearchResumed", priority);
     }
 
     private void search(OrderCore.LockedOrder order, java.time.Duration budget, String eventType) {
+        search(order, budget, eventType, false);
+    }
+
+    private void search(OrderCore.LockedOrder order, java.time.Duration budget, String eventType, boolean priority) {
         OffsetDateTime now = core.now();
         int generation = jdbc.sql("select coalesce(max(generation), 0) + 1 from dispatch_attempt where order_id = :id")
                 .param("id", order.id())
@@ -75,9 +87,11 @@ class DispatchEngine {
         UUID attemptId = UUID.randomUUID();
         jdbc.sql("""
                         insert into dispatch_attempt (id, order_id, generation, phase, phase_deadline, total_deadline,
-                                                      next_action_at, created_at)
-                        values (:id, :orderId, :generation, 'PERSONAL', :phaseDeadline, :totalDeadline, :now, :now)""")
+                                                      next_action_at, created_at, priority)
+                        values (:id, :orderId, :generation, 'PERSONAL', :phaseDeadline, :totalDeadline, :now, :now,
+                                :priority)""")
                 .param("id", attemptId)
+                .param("priority", priority)
                 .param("orderId", order.id())
                 .param("generation", generation)
                 .param("phaseDeadline", now.plus(earliestOf(properties.personalPhaseMax(), budget)))
