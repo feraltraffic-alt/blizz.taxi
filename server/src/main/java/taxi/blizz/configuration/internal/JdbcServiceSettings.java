@@ -49,7 +49,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new AppVersions(NO_POLICY, NO_POLICY, NO_POLICY, NO_POLICY, false),
             new StaffTopUps(Map.of()),
             new RiderDebts(Map.of()),
-            new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7));
+            new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7),
+            new OfferDiscipline(true, 3, true, 20, 50, 30, 3000));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -248,8 +249,10 @@ class JdbcServiceSettings implements ServiceSettings {
         DriverDiscipline discipline = s.driverDiscipline() == null ? DEFAULTS.driverDiscipline()
                 : s.driverDiscipline();
         validate(discipline);
+        OfferDiscipline offers = s.offerDiscipline() == null ? DEFAULTS.offerDiscipline() : s.offerDiscipline();
+        validate(offers);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps, debts, discipline);
+                orders, cash, versions, topUps, debts, discipline, offers);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -305,8 +308,27 @@ class JdbcServiceSettings implements ServiceSettings {
         RiderDebts debts = s.riderDebts() == null ? DEFAULTS.riderDebts() : s.riderDebts();
         DriverDiscipline discipline = s.driverDiscipline() == null ? DEFAULTS.driverDiscipline()
                 : s.driverDiscipline();
+        OfferDiscipline offers = s.offerDiscipline() == null ? DEFAULTS.offerDiscipline() : s.offerDiscipline();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps, debts, discipline);
+                topUps, debts, discipline, offers);
+    }
+
+    /** ADR 0018 B12: the warning threshold above the pause threshold; no zero counts or distances. */
+    private static void validate(OfferDiscipline o) {
+        if (o.missedInRow() < 1 || o.missedInRow() > 20) {
+            throw invalid("Offer discipline: missed_in_row must be between 1 and 20");
+        }
+        if (o.acceptanceMinOffers() < 1 || o.acceptanceMinOffers() > 1000) {
+            throw invalid("Offer discipline: acceptance_min_offers must be between 1 and 1000");
+        }
+        if (o.acceptancePausePercent() < 1 || o.acceptanceWarnPercent() <= o.acceptancePausePercent()
+                || o.acceptanceWarnPercent() > 100) {
+            throw invalid("Offer discipline: acceptance_pause_percent from 1, acceptance_warn_percent above it, up to"
+                    + " 100");
+        }
+        if (o.farPickupMeters() < 100 || o.farPickupMeters() > 100_000) {
+            throw invalid("Offer discipline: far_pickup_meters must be between 100 and 100000");
+        }
     }
 
     /** ADR 0018 B: no zero or negative windows; the warning comes before the pause; the second pause is the longer. */

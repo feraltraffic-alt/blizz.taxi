@@ -30,7 +30,9 @@ public interface DriverRiskFlags {
         /** Too many cancellations with a reason that does not count (ADR 0018 B3). */
         UNCOUNTED_CANCELLATIONS,
         /** A third pause for cancellations within the escalation window (ADR 0018 B7). */
-        REPEATED_PAUSES
+        REPEATED_PAUSES,
+        /** The acceptance rate of personal offers below the pause threshold two weeks running (ADR 0018 B12.2). */
+        LOW_ACCEPTANCE
     }
 
     enum State {

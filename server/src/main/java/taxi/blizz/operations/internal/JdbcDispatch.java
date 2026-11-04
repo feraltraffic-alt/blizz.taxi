@@ -48,10 +48,13 @@ class JdbcDispatch implements Dispatch {
     private final AssignmentCommitter committer;
     private final taxi.blizz.pricing.FinalFares fares;
     private final GeoZones zones;
+    private final OfferDiscipline offerDiscipline;
 
     JdbcDispatch(JdbcClient jdbc, IdempotentCommands commands, OrderCore core, DispatchEngine engine,
                  WorkSessions workSessions, DispatchProperties properties, AssignmentCommitter committer,
-                 taxi.blizz.platform.RateLimits rateLimits, GeoZones zones, taxi.blizz.pricing.FinalFares fares) {
+                 taxi.blizz.platform.RateLimits rateLimits, GeoZones zones, taxi.blizz.pricing.FinalFares fares,
+                 OfferDiscipline offerDiscipline) {
+        this.offerDiscipline = offerDiscipline;
         this.fares = fares;
         this.zones = zones;
 
@@ -136,6 +139,7 @@ class JdbcDispatch implements Dispatch {
                             .param("now", core.now())
                             .param("id", offerId)
                             .update();
+                    offerDiscipline.accepted(driver.id());
                     return commit(order, driver, availability.vehicleId(), "OFFER", offerId);
                 });
         // Fault tests (issue #146): the assignment is committed, the driver has not had the answer.
@@ -166,6 +170,7 @@ class JdbcDispatch implements Dispatch {
                     .update();
             core.recordEvent(orderId, core.touch(orderId), "OfferRejected", driver, null,
                     Map.of("offer_id", offerId.toString()));
+            offerDiscipline.declined(driver.id(), orderId, offerId);
             // A refusal does not reset the passenger's waiting time: same attempt, next driver (REQ-CAN-05).
             engine.liveAttempt(orderId).ifPresent(engine::advance);
             return true;

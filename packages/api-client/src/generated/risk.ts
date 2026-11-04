@@ -45,10 +45,10 @@ export interface components {
             version: number;
         };
         /**
-         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it. DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018 B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3). REPEATED_PAUSES — a third pause for cancellations within the escalation window (B7).
+         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it. DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018 B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3). REPEATED_PAUSES — a third pause of one kind within the escalation window (B7). LOW_ACCEPTANCE — the acceptance rate of personal offers below the pause threshold in each of the last two weeks (B12.2).
          * @enum {string}
          */
-        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT" | "DRIVER_CANCELLATIONS" | "UNCOUNTED_CANCELLATIONS" | "REPEATED_PAUSES";
+        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT" | "DRIVER_CANCELLATIONS" | "UNCOUNTED_CANCELLATIONS" | "REPEATED_PAUSES" | "LOW_ACCEPTANCE";
         /** @description One page of flags, newest raised first (raised_at, then id) (REQ-API-09). */
         RiskFlagList: {
             flags: components["schemas"]["RiskFlag"][];

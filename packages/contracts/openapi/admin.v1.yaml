@@ -6347,8 +6347,11 @@ components:
         city_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         kind:
+          description: >-
+            CANCELLATIONS — for cancelling accepted orders (B6); ACCEPTANCE — for a low acceptance rate of personal
+            offers (B12.2). Each kind grows on its own.
           type: string
-          enum: [CANCELLATIONS]
+          enum: [CANCELLATIONS, ACCEPTANCE]
         level:
           description: 1 — the first pause within the escalation window, 2 — the second, 3 and more — until the day's end.
           type: integer
@@ -6589,6 +6592,53 @@ components:
               minimum: 1
               maximum: 30
               default: 7
+        offer_discipline:
+          description: >-
+            Declined and missed personal offers (owner decision 03.11.2026, ADR 0018 B12); omitted when saving: the
+            defaults. missed_enabled: missed_in_row personal offers let expire in a row take the driver off line (the
+            shift stops accepting, as after a pause; a driver.missed-offers push; one tap on line brings them back).
+            acceptance_enabled: the share of personal offers accepted over the last 7 days, counted from
+            acceptance_min_offers offers: below acceptance_warn_percent a warning (at most once in 24 hours), below
+            acceptance_pause_percent a pause of new orders with the durations and the escalation of
+            driver_discipline; below it in each of the last two weeks a LOW_ACCEPTANCE risk flag. Offers with the
+            pickup farther than far_pickup_meters and orders of the ALL tab never count.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [missed_enabled, missed_in_row, acceptance_enabled, acceptance_min_offers, acceptance_warn_percent,
+                     acceptance_pause_percent, far_pickup_meters]
+          properties:
+            missed_enabled:
+              type: boolean
+              default: true
+            missed_in_row:
+              type: integer
+              minimum: 1
+              maximum: 20
+              default: 3
+            acceptance_enabled:
+              type: boolean
+              default: true
+            acceptance_min_offers:
+              type: integer
+              minimum: 1
+              maximum: 1000
+              default: 20
+            acceptance_warn_percent:
+              description: Above acceptance_pause_percent.
+              type: integer
+              minimum: 2
+              maximum: 100
+              default: 50
+            acceptance_pause_percent:
+              type: integer
+              minimum: 1
+              maximum: 99
+              default: 30
+            far_pickup_meters:
+              type: integer
+              minimum: 100
+              maximum: 100000
+              default: 3000
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

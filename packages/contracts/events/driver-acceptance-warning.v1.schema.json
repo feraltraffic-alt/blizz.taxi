@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-acceptance-warning.v1.schema.json",
+  "title": "DriverAcceptanceWarning v1 payload",
+  "description": "Declining or missing this order's offer left the driver's acceptance rate of personal offers over 7 days below the warning threshold (ADR 0018 B12.2); at most one in 24 hours. The driver gets a push.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "driver_id", "acceptance_percent", "pause_percent"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "acceptance_percent": {"type": "integer", "minimum": 0, "maximum": 100},
+    "pause_percent": {"type": "integer", "minimum": 1, "maximum": 100}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "driver_id": "0b1c2d3e-0000-4000-8000-000000000002",
+     "acceptance_percent": 45, "pause_percent": 30}
+  ]
+}

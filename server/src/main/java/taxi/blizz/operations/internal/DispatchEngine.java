@@ -23,7 +23,11 @@ class DispatchEngine {
     private final DispatchProperties properties;
     private final JdbcDispatchJournal journal;
 
-    DispatchEngine(JdbcClient jdbc, OrderCore core, DispatchProperties properties, JdbcDispatchJournal journal) {
+    private final OfferDiscipline offerDiscipline;
+
+    DispatchEngine(JdbcClient jdbc, OrderCore core, DispatchProperties properties, JdbcDispatchJournal journal,
+                   OfferDiscipline offerDiscipline) {
+        this.offerDiscipline = offerDiscipline;
         this.jdbc = jdbc;
         this.core = core;
         this.properties = properties;
@@ -111,6 +115,7 @@ class DispatchEngine {
             core.closeOpenOffers(attempt.orderId(), "EXPIRED");
             core.recordEvent(attempt.orderId(), core.touch(attempt.orderId()), "OfferExpired", OrderCore.system(),
                     null, Map.of("offer_id", open.get().id().toString(), "driver_id", open.get().driverId().toString()));
+            offerDiscipline.expired(open.get().driverId(), attempt.orderId(), open.get().id());
             open = Optional.empty();
         }
         if (!now.isBefore(attempt.totalDeadline())) {

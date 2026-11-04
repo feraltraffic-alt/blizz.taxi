@@ -150,6 +150,7 @@ class AuditHotPathVolumeTests {
         Query(String name,String index,String sql,Map<String,?> params) {this(name,index,sql,params,false);}
     }
 
+
     @SuppressWarnings("unchecked")
     List<Query> hotQueries() {
         Object auditTarget=AopTestUtils.getUltimateTargetObject(audit);

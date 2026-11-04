@@ -54,9 +54,14 @@ class NotificationFeed implements OutboxHandler {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Payload(UUID driverId, String cancelledBy, UUID followUpOrderId, UUID offerId, UUID assignmentId,
-                   OffsetDateTime expiresAt) {
+                   OffsetDateTime expiresAt, String kind) {
         Payload(UUID driverId, String cancelledBy, UUID followUpOrderId) {
-            this(driverId, cancelledBy, followUpOrderId, null, null, null);
+            this(driverId, cancelledBy, followUpOrderId, null, null, null, null);
+        }
+
+        Payload(UUID driverId, String cancelledBy, UUID followUpOrderId, UUID offerId, UUID assignmentId,
+                OffsetDateTime expiresAt) {
+            this(driverId, cancelledBy, followUpOrderId, offerId, assignmentId, expiresAt, null);
         }
     }
 
@@ -81,7 +86,8 @@ class NotificationFeed implements OutboxHandler {
         return switch (eventType) {
             case "OfferMade", "AssignmentCommitted", "DriverArrived", "TripCompleted", "OrderCancelled",
                  "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted",
-                 "DestinationChanged", "DriverCancellationsWarning", "DriverPaused" -> true;
+                 "DestinationChanged", "DriverCancellationsWarning", "DriverPaused",
+                 "DriverAcceptanceWarning", "DriverOffersMissed" -> true;
             default -> false;
         };
     }
@@ -128,10 +134,16 @@ class NotificationFeed implements OutboxHandler {
                             "driver.destination-changed", DEFAULT_DEADLINE));
                 }
             }
-            case "DriverCancellationsWarning", "DriverPaused" -> {
+            case "DriverCancellationsWarning", "DriverPaused", "DriverAcceptanceWarning", "DriverOffersMissed" -> {
                 if (payload.driverId() != null) {
-                    pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()),
-                            "DriverPaused".equals(type) ? "driver.paused" : "driver.cancellations-warning",
+                    String template = switch (type) {
+                        case "DriverPaused" -> "ACCEPTANCE".equals(payload.kind()) ? "driver.paused-acceptance"
+                                : "driver.paused";
+                        case "DriverAcceptanceWarning" -> "driver.acceptance-warning";
+                        case "DriverOffersMissed" -> "driver.missed-offers";
+                        default -> "driver.cancellations-warning";
+                    };
+                    pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()), template,
                             DEFAULT_DEADLINE));
                 }
             }

@@ -3828,8 +3828,11 @@ export interface components {
             /** Format: date-time */
             ends_at: string;
             id: components["schemas"]["Uuid"];
-            /** @enum {string} */
-            kind: "CANCELLATIONS";
+            /**
+             * @description CANCELLATIONS — for cancelling accepted orders (B6); ACCEPTANCE — for a low acceptance rate of personal offers (B12.2). Each kind grows on its own.
+             * @enum {string}
+             */
+            kind: "CANCELLATIONS" | "ACCEPTANCE";
             /** @description 1 — the first pause within the escalation window, 2 — the second, 3 and more — until the day's end. */
             level: number;
             lift_reason: string | null;
@@ -5401,10 +5404,10 @@ export interface components {
             version: number;
         };
         /**
-         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it. DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018 B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3). REPEATED_PAUSES — a third pause for cancellations within the escalation window (B7).
+         * @description IMPOSSIBLE_MOVEMENT — two consecutive positions of a shift imply a speed above the limit (250 km/h by default) over more than the minimum distance; at most one per shift and hour. MANUAL — raised by staff. DUPLICATE_DOCUMENT — the driver added a document whose file has the same content as another driver's (issue #105); at most one per pair of drivers; of no city, so only staff with all cities see it. DRIVER_CANCELLATIONS — the driver cancelled more accepted orders than the settings' rate over 30 days (ADR 0018 B9). UNCOUNTED_CANCELLATIONS — too many cancellations for reasons that do not count (B3). REPEATED_PAUSES — a third pause of one kind within the escalation window (B7). LOW_ACCEPTANCE — the acceptance rate of personal offers below the pause threshold in each of the last two weeks (B12.2).
          * @enum {string}
          */
-        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT" | "DRIVER_CANCELLATIONS" | "UNCOUNTED_CANCELLATIONS" | "REPEATED_PAUSES";
+        RiskFlagKind: "IMPOSSIBLE_MOVEMENT" | "MANUAL" | "CASH_DISPUTE" | "DUPLICATE_DOCUMENT" | "DRIVER_CANCELLATIONS" | "UNCOUNTED_CANCELLATIONS" | "REPEATED_PAUSES" | "LOW_ACCEPTANCE";
         /** @description One page of flags, newest raised first (raised_at, then id) (REQ-API-09). */
         RiskFlagList: {
             flags: components["schemas"]["RiskFlag"][];
@@ -5506,6 +5509,26 @@ export interface components {
                 warn_after: number;
             } | null;
             languages: components["schemas"]["Languages"];
+            /** @description Declined and missed personal offers (owner decision 03.11.2026, ADR 0018 B12); omitted when saving: the defaults. missed_enabled: missed_in_row personal offers let expire in a row take the driver off line (the shift stops accepting, as after a pause; a driver.missed-offers push; one tap on line brings them back). acceptance_enabled: the share of personal offers accepted over the last 7 days, counted from acceptance_min_offers offers: below acceptance_warn_percent a warning (at most once in 24 hours), below acceptance_pause_percent a pause of new orders with the durations and the escalation of driver_discipline; below it in each of the last two weeks a LOW_ACCEPTANCE risk flag. Offers with the pickup farther than far_pickup_meters and orders of the ALL tab never count. */
+            offer_discipline?: {
+                /** @default true */
+                acceptance_enabled: boolean;
+                /** @default 20 */
+                acceptance_min_offers: number;
+                /** @default 30 */
+                acceptance_pause_percent: number;
+                /**
+                 * @description Above acceptance_pause_percent.
+                 * @default 50
+                 */
+                acceptance_warn_percent: number;
+                /** @default 3000 */
+                far_pickup_meters: number;
+                /** @default true */
+                missed_enabled: boolean;
+                /** @default 3 */
+                missed_in_row: number;
+            } | null;
             orders?: {
                 /**
                  * @description How many orders not in a final state (pre-orders included) one paying rider may have at once (active_orders_per_payer, ADR 0012 Q-03); one more is refused with 409 ACTIVE_ORDER_LIMIT.

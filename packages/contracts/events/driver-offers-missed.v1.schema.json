@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-offers-missed.v1.schema.json",
+  "title": "DriverOffersMissed v1 payload",
+  "description": "This order's offer was the driver's missed_in_row-th personal offer in a row left to expire; the shift stopped accepting (WorkSessionIntentChanged NOT_ACCEPTING) until the driver goes on line again (ADR 0018 B12.1). The driver gets a push.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "driver_id", "missed_in_row"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "missed_in_row": {"type": "integer", "minimum": 1}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "driver_id": "0b1c2d3e-0000-4000-8000-000000000002",
+     "missed_in_row": 3}
+  ]
+}

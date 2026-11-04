@@ -137,6 +137,18 @@ public interface ServiceSettings {
                             int uncountedFlagAbove, int uncountedFlagDays) {
     }
 
+    /**
+     * Declined and missed personal offers (owner decision 03.11.2026, ADR 0018 B12), each part switched on its own.
+     * B12.1: {@code missedInRow} offers let expire in a row take the driver off line. B12.2: the share of personal
+     * offers accepted over the last 7 days, from {@code acceptanceMinOffers} offers: below {@code acceptanceWarnPercent}
+     * a warning (once a day), below {@code acceptancePausePercent} a pause as for cancellations (the durations and the
+     * escalation of {@link DriverDiscipline}); below it in both of the last two weeks a LOW_ACCEPTANCE flag. Offers with
+     * the pickup farther than {@code farPickupMeters} are not counted.
+     */
+    record OfferDiscipline(boolean missedEnabled, int missedInRow, boolean acceptanceEnabled, int acceptanceMinOffers,
+                           int acceptanceWarnPercent, int acceptancePausePercent, int farPickupMeters) {
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -148,13 +160,22 @@ public interface ServiceSettings {
 
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
-                    StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
+                    StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
+                    OfferDiscipline offerDiscipline) {
+        /** Source compatibility for callers written before the offer discipline settings. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    riderDebts, driverDiscipline, null);
+        }
+
         /** Source compatibility for callers written before the driver discipline settings. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, null);
+                    riderDebts, null, null);
         }
 
         /** Source compatibility for callers written before the rider debt limit. */
