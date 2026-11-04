@@ -38,7 +38,8 @@ public class DispatchWorker {
         this.properties = properties;
     }
 
-    private record Due(UUID attemptId, UUID orderId, int generation) {
+    /** {@code priority} and {@code dueAt} order the claimed batch: UPDATE … RETURNING keeps no order of its own. */
+    private record Due(UUID attemptId, UUID orderId, int generation, boolean priority, OffsetDateTime dueAt) {
     }
 
     /** Claims and processes one batch of due attempts; returns how many were claimed. */
@@ -53,17 +54,21 @@ public class DispatchWorker {
                             order by priority desc, next_action_at
                             limit :limit
                             for update skip locked)
-                        returning a.id, a.order_id, a.generation""")
+                        returning a.id, a.order_id, a.generation, a.priority, a.next_action_at""")
                 .param("owner", owner)
                 .param("leaseUntil", now.plus(properties.lease()))
                 .param("now", now)
                 .param("limit", properties.batchSize())
-                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getInt(3)))
+                .query((rs, i) -> new Due(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getInt(3),
+                        rs.getBoolean(4), rs.getObject(5, OffsetDateTime.class)))
                 .list());
         if (due == null) {
             return 0;
         }
-        for (Due task : due) {
+        // An order a driver gave back first (ADR 0018 P1), then the longest due.
+        List<Due> ordered = due.stream().sorted(java.util.Comparator.comparing(Due::priority).reversed()
+                .thenComparing(Due::dueAt)).toList();
+        for (Due task : ordered) {
             try {
                 tx.executeWithoutResult(status -> process(task));
             } catch (RuntimeException e) {
