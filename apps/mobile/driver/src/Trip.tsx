@@ -12,7 +12,8 @@ export type Offer = {id: string; order_id: string; seconds_left: number; vehicle
 export type Trip = {id: string; order_id?: string; phase: string; version: number; pickup: Point; pickup_label: string; dropoff: Point;
   dropoff_label: string; payment_method: string; price_minor?: number | null; currency?: string | null;
   wallet_minor?: number; discount_minor?: number; comment?: string | null; entrance?: string | null};
-type Reason = {code: string; labels: Record<string, string>};
+/** {@code not_counted}: cancelling for it does not count toward a pause (ADR 0018 B3). */
+type Reason = {code: string; labels: Record<string, string>; not_counted?: boolean | null};
 type BroadcastOrder = {order_id: string; vehicle_class: string; pickup_label: string; dropoff_label: string;
   payment_method: string; price_minor?: number | null; currency?: string | null; distance_m: number};
 
@@ -324,7 +325,8 @@ function TripCard({client, t, guard, failure, newId, now, locale, pollMs, trip, 
       {beforeStart ? (
         <>
           {reasons.map(r => (
-            <Button key={r.code} label={(r.code === reason ? '● ' : '○ ') + (r.labels[locale] ?? r.labels.ru ?? r.code)}
+            <Button key={r.code} label={(r.code === reason ? '● ' : '○ ') + (r.labels[locale] ?? r.labels.ru ?? r.code)
+              + (r.not_counted ? ' (' + t('dscNotCounted') + ')' : '')}
               onPress={() => setReason(r.code)} />
           ))}
           <Button label={t('cancelTrip')} disabled={busy || !reason}

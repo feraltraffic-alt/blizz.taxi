@@ -11,6 +11,7 @@ import {Money} from './Money';
 import {Preorders} from './Preorders';
 import {Documents, type AdmissionProfile, type PickedFile} from './Documents';
 import {createTrackBuffer, type TrackPoint} from './Track';
+import {Discipline} from './Discipline';
 
 export type {PickedFile} from './Documents';
 
@@ -300,6 +301,8 @@ function Work({client, t, guard, failure, config, newId, now, locale}: Shared & 
             <Button label={t('resume')} onPress={() => void command('resume')} disabled={busy} />
           </>
         ) : <Button label={t('pause')} onPress={() => void command('pause')} disabled={busy} />) : null}
+      {online && !elsewhere ? <Discipline client={client} t={t} guard={guard} failure={failure}
+        refresh={availability.session_version} /> : null}
       {online ? <Button label={t('goOffline')} onPress={() => void goOffline()} disabled={busy} />
         : canWork ? <Button label={t('goOnline')} onPress={() => void goOnline()} disabled={busy} />
           : <Text style={{color: theme.muted}}>{t('notAdmitted')}</Text>}

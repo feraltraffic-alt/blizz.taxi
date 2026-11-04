@@ -5,6 +5,16 @@ export type {Locale} from '@blizz/mobile-ui';
 /** The driver's own texts; the shared ones (sign-in, legal texts, states) come from @blizz/mobile-ui. */
 export const translations: Catalogs = withCommon({
   ru: {
+    dscTitle: 'Отказы и принятие заказов',
+    dscPausedCancellations: 'Новые заказы на паузе до {until}: много отказов от принятых заказов',
+    dscPausedAcceptance: 'Новые заказы на паузе до {until}: вы принимаете мало заказов',
+    dscToday: 'Отказов от принятых заказов за сутки: {n}.',
+    dscUntilPause: 'Пауза — после ещё {n}.',
+    dscNextPauses: 'Следующий отказ поставит новые заказы на паузу.',
+    dscRate: 'За 30 дней: {percent} % отказов ({cancelled} из {accepted}).',
+    dscAcceptance: 'Принято предложений за 7 дней: {percent} %. Ниже {pause} % — пауза.',
+    dscAcceptanceFew: 'Предложений за 7 дней: {n}; процент считается от {min}.',
+    dscNotCounted: 'не считается отказом',
     transferRules: 'Перевод водителю: до {once} за раз, до {day} в день',
     transfersDisabled: 'Переводы выключены.',
     transferPhone: 'Номер водителя',
@@ -185,6 +195,16 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Терминал'
   },
   uk: {
+    dscTitle: 'Відмови і прийняття замовлень',
+    dscPausedCancellations: 'Нові замовлення на паузі до {until}: багато відмов від прийнятих замовлень',
+    dscPausedAcceptance: 'Нові замовлення на паузі до {until}: ви приймаєте мало замовлень',
+    dscToday: 'Відмов від прийнятих замовлень за добу: {n}.',
+    dscUntilPause: 'Пауза — після ще {n}.',
+    dscNextPauses: 'Наступна відмова поставить нові замовлення на паузу.',
+    dscRate: 'За 30 днів: {percent} % відмов ({cancelled} з {accepted}).',
+    dscAcceptance: 'Прийнято пропозицій за 7 днів: {percent} %. Нижче {pause} % — пауза.',
+    dscAcceptanceFew: 'Пропозицій за 7 днів: {n}; відсоток рахується від {min}.',
+    dscNotCounted: 'не вважається відмовою',
     transferRules: 'Переказ водію: до {once} за раз, до {day} на день',
     transfersDisabled: 'Перекази вимкнено.',
     transferPhone: 'Номер водія',
@@ -365,6 +385,16 @@ export const translations: Catalogs = withCommon({
     payment_TERMINAL: 'Термінал'
   },
   pl: {
+    dscTitle: 'Rezygnacje i przyjmowanie zleceń',
+    dscPausedCancellations: 'Nowe zlecenia wstrzymane do {until}: dużo rezygnacji z przyjętych zleceń',
+    dscPausedAcceptance: 'Nowe zlecenia wstrzymane do {until}: przyjmujesz mało zleceń',
+    dscToday: 'Rezygnacji z przyjętych zleceń w ciągu doby: {n}.',
+    dscUntilPause: 'Pauza — po jeszcze {n}.',
+    dscNextPauses: 'Następna rezygnacja wstrzyma nowe zlecenia.',
+    dscRate: 'Z 30 dni: {percent} % rezygnacji ({cancelled} z {accepted}).',
+    dscAcceptance: 'Przyjęte propozycje z 7 dni: {percent} %. Poniżej {pause} % — pauza.',
+    dscAcceptanceFew: 'Propozycji z 7 dni: {n}; odsetek liczony od {min}.',
+    dscNotCounted: 'nie liczy się jako rezygnacja',
     transferRules: 'Przelew do kierowcy: do {once} naraz, do {day} dziennie',
     transfersDisabled: 'Przelewy są wyłączone.',
     transferPhone: 'Numer kierowcy',
