@@ -13,7 +13,9 @@ create table driver_offer_streak (
     updated_at           timestamptz not null
 );
 
-create index offer_driver_created_idx on offer (driver_id, created_at desc);
+-- The offers that count for the rate; partial, so dispatch's own lookups by order and driver keep their index.
+create index offer_driver_created_idx on offer (driver_id, created_at desc)
+    where state in ('ACCEPTED', 'REJECTED', 'EXPIRED');
 
 alter table driver_risk_flag drop constraint driver_risk_flag_kind_check;
 alter table driver_risk_flag add constraint driver_risk_flag_kind_check
