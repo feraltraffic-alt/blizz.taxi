@@ -130,7 +130,7 @@ test('a sandbox driver signs in by a code, goes online, takes an offer, drives i
   await page.screenshot({path: info.outputPath('11-all-tab.png'), fullPage: true});
   await page.getByRole('button', {name: 'Взять', exact: true}).first().click();
   await expect(page.getByText('Едете к пассажиру')).toBeVisible();
-  await page.getByRole('button', {name: '○ Пассажир попросил отменить', exact: true}).click();
+  await page.getByRole('button', {name: '○ Пассажир попросил отменить (не считается отказом)', exact: true}).click();
   await page.getByRole('button', {name: 'Отменить поездку', exact: true}).click();
   await expect(page.getByText('Ждём предложений…')).toBeVisible();
   await page.screenshot({path: info.outputPath('12-cancelled.png'), fullPage: true});
