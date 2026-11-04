@@ -34,10 +34,19 @@ public interface CancelReasons {
         CANCEL_ORDER
     }
 
+    /**
+     * {@code notCounted}: a driver's reason that does not count as a cancellation for the warning, the pause and the
+     * rate (ADR 0018 B3), e.g. the rider asked to cancel.
+     */
     record Reason(UUID id, Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                  boolean operatorFault, boolean active, int sortOrder, long version) {
+                  boolean operatorFault, boolean notCounted, boolean active, int sortOrder, long version) {
         public Reason {
             labels = labels == null ? Map.of() : Map.copyOf(labels);
+        }
+
+        public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
+                      DriverOutcome driverOutcome, boolean operatorFault, boolean active, int sortOrder, long version) {
+            this(id, audience, code, labels, driverOutcome, operatorFault, false, active, sortOrder, version);
         }
 
         public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
@@ -46,9 +55,17 @@ public interface CancelReasons {
         }
     }
 
-    /** {@code driverOutcome} is required for DRIVER and must be null otherwise; operatorFault is STAFF-only. */
+    /**
+     * {@code driverOutcome} is required for DRIVER and must be null otherwise; operatorFault is STAFF-only, notCounted
+     * DRIVER-only.
+     */
     record Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                 boolean operatorFault, boolean active, int sortOrder) {
+                 boolean operatorFault, boolean notCounted, boolean active, int sortOrder) {
+        public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
+                     boolean operatorFault, boolean active, int sortOrder) {
+            this(audience, code, labels, driverOutcome, operatorFault, false, active, sortOrder);
+        }
+
         public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
                      boolean active, int sortOrder) {
             this(audience, code, labels, driverOutcome, false, active, sortOrder);
@@ -66,7 +83,7 @@ public interface CancelReasons {
 
     Reason create(Actor staff, UUID commandId, Draft draft, String reason);
 
-    /** Labels, driver outcome, operator-fault flag, activity and order; audience and code stay as they were. */
+    /** Labels, driver outcome, operator-fault and not-counted flags, activity and order; side and code stay. */
     Reason update(Actor staff, UUID commandId, UUID reasonId, long expectedVersion, Draft draft, String reason);
 
     /** An active reason of the side in the service of {@code within}, or {@code VALIDATION_FAILED}. */

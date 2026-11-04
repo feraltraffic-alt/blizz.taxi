@@ -122,6 +122,21 @@ public interface ServiceSettings {
         }
     }
 
+    /**
+     * Drivers who cancel an order after accepting it (owner decision 03.11.2026, ADR 0018 part B). A cancellation within
+     * {@code graceSeconds} of the acceptance, or for a reason marked "does not count", is not counted. Over the last 24
+     * hours: {@code warnAfter} counted ones warn the driver, {@code pauseAfter} pause new orders for
+     * {@code firstPauseMinutes}; a second pause within {@code escalationDays} lasts {@code secondPauseMinutes}, a third
+     * one until the end of the city's day (at least {@code secondPauseMinutes}) and raises a risk flag. Over 30 days,
+     * more than {@code rateFlagPercent} of at least {@code rateFlagMinAccepted} accepted orders raise a flag; more than
+     * {@code uncountedFlagAbove} uncounted cancellations by reason in {@code uncountedFlagDays} days raise another.
+     * {@code enabled} false: cancellations are recorded but nothing is counted.
+     */
+    record DriverDiscipline(boolean enabled, int graceSeconds, int warnAfter, int pauseAfter, int firstPauseMinutes,
+                            int secondPauseMinutes, int escalationDays, int rateFlagPercent, int rateFlagMinAccepted,
+                            int uncountedFlagAbove, int uncountedFlagDays) {
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -133,7 +148,15 @@ public interface ServiceSettings {
 
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
-                    StaffTopUps staffTopUps, RiderDebts riderDebts) {
+                    StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
+        /** Source compatibility for callers written before the driver discipline settings. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps, RiderDebts riderDebts) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    riderDebts, null);
+        }
+
         /** Source compatibility for callers written before the rider debt limit. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,

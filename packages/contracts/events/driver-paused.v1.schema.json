@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-paused.v1.schema.json",
+  "title": "DriverPaused v1 payload",
+  "description": "Cancelling this accepted order paused the driver's new offers and claims until ends_at (ADR 0018 B6, B7); level 3 and more also raise a REPEATED_PAUSES risk flag. The driver gets a push.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "driver_id", "pause_id", "level", "cancellations", "ends_at"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "pause_id": {"type": "string", "format": "uuid"},
+    "level": {"type": "integer", "minimum": 1},
+    "cancellations": {"type": "integer", "minimum": 1},
+    "ends_at": {"type": "string", "format": "date-time"}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "driver_id": "0b1c2d3e-0000-4000-8000-000000000002",
+     "pause_id": "0b1c2d3e-0000-4000-8000-000000000003", "level": 1, "cancellations": 5,
+     "ends_at": "2026-11-04T10:30:00Z"}
+  ]
+}

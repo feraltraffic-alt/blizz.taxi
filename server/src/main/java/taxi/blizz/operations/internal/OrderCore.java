@@ -454,9 +454,13 @@ class OrderCore {
                                 where x.order_id in (o.id, o.related_order_id) and x.driver_id = ws.driver_id)
                           and not exists (
                                 select 1 from driver_restriction r where r.driver_id = ws.driver_id and r.active)
+                          and not exists (
+                                select 1 from driver_pause p
+                                where p.driver_id = ws.driver_id and p.lifted_at is null and p.ends_at > :now)
                         order by distance_m, ws.driver_id
                         limit :limit""")
                 .param("orderId", orderId)
+                .param("now", now)
                 .param("heartbeatSince", now.minus(presence.stale()))
                 .param("locationSince", now.minus(presence.gpsMaxAge()))
                 .param("includeOffered", includeOffered)
@@ -504,7 +508,10 @@ class OrderCore {
                                  when not (o.vehicle_class = any(v.class_approvals)) then 'CLASS'
                                  when o.payment_method = 'TERMINAL' and not d.has_payment_terminal then 'PAYMENT'
                                  when exists (select 1 from driver_restriction r
-                                              where r.driver_id = ws.driver_id and r.active) then 'RESTRICTED'
+                                              where r.driver_id = ws.driver_id and r.active)
+                                      or exists (select 1 from driver_pause p
+                                                 where p.driver_id = ws.driver_id and p.lifted_at is null
+                                                   and p.ends_at > :now) then 'RESTRICTED'
                                  when exists (select 1 from assignment x
                                               where x.order_id in (o.id, o.related_order_id)
                                                 and x.driver_id = ws.driver_id) then 'PREVIOUS_DRIVER'
@@ -530,6 +537,7 @@ class OrderCore {
                 .param("accuracy", presence.eligibilityAccuracyMeters())
                 .param("returnZone", returnZone(orderId))
                 .param("limit", limit)
+                .param("now", now)
                 .query((rs, i) -> new Considered(rs.getObject("driver_id", UUID.class),
                         (Integer) rs.getObject("distance_m"), rs.getString("reason")))
                 .list();

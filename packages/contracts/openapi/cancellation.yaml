@@ -93,6 +93,11 @@ components:
         operator_fault:
           description: STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account.
           type: boolean
+        not_counted:
+          description: >-
+            DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the
+            warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel.
+          type: boolean
         active:
           description: Inactive reasons are hidden from the apps; reasons are never deleted.
           type: boolean
@@ -136,6 +141,10 @@ components:
         operator_fault:
           type: boolean
           default: false
+        not_counted:
+          description: DRIVER-only (ADR 0018 B3).
+          type: boolean
+          default: false
         active:
           type: boolean
         sort_order:
@@ -163,6 +172,9 @@ components:
         driver_outcome:
           $ref: "#/components/schemas/DriverOutcome"
         operator_fault:
+          type: boolean
+        not_counted:
+          description: DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag.
           type: boolean
         active:
           type: boolean

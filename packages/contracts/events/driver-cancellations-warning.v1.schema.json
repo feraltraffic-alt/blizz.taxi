@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/driver-cancellations-warning.v1.schema.json",
+  "title": "DriverCancellationsWarning v1 payload",
+  "description": "The driver cancelled warn_after accepted orders within 24 hours, this order being the last (ADR 0018 B5); the driver gets a push.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "driver_id", "cancellations", "pause_after"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "cancellations": {"type": "integer", "minimum": 1},
+    "pause_after": {"type": "integer", "minimum": 2}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "driver_id": "0b1c2d3e-0000-4000-8000-000000000002",
+     "cancellations": 3, "pause_after": 5}
+  ]
+}

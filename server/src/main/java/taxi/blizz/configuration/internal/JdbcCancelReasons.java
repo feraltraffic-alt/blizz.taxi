@@ -37,7 +37,8 @@ class JdbcCancelReasons implements CancelReasons {
     private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{1,39}$");
     private static final int LABEL_MAX = 80;
     private static final String SELECT = """
-            select id, audience, code, labels::text as labels, driver_outcome, operator_fault, active, sort_order, version
+            select id, audience, code, labels::text as labels, driver_outcome, operator_fault, not_counted, active, sort_order,
+                   version
             from cancel_reason""";
 
     private final JdbcClient jdbc;
@@ -97,14 +98,15 @@ class JdbcCancelReasons implements CancelReasons {
                     try {
                         jdbc.sql("""
                                         insert into cancel_reason (id, service_id, audience, code, labels,
-                                                                   driver_outcome, operator_fault, active, sort_order,
-                                                                   created_at, updated_at)
+                                                                   driver_outcome, operator_fault, not_counted,
+                                                                   active, sort_order, created_at, updated_at)
                                         values (:id, :service, :audience, :code, cast(:labels as jsonb), :outcome,
-                                                :operatorFault, :active, :sort, :now, :now)""")
+                                                :operatorFault, :notCounted, :active, :sort, :now, :now)""")
                                 .param("id", id).param("service", service).param("audience", clean.audience().name()).param("code", clean.code())
                                 .param("labels", json.writeValueAsString(clean.labels()))
                                 .param("outcome", clean.driverOutcome() == null ? null : clean.driverOutcome().name())
                                 .param("operatorFault", clean.operatorFault())
+                                .param("notCounted", clean.notCounted())
                                 .param("active", clean.active()).param("sort", clean.sortOrder())
                                 .param("now", now()).update();
                     } catch (DuplicateKeyException e) {
@@ -141,14 +143,17 @@ class JdbcCancelReasons implements CancelReasons {
                         throw invalid("The side and the code of a reason never change; add a new reason instead");
                     }
                     Draft clean = validate(actor, new Draft(before.audience(), before.code(), draft.labels(),
-                            draft.driverOutcome(), draft.operatorFault(), draft.active(), draft.sortOrder()));
+                            draft.driverOutcome(), draft.operatorFault(), draft.notCounted(), draft.active(),
+                            draft.sortOrder()));
                     jdbc.sql("""
                                     update cancel_reason set labels = cast(:labels as jsonb), driver_outcome = :outcome,
-                                           operator_fault = :operatorFault, active = :active, sort_order = :sort,
+                                           operator_fault = :operatorFault, not_counted = :notCounted, active = :active,
+                                           sort_order = :sort,
                                            updated_at = :now, version = version + 1 where id = :id""")
                             .param("labels", json.writeValueAsString(clean.labels()))
                             .param("outcome", clean.driverOutcome() == null ? null : clean.driverOutcome().name())
                             .param("operatorFault", clean.operatorFault())
+                            .param("notCounted", clean.notCounted())
                             .param("active", clean.active()).param("sort", clean.sortOrder())
                             .param("now", now()).param("id", reasonId).update();
                     Reason after = read(reasonId);
@@ -205,9 +210,10 @@ class JdbcCancelReasons implements CancelReasons {
         if (!Services.DEFAULT_ID.equals(service)) {
             jdbc.sql("""
                             insert into cancel_reason (id, service_id, audience, code, labels, driver_outcome,
-                                                       operator_fault, active, sort_order, created_at, updated_at)
+                                                       operator_fault, not_counted, active, sort_order, created_at,
+                                                       updated_at)
                             select gen_random_uuid(), :service, audience, code, labels, driver_outcome,
-                                   operator_fault, active, sort_order, :now, :now
+                                   operator_fault, not_counted, active, sort_order, :now, :now
                             from cancel_reason
                             where service_id = :first
                               and not exists (select 1 from cancel_reason where service_id = :service)
@@ -238,6 +244,9 @@ class JdbcCancelReasons implements CancelReasons {
         if (d.operatorFault() && d.audience() != Audience.STAFF) {
             throw invalid("Only a staff cancellation reason can be marked as operator fault");
         }
+        if (d.notCounted() && d.audience() != Audience.DRIVER) {
+            throw invalid("Only a driver's reason can be marked as not counted");
+        }
         Map<String, String> labels = new LinkedHashMap<>();
         if (d.labels() != null) {
             for (Map.Entry<String, String> e : d.labels().entrySet()) {
@@ -262,7 +271,8 @@ class JdbcCancelReasons implements CancelReasons {
         if (d.sortOrder() < 0 || d.sortOrder() > 10_000) {
             throw invalid("The position is between 0 and 10000");
         }
-        return new Draft(d.audience(), code, labels, d.driverOutcome(), d.operatorFault(), d.active(), d.sortOrder());
+        return new Draft(d.audience(), code, labels, d.driverOutcome(), d.operatorFault(), d.notCounted(), d.active(),
+                d.sortOrder());
     }
 
     private Reason read(UUID id) {
@@ -274,7 +284,7 @@ class JdbcCancelReasons implements CancelReasons {
         return new Reason(rs.getObject("id", UUID.class), Audience.valueOf(rs.getString("audience")),
                 rs.getString("code"), json.readValue(rs.getString("labels"), new TypeReference<Map<String, String>>() {
                 }), outcome == null ? null : DriverOutcome.valueOf(outcome), rs.getBoolean("operator_fault"),
-                rs.getBoolean("active"), rs.getInt("sort_order"), rs.getLong("version"));
+                rs.getBoolean("not_counted"), rs.getBoolean("active"), rs.getInt("sort_order"), rs.getLong("version"));
     }
 
     private static String required(String reason) {

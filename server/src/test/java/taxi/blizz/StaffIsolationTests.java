@@ -105,6 +105,7 @@ class StaffIsolationTests {
             "GET /api/admin/v1/driver-risk-flags/{flag_id}",
             "POST /api/admin/v1/driver-risk-flags/{flag_id}/confirm",
             "POST /api/admin/v1/driver-risk-flags/{flag_id}/dismiss",
+            "POST /api/admin/v1/driver-pauses/{pause_id}/lift",
             "GET /api/admin/v1/drivers/{driver_id}/earnings",
             "GET /api/admin/v1/finance/pending-postings",
             "GET /api/admin/v1/orders",
@@ -583,6 +584,15 @@ class StaffIsolationTests {
                             "reason", "Fixture"));
             ids.put("flag_id", flag.get("id"));
             values.put("expected_version", flag.get("version"));
+        } else if (path.contains("/driver-pauses/")) {
+            UUID pause = UUID.randomUUID();
+            jdbc.sql("""
+                            insert into driver_pause (id, driver_id, city_id, kind, level, starts_at, ends_at)
+                            values (:id, :driver, :city, 'CANCELLATIONS', 1, now(), now() + interval '30 minutes')""")
+                    .param("id", pause).param("driver", rides.driverNear(PICKUP).actor().id()).param("city", city)
+                    .update();
+            ids.put("pause_id", pause);
+            values.put("expected_version", 1L);
         } else if (path.contains("/drivers/{driver_id}/earnings")) {
             ids.put("driver_id", rides.driverNear(PICKUP).actor().id());
         } else if (path.contains("{driver_id}")) {

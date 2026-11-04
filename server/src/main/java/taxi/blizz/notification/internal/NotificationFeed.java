@@ -81,7 +81,7 @@ class NotificationFeed implements OutboxHandler {
         return switch (eventType) {
             case "OfferMade", "AssignmentCommitted", "DriverArrived", "TripCompleted", "OrderCancelled",
                  "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted",
-                 "DestinationChanged" -> true;
+                 "DestinationChanged", "DriverCancellationsWarning", "DriverPaused" -> true;
             default -> false;
         };
     }
@@ -126,6 +126,13 @@ class NotificationFeed implements OutboxHandler {
                 if (payload.driverId() != null) {
                     pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()),
                             "driver.destination-changed", DEFAULT_DEADLINE));
+                }
+            }
+            case "DriverCancellationsWarning", "DriverPaused" -> {
+                if (payload.driverId() != null) {
+                    pushes.add(new Push(new Actor(SubjectType.DRIVER, payload.driverId()),
+                            "DriverPaused".equals(type) ? "driver.paused" : "driver.cancellations-warning",
+                            DEFAULT_DEADLINE));
                 }
             }
             case "TripCompleted" -> toRider.accept("rider.trip-completed");

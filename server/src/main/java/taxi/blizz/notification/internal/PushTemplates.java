@@ -78,6 +78,17 @@ final class PushTemplates {
                     "Замовлення скасовано", "Замовлення більше не потрібно виконувати",
                     "Zlecenie anulowane", "Zlecenie nie jest już aktualne",
                     "Order cancelled", "You no longer need to take this order")),
+            // ADR 0018 B5, B6: how many and until when, the app shows; a push stays without numbers.
+            Map.entry("driver.cancellations-warning", texts(
+                    "Много отказов от заказов", "Ещё отказы за сутки приостановят новые заказы",
+                    "Багато відмов від замовлень", "Ще відмови за добу призупинять нові замовлення",
+                    "Dużo rezygnacji ze zleceń", "Kolejne rezygnacje w ciągu doby wstrzymają nowe zlecenia",
+                    "Many cancelled orders", "More cancellations today will pause new orders")),
+            Map.entry("driver.paused", texts(
+                    "Новые заказы на паузе", "Из-за отказов от заказов. Время окончания — в приложении",
+                    "Нові замовлення на паузі", "Через відмови від замовлень. Час закінчення — у застосунку",
+                    "Nowe zlecenia wstrzymane", "Z powodu rezygnacji ze zleceń. Czas końca jest w aplikacji",
+                    "New orders paused", "Because of cancelled orders. The app shows when it ends")),
             // {type} and {date}: see document(...) below.
             Map.entry("driver.document-expiring", texts(
                     "Документ скоро закончится", "{type} действует до {date}. Загрузите новый в приложении",

@@ -5858,6 +5858,87 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/driver-pauses:
+    get:
+      operationId: listDriverPauses
+      summary: A driver's pauses for cancellations
+      description: >-
+        Pauses of new orders for cancelling accepted orders (ADR 0018 B6–B8), newest first, at most 100, only of the
+        cities where the caller has drivers.risk.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: driver_id
+          in: query
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: The pauses.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverPauseList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/driver-pauses/{pause_id}/lift:
+    post:
+      operationId: liftDriverPause
+      summary: Lift a pause for cancellations
+      description: >-
+        Ends an active pause at once with a reason (ADR 0018 B8); needs drivers.risk for the pause's city (a super
+        admin has it) and is audited. The cancellations stay counted. A pause already over → 409.
+      tags: [Drivers]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - name: pause_id
+          in: path
+          required: true
+          schema:
+            $ref: "./common.yaml#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command_id, expected_version, reason]
+              properties:
+                command_id:
+                  $ref: "./common.yaml#/components/schemas/Uuid"
+                expected_version:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+      responses:
+        "200":
+          description: The pause now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverPause"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
 tags:
   - name: Services
     description: The taxi services of the server and the platform owner (ADR 0016)
@@ -6253,6 +6334,57 @@ components:
           type: string
           format: date-time
 
+    DriverPause:
+      type: object
+      additionalProperties: false
+      required: [id, driver_id, city_id, kind, level, starts_at, ends_at, active, lifted_at, lifted_by, lift_reason,
+                 version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum: [CANCELLATIONS]
+        level:
+          description: 1 — the first pause within the escalation window, 2 — the second, 3 and more — until the day's end.
+          type: integer
+          minimum: 1
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        active:
+          description: Not lifted and not over yet.
+          type: boolean
+        lifted_at:
+          type: [string, "null"]
+          format: date-time
+        lifted_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        lift_reason:
+          type: [string, "null"]
+        version:
+          type: integer
+          format: int64
+
+    DriverPauseList:
+      type: object
+      additionalProperties: false
+      required: [pauses]
+      properties:
+        pauses:
+          type: array
+          items:
+            $ref: "#/components/schemas/DriverPause"
+
     Settings:
       type: object
       additionalProperties: false
@@ -6384,6 +6516,79 @@ components:
                 minimum: 0
                 maximum: 1000000000000
               example: {UAH: 0, PLN: 1000}
+        driver_discipline:
+          description: >-
+            Drivers who cancel an order after accepting it (owner decision 03.11.2026, ADR 0018 part B); omitted when
+            saving: the defaults. A cancellation within grace_seconds of the acceptance, or for a reason with
+            not_counted, is not counted. Over the last 24 hours (rolling): warn_after counted cancellations send the
+            driver a warning, pause_after pause new offers and claims for first_pause_minutes; the second pause within
+            escalation_days lasts second_pause_minutes, the third and later until the end of the city's day (at least
+            second_pause_minutes) and raise a REPEATED_PAUSES risk flag. More than rate_flag_percent of at least
+            rate_flag_min_accepted accepted orders in 30 days raise DRIVER_CANCELLATIONS; more than
+            uncounted_flag_above cancellations for not-counted reasons in uncounted_flag_days days raise
+            UNCOUNTED_CANCELLATIONS. A trip in progress and orders already accepted are never touched. enabled false:
+            cancellations are recorded but nothing is counted.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [enabled, grace_seconds, warn_after, pause_after, first_pause_minutes, second_pause_minutes,
+                     escalation_days, rate_flag_percent, rate_flag_min_accepted, uncounted_flag_above,
+                     uncounted_flag_days]
+          properties:
+            enabled:
+              type: boolean
+              default: true
+            grace_seconds:
+              type: integer
+              minimum: 0
+              maximum: 600
+              default: 30
+            warn_after:
+              description: Fewer than pause_after.
+              type: integer
+              minimum: 1
+              maximum: 49
+              default: 3
+            pause_after:
+              type: integer
+              minimum: 2
+              maximum: 50
+              default: 5
+            first_pause_minutes:
+              type: integer
+              minimum: 1
+              maximum: 1440
+              default: 30
+            second_pause_minutes:
+              description: At least first_pause_minutes.
+              type: integer
+              minimum: 1
+              maximum: 1440
+              default: 120
+            escalation_days:
+              type: integer
+              minimum: 1
+              maximum: 30
+              default: 7
+            rate_flag_percent:
+              type: integer
+              minimum: 1
+              maximum: 100
+              default: 20
+            rate_flag_min_accepted:
+              type: integer
+              minimum: 1
+              maximum: 1000
+              default: 20
+            uncounted_flag_above:
+              type: integer
+              minimum: 1
+              maximum: 100
+              default: 5
+            uncounted_flag_days:
+              type: integer
+              minimum: 1
+              maximum: 30
+              default: 7
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
