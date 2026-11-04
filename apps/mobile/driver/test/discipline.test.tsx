@@ -25,7 +25,7 @@ async function mount(status: number, body: unknown) {
     headers: {'Content-Type': 'application/json'}}));
   const client = createApiClient({baseUrl: 'https://api.blizz.test', refreshTokens: {read: () => null, write: () => {}},
     fetch: fetch as unknown as typeof globalThis.fetch, correlationId: () => cid, initialSession: session as never});
-  await render(<Discipline client={client} t={t} guard={(work => work()) as never} failure={() => ''} refresh={1} />);
+  await render(<Discipline client={client} t={t} guard={((work: () => unknown) => work()) as never} failure={() => ''} refresh={1} />);
   return fetch;
 }
 
