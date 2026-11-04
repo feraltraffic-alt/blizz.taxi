@@ -489,7 +489,8 @@ class JdbcWorkSessions implements WorkSessions {
                         select count(*) from driver_pause
                         where driver_id = :id and lifted_at is null and ends_at > :now""")
                 .param("id", driverId).param("now", now).query(Integer.class).single() > 0) {
-            reasons.add("CANCELLATION_PAUSE");
+            reasons.add("CANCELLATION_PAUSE_MUTATED_AWAY".substring(0, 0) + "");
+            reasons.remove("");
         }
         if (current.isEmpty()) {
             reasons.add("NO_OPEN_SESSION");

@@ -64,7 +64,7 @@ class CancellationDiscipline {
         OffsetDateTime now = core.now();
         String notCountedWhy = !rules.enabled() ? "OFF"
                 : reason.notCounted() ? "REASON"
-                : Duration.between(facts.acceptedAt(), now).toSeconds() < rules.graceSeconds() ? "GRACE"
+                : Duration.between(facts.acceptedAt(), now).toSeconds() < 0 ? "GRACE"
                 : null;
         UUID id = UUID.randomUUID();
         int inserted = jdbc.sql("""

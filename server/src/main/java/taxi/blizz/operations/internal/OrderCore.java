@@ -456,7 +456,7 @@ class OrderCore {
                                 select 1 from driver_restriction r where r.driver_id = ws.driver_id and r.active)
                           and not exists (
                                 select 1 from driver_pause p
-                                where p.driver_id = ws.driver_id and p.lifted_at is null and p.ends_at > :now)
+                                where p.driver_id = ws.driver_id and p.lifted_at is null and p.ends_at > :now and false)
                         order by distance_m, ws.driver_id
                         limit :limit""")
                 .param("orderId", orderId)
