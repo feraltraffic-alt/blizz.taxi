@@ -150,6 +150,12 @@ class AuditHotPathVolumeTests {
         Query(String name,String index,String sql,Map<String,?> params) {this(name,index,sql,params,false);}
     }
 
+    /**
+     * Other indexes a baseline drops too, so it really scans: offer_driver_created_idx (ADR 0018 B12.2, a driver's offers
+     * of 7 days) also serves "order and driver" by the driver.
+     */
+    static final Map<String,List<String>> ALSO_DROPPED=Map.of("offer_order_driver_idx",List.of("offer_driver_created_idx"));
+
     @SuppressWarnings("unchecked")
     List<Query> hotQueries() {
         Object auditTarget=AopTestUtils.getUltimateTargetObject(audit);
@@ -219,6 +225,8 @@ class AuditHotPathVolumeTests {
     void eachHotPathUsesItsIndexUnderFiftyMilliseconds(Query query) {
         JsonNode before=tx.execute(s->{
             jdbc.sql("drop index if exists "+query.index()).update();
+            ALSO_DROPPED.getOrDefault(query.index(),List.of())
+                    .forEach(other->jdbc.sql("drop index if exists "+other).update());
             JsonNode plan=query.generic()?genericPlan(query.name()+" BEFORE",query.sql(),query.params())
                     :explain(query.name()+" BEFORE",query.sql(),query.params());
             s.setRollbackOnly();return plan;
