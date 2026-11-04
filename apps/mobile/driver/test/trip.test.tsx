@@ -35,7 +35,9 @@ const assignment = {id: OFFER, order_id: ORDER, driver_id: session.subject.id, v
   state: 'COMMITTED', trip_id: TRIP, trip_phase: 'TO_PICKUP'};
 const reasons = {reasons: [
   {code: 'CAR_BROKE', labels: {ru: 'Сломалась машина', uk: 'Зламалася машина', pl: 'Zepsuty samochód'},
-    driver_outcome: 'RETURN_TO_SEARCH'}]};
+    driver_outcome: 'RETURN_TO_SEARCH', not_counted: false},
+  {code: 'PASSENGER_ASKED', labels: {ru: 'Пассажир попросил', uk: 'Пасажир попросив', pl: 'Pasażer poprosił'},
+    driver_outcome: 'CANCEL_ORDER', not_counted: true}]};
 
 type Call = {method: string; path: string; body?: unknown};
 type Answer = {status: number; body?: unknown; delayMs?: number};
@@ -148,6 +150,8 @@ describe('E4: restarting', () => {
       {status: 204}], 'GET /api/driver/v1/offers': [{status: 200, body: []}],
     ['POST /api/driver/v1/trips/' + TRIP + '/cancel']: [{status: 200, body: trip('ABORTED', 8)}]});
     await fireEvent.press(await screen.findByRole('button', {name: '○ Сломалась машина'}));
+    // ADR 0018 B3: the driver sees which reasons do not count toward a pause.
+    expect(screen.getByRole('button', {name: '○ Пассажир попросил (не считается отказом)'})).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', {name: 'Отменить поездку'}));
     expect(await screen.findByText('Ждём предложений…')).toBeTruthy();
     const body = posts(http, '/cancel')[0]!.body as {reason_code: string; expected_version: number};

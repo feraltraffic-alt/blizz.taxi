@@ -90,6 +90,23 @@ describe('K1: the rider calls the driver', () => {
     });
 });
 
+describe('ADR 0018 P3: the driver gave the order back', () => {
+  it.each([['DRIVER_CANCELLED', 'Водитель отказался от заказа. Ищем другую машину'],
+    ['SERVICE_REASSIGNED', 'Служба сменила водителя. Ищем другую машину']])('%s is said, without a name', async (code,
+    shown) => {
+    const changed = {...riding, status: 'SEARCHING', driver: null,
+      driver_change: {reason_code: code, at: '2026-11-04T09:00:00Z'}};
+    await mount({'GET /api/rider/v1/orders/current': [{status: 200, body: {orders: [changed]}}],
+      ['GET /api/rider/v1/orders/' + ID]: [{status: 200, body: changed}]}, 'SEARCHING', 'Ищем водителя');
+    expect(await screen.findByText(shown)).toBeTruthy();
+  });
+
+  it('nothing is said without a change', async () => {
+    await mount({}, 'SEARCHING', 'Ищем водителя');
+    expect(screen.queryByText(/Ищем другую машину/)).toBeNull();
+  });
+});
+
 describe('K3: through the service', () => {
   it('says so', async () => {
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
