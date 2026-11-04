@@ -16,6 +16,8 @@ type Card = {id: string; masked_pan: string; card_type: string | null};
 type Driver = {name: string; make: string; model: string; color: string; registration_number: string};
 export type Order = {id: string; status: string; version: number; price_minor?: number | null; currency?: string;
   driver?: Driver | null; pickup_eta?: {seconds: number} | null; payment_method?: string; status_reason?: string | null;
+  /** Set when the driver was changed before the start (ADR 0018 P3): no name, no reason. */
+  driver_change?: {reason_code: string; at: string} | null;
   pickup?: Point;
   /** Where the driver is while the trip is under way (#479, #483); absent otherwise. */
   driver_location?: {lat: number; lon: number; at: string; stale: boolean}};
@@ -321,6 +323,8 @@ function Tracker({client, t, guard, failure, newId, pollMs, push, order, onChang
   return (
     <Screen title={t('yourRide')}>
       <Text style={{color: theme.text}}>{t('status_' + order.status)}</Text>
+      {order.status === 'SEARCHING' && order.driver_change ? <Text style={{color: theme.text}}>{t(
+        order.driver_change.reason_code === 'DRIVER_CANCELLED' ? 'driverGaveUp' : 'driverTakenOff')}</Text> : null}
       <SafetyButton client={client} t={t} guard={guard} failure={failure} api="/api/rider/v1" />
       {paymentEnd ? <Text style={{color: theme.error}}>{t(paymentEnd === 'PAYMENT_DECLINED' ? 'paymentDeclined'
         : 'paymentTimeout')}</Text> : null}
