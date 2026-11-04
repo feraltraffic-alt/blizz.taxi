@@ -40,7 +40,8 @@ class CancellationDiscipline {
     }
 
     /** A pause in force: new offers and claims wait until {@code endsAt}. */
-    record Pause(UUID id, UUID driverId, UUID cityId, int level, OffsetDateTime startsAt, OffsetDateTime endsAt) {
+    record Pause(UUID id, UUID driverId, UUID cityId, String kind, int level, OffsetDateTime startsAt,
+                 OffsetDateTime endsAt) {
     }
 
     /**
@@ -97,7 +98,8 @@ class CancellationDiscipline {
                     payload);
         }
         if (lastDay >= rules.pauseAfter() && active(driverId).isEmpty()) {
-            pause(driverId, orderId, facts.cityId(), ZoneId.of(facts.timezone()), lastDay, rules, now);
+            pause("CANCELLATIONS", driverId, orderId, facts.cityId(), ZoneId.of(facts.timezone()), lastDay, rules,
+                    now);
         }
         flagRate(driverId, facts.cityId(), id, rules, now);
     }
@@ -105,13 +107,13 @@ class CancellationDiscipline {
     /** The pause in force for the driver, if any. */
     Optional<Pause> active(UUID driverId) {
         return jdbc.sql("""
-                        select id, driver_id, city_id, level, starts_at, ends_at from driver_pause
+                        select id, driver_id, city_id, kind, level, starts_at, ends_at from driver_pause
                         where driver_id = :driver and lifted_at is null and ends_at > :now
                         order by ends_at desc limit 1""")
                 .param("driver", driverId).param("now", core.now())
                 .query((rs, i) -> new Pause(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class), rs.getInt(4), rs.getObject(5, OffsetDateTime.class),
-                        rs.getObject(6, OffsetDateTime.class)))
+                        rs.getObject(3, UUID.class), rs.getString(4), rs.getInt(5),
+                        rs.getObject(6, OffsetDateTime.class), rs.getObject(7, OffsetDateTime.class)))
                 .optional();
     }
 
@@ -123,16 +125,17 @@ class CancellationDiscipline {
     }
 
     /**
-     * B6, B7: the first pause within the escalation window lasts the first time, the second the second time, the
-     * third and later until the end of the city's day — at least the second time, so a pause near midnight is not a
-     * few minutes long — and raise a REPEATED_PAUSES flag.
+     * B6, B7 (and B12.2 for {@code ACCEPTANCE}): the first pause of the kind within the escalation window lasts the
+     * first time, the second the second time, the third and later until the end of the city's day — at least the
+     * second time, so a pause near midnight is not a few minutes long — and raise a REPEATED_PAUSES flag.
+     * {@code count}: what led to it (cancellations in 24 hours, or the acceptance percent).
      */
-    private void pause(UUID driverId, UUID orderId, UUID cityId, ZoneId zone, int lastDay,
-                       ServiceSettings.DriverDiscipline rules, OffsetDateTime now) {
+    void pause(String kind, UUID driverId, UUID orderId, UUID cityId, ZoneId zone, int count,
+               ServiceSettings.DriverDiscipline rules, OffsetDateTime now) {
         int before = jdbc.sql("""
                         select count(*) from driver_pause
-                        where driver_id = :driver and kind = 'CANCELLATIONS' and starts_at > :since""")
-                .param("driver", driverId).param("since", now.minusDays(rules.escalationDays()))
+                        where driver_id = :driver and kind = :kind and starts_at > :since""")
+                .param("driver", driverId).param("kind", kind).param("since", now.minusDays(rules.escalationDays()))
                 .query(Integer.class).single();
         int level = before + 1;
         OffsetDateTime endsAt;
@@ -150,19 +153,21 @@ class CancellationDiscipline {
         UUID pauseId = UUID.randomUUID();
         jdbc.sql("""
                         insert into driver_pause (id, driver_id, city_id, kind, level, starts_at, ends_at)
-                        values (:id, :driver, :city, 'CANCELLATIONS', :level, :now, :ends)""")
-                .param("id", pauseId).param("driver", driverId).param("city", cityId).param("level", level)
+                        values (:id, :driver, :city, :kind, :level, :now, :ends)""")
+                .param("id", pauseId).param("kind", kind).param("driver", driverId).param("city", cityId).param("level", level)
                 .param("now", now).param("ends", endsAt).update();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("driver_id", driverId.toString());
         payload.put("pause_id", pauseId.toString());
+        payload.put("kind", kind);
         payload.put("level", level);
-        payload.put("cancellations", lastDay);
+        payload.put("CANCELLATIONS".equals(kind) ? "cancellations" : "acceptance_percent", count);
         payload.put("ends_at", endsAt.toString());
         core.recordEvent(orderId, core.touch(orderId), "DriverPaused", OrderCore.system(), null, payload);
         if (level >= 3) {
             flags.raiseAutomatic(driverId, cityId, DriverRiskFlags.Kind.REPEATED_PAUSES,
-                    Map.of("pause_id", pauseId.toString(), "level", level, "within_days", rules.escalationDays()),
+                    Map.of("pause_id", pauseId.toString(), "kind", kind, "level", level,
+                            "within_days", rules.escalationDays()),
                     "REPEATED_PAUSES:" + pauseId, now);
         }
     }

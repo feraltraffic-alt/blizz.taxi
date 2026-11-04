@@ -84,6 +84,21 @@ final class PushTemplates {
                     "Багато відмов від замовлень", "Ще відмови за добу призупинять нові замовлення",
                     "Dużo rezygnacji ze zleceń", "Kolejne rezygnacje w ciągu doby wstrzymają nowe zlecenia",
                     "Many cancelled orders", "More cancellations today will pause new orders")),
+            Map.entry("driver.paused-acceptance", texts(
+                    "Новые заказы на паузе", "Вы принимаете мало заказов. Время окончания — в приложении",
+                    "Нові замовлення на паузі", "Ви приймаєте мало замовлень. Час закінчення — у застосунку",
+                    "Nowe zlecenia wstrzymane", "Przyjmujesz mało zleceń. Czas końca jest w aplikacji",
+                    "New orders paused", "You accept few orders. The app shows when it ends")),
+            Map.entry("driver.acceptance-warning", texts(
+                    "Вы принимаете мало заказов", "Если так продолжится, новые заказы встанут на паузу",
+                    "Ви приймаєте мало замовлень", "Якщо так триватиме, нові замовлення стануть на паузу",
+                    "Przyjmujesz mało zleceń", "Jeśli tak dalej, nowe zlecenia zostaną wstrzymane",
+                    "You accept few orders", "If this goes on, new orders will be paused")),
+            Map.entry("driver.missed-offers", texts(
+                    "Вы не на линии", "Вы пропустили несколько заказов. Нажмите «На линию», когда будете готовы",
+                    "Ви не на лінії", "Ви пропустили кілька замовлень. Натисніть «На лінію», коли будете готові",
+                    "Jesteś offline", "Pominięto kilka zleceń. Naciśnij „Online”, gdy będziesz gotowy",
+                    "You are off line", "You missed several orders. Tap On line when you are ready")),
             Map.entry("driver.paused", texts(
                     "Новые заказы на паузе", "Из-за отказов от заказов. Время окончания — в приложении",
                     "Нові замовлення на паузі", "Через відмови від замовлень. Час закінчення — у застосунку",

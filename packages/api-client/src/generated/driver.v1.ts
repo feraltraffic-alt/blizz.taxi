@@ -1648,7 +1648,8 @@ export interface components {
              *     default; REQ-GEO-04, issue #141: eligible again with the next accurate fix), ADMISSION_CITY (not admitted
              *     in the session's city; issue #141), LOCATION_OUTSIDE_CITY (the last fix is further outside the city's
              *     polygon than the city's return zone; REQ-DS-07: never touches a current trip), CANCELLATION_PAUSE (a pause
-             *     for cancelling accepted orders, ADR 0018 B6: new orders only).
+             *     for cancelling accepted orders, ADR 0018 B6: new orders only), ACCEPTANCE_PAUSE (a pause for a low
+             *     acceptance rate of personal offers, B12.2).
              */
             ineligible_reasons: string[];
             /** @enum {string|null} */
