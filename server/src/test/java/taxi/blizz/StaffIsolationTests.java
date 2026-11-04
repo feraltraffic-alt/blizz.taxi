@@ -111,6 +111,7 @@ class StaffIsolationTests {
             "GET /api/admin/v1/orders",
             "GET /api/admin/v1/orders/overview",
             "GET /api/admin/v1/reports/finance",
+            "GET /api/admin/v1/reports/driver-cancellations",
             "GET /api/admin/v1/reports/orders",
             "GET /api/admin/v1/reports/exports/{export_id}",
             "GET /api/admin/v1/reports/exports/{export_id}/file",
@@ -172,6 +173,8 @@ class StaffIsolationTests {
                     "Uploads a file of a case the staff member is writing; the file belongs to its uploader until "
                             + "attached, and reading it back is swept through the case's attachment"),
             Map.entry("PUT /api/operator/v1/uploads/{file_id}", "Same as the admin upload"),
+            Map.entry("GET /api/admin/v1/drivers/{driver_id}/discipline",
+                    "The driver's own counts; the rows only of the caller's cities (DriverDisciplineViewTests case 10)"),
             Map.entry("GET /api/admin/v1/clients/{client_id}", RIDER_NO_CITY),
             Map.entry("GET /api/admin/v1/clients/{client_id}/data-exports", RIDER_NO_CITY),
             Map.entry("POST /api/admin/v1/clients/{client_id}/block", RIDER_NO_CITY),
