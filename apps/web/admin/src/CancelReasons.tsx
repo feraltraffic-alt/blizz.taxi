@@ -4,10 +4,11 @@ import {Failure, type Translate} from '@blizz/web-ui';
 
 type Side = 'RIDER' | 'DRIVER' | 'STAFF' | 'REASSIGN';
 type Reason = {id: string; audience: Side; code: string; labels: Record<string, string>;
-  driver_outcome: string | null; operator_fault?: boolean; not_counted?: boolean; active: boolean; sort_order: number;
-  version: number};
+  driver_outcome: string | null; operator_fault?: boolean; not_counted?: boolean; fault?: string | null;
+  late_driver_fault?: boolean; active: boolean; sort_order: number; version: number};
+/** {@code blame}: the fault (ADR 0019), '' — the side's starting one, not sent; {@code late}: the driver's if late. */
 type Draft = {labels: Record<string, string>; outcome: string; fault: boolean; notCounted: boolean; active: boolean;
-  order: string; why: string};
+  order: string; why: string; blame: string; late: boolean};
 
 const SIDES: Side[] = ['RIDER', 'DRIVER', 'STAFF', 'REASSIGN'];
 const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
@@ -20,18 +21,22 @@ function labelsOf(labels: Record<string, string>, main: string) {
   return kept[main] && Object.values(kept).every(v => v.length <= 80) ? kept : null;
 }
 
+const EMPTY: Draft = {labels: {}, outcome: '', fault: false, notCounted: false, active: true, order: '0', why: '',
+  blame: '', late: false};
+
 /**
  * The cancellation reasons of every side for holders of settings.manage (#385, REQ-CAN-01): the list by side and
  * order, adding a reason, and changing one with the version read. A driver's reason has an outcome and may not count
- * as a cancellation (ADR 0018 B3), a staff reason may be the operator's fault, and other sides send neither.
+ * as a cancellation (ADR 0018 B3), a staff reason may be the operator's fault, and other sides send neither. Every
+ * side but REASSIGN has a fault (ADR 0019), sent when chosen or changed; the client's may turn to the driver's when
+ * the driver is late.
  */
 export function CancelReasons({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const [reasons, setReasons] = useState<Reason[] | null>(null);
   const [languages, setLanguages] = useState<{main: string; enabled: string[]}>({main: 'uk', enabled: ['uk']});
   const [side, setSide] = useState<Side>('RIDER');
   const [code, setCode] = useState('');
-  const [draft, setDraft] = useState<Draft>({labels: {}, outcome: '', fault: false, notCounted: false,
-    active: true, order: '0', why: ''});
+  const [draft, setDraft] = useState<Draft>(EMPTY);
   const [editing, setEditing] = useState<Record<string, Draft>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -50,13 +55,19 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
     }).catch(() => undefined);
   }, [client, read]);
 
-  /** The fields of a side: an outcome for drivers, the operator's fault for staff, nothing for the others. */
-  const extras = (of: Side, d: Draft) => ({...(of === 'DRIVER' ? {driver_outcome: d.outcome,
+  /**
+   * The fields of a side: an outcome for drivers, the operator's fault for staff; the fault and the lateness mark when
+   * chosen on a new reason or changed on one read ({@code was}).
+   */
+  const extras = (of: Side, d: Draft, was?: Reason) => ({...(of === 'DRIVER' ? {driver_outcome: d.outcome,
     not_counted: d.notCounted} : {}),
-    ...(of === 'STAFF' ? {operator_fault: d.fault} : {})});
+    ...(of === 'STAFF' ? {operator_fault: d.fault} : {}),
+    ...(of !== 'REASSIGN' && d.blame !== '' && d.blame !== (was?.fault ?? '') ? {fault: d.blame} : {}),
+    ...(of !== 'REASSIGN' && d.late !== Boolean(was?.late_driver_fault) ? {late_driver_fault: d.late} : {})});
   const valid = (of: Side, d: Draft) => {
     const why = d.why.trim();
     return labelsOf(d.labels, languages.main) !== null && (of !== 'DRIVER' || d.outcome !== '')
+      && (!d.late || d.blame === 'CLIENT' || (d.blame === '' && of === 'RIDER'))
       && ORDER.test(d.order.trim()) && Number(d.order.trim()) <= 10000 && why !== '' && why.length <= 500;
   };
 
@@ -88,7 +99,7 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
         active: draft.active, sort_order: Number(draft.order.trim()), reason: draft.why.trim()}} as never) as Reason;
       setReasons(list => [...(list ?? []), created]);
       setCode('');
-      setDraft({labels: {}, outcome: '', fault: false, notCounted: false, active: true, order: '0', why: ''});
+      setDraft(EMPTY);
       setMessage(t('reasonAdded'));
     }, 'reasonCodeTaken', false);
   }
@@ -103,7 +114,7 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
     return run(async () => {
       const changed = await client.post('/api/admin/v1/settings/cancel-reasons/{reason_id}' as never, {params: {
         reason_id: r.id}, body: {command_id: newId(), expected_version: r.version,
-        labels: labelsOf(d.labels, languages.main), ...extras(r.audience, d), active: d.active,
+        labels: labelsOf(d.labels, languages.main), ...extras(r.audience, d, r), active: d.active,
         sort_order: Number(d.order.trim()), reason: d.why.trim()}} as never) as Reason;
       setReasons(list => (list ?? []).map(x => x.id === changed.id ? changed : x));
       setEditing(all => Object.fromEntries(Object.entries(all).filter(([id]) => id !== r.id)));
@@ -113,7 +124,9 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
   const outcome = (r: Reason) => r.driver_outcome ? [t('outcome_' + r.driver_outcome)] : [];
   const line = (r: Reason) => [r.code, r.labels[languages.main] ?? Object.values(r.labels)[0] ?? '—',
     t(r.active ? 'reasonActive' : 'reasonHidden'), t('reasonOrder', {n: r.sort_order}), ...outcome(r),
-    ...(r.operator_fault ? [t('operatorFault')] : []), ...(r.not_counted ? [t('notCounted')] : [])].join(' · ');
+    ...(r.operator_fault ? [t('operatorFault')] : []), ...(r.not_counted ? [t('notCounted')] : []),
+    ...(r.fault && r.fault !== 'OPERATOR' ? [t('fault_' + r.fault)] : []),
+    ...(r.late_driver_fault ? [t('lateMark')] : [])].join(' · ');
   const labelInputs = (d: Draft, change: (labels: Record<string, string>) => void, name: (lang: string) => string) =>
     [...languages.enabled, ...Object.keys(d.labels).filter(k => !languages.enabled.includes(k))].map(lang => (
       <label key={lang}>{name(lang)}
@@ -134,7 +147,22 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
         </>
       ) : null}
       {of === 'STAFF' ? <label><input type="checkbox" checked={d.fault}
-        onChange={e => set({...d, fault: e.target.checked})} />{t('operatorFaultBox') + suffix}</label> : null}
+        onChange={e => set({...d, fault: e.target.checked, blame: e.target.checked ? 'OPERATOR'
+          : d.blame === 'OPERATOR' ? 'NONE' : d.blame})} />{t('operatorFaultBox') + suffix}</label> : null}
+      {of !== 'REASSIGN' ? (
+        <>
+          <label htmlFor={'fault-' + id}>{t('faultLabel') + suffix}</label>
+          <select id={'fault-' + id} value={d.blame} onChange={e => set({...d, blame: e.target.value,
+            fault: e.target.value === 'OPERATOR', late: e.target.value === 'CLIENT' ? d.late : false})}>
+            <option value="">{t('faultDefault')}</option>
+            {['CLIENT', 'DRIVER', ...(of === 'STAFF' ? ['OPERATOR'] : []), 'NONE'].map(f => (
+              <option key={f} value={f}>{t('fault_' + f)}</option>))}
+          </select>
+          {d.blame === 'CLIENT' || (d.blame === '' && of === 'RIDER') ? <label><input type="checkbox"
+            checked={d.late} onChange={e => set({...d, late: e.target.checked})} />{t('lateBox') + suffix}</label>
+            : null}
+        </>
+      ) : null}
     </>
   );
   const sorted = [...(reasons ?? [])].sort((a, b) => a.sort_order - b.sort_order);
@@ -167,7 +195,8 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
                     <button type="button" onClick={() => setEditing(all => ({...all, [r.id]: {labels: {...r.labels},
                       outcome: r.driver_outcome ?? '', fault: Boolean(r.operator_fault),
                       notCounted: Boolean(r.not_counted), active: r.active,
-                      order: String(r.sort_order), why: ''}}))}>{t('editReason', {code: r.code})}</button>
+                      order: String(r.sort_order), why: '', blame: r.fault ?? '',
+                      late: Boolean(r.late_driver_fault)}}))}>{t('editReason', {code: r.code})}</button>
                   )}
                 </li>
               );

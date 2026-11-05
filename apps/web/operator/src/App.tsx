@@ -6,6 +6,7 @@ import {LiveDrivers} from './LiveDrivers.js';
 import {Support} from './Support.js';
 import {OrderHistory} from './OrderHistory.js';
 import {OrderActions} from './OrderActions.js';
+import {OrderFault} from './OrderFault.js';
 import {Calls, type FromCall} from './Calls.js';
 import {OrderCalls} from './OrderCalls.js';
 import {PlacePicker, type Place, type Point} from './Places.js';
@@ -21,7 +22,8 @@ const E164 = /^\+[1-9][0-9]{7,14}$/;
 type City = {id: string; name: string; center: Point};
 type Quote = {id: string; amount_minor: number; currency: string};
 type Order = {id: string; short_number: number; status: string; version: number; city_id?: string;
-  payer_client_id?: string | null; payment_method?: string; reservation?: {driver_name?: string | null} | null};
+  payer_client_id?: string | null; payment_method?: string; reservation?: {driver_name?: string | null} | null;
+  cancellation?: {fault?: string | null} | null};
 
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
 export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000, live}: {client: ApiClient;
@@ -321,6 +323,8 @@ function OrderView({client, t, order, onChange, newId, pollMs, onDone, rights, n
       <OrderTrip client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
         refresh={refresh} />
       <OrderActions client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
+        refresh={refresh} />
+      <OrderFault client={client} t={t} order={order} rights={rights} newId={newId} onChange={onChange}
         refresh={refresh} />
       {/* The history and the conversation need orders.view (#292 H5). */}
       {canView ? <OrderCalls client={client} t={t} order={order} newId={newId} /> : null}

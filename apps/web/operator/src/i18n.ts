@@ -5,6 +5,11 @@ export {validateCatalogs} from '@blizz/web-ui';
 /** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
 const own: Catalogs = {
   ru: {
+    faultIs: 'Виновник отмены: {fault}', faultUnknown: 'не определён (отменён до ADR 0019)',
+    fault_CLIENT_FREE: 'клиент, бесплатно', fault_CLIENT: 'клиент', fault_DRIVER: 'водитель',
+    fault_OPERATOR: 'оператор', fault_NONE: 'никто',
+    faultNew: 'Другой виновник', faultComment: 'Почему меняется виновник', faultChange: 'Изменить виновника',
+    faultChanged: 'Виновник изменён.', faultNeeds: 'Выберите другого виновника и напишите почему (до 500 символов).',
     myDay: 'Мой день', myPoints: 'Баллы: {points} (выполнено {done}, отменено {cancelled}) с {since}',
     noEmergency: 'Экстренного доступа нет.', emergencyUntil: 'Экстренный доступ до {until}: {rights} — {reason}',
     cityOperators: 'Операторы города', noOperators: 'Операторов нет.', extShort: 'вн. {number}',
@@ -138,6 +143,11 @@ const own: Catalogs = {
     orderMoved: 'Заказ изменился, пока вы его отменяли. Проверьте его состояние.', another: 'Новый заказ'
   },
   uk: {
+    faultIs: 'Винуватець скасування: {fault}', faultUnknown: 'не визначено (скасовано до ADR 0019)',
+    fault_CLIENT_FREE: 'клієнт, безкоштовно', fault_CLIENT: 'клієнт', fault_DRIVER: 'водій',
+    fault_OPERATOR: 'оператор', fault_NONE: 'ніхто',
+    faultNew: 'Інший винуватець', faultComment: 'Чому змінюється винуватець', faultChange: 'Змінити винуватця',
+    faultChanged: 'Винуватця змінено.', faultNeeds: 'Оберіть іншого винуватця й напишіть чому (до 500 символів).',
     myDay: 'Мій день', myPoints: 'Бали: {points} (виконано {done}, скасовано {cancelled}) з {since}',
     noEmergency: 'Екстреного доступу немає.', emergencyUntil: 'Екстрений доступ до {until}: {rights} — {reason}',
     cityOperators: 'Оператори міста', noOperators: 'Операторів немає.', extShort: 'вн. {number}',
@@ -271,6 +281,11 @@ const own: Catalogs = {
     orderMoved: 'Замовлення змінилося, поки ви його скасовували. Перевірте його стан.', another: 'Нове замовлення'
   },
   pl: {
+    faultIs: 'Winny anulowania: {fault}', faultUnknown: 'nieustalony (anulowane przed ADR 0019)',
+    fault_CLIENT_FREE: 'klient, bezpłatnie', fault_CLIENT: 'klient', fault_DRIVER: 'kierowca',
+    fault_OPERATOR: 'operator', fault_NONE: 'nikt',
+    faultNew: 'Inny winny', faultComment: 'Dlaczego zmienia się winny', faultChange: 'Zmień winnego',
+    faultChanged: 'Winny zmieniony.', faultNeeds: 'Wybierz innego winnego i napisz dlaczego (do 500 znaków).',
     myDay: 'Mój dzień', myPoints: 'Punkty: {points} (zrealizowane {done}, anulowane {cancelled}) od {since}',
     noEmergency: 'Brak dostępu awaryjnego.', emergencyUntil: 'Dostęp awaryjny do {until}: {rights} — {reason}',
     cityOperators: 'Operatorzy miasta', noOperators: 'Brak operatorów.', extShort: 'wewn. {number}',
@@ -404,6 +419,11 @@ const own: Catalogs = {
     orderMoved: 'Zamówienie zmieniło się w trakcie anulowania. Sprawdź jego stan.', another: 'Nowe zamówienie'
   },
   en: {
+    faultIs: 'At fault for the cancellation: {fault}', faultUnknown: 'not set (cancelled before ADR 0019)',
+    fault_CLIENT_FREE: 'the client, free', fault_CLIENT: 'the client', fault_DRIVER: 'the driver',
+    fault_OPERATOR: 'the operator', fault_NONE: 'nobody',
+    faultNew: 'Another fault', faultComment: 'Why the fault changes', faultChange: 'Change the fault',
+    faultChanged: 'The fault is changed.', faultNeeds: 'Choose another fault and say why (up to 500 characters).',
     myDay: 'My day', myPoints: 'Points: {points} ({done} completed, {cancelled} cancelled) since {since}',
     noEmergency: 'No emergency access.', emergencyUntil: 'Emergency access until {until}: {rights} — {reason}',
     cityOperators: 'City operators', noOperators: 'No operators.', extShort: 'ext. {number}',

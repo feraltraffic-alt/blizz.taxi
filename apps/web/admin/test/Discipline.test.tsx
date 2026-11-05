@@ -96,6 +96,35 @@ describe('settings', () => {
     expect(await screen.findByText('Правила сохранены.')).toBeVisible();
   });
 
+  it('the pickup time and the minutes of the fault go with the settings (ADR 0019, ADR 0020)', async () => {
+    const {saves} = handlers();
+    const user = await open();
+    expect(screen.getByLabelText('Не предлагать заказ водителю с подачей дольше, минут')).toHaveValue('15');
+    await user.clear(screen.getByLabelText('Не предлагать заказ водителю с подачей дольше, минут'));
+    await user.type(screen.getByLabelText('Не предлагать заказ водителю с подачей дольше, минут'), '20');
+    await user.clear(screen.getByLabelText('Бесплатная отмена клиентом после принятия заказа, минут'));
+    await user.type(screen.getByLabelText('Бесплатная отмена клиентом после принятия заказа, минут'), '3');
+    await user.click(screen.getByRole('checkbox',
+      {name: 'Засчитывать водителю отмену клиентом из-за опоздания (паузы и предупреждения)'}));
+    await user.type(screen.getByLabelText('Причина изменения'), 'Пилот');
+    await user.click(screen.getByRole('button', {name: 'Сохранить правила'}));
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0]).toMatchObject({settings: {pickup_time: {max_minutes: 20, routed_candidates: 10},
+      cancellation_fault: {client_free_minutes: 3, driver_late_minutes: 5, driver_late_without_promise_minutes: 15,
+        count_late_cancellations: true}}});
+  });
+
+  it('a pickup time over two hours sends nothing', async () => {
+    const {saves} = handlers();
+    const user = await open();
+    await user.clear(screen.getByLabelText('Не предлагать заказ водителю с подачей дольше, минут'));
+    await user.type(screen.getByLabelText('Не предлагать заказ водителю с подачей дольше, минут'), '121');
+    await user.type(screen.getByLabelText('Причина изменения'), 'x');
+    await user.click(screen.getByRole('button', {name: 'Сохранить правила'}));
+    expect(await screen.findByText(/Проверьте числа/)).toBeVisible();
+    expect(saves).toHaveLength(0);
+  });
+
   it('a warning not before the pause, or no reason, sends nothing', async () => {
     const {saves} = handlers();
     const user = await open();

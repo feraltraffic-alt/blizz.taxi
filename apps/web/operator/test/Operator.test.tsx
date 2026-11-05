@@ -507,6 +507,64 @@ describe('#294: driver actions on an order', () => {
 });
 
 /** Calling the order's caller, driver or rider (#304): T1–T6. */
+describe('ADR 0019: the fault of a cancelled order', () => {
+  const cancelled = (fault: string | null, version = 3) => ({...order, status: 'CANCELLED', version, city_id: KYIV.id,
+    cancellation: {by: 'RIDER', reason_code: 'CHANGED_MIND', reason_labels: {ru: 'Передумал'}, fault}});
+
+  function handlers(rights: string[], answer?: () => Response) {
+    const sent: Record<string, unknown>[] = [];
+    server.use(...base({...operator, effective_permissions: rights}),
+      http.post(origin + '/api/operator/v1/quotes', () => HttpResponse.json(quote, {status: 201})),
+      http.post(origin + '/api/operator/v1/orders', () => HttpResponse.json(cancelled('CLIENT'), {status: 201})),
+      http.get(origin + '/api/operator/v1/orders/' + order.id, () => HttpResponse.json(cancelled('CLIENT') as never)),
+      http.post(origin + '/api/operator/v1/orders/' + order.id + '/cancellation-fault', async ({request}) => {
+        sent.push(await request.json() as Record<string, unknown>);
+        return answer ? answer() : HttpResponse.json(cancelled('DRIVER', 4) as never);
+      }));
+    return sent;
+  }
+
+  async function ordered() {
+    mount();
+    const user = await priced();
+    await user.click(screen.getByRole('button', {name: 'Создать заказ'}));
+    await screen.findByText('Заказ №1042');
+    return user;
+  }
+
+  it('F1: everyone sees the fault; only orders.fault changes it, with a comment and the version', async () => {
+    const sent = handlers([...operator.effective_permissions, 'orders.fault']);
+    const user = await ordered();
+    expect(await screen.findByText('Виновник отмены: клиент')).toBeVisible();
+    await user.click(screen.getByRole('button', {name: 'Изменить виновника'}));
+    expect(await screen.findByText(/^Выберите другого виновника/)).toBeVisible();
+    expect(sent).toEqual([]);
+    await user.selectOptions(screen.getByLabelText('Другой виновник'), 'DRIVER');
+    await user.type(screen.getByLabelText('Почему меняется виновник'), 'водитель опоздал на 20 минут');
+    await user.click(screen.getByRole('button', {name: 'Изменить виновника'}));
+    expect(await screen.findByText('Виновник отмены: водитель')).toBeVisible();
+    expect(sent).toEqual([{command_id: expect.any(String), expected_version: 3, fault: 'DRIVER',
+      comment: 'водитель опоздал на 20 минут'}]);
+  });
+
+  it('F2: without orders.fault the fault is only shown', async () => {
+    handlers(operator.effective_permissions);
+    await ordered();
+    expect(await screen.findByText('Виновник отмены: клиент')).toBeVisible();
+    expect(screen.queryByRole('button', {name: 'Изменить виновника'})).toBeNull();
+  });
+
+  it('F3: a change by someone else meanwhile reads the order again', async () => {
+    handlers([...operator.effective_permissions, 'orders.fault'],
+      () => HttpResponse.json(problem(409, 'VERSION_CONFLICT') as never, {status: 409}));
+    const user = await ordered();
+    await user.selectOptions(await screen.findByLabelText('Другой виновник'), 'NONE');
+    await user.type(screen.getByLabelText('Почему меняется виновник'), 'тестовый заказ');
+    await user.click(screen.getByRole('button', {name: 'Изменить виновника'}));
+    expect(await screen.findByText('Заказ изменился, пока вы его меняли. Проверьте его состояние.')).toBeVisible();
+  });
+});
+
 describe('#304: click-to-call', () => {
   type Sent = {to: string; command_id: string};
   const placed = (state: string) => ({id: 'ca000000-0000-4000-8000-000000000009', direction: 'OUTBOUND',
