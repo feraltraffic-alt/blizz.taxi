@@ -233,7 +233,7 @@ export function LiveBoard({client, t, cities, pollMs, api, classes: withClasses 
 }
 
 /** The live board's texts for both panels (#482): each panel adds them to its catalogs. */
-export const liveBoardTexts: Record<'ru' | 'uk' | 'pl', Record<string, string>> = {
+export const liveBoardTexts: Record<'ru' | 'uk' | 'pl' | 'en', Record<string, string>> = {
   ru: {
     lbTitle: 'Машины на линии', lbCity: 'Город', lbStatus: 'Статус', lbStatus_FREE: 'свободен',
     lbStatus_ON_ORDER: 'на заказе', lbStatus_PAUSED: 'на паузе', lbStatus_CLOSING: 'завершает смену',
@@ -260,5 +260,14 @@ export const liveBoardTexts: Record<'ru' | 'uk' | 'pl', Record<string, string>> 
     lbTotal: 'Razem: {count}', lbNoSignal: 'brak łączności', lbNoSignalFor: 'brak łączności {minutes} min',
     lbNoCar: 'bez auta', lbNoName: 'bez imienia', lbTerminal: 'terminal', lbMap: 'Samochody na mapie',
     lbUnplaced: 'Bez pozycji na mapie: {count}'
+  },
+  en: {
+    lbTitle: 'Cars on line', lbCity: 'City', lbStatus: 'Status', lbStatus_FREE: 'free',
+    lbStatus_ON_ORDER: 'on an order', lbStatus_PAUSED: 'paused', lbStatus_CLOSING: 'ending the shift',
+    lbStatus_NO_SIGNAL: 'no signal', lbClass: 'Car class', lbAnyClass: 'Any class',
+    lbFresh: 'Only with a fresh position', lbInView: 'Only the visible part of the map', lbNoCars: 'No cars on line.',
+    lbTotal: 'Total: {count}', lbNoSignal: 'no signal', lbNoSignalFor: 'no signal for {minutes} min',
+    lbNoCar: 'no car', lbNoName: 'no name', lbTerminal: 'terminal', lbMap: 'Cars on the map',
+    lbUnplaced: 'No position on the map: {count}'
   }
 };
