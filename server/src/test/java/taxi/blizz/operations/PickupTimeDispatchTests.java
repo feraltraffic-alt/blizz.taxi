@@ -222,8 +222,9 @@ class PickupTimeDispatchTests {
     }
 
     private Optional<OffsetDateTime> promised(OrderView order) {
-        return Optional.ofNullable(jdbc.sql("select promised_pickup_at from assignment where order_id = :o")
-                .param("o", order.id()).query(OffsetDateTime.class).single());
+        return Optional.ofNullable((OffsetDateTime) jdbc.sql(
+                        "select promised_pickup_at from assignment where order_id = :o")
+                .param("o", order.id()).query((rs, i) -> rs.getObject(1, OffsetDateTime.class)).list().getFirst());
     }
 
     @SuppressWarnings("unchecked")
