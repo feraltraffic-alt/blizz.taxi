@@ -47,7 +47,9 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
     console.log('PAGE AFTER PASSWORD CHANGE:', await page.locator('body').innerText());
   }
   await expect(form).toBeVisible();
-  await page.locator('select').first().selectOption({label: 'Київ'});
+  // The page's selects without the language picker (its options carry lang).
+  const selects = page.locator('select').filter({hasNot: page.locator('option[lang]')});
+  await selects.first().selectOption({label: 'Київ'});
   await page.getByLabel('Телефон звонящего', {exact: true}).fill('+38067' + String(Date.now()).slice(-7));
   await page.getByLabel('Откуда', {exact: true}).fill('Хрещатик');
   const answer = page.waitForResponse(r => r.url().includes('/api/operator/v1/places'));
@@ -63,7 +65,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await page.getByRole('button', {name: 'Найти', exact: true}).nth(1).click();
   await page.locator('fieldset').nth(1).getByRole('listitem').first().getByRole('button').click();
   // The class from the city's list (#251): the selects are the city, the class and the payment, in that order.
-  const classes = page.locator('select').nth(1);
+  const classes = selects.nth(1);
   await expect(classes.locator('option')).toHaveText(['Комфорт', 'Стандарт']);
   await classes.selectOption({label: 'Комфорт'});
   const priced = page.waitForResponse(r => r.url().endsWith('/api/operator/v1/quotes'));
@@ -76,7 +78,7 @@ test('an operator signs in, takes a phone order in Kyiv, sees it and cancels it'
   await expect(page.getByText(/^Заказ №\d+/)).toBeVisible();
   await expect(page.getByText(/^Статус: /)).toBeVisible();
   await page.screenshot({path: info.outputPath('2-order.png'), fullPage: true});
-  await page.locator('select').first().selectOption({index: 1}); // the reason: the only select of the order view
+  await selects.first().selectOption({index: 1}); // the reason: the only select of the order view
   await page.getByRole('button', {name: 'Отменить заказ'}).click();
   await expect(page.getByText('Статус: CANCELLED')).toBeVisible();
   await page.screenshot({path: info.outputPath('3-cancelled.png'), fullPage: true});
