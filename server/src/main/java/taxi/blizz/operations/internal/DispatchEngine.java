@@ -24,10 +24,15 @@ class DispatchEngine {
     private final JdbcDispatchJournal journal;
 
     private final OfferDiscipline offerDiscipline;
+    private final PickupTimes pickupTimes;
+    private final taxi.blizz.configuration.ServiceSettings settings;
 
     DispatchEngine(JdbcClient jdbc, OrderCore core, DispatchProperties properties, JdbcDispatchJournal journal,
-                   OfferDiscipline offerDiscipline) {
+                   OfferDiscipline offerDiscipline, PickupTimes pickupTimes,
+                   taxi.blizz.configuration.ServiceSettings settings) {
         this.offerDiscipline = offerDiscipline;
+        this.pickupTimes = pickupTimes;
+        this.settings = settings;
         this.jdbc = jdbc;
         this.core = core;
         this.properties = properties;
@@ -149,26 +154,51 @@ class DispatchEngine {
         }
     }
 
+    /**
+     * One round (ADR 0020): the nearest candidates within the widest radius get a pickup time; those above the
+     * service's threshold are passed over, and the order is offered to the fastest free one (the nearer on a tie).
+     */
     private boolean offerToNextDriver(Attempt attempt, OffsetDateTime now) {
         int widest = properties.radiiMeters().stream().mapToInt(Integer::intValue).max().orElse(0);
         // Considered before the offer, so the chosen driver is not shown as busy with it (REQ-DSP-12).
         List<OrderCore.Considered> considered = core.explain(attempt.orderId(), widest,
                 properties.journalCandidates());
-        for (int radius : properties.radiiMeters()) {
-            for (OrderCore.Candidate candidate : core.candidates(attempt.orderId(), radius, null, false)) {
-                OrderCore.Capacity capacity = core.lockCapacity(candidate.driverId());
-                // Read again under the capacity lock that a pause or close takes: the driver may have paused since
-                // the candidate query (issue #141, E5).
-                if (!"FREE".equals(capacity.occupancy()) || !core.accepting(candidate.driverId())) {
-                    continue;
-                }
-                offer(attempt, candidate, now, "AUTO", OrderCore.system());
-                journal.round(attempt, widest, considered, candidate.driverId(), now);
-                return true;
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", attempt.orderId())
+                .query(UUID.class).single();
+        taxi.blizz.configuration.ServiceSettings.PickupTime rules = settings.ofCity(cityId).settings().pickupTime();
+        int limit = rules.maxMinutes() * 60;
+        List<PickupTimes.Timed> timed = pickupTimes.of(attempt.orderId(),
+                core.candidates(attempt.orderId(), widest, rules.routedCandidates(), false));
+        Map<UUID, Integer> seconds = new java.util.HashMap<>();
+        timed.forEach(t -> seconds.put(t.candidate().driverId(), t.seconds()));
+        List<OrderCore.Considered> journaled = considered.stream().map(c -> {
+            Integer s = seconds.get(c.driverId());
+            return new OrderCore.Considered(c.driverId(), c.distanceM(),
+                    c.reason() == null && s != null && s > limit ? "PICKUP_TOO_LONG" : c.reason(), s);
+        }).toList();
+        List<PickupTimes.Timed> within = timed.stream().filter(t -> t.seconds() <= limit)
+                .sorted(java.util.Comparator.comparingInt(PickupTimes.Timed::seconds)
+                        .thenComparingInt(t -> t.candidate().distanceM())
+                        .thenComparing(t -> t.candidate().driverId()))
+                .toList();
+        for (PickupTimes.Timed t : within) {
+            OrderCore.Capacity capacity = core.lockCapacity(t.candidate().driverId());
+            // Read again under the capacity lock that a pause or close takes: the driver may have paused since
+            // the candidate query (issue #141, E5).
+            if (!"FREE".equals(capacity.occupancy()) || !core.accepting(t.candidate().driverId())) {
+                continue;
             }
+            offer(attempt, t, now, "AUTO", OrderCore.system());
+            journal.round(attempt, widest, journaled, t.candidate().driverId(), now);
+            return true;
         }
-        journal.round(attempt, widest, considered, null, now);
+        journal.round(attempt, widest, journaled, null, now);
         return false;
+    }
+
+    /** A manual offer (REQ-OPS-04): the pickup time is recorded, the threshold does not apply (ADR 0020). */
+    UUID offer(Attempt attempt, OrderCore.Candidate candidate, OffsetDateTime now, String source, Actor actor) {
+        return offer(attempt, pickupTimes.of(attempt.orderId(), List.of(candidate)).getFirst(), now, source, actor);
     }
 
     /**
@@ -176,13 +206,17 @@ class DispatchEngine {
      * an automatic and a manual offer (REQ-OPS-04, issue #143). It lasts the personal offer time, never past the
      * search's total deadline (REQ-DSP-10), and the attempt is due again when it expires.
      */
-    UUID offer(Attempt attempt, OrderCore.Candidate candidate, OffsetDateTime now, String source, Actor actor) {
+    UUID offer(Attempt attempt, PickupTimes.Timed timed, OffsetDateTime now, String source, Actor actor) {
+        OrderCore.Candidate candidate = timed.candidate();
         OffsetDateTime expiresAt = earliest(now.plus(properties.personalOfferTtl()), attempt.totalDeadline());
         UUID offerId = UUID.randomUUID();
         jdbc.sql("""
                         insert into offer (id, order_id, attempt_id, driver_id, state, distance_m, expires_at,
-                                           created_at)
-                        values (:id, :orderId, :attemptId, :driverId, 'OPEN', :distance, :expiresAt, :now)""")
+                                           created_at, pickup_eta_seconds, pickup_eta_source)
+                        values (:id, :orderId, :attemptId, :driverId, 'OPEN', :distance, :expiresAt, :now,
+                                :eta, :etaSource)""")
+                .param("eta", timed.seconds())
+                .param("etaSource", timed.source())
                 .param("id", offerId)
                 .param("orderId", attempt.orderId())
                 .param("attemptId", attempt.id())
@@ -194,7 +228,8 @@ class DispatchEngine {
         core.setOccupancy(candidate.driverId(), "OFFERED", null);
         core.recordEvent(attempt.orderId(), core.touch(attempt.orderId()), "OfferMade", actor, null,
                 Map.of("offer_id", offerId.toString(), "driver_id", candidate.driverId().toString(),
-                        "distance_m", candidate.distanceM(), "expires_at", expiresAt.toString(), "source", source));
+                        "distance_m", candidate.distanceM(), "expires_at", expiresAt.toString(), "source", source,
+                        "pickup_eta_seconds", timed.seconds(), "pickup_eta_source", timed.source()));
         schedule(attempt, expiresAt);
         return offerId;
     }

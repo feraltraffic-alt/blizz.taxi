@@ -149,6 +149,14 @@ public interface ServiceSettings {
                            int acceptanceWarnPercent, int acceptancePausePercent, int farPickupMeters) {
     }
 
+    /**
+     * Drivers are chosen by pickup time (owner decision 05.11.2026, ADR 0020): the {@code routedCandidates} nearest
+     * candidates get a road pickup time by the service's router, and a driver whose time is above {@code maxMinutes}
+     * is not offered the order; the search goes on to its timeout.
+     */
+    record PickupTime(int maxMinutes, int routedCandidates) {
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -161,13 +169,22 @@ public interface ServiceSettings {
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                     StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
-                    OfferDiscipline offerDiscipline) {
+                    OfferDiscipline offerDiscipline, PickupTime pickupTime) {
+        /** Source compatibility for callers written before the pickup time settings. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
+                        OfferDiscipline offerDiscipline) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    riderDebts, driverDiscipline, offerDiscipline, null);
+        }
+
         /** Source compatibility for callers written before the offer discipline settings. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, null);
+                    riderDebts, driverDiscipline, null, null);
         }
 
         /** Source compatibility for callers written before the driver discipline settings. */
@@ -175,7 +192,7 @@ public interface ServiceSettings {
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, null, null);
+                    riderDebts, null, null, null);
         }
 
         /** Source compatibility for callers written before the rider debt limit. */

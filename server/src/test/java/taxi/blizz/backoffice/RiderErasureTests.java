@@ -119,7 +119,7 @@ class RiderErasureTests {
             N legal_document_version: audience kind state texts
             R notification: body data title
             N notification: channel last_error locale recipient_type state template
-            N offer: state
+            N offer: pickup_eta_source state
             N operator_bonus_account: timezone
             N operator_bonus_entry: kind rule_key
             N operator_bonus_settings: reason time_rules

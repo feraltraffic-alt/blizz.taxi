@@ -112,6 +112,20 @@ class ConfiguredRouteEstimator implements RouteEstimator, IntegrationCheck {
                 : straightLine.estimate(pickup, dropOff);
     }
 
+    @Override
+    public Optional<Estimate> road(java.util.UUID serviceId, GeoPoint from, GeoPoint to) {
+        if (serviceId == null) {
+            return Optional.empty();
+        }
+        Built b = current(serviceId);
+        return b.properties().enabled() && addressStillAllowed(b) ? b.graphHopper().road(from, to) : Optional.empty();
+    }
+
+    @Override
+    public Estimate straightLine(long straightMetres) {
+        return straightLine.straightLine(straightMetres);
+    }
+
     private boolean addressStillAllowed(Built b) {
         if (!b.fromPanel()) {
             return true;

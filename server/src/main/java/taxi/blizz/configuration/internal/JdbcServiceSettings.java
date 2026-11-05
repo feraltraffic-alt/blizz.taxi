@@ -50,7 +50,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new StaffTopUps(Map.of()),
             new RiderDebts(Map.of()),
             new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7),
-            new OfferDiscipline(true, 3, true, 20, 50, 30, 3000));
+            new OfferDiscipline(true, 3, true, 20, 50, 30, 3000),
+            new PickupTime(15, 10));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -251,8 +252,10 @@ class JdbcServiceSettings implements ServiceSettings {
         validate(discipline);
         OfferDiscipline offers = s.offerDiscipline() == null ? DEFAULTS.offerDiscipline() : s.offerDiscipline();
         validate(offers);
+        PickupTime pickup = s.pickupTime() == null ? DEFAULTS.pickupTime() : s.pickupTime();
+        validate(pickup);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps, debts, discipline, offers);
+                orders, cash, versions, topUps, debts, discipline, offers, pickup);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -309,8 +312,19 @@ class JdbcServiceSettings implements ServiceSettings {
         DriverDiscipline discipline = s.driverDiscipline() == null ? DEFAULTS.driverDiscipline()
                 : s.driverDiscipline();
         OfferDiscipline offers = s.offerDiscipline() == null ? DEFAULTS.offerDiscipline() : s.offerDiscipline();
+        PickupTime pickup = s.pickupTime() == null ? DEFAULTS.pickupTime() : s.pickupTime();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps, debts, discipline, offers);
+                topUps, debts, discipline, offers, pickup);
+    }
+
+    /** ADR 0020: a pickup time threshold of 1 to 120 minutes; 1 to 20 candidates routed (the candidate limit). */
+    private static void validate(PickupTime p) {
+        if (p.maxMinutes() < 1 || p.maxMinutes() > 120) {
+            throw invalid("Pickup time: max_minutes must be between 1 and 120");
+        }
+        if (p.routedCandidates() < 1 || p.routedCandidates() > 20) {
+            throw invalid("Pickup time: routed_candidates must be between 1 and 20");
+        }
     }
 
     /** ADR 0018 B12: the warning threshold above the pause threshold; no zero counts or distances. */

@@ -21,7 +21,7 @@ class OrderMetrics {
             "NO_CARS", "TEST_ORDER");
     private static final Set<String> EXCLUSIONS = Set.of("STALE_LOCATION", "INACCURATE_LOCATION", "OUTSIDE_CITY",
             "CITY_NOT_ADMITTED", "PAUSED", "NOT_ADMITTED", "CLASS", "PAYMENT", "RESTRICTED", "PREVIOUS_DRIVER",
-            "ALREADY_OFFERED", "BUSY", "TOO_FAR");
+            "ALREADY_OFFERED", "BUSY", "TOO_FAR", "PICKUP_TOO_LONG");
     private final JdbcClient jdbc;
     private final Clock clock;
     private final CommittedMetrics metrics;

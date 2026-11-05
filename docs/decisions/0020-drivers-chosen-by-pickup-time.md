@@ -30,10 +30,11 @@ The owner's rule from ADR 0018 holds: every number below is a setting in the adm
    still applies; the offer records which one it used.
 5. **The offer carries the pickup time** and its source. When the driver accepts an offer whose time came from the
    router, the assignment records the **promised pickup time**: the acceptance plus that time. ADR 0019 uses it for
-   the driver's lateness. An order taken from the "ALL" tab, a straight-line time or a manual offer by an operator
-   leave no promise.
+   the driver's lateness. An order taken from the "ALL" tab or an offer with a straight-line time leave no promise;
+   an operator's manual offer promises like any other.
 6. **What stays as it is:** the "ALL" tab shows orders by distance (routing every driver who looks at it would cost a
    route per driver per order); an operator's manual offer is not limited by the threshold, but records the time.
+   Of the candidates the round routes, those not among the nearest 10 are left for the next round.
 7. **The dispatch journal** (REQ-DSP-12) shows each considered driver's pickup time and "above the threshold" as the
    reason they were passed over.
 
