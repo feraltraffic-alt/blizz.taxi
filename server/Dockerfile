@@ -11,6 +11,9 @@ COPY src ./src
 RUN mvn -B -q -ntp -DskipTests package && cp target/server-*.jar /app.jar
 
 FROM eclipse-temurin:25-jre@sha256:ecdc0adb37bde1a281c4d245a3cd535004b1fc8322d560f5b09463b248c81df0
+# The base image's packages with fixes published since its digest was pinned (CVE-2026-109518 in apt, 05.11.2026);
+# the package lists are not kept in the image.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 blizz
 USER blizz
 COPY --from=build /app.jar /app/server.jar
