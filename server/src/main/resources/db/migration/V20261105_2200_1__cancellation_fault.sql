@@ -13,7 +13,7 @@ update cancel_reason set fault = case
     when code = 'VEHICLE_BREAKDOWN' then 'DRIVER'
     else 'NONE' end;
 update cancel_reason set late_driver_fault = true where audience = 'RIDER' and code = 'WAIT_TOO_LONG';
-alter table cancel_reason add constraint cancel_reason_fault_check
+alter table cancel_reason add constraint cancel_reason_fault_audience_check
     check ((audience = 'REASSIGN') = (fault is null));
 alter table cancel_reason add constraint cancel_reason_operator_fault_check
     check (operator_fault = coalesce(fault = 'OPERATOR', false));
