@@ -44,13 +44,21 @@ A reason with `CLIENT` gives `CLIENT_FREE` or `CLIENT` by the time:
 The driver's 30-second grace (ADR 0018 B2) is a separate setting and stays.
 
 A reason may also be marked **"the driver's fault if the driver is late"** (default only on the rider's "The wait is
-too long"). With it, the fault is `DRIVER` when the driver is later than promised by more than **5 minutes** (setting
-"driver late", minutes): the driver has not arrived and the promised time plus the setting has passed, or arrived after
-it.
+too long"). With it, the fault is `DRIVER` when, at the moment of the cancellation, the driver is late:
 
-**The promised time** is the first pickup estimate the rider was shown for this driver (REQ-RID-04): the time of the
-driver's position it was computed from plus the estimated duration. The server records it once per assignment. With no
-estimate ever shown (for example an order taken by phone), there is no promise and lateness is not applied.
+- **late against the promise:** the driver has not arrived and the promised pickup time plus **5 minutes** (setting
+  "driver late", minutes) has passed, or arrived after it;
+- **the promised pickup time** is the time of the acceptance plus the pickup time the driver was offered the order
+  with. Drivers are chosen by pickup time on the service's own GraphHopper (owner, 05.11.2026; ADR 0020), so the
+  offer carries it;
+- **no promise known** (an order taken from the "ALL" tab, or an offer made while the router was down): the driver
+  is late when they have not arrived within **15 minutes** of the acceptance (setting "driver late without a promise",
+  minutes).
+
+The owner first agreed to "5 minutes over the first estimate the rider saw", then asked how Uber and Bolt do it
+(05.11.2026). As far as the lead knows (from memory; the rules differ by city and change): both count lateness against
+the pickup time given at the match, both make the rider's cancellation free when the driver is late, and neither
+counts a rider's cancellation in the driver's cancellation rate. The owner chose: the fault is the driver's.
 
 Starting faults of the reasons that exist today:
 
@@ -70,9 +78,11 @@ reasons marked "operator's fault" (ADR 0011) have the fault `OPERATOR`; the two 
 
 ### 3. Consequences
 
-- `DRIVER`: the cancellation counts against the driver (ADR 0018 B) when the driver cancelled it or the rider
-  cancelled because the driver was late. A cancellation by staff for the driver's fault (a breakdown on the way)
-  is recorded with the fault but is not counted automatically.
+- `DRIVER`: the cancellation counts against the driver (ADR 0018 B) when the driver cancelled it. A rider's
+  cancellation because the driver was late counts only with the setting "count the rider's cancellations for
+  lateness" (default off, as in Uber and Bolt); it is always recorded with the fault, so the rider pays nothing and
+  reports and refunds put it on the driver. A cancellation by staff for the driver's fault (a breakdown on the way) is
+  recorded with the fault but is not counted automatically.
 - `OPERATOR`: the operator's points (ADR 0011), as today.
 - `CLIENT`: a cancellation fee may apply once Q-07 is decided; nothing is charged today.
 - `CLIENT_FREE`, `NONE`: nothing.
