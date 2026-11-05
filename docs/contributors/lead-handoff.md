@@ -1,4 +1,4 @@
-# Lead handoff (state on 03.11.2026, evening)
+# Lead handoff (state on 05.11.2026, midday)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -28,9 +28,9 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 
 | Who | Queue (in order) |
 |---|---|
-| Codex | Idle since 30.10. #136 was finished by the lead (#233) from Codex's tests-first commit |
-| Second Claude | Idle since 01.11 09:16. Its #137 (rider app) was finished by the lead (#236) |
-| Lead | ADR 0016: parts 1, 3, 4, 5 done (#214, #216, #217, #218); part 2 (#215) done except **service-data retention**, which waits for the owner's answer below. Clients merged: web foundation (#233), rider first slice (#236), driver first slice (#239), operator workstation (#246), rider `/me` (#242), city center (#244); on 02.11: rider ordering (#250), driver offers and trips (#252), no secret in the bundles, AC-23 (#255), rating and tip (#258), driver ALL tab (#259), operator vehicle classes (#260), driver money screen (#261), order chat (#263), pushes and stale notifications, AC-19 (#265; the phone check is the owner's, with AC-26). The owner said on 02.11: "today work alone, without the contributors; take a task, finish it, take the next". Next candidates: card payment in the rider app (payment methods, WayForPay page), the driver's documents and vehicle upload, the operator's other screens (live drivers, support), the rider's order history |
+| Codex | Idle. On 05.11 the owner said "take their tasks": the lead did the proposed ones (panel languages #497/#498, load stand #499) |
+| Second Claude | Idle, same as Codex |
+| Lead | ADR 0018 part B (driver cancellations, offer discipline, priority search, issue #487) done in #489–#493. Next: refunds (ADR 0018 part A) once the owner answers Q-06 points 6–9; tariffs #30 when the owner says |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -46,6 +46,11 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 - #46 payment link by SMS.
 
 ### Open owner questions
+
+- **Q-06 refunds** (ADR 0018 part A): points 1–5 decided on 04.11 (who refunds, limits, second confirmation
+  variant В, partial refunds, card or bonuses). **Open:** 6 who pays (proposed: a setting per reason; the owner
+  asked about fines, which wait for the lawyer, Q-05), 7 cash trips, 8 time limit, 9 reasons and notification.
+  Owner rule: every number and switch is an admin-panel setting.
 
 - **Settings of the whole server**, answered 02.11: the super admin of each service sets its Asterisk connection and its retention terms (ADR 0016, owner decision 02.11.2026). The work is in the issues for Asterisk per service and retention per service.
 - **Before launch:** a second super admin. The confirmation lockout of the only one stays by the owner's choice
@@ -82,6 +87,22 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (04–05.11.2026)
+
+- **ADR 0018** (#486, #488): owner answers on refunds (part A, points 1–5) and driver cancellations (part B).
+- **#487 done by the lead** (#489–#493): counted cancellations with a warning, pauses and staff lifting,
+  the cancellation report, offer discipline (missed in a row takes the driver off line; acceptance share with
+  warning, pause and the LOW_ACCEPTANCE flag), priority search for a rider whose driver cancelled.
+  Found on the way: the dispatch worker handled its claimed batch in arbitrary order (`UPDATE … RETURNING`
+  keeps no order); it now sorts by priority, then due time (#491, lessons case 26).
+- **Dependabot #494, #495** merged with the owner's yes. **#496:** the server image takes the base image's
+  package fixes (CVE in apt).
+- **Panels languages** (#497, #498): a language picker ru/uk/pl/en, remembered per panel. An operator e2e took
+  "the first select" and broke when the picker appeared (lessons case 28).
+- **Load stand** (#499): the tokens lacked the `svc` claim, so every request got 401 and the run still passed;
+  `scripts/load/sane.mjs` now fails a run that loaded nothing (lessons case 27). L1 on the fixed stand
+  (run 42023169593): 0 % failed, 2281 rides, order p95 64 ms, accept p95 21 ms, 0 invariant violations.
 
 ## Recent history (03.11.2026, evening)
 
