@@ -1,10 +1,13 @@
 // Mints access tokens for the seeded load subjects (issue #146 part 3), as the server signs them: HS256 with the
 // sandbox's access-token secret, its instance id as issuer. The device sessions are in seed.sql.
-// Usage: node tokens.mjs DRIVERS RIDERS > tokens.json   (ACCESS_TOKEN_SECRET, INSTANCE_ID from the environment)
+// Usage: node tokens.mjs DRIVERS RIDERS > tokens.json   (ACCESS_TOKEN_SECRET, INSTANCE_ID, SERVICE_ID from the environment)
 import { createHash, createHmac } from 'node:crypto';
 
 const secret = process.env.ACCESS_TOKEN_SECRET ?? 'sandbox-only-access-token-secret-not-for-real-use';
 const instance = process.env.INSTANCE_ID ?? '00000000-0000-4000-8000-00000000005a';
+// The taxi service of the seeded subjects and their device sessions (ADR 0016): the first one. A token without it no
+// longer matches its session, so every request of a run was refused with 401 from 01.11 on.
+const service = process.env.SERVICE_ID ?? '5e000000-0000-4000-8000-000000000001';
 const [drivers, riders] = process.argv.slice(2).map(Number);
 
 // PostgreSQL's md5(text)::uuid
@@ -16,7 +19,7 @@ const now = Math.floor(Date.now() / 1000);
 function token(type, audience, id, sid) {
   const head = b64({ alg: 'HS256' });
   const body = b64({ iss: instance, sub: id, aud: audience, iat: now, exp: now + 6 * 3600, jti: uuid(`jti-${sid}`),
-                     sub_type: type, sid, iid: instance });
+                     sub_type: type, sid, iid: instance, svc: service });
   const signature = createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
   return `${head}.${body}.${signature}`;
 }
