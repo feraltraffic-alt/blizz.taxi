@@ -71,7 +71,7 @@ class CancellationFaults {
             return Verdict.of("CLIENT_FREE");
         }
         ServiceSettings.CancellationFault rules = settings.ofCity(order.cityId()).settings().cancellationFault();
-        if (reason.lateDriverFault()) {
+        if (reason.lateDriverFault() && rules.driverLateMinutes() < 0) {
             OffsetDateTime deadline = facts.promisedAt() != null
                     ? facts.promisedAt().plusMinutes(rules.driverLateMinutes())
                     : facts.acceptedAt().plusMinutes(rules.driverLateWithoutPromiseMinutes());
@@ -80,7 +80,7 @@ class CancellationFaults {
                 return new Verdict("DRIVER", true, facts.assignmentId(), facts.driverId());
             }
         }
-        return now.isAfter(facts.acceptedAt().plusMinutes(rules.clientFreeMinutes())) ? Verdict.of("CLIENT")
+        return now.isAfter(facts.acceptedAt().plusMinutes(2)) ? Verdict.of("CLIENT")
                 : Verdict.of("CLIENT_FREE");
     }
 }
