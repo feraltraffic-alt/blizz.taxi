@@ -114,6 +114,39 @@ class CancellationDiscipline {
         flagRate(driverId, facts.cityId(), id, rules, now);
     }
 
+    /**
+     * Staff set the fault of the order the driver was on (ADR 0019 point 4): {@code counted} — the driver's fault, the
+     * cancellation counts from now on (recorded if it was not, source STAFF); otherwise it counts no more (not counted,
+     * STAFF). Nothing is warned or paused now, and a pause already given stays until staff lift it.
+     */
+    void recount(UUID driverId, UUID orderId, UUID assignmentId, String reasonCode, boolean counted) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))").param("key", "driver-discipline:" + driverId)
+                .query().singleRow();
+        if (!counted) {
+            jdbc.sql("""
+                            update driver_cancellation set counted = false, not_counted_why = 'STAFF'
+                            where assignment_id = :assignment and counted""")
+                    .param("assignment", assignmentId).update();
+            return;
+        }
+        int changed = jdbc.sql("""
+                        update driver_cancellation set counted = true, not_counted_why = null
+                        where assignment_id = :assignment""")
+                .param("assignment", assignmentId).update();
+        if (changed > 0) {
+            return;
+        }
+        jdbc.sql("""
+                        insert into driver_cancellation (id, driver_id, city_id, order_id, assignment_id, reason_code,
+                                                         counted, not_counted_why, accepted_at, cancelled_at, source)
+                        select :id, a.driver_id, o.city_id, o.id, a.id, :code, true, null, a.created_at, :now, 'STAFF'
+                        from assignment a join ride_order o on o.id = a.order_id
+                        where a.id = :assignment
+                        on conflict (assignment_id) do nothing""")
+                .param("id", UUID.randomUUID()).param("code", reasonCode == null ? "STAFF" : reasonCode)
+                .param("now", core.now()).param("assignment", assignmentId).update();
+    }
+
     /** The pause in force for the driver, if any. */
     Optional<Pause> active(UUID driverId) {
         return jdbc.sql("""

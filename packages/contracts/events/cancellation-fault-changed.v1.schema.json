@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/cancellation-fault-changed.v1.schema.json",
+  "title": "CancellationFaultChanged v1 payload",
+  "description": "Staff set another fault on this cancelled order (ADR 0019 point 4). fault_before is null for an order cancelled before ADR 0019. driver_id: the driver who was on the order when it was cancelled, whose counted cancellation follows the fault; left out when there was none. The operator's points follow a change to or from OPERATOR.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "fault", "fault_before", "comment"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "fault": {"type": "string", "enum": ["CLIENT_FREE", "CLIENT", "DRIVER", "OPERATOR", "NONE"]},
+    "fault_before": {"type": ["string", "null"], "enum": ["CLIENT_FREE", "CLIENT", "DRIVER", "OPERATOR", "NONE", null]},
+    "comment": {"type": "string", "minLength": 1, "maxLength": 500},
+    "driver_id": {"type": "string", "format": "uuid"}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "fault": "DRIVER", "fault_before": "CLIENT",
+     "comment": "The driver was 20 minutes late; the rider called", "driver_id": "0b1c2d3e-0000-4000-8000-000000000002"}
+  ]
+}

@@ -31,6 +31,7 @@ public final class StaffPermissions {
             new Permission("orders.reassign", "Orders", "Take a driver off an order"),
             new Permission("orders.offer", "Orders", "Offer an order to a chosen driver (audited)"),
             new Permission("orders.interrupt", "Orders", "Interrupt a trip in progress and send a follow-up"),
+            new Permission("orders.fault", "Orders", "Change the fault of a cancelled order (audited)"),
             new Permission("orders.view", "Orders", "Order details and the rider–driver chat"),
             new Permission("calls.answer", "Calls", "Incoming calls: see them as they ring and take them"),
             new Permission("calls.listen", "Calls", "Listen to call recordings (every listening is audited)"),
