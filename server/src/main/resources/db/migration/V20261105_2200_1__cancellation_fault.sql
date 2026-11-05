@@ -1,7 +1,8 @@
 -- Who is at fault for a cancelled order (owner decision 05.11.2026, ADR 0019).
 
 -- The fault each cancellation reason gives; CLIENT turns into CLIENT_FREE or CLIENT by the time. REASSIGN reasons
--- cancel nothing and have none. late_driver_fault: the driver's fault when the driver is late.
+-- cancel nothing and have none; on another reason null means the starting fault of its side (the server writes it).
+-- late_driver_fault: the driver's fault when the driver is late.
 alter table cancel_reason add column fault text check (fault in ('CLIENT', 'DRIVER', 'OPERATOR', 'NONE'));
 alter table cancel_reason add column late_driver_fault boolean not null default false;
 update cancel_reason set fault = case
@@ -14,17 +15,15 @@ update cancel_reason set fault = case
     else 'NONE' end;
 update cancel_reason set late_driver_fault = true where audience = 'RIDER' and code = 'WAIT_TOO_LONG';
 alter table cancel_reason add constraint cancel_reason_fault_audience_check
-    check ((audience = 'REASSIGN') = (fault is null));
+    check (audience <> 'REASSIGN' or fault is null);
 alter table cancel_reason add constraint cancel_reason_operator_fault_check
-    check (operator_fault = coalesce(fault = 'OPERATOR', false));
+    check (fault is null or operator_fault = (fault = 'OPERATOR'));
 alter table cancel_reason add constraint cancel_reason_late_driver_fault_check
     check (not late_driver_fault or fault = 'CLIENT');
 
 -- The fault of a cancelled order; null for orders cancelled before ADR 0019.
 alter table ride_order add column cancel_fault text
     check (cancel_fault in ('CLIENT_FREE', 'CLIENT', 'DRIVER', 'OPERATOR', 'NONE'));
-alter table ride_order add constraint ride_order_cancel_fault_by_check
-    check (cancel_fault is null or cancelled_by is not null);
 
 -- A driver's cancellation may come from the rider's cancellation for lateness (LATE) or from staff setting the
 -- driver's fault (STAFF); a cancellation staff took off the driver is not counted with the reason STAFF.

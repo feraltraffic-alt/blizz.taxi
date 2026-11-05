@@ -323,7 +323,9 @@ class JdbcCancelReasons implements CancelReasons {
                 rs.getString("code"), json.readValue(rs.getString("labels"), new TypeReference<Map<String, String>>() {
                 }), outcome == null ? null : DriverOutcome.valueOf(outcome), rs.getBoolean("operator_fault"),
                 rs.getBoolean("not_counted"), rs.getBoolean("active"), rs.getInt("sort_order"), rs.getLong("version"),
-                rs.getString("fault") == null ? null : Fault.valueOf(rs.getString("fault")),
+                rs.getString("fault") == null
+                        ? Fault.startingFor(Audience.valueOf(rs.getString("audience")), rs.getBoolean("operator_fault"))
+                        : Fault.valueOf(rs.getString("fault")),
                 rs.getBoolean("late_driver_fault"));
     }
 
