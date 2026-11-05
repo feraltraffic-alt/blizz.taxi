@@ -23,7 +23,7 @@ alter table cancel_reason add constraint cancel_reason_late_driver_fault_check
 -- The fault of a cancelled order; null for orders cancelled before ADR 0019.
 alter table ride_order add column cancel_fault text
     check (cancel_fault in ('CLIENT_FREE', 'CLIENT', 'DRIVER', 'OPERATOR', 'NONE'));
-alter table ride_order add constraint ride_order_cancel_fault_check
+alter table ride_order add constraint ride_order_cancel_fault_by_check
     check (cancel_fault is null or cancelled_by is not null);
 
 -- A driver's cancellation may come from the rider's cancellation for lateness (LATE) or from staff setting the
