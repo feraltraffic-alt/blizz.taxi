@@ -6,8 +6,8 @@ export type Catalogs = Record<Locale, Record<string, string>>;
 export type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 /** The keys the shared staff screens use; every panel's catalog has them (checked by validateCatalogs). */
-export const AUTH_KEYS = ['signIn', 'signInTitle', 'login', 'password', 'wrongCredentials', 'lockedOut', 'suspended',
-  'genericError', 'correlation', 'passwordChange', 'passwordChangeHint', 'currentPassword', 'newPassword',
+export const AUTH_KEYS = ['language', 'signIn', 'signInTitle', 'login', 'password', 'wrongCredentials', 'lockedOut',
+  'suspended', 'genericError', 'correlation', 'passwordChange', 'passwordChangeHint', 'currentPassword', 'newPassword',
   'savePassword', 'passwordTooShort', 'wrongCurrentPassword', 'signOut', 'loading'] as const;
 
 /**
@@ -140,8 +140,10 @@ function PasswordChange({client, t}: {client: ApiClient; t: Translate}) {
  * A staff panel's gate (#136, #245): the session restored from the tab, sign-in with the panel's audience, the
  * forced password change before anything else, then the panel.
  */
-export function StaffGate({client, t, audience, children}: {client: ApiClient; t: Translate;
-  audience: 'ADMIN' | 'OPERATOR'; children: ReactNode}) {
+export function StaffGate({client, t, audience, children, locale, onLocale}: {client: ApiClient; t: Translate;
+  audience: 'ADMIN' | 'OPERATOR'; children: ReactNode;
+  /** With both, the language picker is above the sign-in and the panel alike. */
+  locale?: Locale; onLocale?: (locale: Locale) => void}) {
   const session = useSession(client);
   const [restored, setRestored] = useState(session.authenticated);
 
@@ -157,7 +159,51 @@ export function StaffGate({client, t, audience, children}: {client: ApiClient; t
   else if (!session.authenticated) content = <SignIn client={client} t={t} audience={audience} />;
   else if (session.passwordChangeRequired) content = <PasswordChange client={client} t={t} />;
   else content = children;
-  return <main>{content}</main>;
+  return (
+    <main>
+      {locale && onLocale ? <LanguagePicker t={t} locale={locale} onChange={onLocale} /> : null}
+      {content}
+    </main>
+  );
+}
+
+/** The panels' languages, each named in itself so anyone finds their own. */
+export const LOCALES: readonly Locale[] = ['ru', 'uk', 'pl'];
+const NATIVE: Record<Locale, string> = {ru: 'Русский', uk: 'Українська', pl: 'Polski'};
+
+/**
+ * The staff member's language on this browser, Russian by default (owner decision 27.10.2026). Kept in localStorage as a
+ * convenience of the viewer; a blocked or empty storage gives Russian and the page still works.
+ */
+export function useStoredLocale(key: string): [Locale, (locale: Locale) => void] {
+  const [locale, setLocale] = useState<Locale>(() => {
+    try {
+      const stored = globalThis.localStorage?.getItem(key);
+      return (LOCALES as readonly string[]).includes(stored ?? '') ? stored as Locale : 'ru';
+    } catch {
+      return 'ru';
+    }
+  });
+  const change = (next: Locale) => {
+    setLocale(next);
+    try {
+      globalThis.localStorage?.setItem(key, next);
+    } catch {
+      // A blocked storage: the choice lasts as long as this page.
+    }
+  };
+  return [locale, change];
+}
+
+export function LanguagePicker({t, locale, onChange}: {t: Translate; locale: Locale;
+  onChange: (locale: Locale) => void}) {
+  return (
+    <label>{t('language')}
+      <select value={locale} onChange={e => onChange(e.target.value as Locale)}>
+        {LOCALES.map(l => <option key={l} value={l} lang={l}>{NATIVE[l]}</option>)}
+      </select>
+    </label>
+  );
 }
 
 /** The refresh token in the tab's sessionStorage, never localStorage (#136); the access token stays in memory. */

@@ -1,6 +1,6 @@
-import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
-import {Failure, StaffGate, translator, type Translate} from '@blizz/web-ui';
+import {Failure, StaffGate, translator, useStoredLocale, type Translate} from '@blizz/web-ui';
 import {translations} from './i18n.js';
 import {LiveDrivers} from './LiveDrivers.js';
 import {Support} from './Support.js';
@@ -16,7 +16,6 @@ import {CardPop, type Live} from './CardPop.js';
 
 export type {LiveSocket} from './CardPop.js';
 
-const t: Translate = translator(translations, 'ru');
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 
 type City = {id: string; name: string; center: Point};
@@ -27,15 +26,17 @@ type Order = {id: string; short_number: number; status: string; version: number;
 /** The operator workstation (#245): the shared staff gate, then a phone order and its status. */
 export function OperatorApp({client, newId = () => crypto.randomUUID(), pollMs = 5000, live}: {client: ApiClient;
   newId?: () => string; pollMs?: number; live?: Live}) {
+  const [locale, setLocale] = useStoredLocale('blizz.operator.locale');
+  const t = useMemo(() => translator(translations, locale), [locale]);
   return (
-    <StaffGate client={client} t={t} audience="OPERATOR">
-      <Workstation client={client} newId={newId} pollMs={pollMs} live={live} />
+    <StaffGate client={client} t={t} audience="OPERATOR" locale={locale} onLocale={setLocale}>
+      <Workstation client={client} t={t} newId={newId} pollMs={pollMs} live={live} />
     </StaffGate>
   );
 }
 
-function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: () => string; pollMs: number;
-  live?: Live}) {
+function Workstation({client, t, newId, pollMs, live}: {client: ApiClient; t: Translate; newId: () => string;
+  pollMs: number; live?: Live}) {
   const [cities, setCities] = useState<City[] | null>(null);
   const [rights, setRights] = useState<Set<string> | null>(null);
   const [cityId, setCityId] = useState('');
@@ -93,7 +94,7 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
         onOrder={call => {setFromCall(call); setOrder(null); setView('order');}} /> :
       view === 'live' && rights.has('orders.view') ? <LiveDrivers client={client} t={t} cities={cities}
         pollMs={pollMs} /> : view === 'support' && rights.has('support.manage') ? <Support client={client} t={t}
-        cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
+        cities={cities} me={myId} newId={newId} /> : order ? <OrderView client={client} t={t} order={order} onChange={setOrder} newId={newId} pollMs={pollMs}
         rights={rights} near={(cities.find(c => c.id === order.city_id) ?? cities[0])?.center ?? {lat: 0, lon: 0}}
         onDone={() => setOrder(null)} /> : (
         <section aria-labelledby="new-order">
@@ -105,7 +106,7 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
             </select>
           </label>
           {/* The server checks the city too; the form is shown only to a holder of orders.create (E1). */}
-          {rights.has('orders.create') && city ? <OrderForm key={city.id + (fromCall?.id ?? '')} client={client}
+          {rights.has('orders.create') && city ? <OrderForm key={city.id + (fromCall?.id ?? '')} client={client} t={t}
             city={city} newId={newId} call={fromCall} onCreated={created => {setFromCall(null); setOrder(created);}} /> : <p role="alert">{t('noRight')}</p>}
         </section>
       )}
@@ -113,7 +114,8 @@ function Workstation({client, newId, pollMs, live}: {client: ApiClient; newId: (
   );
 }
 
-function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; city: City; newId: () => string;
+function OrderForm({client, t, city, newId, call, onCreated}: {client: ApiClient; t: Translate; city: City;
+  newId: () => string;
   call: FromCall | null; onCreated: (order: Order) => void}) {
   const [phone, setPhone] = useState(call?.phone ?? '');
   const [phoneError, setPhoneError] = useState(false);
@@ -259,7 +261,8 @@ function OrderForm({client, city, newId, call, onCreated}: {client: ApiClient; c
   );
 }
 
-function OrderView({client, order, onChange, newId, pollMs, onDone, rights, near}: {client: ApiClient; order: Order;
+function OrderView({client, t, order, onChange, newId, pollMs, onDone, rights, near}: {client: ApiClient;
+  t: Translate; order: Order;
   onChange: (order: Order) => void; newId: () => string; pollMs: number; onDone: () => void; rights: Set<string>;
   near: Point}) {
   const canView = rights.has('orders.view');
