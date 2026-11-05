@@ -52,5 +52,22 @@ export const orderFare: Catalogs = {
     fareNeeds: 'Nowa cena — inna, najwyżej dwa miejsca po przecinku; potrzebne są powód do 500 znaków i Twoje hasło.',
     farePaymentPending: 'Płatność jeszcze trwa; popraw później.',
     fareConflict: 'Cena się zmieniła albo zamówienie nie zostało wykonane; pokazano bieżącą.',
+  },
+  en: {
+    fareTitle: 'Final fare',
+    fareCommission: 'commission {amount}',
+    fareDriver: 'to driver {amount}',
+    fareAuthor: 'staff member {id}',
+    fareRefund: 'We owe the rider {amount} — awaiting refund; do not refund manually.',
+    fareNone: 'No final fare.',
+    fareCorrectTitle: 'Correct fare',
+    fareAmount: 'Corrected fare',
+    fareReason: 'Reason for the correction',
+    farePassword: 'Your password for the correction',
+    fareCorrect: 'Correct fare',
+    fareCorrected: 'Fare corrected.',
+    fareNeeds: 'The new fare must differ and have at most two digits after the point; a reason up to 500 characters and your password are required.',
+    farePaymentPending: 'Payment is still in progress; correct it later.',
+    fareConflict: 'The fare has changed or the order is not completed; the current state is shown.',
   }
 };

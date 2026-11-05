@@ -157,15 +157,17 @@ describe('protected panel', () => {
   });
 });
 
-it('RU default catalog is nonempty and UK/PL contain the exact same keys', () => {
+it('RU default catalog is nonempty and UK/PL/EN contain the exact same keys', () => {
   expect(Object.keys(translations.ru)).toContain('signIn');
   expect(Object.keys(translations.ru).length).toBeGreaterThan(15);
   expect(Object.keys(translations.uk).sort()).toEqual(Object.keys(translations.ru).sort());
   expect(Object.keys(translations.pl).sort()).toEqual(Object.keys(translations.ru).sort());
+  expect(Object.keys(translations.en).sort()).toEqual(Object.keys(translations.ru).sort());
   validateCatalogs(translations);
 });
 it('the translation guard actually refuses a missing key', () => {
-  expect(() => validateCatalogs({ru: {signIn: 'Вход'}, uk: {}, pl: {signIn: 'Wejście'}})).toThrow(/uk.*signIn/);
+  expect(() => validateCatalogs({ru: {signIn: 'Вход'}, uk: {}, pl: {signIn: 'Wejście'},
+    en: {signIn: 'Sign in'}})).toThrow(/uk.*signIn/);
 });
 
 it('refresh-token removal can be observed without persisting access tokens', async () => {

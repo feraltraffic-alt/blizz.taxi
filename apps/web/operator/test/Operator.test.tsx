@@ -232,6 +232,7 @@ describe('E6: a city that takes no orders now', () => {
 it('the catalogs have the same keys and every key of the shared staff screens', () => {
   validateCatalogs(translations);
   expect(Object.keys(translations.pl).sort()).toEqual(Object.keys(translations.ru).sort());
+  expect(Object.keys(translations.en).sort()).toEqual(Object.keys(translations.ru).sort());
 });
 
 it('signs in with the OPERATOR audience', async () => {

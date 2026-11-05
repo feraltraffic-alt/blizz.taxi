@@ -5,4 +5,5 @@ export const liveBoard: Catalogs = {
   ru: {...liveBoardTexts.ru, navLive: 'Карта машин'},
   uk: {...liveBoardTexts.uk, navLive: 'Мапа машин'},
   pl: {...liveBoardTexts.pl, navLive: 'Mapa aut'},
+  en: {...liveBoardTexts.en, navLive: 'Vehicle map'},
 };
