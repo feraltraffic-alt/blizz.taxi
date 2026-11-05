@@ -51,6 +51,9 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 18. **A new background worker is off in the tests by default.** Add it to `server/src/test/resources/config/application.yml` turned off, and turn it on only in the test of it: every test context shares one database (lessons case 22).
 19. **A test owns its data in the shared database.** Fixtures reach only the test's own taxi service, counts check the test's own rows by id, and a wait looks for the end of what was started, not its start (lessons cases 23 and 24).
 20. **A mutation branch passes lint and typecheck,** so that CI reaches the tests; push one branch per command (lessons case 25).
+21. **Order is stated, not assumed.** Rows from `UPDATE … RETURNING` or a set come in no order: sort them, and test with several rows at once (lessons case 26).
+22. **A run that measures something proves it did the work:** a gate on the failure share and a minimum of real work, shown red once (lessons case 27).
+23. **Find page elements by label or role and name,** never by position (lessons case 28).
 
 ## Rules that must not be broken
 

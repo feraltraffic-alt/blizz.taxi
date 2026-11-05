@@ -287,6 +287,27 @@ Real cases from pull requests on this repository: what was handed in, what the r
   - After any automatic conflict join, typecheck and test before committing.
   - A list that every feature appends to is replaced by discovery (a glob or a registry), so features don't collide.
 
+## 26. `UPDATE … RETURNING` keeps no order (#491)
+
+- **Missed:** the dispatch worker claimed a batch of due attempts with `UPDATE … RETURNING` and handled them in the
+  returned order. PostgreSQL returns updated rows in no promised order, even when the inner select is ordered, so a
+  priority attempt could wait behind ordinary ones. The priority test with several attempts due at once showed it.
+- **Habit:** order in Java after a claim, or select the claimed rows again with `ORDER BY`; test with more than
+  one row due at once.
+
+## 27. A run that measured nothing passed (#499)
+
+- **Missed:** the load stand's tokens lacked the `svc` claim, every request got 401, and the run was green:
+  latency of refusals is fast, and nothing gated on the share of failures.
+- **Habit:** every run that is not a test of its own gets a sanity gate: a failure share, and a minimum of real
+  work done (rides, connections). Show the gate red once on a broken run.
+
+## 28. A test that took "the first select" (#497)
+
+- **Missed:** an operator e2e found its field as the page's first `select`; the new language picker became the
+  first one and the test broke.
+- **Habit:** find elements by label or role and name, never by position on the page.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.
