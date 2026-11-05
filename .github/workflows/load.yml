@@ -111,14 +111,22 @@ jobs:
             grep -v '^\s*$' k6.log | tail -n 60
             echo '```'
           } > transcript.md
+          if node scripts/load/sane.mjs > sane.txt; then
+            echo "✅ load-l1: $(cat sane.txt) The numbers record, they do not gate (see transcript.md)." > results.txt
+          else
+            echo "❌ load-l1: $(cat sane.txt)" > results.txt
+          fi
+          cat results.txt >> "$GITHUB_STEP_SUMMARY"
           cat transcript.md >> "$GITHUB_STEP_SUMMARY"
-          echo "✅ load-l1 (see transcript.md; L1 records, it does not gate)" > results.txt
       - name: Publish results to the sandbox-runs branch
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_DIR: ${{ github.run_id }}-load
         run: scripts/sandbox/publish.sh
+      - name: The run loaded the server
+        if: always()
+        run: grep -q '^✅' results.txt
       - name: Keep the raw data
         if: always()
         uses: actions/upload-artifact@v7
