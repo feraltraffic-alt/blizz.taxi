@@ -1,4 +1,4 @@
-# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–5) and drivers cancelling accepted orders
+# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–6) and drivers cancelling accepted orders
 
 Date: 03.11.2026. Status: accepted (the owner's answers in the lead's session).
 
@@ -58,12 +58,33 @@ server checks every limit, so a direct API call cannot pass one (AC-07). Every s
 - Limits and confirmation are the same for both ways.
 - The validity of bonuses given as a refund is a setting.
 
+### A6. Who bears a refund (owner, 05.11.2026)
+
+The one at fault bears it, with the faults of ADR 0019:
+
+- **A refund of a cancelled order** (a charge for an interrupted trip, a fee once Q-07 allows one) follows the
+  order's fault.
+- **A refund of a completed trip** follows the refund reason: each reason in the list (A4) has a fault in the admin
+  panel, from the same set — the driver's (for example a long route, rudeness, a dirty car), the operator's, or
+  nobody's (a double charge, a software error, a long wait for the pickup). The staff member may change it in the
+  request with a comment, and the confirmer (A3) sees it.
+
+What each fault means for the money:
+
+- `DRIVER`: the driver bears the refund in the driver's share of the fare; the service bears its commission's share.
+  A sum already paid out to the driver lowers the next payout, or becomes the driver's debt (ADR 0014 limits).
+- `OPERATOR`, `NONE`, `CLIENT_FREE`: the service bears all of it.
+- `CLIENT`: no refund is due; a refund made all the same (goodwill) is borne by the service.
+
+The driver sees each such charge as its own line in the earnings ("refund to the rider for trip №…, reason") with a
+notice, and may dispute it through a support case, decided by finance or the super admin (as a cash dispute). A
+refund never cancels the completed trip: it stays in the driver's history and rating. Fines are not this: they wait
+for the lawyer (Q-05).
+
 ### Still open
 
-Who bears the refund — the service or the driver (point 6, proposed: by reason, a setting per reason), cash trips
-(point 7), the time limit (point 8), reasons and the rider's notice (point 9). Until they are answered, refunds are
-not built. Fines for drivers are a separate question that waits for a lawyer (Q-05): only as written in the contract
-with the driver.
+Cash trips (point 7), the time limit (point 8), reasons and the rider's notice (point 9). Until they are answered,
+refunds are not built.
 
 ## Part B. A driver cancels an order after accepting it
 
