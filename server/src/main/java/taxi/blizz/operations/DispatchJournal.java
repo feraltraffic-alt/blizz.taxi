@@ -21,16 +21,22 @@ public interface DispatchJournal {
                    List<Offer> offers, List<Round> rounds) {
     }
 
-    /** {@code result}: OPEN, ACCEPTED, DECLINED, EXPIRED or REVOKED. */
+    /**
+     * {@code result}: OPEN, ACCEPTED, DECLINED, EXPIRED or REVOKED; {@code pickupEtaSeconds} and its source (ROUTER or
+     * STRAIGHT_LINE) as the offer was made with, null for offers made before ADR 0020.
+     */
     record Offer(UUID offerId, UUID driverId, Integer distanceM, String result, OffsetDateTime offeredAt,
-                 OffsetDateTime closedAt) {
+                 OffsetDateTime closedAt, Integer pickupEtaSeconds, String pickupEtaSource) {
     }
 
     record Round(OffsetDateTime at, String phase, int radiusM, List<Candidate> candidates) {
     }
 
-    /** {@code outcome}: OFFERED, ELIGIBLE or EXCLUDED with {@code reason}. */
-    record Candidate(UUID driverId, Integer distanceM, String outcome, String reason) {
+    /**
+     * {@code outcome}: OFFERED, ELIGIBLE or EXCLUDED with {@code reason}; {@code pickupSeconds}: the pickup time the
+     * round computed for the driver (ADR 0020), null when it computed none.
+     */
+    record Candidate(UUID driverId, Integer distanceM, String outcome, String reason, Integer pickupSeconds) {
     }
 
     /** Needs {@link Orders#VIEW_PERMISSION} for the order's city. */

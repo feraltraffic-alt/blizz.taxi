@@ -423,7 +423,8 @@ class OrderCore {
         OffsetDateTime now = now();
         return jdbc.sql("""
                         select ws.driver_id, ws.vehicle_id,
-                               cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance_m
+                               cast(ST_Distance(ws.last_location::geography, o.pickup::geography) as int) as distance_m,
+                               ST_Y(ws.last_location) as lat, ST_X(ws.last_location) as lon
                         from ride_order o
                         join work_session ws on ws.city_id = o.city_id and ws.state = 'OPEN' and ws.intent = 'ACCEPTING'
                         join driver d on d.id = ws.driver_id
@@ -470,15 +471,23 @@ class OrderCore {
                 .param("radius", radius)
                 .param("limit", limit == null ? properties.candidateLimit() : limit)
                 .query((rs, i) -> new Candidate(rs.getObject("driver_id", UUID.class),
-                        rs.getObject("vehicle_id", UUID.class), rs.getInt("distance_m")))
+                        rs.getObject("vehicle_id", UUID.class), rs.getInt("distance_m"),
+                        new taxi.blizz.geo.GeoPoint(rs.getDouble("lat"), rs.getDouble("lon"))))
                 .list();
     }
 
-    record Candidate(UUID driverId, UUID vehicleId, int distanceM) {
+    /** {@code location}: the driver's last position, from which the pickup time is routed (ADR 0020). */
+    record Candidate(UUID driverId, UUID vehicleId, int distanceM, taxi.blizz.geo.GeoPoint location) {
     }
 
-    /** A driver considered for an order and the first check that left him out (null: he qualified). */
-    record Considered(UUID driverId, Integer distanceM, String reason) {
+    /**
+     * A driver considered for an order and the first check that left him out (null: he qualified);
+     * {@code pickupSeconds}: the pickup time the round computed for him, null when it computed none (ADR 0020).
+     */
+    record Considered(UUID driverId, Integer distanceM, String reason, Integer pickupSeconds) {
+        Considered(UUID driverId, Integer distanceM, String reason) {
+            this(driverId, distanceM, reason, null);
+        }
     }
 
     /**

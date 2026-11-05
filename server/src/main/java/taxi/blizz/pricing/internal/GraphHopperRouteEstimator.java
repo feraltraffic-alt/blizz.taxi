@@ -60,7 +60,28 @@ class GraphHopperRouteEstimator implements RouteEstimator {
         return answer.estimate();
     }
 
+    /**
+     * The road route only (ADR 0020): empty when GraphHopper failed, refused, found no route or its breaker is open.
+     * A failure counts for the breaker as in {@link #estimate}.
+     */
+    java.util.Optional<Estimate> road(GeoPoint from, GeoPoint to) {
+        Answer answer = breakers.call(ProviderBreakers.Provider.GRAPHHOPPER, () -> askRoad(from, to),
+                Answer::failure,
+                e -> {
+                    log.warn("GraphHopper is unavailable ({}); no road time", e.toString());
+                    return new Answer(null, true);
+                },
+                () -> new Answer(null, true));
+        return java.util.Optional.ofNullable(answer.estimate());
+    }
+
     private Answer ask(GeoPoint pickup, GeoPoint dropOff) throws Exception {
+        Answer road = askRoad(pickup, dropOff);
+        return road.estimate() != null ? road : new Answer(fallback.estimate(pickup, dropOff), road.failure());
+    }
+
+    /** The answer with a null estimate when there is no road route; the failure flag as for the breaker. */
+    private Answer askRoad(GeoPoint pickup, GeoPoint dropOff) throws Exception {
         HttpResponse<String> response = http.send(HttpRequest.newBuilder(uri(pickup, dropOff))
                 .timeout(properties.timeout()).header("Accept", "application/json").GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -68,12 +89,12 @@ class GraphHopperRouteEstimator implements RouteEstimator {
             log.warn("GraphHopper answered {}; using the straight-line estimate: {}", response.statusCode(),
                     abbreviate(response.body()));
             boolean down = response.statusCode() >= 500 || response.statusCode() == 429;
-            return new Answer(fallback.estimate(pickup, dropOff), down);
+            return new Answer(null, down);
         }
         JsonNode path = json.readTree(response.body()).path("paths").path(0);
         if (path.isMissingNode() || !path.path("distance").isNumber() || !path.path("time").isNumber()) {
             log.warn("GraphHopper found no route; using the straight-line estimate");
-            return new Answer(fallback.estimate(pickup, dropOff), false);
+            return new Answer(null, false);
         }
         long metres = path.path("distance").decimalValue().setScale(0, RoundingMode.HALF_UP).longValueExact();
         long seconds = BigDecimal.valueOf(path.path("time").longValue())

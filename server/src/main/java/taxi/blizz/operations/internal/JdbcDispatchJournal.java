@@ -59,6 +59,7 @@ class JdbcDispatchJournal implements DispatchJournal {
             candidate.put("outcome", c.reason() != null ? "EXCLUDED"
                     : c.driverId().equals(offered) ? "OFFERED" : "ELIGIBLE");
             candidate.put("reason", c.reason());
+            candidate.put("pickup_seconds", c.pickupSeconds());
             candidates.add(candidate);
             if (c.reason() != null) metrics.excluded(c.reason());
         }
@@ -102,12 +103,14 @@ class JdbcDispatchJournal implements DispatchJournal {
             Row a = attempts.get(i);
             OffsetDateTime until = i + 1 < attempts.size() ? attempts.get(i + 1).createdAt() : null;
             List<Offer> offers = jdbc.sql("""
-                            select id, driver_id, distance_m, state, created_at, closed_at from offer
+                            select id, driver_id, distance_m, state, created_at, closed_at, pickup_eta_seconds,
+                                   pickup_eta_source from offer
                             where attempt_id = :attempt order by created_at, id""")
                     .param("attempt", a.id())
                     .query((rs, n) -> new Offer(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                             (Integer) rs.getObject(3), "REJECTED".equals(rs.getString(4)) ? "DECLINED" : rs.getString(4),
-                            rs.getObject(5, OffsetDateTime.class), rs.getObject(6, OffsetDateTime.class)))
+                            rs.getObject(5, OffsetDateTime.class), rs.getObject(6, OffsetDateTime.class),
+                            (Integer) rs.getObject(7), rs.getString(8)))
                     .list();
             OffsetDateTime broadcastAt = jdbc.sql("""
                             select occurred_at from order_event
@@ -148,7 +151,8 @@ class JdbcDispatchJournal implements DispatchJournal {
             Map<String, Object> c = (Map<String, Object>) item;
             list.add(new Candidate(UUID.fromString((String) c.get("driver_id")),
                     c.get("distance_m") == null ? null : ((Number) c.get("distance_m")).intValue(),
-                    (String) c.get("outcome"), (String) c.get("reason")));
+                    (String) c.get("outcome"), (String) c.get("reason"),
+                    c.get("pickup_seconds") == null ? null : ((Number) c.get("pickup_seconds")).intValue()));
         }
         return list;
     }

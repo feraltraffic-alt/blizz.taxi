@@ -41,4 +41,15 @@ class StraightLineRouteEstimator implements RouteEstimator {
                 .query((rs, i) -> new Estimate(rs.getLong(1), rs.getLong(2), Source.STRAIGHT_LINE))
                 .single();
     }
+
+    @Override
+    public Estimate straightLine(long straightMetres) {
+        java.math.BigDecimal metres = java.math.BigDecimal.valueOf(Math.max(0, straightMetres))
+                .multiply(properties.detourFactor());
+        long road = metres.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+        long seconds = metres.multiply(java.math.BigDecimal.valueOf(36))
+                .divide(properties.averageSpeedKmh().multiply(java.math.BigDecimal.TEN), 0,
+                        java.math.RoundingMode.HALF_UP).longValueExact();
+        return new Estimate(road, seconds, Source.STRAIGHT_LINE);
+    }
 }

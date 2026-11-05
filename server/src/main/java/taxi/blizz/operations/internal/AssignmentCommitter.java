@@ -43,6 +43,17 @@ class AssignmentCommitter {
                 .param("source", source)
                 .param("now", now)
                 .update();
+        if (offerId != null) {
+            // The promised pickup (ADR 0019, ADR 0020): the acceptance plus the router's time the offer was made
+            // with; a straight-line time, a claim from the ALL tab or an offer before ADR 0020 promise nothing.
+            jdbc.sql("""
+                            update assignment
+                            set promised_pickup_at = cast(:now as timestamptz)
+                                                     + make_interval(secs => f.pickup_eta_seconds)
+                            from offer f
+                            where assignment.id = :id and f.id = :offer and f.pickup_eta_source = 'ROUTER'""")
+                    .param("now", now).param("id", assignmentId).param("offer", offerId).update();
+        }
         jdbc.sql("""
                         insert into trip (id, assignment_id, order_id, phase, created_at)
                         values (:id, :assignmentId, :orderId, 'TO_PICKUP', :now)""")

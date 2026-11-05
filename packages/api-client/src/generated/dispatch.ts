@@ -35,6 +35,8 @@ export interface components {
              * @enum {string}
              */
             outcome: "OFFERED" | "ELIGIBLE" | "EXCLUDED";
+            /** @description The pickup time the round computed for the driver (ADR 0020); null when it computed none (not among the nearest candidates routed, or left out before). */
+            pickup_seconds?: number | null;
             /** @description Why an EXCLUDED driver was left out (the first check that failed); null otherwise. */
             reason: components["schemas"]["ExclusionReason"] | null;
         };
@@ -50,6 +52,10 @@ export interface components {
             offer_id: components["schemas"]["Uuid"];
             /** Format: date-time */
             offered_at: string;
+            /** @description The pickup time the offer was made with (ADR 0020): from the driver's position to the pickup, by the service's router or, without it, the straight-line estimate; null for offers made before. */
+            pickup_eta_seconds?: number | null;
+            /** @enum {string|null} */
+            pickup_eta_source?: "ROUTER" | "STRAIGHT_LINE" | null;
             /**
              * @description OPEN — still waiting for the driver.
              * @enum {string}
@@ -67,10 +73,10 @@ export interface components {
             radius_m: number;
         };
         /**
-         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt) or a pause for cancellations (ADR 0018); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius.
+         * @description STALE_LOCATION — no recent heartbeat or position; INACCURATE_LOCATION — the last position reported an accuracy worse than blizz.presence.eligibility-accuracy-meters (REQ-GEO-04, issue #141); CITY_NOT_ADMITTED — the driver is not admitted in the order's city (issue #141); OUTSIDE_CITY — further outside the city's polygon than its return zone (REQ-DS-07); PAUSED — the shift does not take orders now; NOT_ADMITTED — the account, admission or vehicle is not approved; CLASS — the vehicle has not the order's class; PAYMENT — no payment terminal for an order paid at one; BUSY — offered another order or on a trip; RESTRICTED — an active restriction (debt) or a pause for cancellations (ADR 0018); ALREADY_OFFERED — had this order offered already; PREVIOUS_DRIVER — was released from this order (or its related one); TOO_FAR — beyond the search radius; PICKUP_TOO_LONG — the pickup time is above the service's maximum pickup time (ADR 0020).
          * @enum {string}
          */
-        ExclusionReason: "STALE_LOCATION" | "INACCURATE_LOCATION" | "CITY_NOT_ADMITTED" | "OUTSIDE_CITY" | "PAUSED" | "NOT_ADMITTED" | "CLASS" | "PAYMENT" | "BUSY" | "RESTRICTED" | "ALREADY_OFFERED" | "PREVIOUS_DRIVER" | "TOO_FAR";
+        ExclusionReason: "STALE_LOCATION" | "INACCURATE_LOCATION" | "CITY_NOT_ADMITTED" | "OUTSIDE_CITY" | "PAUSED" | "NOT_ADMITTED" | "CLASS" | "PAYMENT" | "BUSY" | "RESTRICTED" | "ALREADY_OFFERED" | "PREVIOUS_DRIVER" | "TOO_FAR" | "PICKUP_TOO_LONG";
         /** Format: uuid */
         Uuid: string;
     };

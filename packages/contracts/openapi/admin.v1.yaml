@@ -6707,6 +6707,27 @@ components:
               minimum: 100
               maximum: 100000
               default: 3000
+        pickup_time:
+          description: >-
+            Drivers are chosen by pickup time (owner decision 05.11.2026, ADR 0020); omitted when saving: the
+            defaults. The routed_candidates nearest candidates of a search round get a road pickup time by the
+            service's router (the straight-line estimate when it has none or fails); a driver whose time is above
+            max_minutes is not offered the order, and the search goes on to its timeout. The fastest free driver gets
+            the offer.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [max_minutes, routed_candidates]
+          properties:
+            max_minutes:
+              type: integer
+              minimum: 1
+              maximum: 120
+              default: 15
+            routed_candidates:
+              type: integer
+              minimum: 1
+              maximum: 20
+              default: 10
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
