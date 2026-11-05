@@ -1,7 +1,7 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {Link, Route, Routes} from 'react-router-dom';
 import {type AdminMe, type ApiClient} from '@blizz/api-client';
-import {Failure, StaffGate, translator} from '@blizz/web-ui';
+import {Failure, StaffGate, translator, useStoredLocale, type Translate} from '@blizz/web-ui';
 import {translations} from './i18n.js';
 import {DriverCase, DriverQueue} from './Drivers.js';
 import {CityList, CityOperations} from './Geo.js';
@@ -34,8 +34,6 @@ import {Reports} from './Reports.js';
 import {Risk} from './Risk.js';
 import {DriverPromotions} from './DriverPromotions.js';
 import {Flags} from './Flags.js';
-
-const t = translator(translations, 'ru');
 
 /** The sections, each shown to holders of its permission; staff management is the super admin's (by role). */
 const SECTIONS: {path: string; label: string; permission?: string | string[]; role?: string}[] = [
@@ -71,7 +69,7 @@ const ROLES: Record<string, string> = {
   SUPER_ADMIN: 'roleSuperAdmin', ADMIN: 'roleAdmin', OPERATOR: 'roleOperator', PLATFORM_OWNER: 'rolePlatformOwner'
 };
 
-function Profile({me, client}: {me: AdminMe; client: ApiClient}) {
+function Profile({me, client, t}: {me: AdminMe; client: ApiClient; t: Translate}) {
   const profile = me.member.profile;
   return (
     <section aria-labelledby="profile-title">
@@ -92,7 +90,7 @@ function Profile({me, client}: {me: AdminMe; client: ApiClient}) {
   );
 }
 
-function Panel({client}: {client: ApiClient}) {
+function Panel({client, t}: {client: ApiClient; t: Translate}) {
   const [me, setMe] = useState<AdminMe | null>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -124,7 +122,7 @@ function Panel({client}: {client: ApiClient}) {
         <button type="button" onClick={() => void client.logout()}>{t('signOut')}</button>
       </nav>
       <Routes>
-        <Route path="/" element={<Profile me={me} client={client} />} />
+        <Route path="/" element={<Profile me={me} client={client} t={t} />} />
         {role === 'SUPER_ADMIN' ? <Route path="/staff" element={<Staff client={client} t={t}
           newId={() => crypto.randomUUID()} />} /> : null}
         {sections.some(s => s.path === '/wallets') ? <Route path="/wallets" element={<Wallets client={client} t={t}
@@ -229,5 +227,11 @@ function Panel({client}: {client: ApiClient}) {
  * staff member's profile and the sections their permissions open.
  */
 export function AdminApp({client}: {client: ApiClient}) {
-  return <StaffGate client={client} t={t} audience="ADMIN"><Panel client={client} /></StaffGate>;
+  const [locale, setLocale] = useStoredLocale('blizz.admin.locale');
+  const t = useMemo(() => translator(translations, locale), [locale]);
+  return (
+    <StaffGate client={client} t={t} audience="ADMIN" locale={locale} onLocale={setLocale}>
+      <Panel client={client} t={t} />
+    </StaffGate>
+  );
 }
