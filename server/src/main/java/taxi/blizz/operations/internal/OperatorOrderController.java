@@ -253,6 +253,18 @@ class OperatorOrderController {
         return new InterruptedView(view(result.order()), result.followUp() == null ? null : view(result.followUp()));
     }
 
+    record FaultRequest(@NotNull UUID commandId, @NotNull @jakarta.validation.constraints.Min(0) Long expectedVersion,
+                        @NotBlank @Size(max = 20) String fault, @NotBlank @Size(max = 500) String comment) {
+    }
+
+    /** Staff set another fault on a cancelled order (ADR 0019 point 4). */
+    @PostMapping("/orders/{orderId}/cancellation-fault")
+    OperatorOrderView changeCancellationFault(AccessClaims claims, @PathVariable UUID orderId,
+                                              @Valid @RequestBody FaultRequest body) {
+        return view(orders.changeCancellationFault(claims.actor(), body.commandId(), orderId, body.expectedVersion(),
+                body.fault(), body.comment()));
+    }
+
     record ManualOfferRequest(@NotNull UUID commandId, @NotNull UUID driverId, @NotBlank @Size(max = 500) String reason) {
     }
 

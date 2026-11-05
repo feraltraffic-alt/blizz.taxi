@@ -77,7 +77,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return "TripCompleted".equals(eventType) || "OrderCancelled".equals(eventType);
+        return "TripCompleted".equals(eventType) || "OrderCancelled".equals(eventType)
+                || "CancellationFaultChanged".equals(eventType);
     }
 
     @Override
@@ -98,6 +99,13 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
             }
             Object reason = body.get("reason_code");
             apply(orderId, "OPERATOR_FAULT_CANCELLATION", reason == null ? null : reason.toString(), event.occurredAt());
+        } else if ("CancellationFaultChanged".equals(event.type())) {
+            // Staff set the fault (ADR 0019 point 4): the operator's points follow a change to or from OPERATOR.
+            if ("OPERATOR".equals(body.get("fault"))) {
+                apply(orderId, "OPERATOR_FAULT_CANCELLATION", null, event.occurredAt(), true);
+            } else if ("OPERATOR".equals(body.get("fault_before"))) {
+                reverse(orderId, event.occurredAt());
+            }
         }
     }
 
@@ -250,6 +258,14 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
     }
 
     private void apply(UUID orderId, String kind, String reasonCode, OffsetDateTime occurredAt) {
+        apply(orderId, kind, reasonCode, occurredAt, false);
+    }
+
+    /**
+     * {@code byStaff}: the operator's fault was set by staff on the order (ADR 0019), so the reason's flag is not
+     * asked; the settings still decide whether cancellations count.
+     */
+    private void apply(UUID orderId, String kind, String reasonCode, OffsetDateTime occurredAt, boolean byStaff) {
         Optional<Orders.Origin> maybeOrigin = orders.origin(orderId);
         if (maybeOrigin.isEmpty()) {
             return;
@@ -267,7 +283,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         }
         SettingsVersion version = settingsAt(service, origin.createdAt());
         if ("OPERATOR_FAULT_CANCELLATION".equals(kind)) {
-            boolean operatorFault = cancelReasons.find(service, CancelReasons.Audience.STAFF, reasonCode)
+            boolean operatorFault = byStaff || cancelReasons.find(service, CancelReasons.Audience.STAFF, reasonCode)
                     .map(CancelReasons.Reason::operatorFault).orElse(false);
             if (!operatorFault || !version.settings().countCancellations()) {
                 return;
@@ -293,8 +309,52 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
         if (inserted == 0) {
             return;
         }
-        int fulfilled = "FULFILLED".equals(kind) ? 1 : 0;
-        int cancelled = "OPERATOR_FAULT_CANCELLATION".equals(kind) ? 1 : 0;
+        credit(origin.createdById(), selected.points(), "FULFILLED".equals(kind) ? 1 : 0,
+                "OPERATOR_FAULT_CANCELLATION".equals(kind) ? 1 : 0, periodKey, occurredAt, timezone, service);
+    }
+
+    /**
+     * Staff took the operator's fault off the order (ADR 0019): the penalty comes back as an entry of its own, at
+     * most once per order, in the period the change falls in.
+     */
+    private void reverse(UUID orderId, OffsetDateTime occurredAt) {
+        record Penalty(UUID staffId, int points) {
+        }
+        Optional<Penalty> penalty = jdbc.sql("""
+                        select staff_id, points from operator_bonus_entry
+                        where order_id = :order and kind = 'OPERATOR_FAULT_CANCELLATION'""")
+                .param("order", orderId).query((rs, i) -> new Penalty(rs.getObject(1, UUID.class), rs.getInt(2)))
+                .optional();
+        Optional<Orders.Origin> origin = orders.origin(orderId);
+        if (penalty.isEmpty() || origin.isEmpty()) {
+            return;
+        }
+        UUID service = cities.serviceOf(origin.get().cityId()).orElse(null);
+        String timezone = cities.timezone(origin.get().cityId()).orElse(null);
+        if (service == null || timezone == null) {
+            return;
+        }
+        UUID staffId = penalty.get().staffId();
+        int points = -penalty.get().points();
+        LocalDate periodKey = periodFor(staffId, occurredAt);
+        int inserted = jdbc.sql("""
+                        insert into operator_bonus_entry
+                            (id, staff_id, order_id, kind, rule_key, settings_version, points, occurred_at, created_at,
+                             period_key)
+                        select :id, staff_id, order_id, 'OPERATOR_FAULT_REVERSED', rule_key, settings_version, :points,
+                               :occurred, :created, :period
+                        from operator_bonus_entry where order_id = :order and kind = 'OPERATOR_FAULT_CANCELLATION'
+                        on conflict (order_id, kind) do nothing""")
+                .param("id", UUID.randomUUID()).param("points", points).param("occurred", occurredAt)
+                .param("created", now()).param("period", periodKey).param("order", orderId).update();
+        if (inserted > 0) {
+            credit(staffId, points, 0, -1, periodKey, occurredAt, timezone, service);
+        }
+    }
+
+    /** Adds the points and counts to the closed period {@code periodKey}, or to the open account when null. */
+    private void credit(UUID staffId, int points, int fulfilled, int cancelled, LocalDate periodKey,
+                        OffsetDateTime occurredAt, String timezone, UUID service) {
         if (periodKey != null) {
             jdbc.sql("""
                             update operator_bonus_period set points = points + :points,
@@ -302,8 +362,8 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                                 cancelled_count = cancelled_count + :cancelled
                             where staff_id = :staff and period_key = :period
                             """)
-                    .param("points", selected.points()).param("fulfilled", fulfilled)
-                    .param("cancelled", cancelled).param("staff", origin.createdById())
+                    .param("points", points).param("fulfilled", fulfilled)
+                    .param("cancelled", cancelled).param("staff", staffId)
                     .param("period", periodKey).update();
         } else {
             jdbc.sql("""
@@ -318,7 +378,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
                                 timezone = excluded.timezone,
                                 updated_at = excluded.updated_at
                             """)
-                    .param("staff", origin.createdById()).param("points", selected.points())
+                    .param("staff", staffId).param("points", points)
                     .param("fulfilled", fulfilled).param("cancelled", cancelled).param("started", occurredAt)
                     .param("timezone", timezone).param("now", now()).param("service", service).update();
         }

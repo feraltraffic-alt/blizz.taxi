@@ -137,6 +137,40 @@ class OperatorBonusTests {
                 .param("staff", operator.id()).query(Long.class).single()).isEqualTo(1);
     }
 
+    /** ADR 0019 point 4: staff setting the operator's fault penalises once, taking it off gives it back once. */
+    @Test
+    void theOperatorsPointsFollowTheFaultStaffSet() {
+        UUID order = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        OutboxMessage toOperator = faultChanged(order, "OPERATOR", "NONE");
+        bonuses.handle(toOperator);
+        bonuses.handle(toOperator);
+        assertThat(bonuses.mine(operator, 10).balance()).isEqualTo(-10);
+
+        OutboxMessage back = faultChanged(order, "CLIENT", "OPERATOR");
+        bonuses.handle(back);
+        bonuses.handle(back);
+        assertThat(bonuses.mine(operator, 10).balance()).isZero();
+        assertThat(jdbc.sql("select kind || ':' || points from operator_bonus_entry where order_id = :o order by kind")
+                .param("o", order).query(String.class).list())
+                .containsExactly("OPERATOR_FAULT_CANCELLATION:-10", "OPERATOR_FAULT_REVERSED:10");
+        assertThat(bonuses.mine(operator, 10).cancelledCount()).as("the cancellation is no longer counted").isZero();
+
+        UUID appOrder = order(operator.id(), OffsetDateTime.now(ZoneOffset.UTC), "APP");
+        bonuses.handle(faultChanged(appOrder, "OPERATOR", "CLIENT"));
+        assertThat(bonuses.mine(operator, 10).balance()).as("not the operator's order").isZero();
+
+        UUID untouched = phoneOrder(operator.id(), OffsetDateTime.now(ZoneOffset.UTC));
+        bonuses.handle(faultChanged(untouched, "NONE", "OPERATOR"));
+        assertThat(bonuses.mine(operator, 10).balance()).as("no penalty to give back").isZero();
+    }
+
+    private OutboxMessage faultChanged(UUID orderId, String fault, String before) {
+        String payload = "{\"order_id\":\"" + orderId + "\",\"fault\":\"" + fault + "\",\"fault_before\":\""
+                + before + "\",\"comment\":\"Test\"}";
+        return new OutboxMessage(UUID.randomUUID(), "CancellationFaultChanged", 1, "Order", orderId, 2, payload,
+                UUID.randomUUID(), OffsetDateTime.now(ZoneOffset.UTC), 0);
+    }
+
     @Test
     void managementApisRejectNonStaff() {
         Actor rider = new Actor(SubjectType.CLIENT, UUID.randomUUID());

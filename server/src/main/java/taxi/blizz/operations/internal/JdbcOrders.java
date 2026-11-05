@@ -628,6 +628,76 @@ class JdbcOrders implements Orders {
                 });
     }
 
+    private static final java.util.Set<String> FAULTS = java.util.Set.of("CLIENT_FREE", "CLIENT", "DRIVER", "OPERATOR",
+            "NONE");
+
+    record FaultRequest(UUID orderId, long expectedVersion, String fault, String comment) {
+    }
+
+    @Override
+    public OrderView changeCancellationFault(Actor actor, UUID commandId, UUID orderId, long expectedVersion,
+                                             String fault, String comment) {
+        if (fault == null || !FAULTS.contains(fault)) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED,
+                    "The fault is one of CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE");
+        }
+        String why = comment == null ? "" : comment.strip();
+        if (why.isEmpty() || why.length() > 500) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "A comment of 1 to 500 characters is required");
+        }
+        UUID cityId = jdbc.sql("select city_id from ride_order where id = :id").param("id", orderId)
+                .query(UUID.class).optional()
+                .orElseThrow(() -> new DomainException(ErrorCode.NOT_FOUND, "Order not found"));
+        requireStaff(actor, CHANGE_FAULT_PERMISSION, cityId);
+        return commands.execute(new CommandKey(actor, "order.cancellation_fault", commandId),
+                new FaultRequest(orderId, expectedVersion, fault, why), OrderView.class, () -> {
+                    OrderCore.LockedOrder order = core.lockOrder(orderId);
+                    if (order.version() != expectedVersion) {
+                        throw ConflictException.version(order.version(), "The order changed");
+                    }
+                    if (!"CANCELLED".equals(order.status())) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "Only a cancelled order has a fault");
+                    }
+                    String before = jdbc.sql("select cancel_fault from ride_order where id = :id")
+                            .param("id", orderId).query((rs, i) -> rs.getString(1)).single();
+                    if (fault.equals(before)) {
+                        throw new DomainException(ErrorCode.STATE_CONFLICT, "The order already has this fault");
+                    }
+                    jdbc.sql("update ride_order set cancel_fault = :fault where id = :id")
+                            .param("fault", fault).param("id", orderId).update();
+                    // The driver who was on the order when it was cancelled; a driver who gave it up before is not.
+                    record OnOrder(UUID assignmentId, UUID driverId) {
+                    }
+                    OnOrder onOrder = jdbc.sql("""
+                                    select id, driver_id from assignment
+                                    where order_id = :id and (close_reason like '%CANCELLED:%'
+                                          or close_reason = 'NO_SHOW' or close_reason like 'INTERRUPTED:%')
+                                    order by created_at desc limit 1""")
+                            .param("id", orderId)
+                            .query((rs, i) -> new OnOrder(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
+                            .optional().orElse(null);
+                    if (onOrder != null && ("DRIVER".equals(fault) || "DRIVER".equals(before))) {
+                        String code = jdbc.sql("select cancel_reason_code from ride_order where id = :id")
+                                .param("id", orderId).query(String.class).single();
+                        discipline.recount(onOrder.driverId(), orderId, onOrder.assignmentId(), code,
+                                "DRIVER".equals(fault));
+                    }
+                    Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                    payload.put("fault", fault);
+                    payload.put("fault_before", before);
+                    payload.put("comment", why);
+                    if (onOrder != null) {
+                        payload.put("driver_id", onOrder.driverId().toString());
+                    }
+                    core.recordEvent(orderId, core.touch(orderId), "CancellationFaultChanged", actor, why, payload);
+                    Map<String, Object> was = new java.util.LinkedHashMap<>();
+                    was.put("fault", before);
+                    audit.record(new AuditEntry(actor, "order.cancellation_fault", "ride_order", orderId.toString(),
+                            why, was, Map.of("fault", fault)));
+                    return core.view(orderId);
+                });
+    }
+
     /** The first check that leaves the driver out, as the dispatch journal names it (REQ-DSP-12). */
     private String whyNotCandidate(UUID orderId, int radius, UUID driverId) {
         return core.explain(orderId, radius, 1000).stream().filter(c -> c.driverId().equals(driverId))

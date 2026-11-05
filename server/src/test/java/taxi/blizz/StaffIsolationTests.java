@@ -74,7 +74,7 @@ class StaffIsolationTests {
             "audit.view", "calls.answer", "calls.listen", "calls.supervise", "clients.delete", "clients.manage",
             "driver.review", "drivers.delete", "drivers.risk", "fares.correct", "finance.manage", "flags.manage",
             "geo.manage", "integrations.manage", "legal.manage", "orders.cancel", "orders.create",
-            "operator-bonuses.manage", "orders.interrupt", "orders.offer", "orders.reassign", "orders.view",
+            "operator-bonuses.manage", "orders.fault", "orders.interrupt", "orders.offer", "orders.reassign", "orders.view",
             "payments.retry", "pricing.manage",
             "promotions.manage", "reports.view", "retention.manage", "settings.manage", "support.manage",
             "trips.correct", "wallets.manage"};
@@ -449,6 +449,8 @@ class StaffIsolationTests {
         values.put("outcome", "WON");
         values.put("to", "RIDER");
         values.put("follow_up", false);
+        values.put("fault", "NONE");
+        values.put("comment", "Staff isolation probe");
         values.put("reason_code", path.endsWith("/interrupt") ? "VEHICLE_BREAKDOWN"
                 : path.endsWith("/revoke-assignment") ? "DRIVER_NOT_RESPONDING" : "NO_CARS");
         if (path.contains("/cash-dispute/")) {

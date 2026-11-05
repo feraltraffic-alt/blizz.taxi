@@ -698,6 +698,44 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/operator/v1/orders/{order_id}/cancellation-fault:
+    post:
+      operationId: changeCancellationFault
+      summary: Set another fault on a cancelled order
+      description: >-
+        ADR 0019 point 4. Requires orders.fault for the order city; audited and in the order's history
+        (CancellationFaultChanged). Only a CANCELLED order; the same fault again → 409. The driver who was on the order
+        when it was cancelled has the cancellation counted from now on (to DRIVER) or no more (from DRIVER); a pause
+        already given stays until staff lift it. The operator's points follow a change to or from OPERATOR. The answer
+        is the order.
+      tags: [Orders]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeCancellationFault"
+      responses:
+        "200":
+          description: The order with the new fault.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorOrder"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
   /api/operator/v1/orders/{order_id}/interrupt:
     post:
       operationId: interruptTrip
@@ -1708,6 +1746,26 @@ components:
         driver_id:
           $ref: "./common.yaml#/components/schemas/Uuid"
         reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    ChangeCancellationFault:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version, fault, comment]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        fault:
+          type: string
+          enum: [CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE]
+        comment:
+          description: Why the fault changes; goes to the audit log and the order's history.
           type: string
           minLength: 1
           maxLength: 500

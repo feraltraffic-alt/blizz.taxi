@@ -174,6 +174,19 @@ public interface Orders {
      */
     Interrupted interrupt(Actor staff, UUID commandId, UUID orderId, long expectedVersion, Interruption interruption);
 
+    /** Set another fault on a cancelled order (ADR 0019 point 4). */
+    String CHANGE_FAULT_PERMISSION = "orders.fault";
+
+    /**
+     * Staff with {@link #CHANGE_FAULT_PERMISSION} for the order's city set another {@code fault} (CLIENT_FREE, CLIENT,
+     * DRIVER, OPERATOR or NONE) on a CANCELLED order, with a comment (ADR 0019 point 4). What follows from the fault
+     * follows the change: the driver who was on the order has the cancellation counted from now on, or no more (a
+     * pause already given stays until staff lift it); the operator's points follow a change to or from OPERATOR.
+     * Audited, in the order's history; the same fault again is a conflict.
+     */
+    OrderView changeCancellationFault(Actor staff, UUID commandId, UUID orderId, long expectedVersion, String fault,
+                                      String comment);
+
     /** Who takes part in an order now: the paying rider and the driver of the current or last assignment. */
     record Participants(UUID payerClientId, UUID driverId) {
     }

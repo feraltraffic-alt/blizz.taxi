@@ -4614,8 +4614,11 @@ export interface components {
             staff_id: components["schemas"]["Uuid"];
         };
         OperatorBonusEntry: {
-            /** @enum {string} */
-            kind: "FULFILLED" | "OPERATOR_FAULT_CANCELLATION";
+            /**
+             * @description OPERATOR_FAULT_REVERSED — staff took the operator's fault off the order (ADR 0019); the penalty back.
+             * @enum {string}
+             */
+            kind: "FULFILLED" | "OPERATOR_FAULT_CANCELLATION" | "OPERATOR_FAULT_REVERSED";
             /** Format: date-time */
             occurred_at: string;
             order_id: components["schemas"]["Uuid"];
