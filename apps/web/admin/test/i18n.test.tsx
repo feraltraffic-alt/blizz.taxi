@@ -4,7 +4,7 @@ import {join as path} from 'node:path';
 import * as i18n from '../src/i18n.js';
 
 /** Texts per section (#377): I1–I3 of the issue. */
-type Catalogs = Record<'ru' | 'uk' | 'pl', Record<string, string>>;
+type Catalogs = Record<'ru' | 'uk' | 'pl' | 'en', Record<string, string>>;
 const join = (i18n as unknown as {joinCatalogs?: (parts: Record<string, Catalogs>) => Catalogs}).joinCatalogs;
 const snapshot = JSON.parse(readFileSync(path(process.cwd(),
   'apps/web/admin/test/fixtures/i18n-snapshot.json'), 'utf8')) as Catalogs;
@@ -21,7 +21,7 @@ describe('I1: nothing lost', () => {
 describe('I2: a key in two files', () => {
   it('is refused, naming the key and both files', () => {
     expect(join).toBeTypeOf('function');
-    const part = {ru: {save: 'a'}, uk: {save: 'b'}, pl: {save: 'c'}};
+    const part = {ru: {save: 'a'}, uk: {save: 'b'}, pl: {save: 'c'}, en: {save: 'd'}};
     expect(() => join!({core: part, geo: part})).toThrow(/save.*core.*geo|save.*geo.*core/);
   });
 });
@@ -29,17 +29,20 @@ describe('I2: a key in two files', () => {
 describe('I3: a key missing from a language', () => {
   it('is refused, naming the key and the language', () => {
     expect(join).toBeTypeOf('function');
-    expect(() => join!({geo: {ru: {save: 'a', more: 'b'}, uk: {save: 'b', more: 'c'}, pl: {save: 'c'}}}))
+    expect(() => join!({geo: {ru: {save: 'a', more: 'b'}, uk: {save: 'b', more: 'c'}, pl: {save: 'c'},
+      en: {save: 'd', more: 'e'}}}))
       .toThrow(/more.*pl/);
   });
 
   it('a key only in another language than ru is refused as well', () => {
-    expect(() => join!({geo: {ru: {save: 'a'}, uk: {save: 'b', extra: 'x'}, pl: {save: 'c'}}})).toThrow(/extra/);
+    expect(() => join!({geo: {ru: {save: 'a'}, uk: {save: 'b', extra: 'x'}, pl: {save: 'c'}, en: {save: 'd'}}}))
+      .toThrow(/extra/);
   });
 
   it('two good files join', () => {
-    expect(join!({core: {ru: {a: '1'}, uk: {a: '2'}, pl: {a: '3'}}, geo: {ru: {b: '4'}, uk: {b: '5'}, pl: {b: '6'}}}))
-      .toEqual({ru: {a: '1', b: '4'}, uk: {a: '2', b: '5'}, pl: {a: '3', b: '6'}});
+    expect(join!({core: {ru: {a: '1'}, uk: {a: '2'}, pl: {a: '3'}, en: {a: '7'}},
+      geo: {ru: {b: '4'}, uk: {b: '5'}, pl: {b: '6'}, en: {b: '8'}}}))
+      .toEqual({ru: {a: '1', b: '4'}, uk: {a: '2', b: '5'}, pl: {a: '3', b: '6'}, en: {a: '7', b: '8'}});
   });
 });
 
@@ -53,7 +56,7 @@ describe('I4: every file is joined', () => {
     const parts = Object.values(module);
     expect(parts.length).toBeGreaterThan(0);
     for (const part of parts) {
-      for (const locale of ['ru', 'uk', 'pl'] as const) {
+      for (const locale of ['ru', 'uk', 'pl', 'en'] as const) {
         expect(i18n.translations[locale]).toMatchObject(part[locale]);
       }
     }

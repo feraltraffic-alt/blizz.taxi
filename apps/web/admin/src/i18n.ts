@@ -2,14 +2,14 @@ import type {Catalogs} from '@blizz/web-ui';
 
 export type {Locale} from '@blizz/web-ui';
 
-const LOCALES = ['ru', 'uk', 'pl'] as const;
+const LOCALES = ['ru', 'uk', 'pl', 'en'] as const;
 
 /**
  * Joins the texts of the sections, one file each (#377). Refuses, when the module loads, a key given by two files and a
  * key missing from one language, naming them, so a mistake never reaches a screen as a bare key.
  */
 export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
-  const joined: Catalogs = {ru: {}, uk: {}, pl: {}};
+  const joined: Catalogs = {ru: {}, uk: {}, pl: {}, en: {}};
   const owner: Record<string, string> = {};
   for (const [name, part] of Object.entries(parts)) {
     const keys = new Set(LOCALES.flatMap(locale => Object.keys(part[locale] ?? {})));
@@ -30,7 +30,7 @@ export function joinCatalogs(parts: Record<string, Catalogs>): Catalogs {
  */
 const sections = import.meta.glob<Record<string, Catalogs>>('./i18n/*.ts', {eager: true});
 
-/** Russian by default; Ukrainian and Polish with the same keys (owner decision 27.10.2026). */
+/** Russian by default; Ukrainian, Polish and English with the same keys (owner decision 27.10.2026). */
 export const translations: Catalogs = joinCatalogs(Object.fromEntries(Object.values(sections)
   .flatMap(module => Object.entries(module))));
 

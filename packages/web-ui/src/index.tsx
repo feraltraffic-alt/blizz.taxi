@@ -1,7 +1,7 @@
 import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
 import {ApiError, type ApiClient, type SessionSnapshot} from '@blizz/api-client';
 
-export type Locale = 'ru' | 'uk' | 'pl';
+export type Locale = 'ru' | 'uk' | 'pl' | 'en';
 export type Catalogs = Record<Locale, Record<string, string>>;
 export type Translate = (key: string, values?: Record<string, string | number>) => string;
 
@@ -168,11 +168,11 @@ export function StaffGate({client, t, audience, children, locale, onLocale}: {cl
 }
 
 /** The panels' languages, each named in itself so anyone finds their own. */
-export const LOCALES: readonly Locale[] = ['ru', 'uk', 'pl'];
-const NATIVE: Record<Locale, string> = {ru: 'Русский', uk: 'Українська', pl: 'Polski'};
+export const LOCALES: readonly Locale[] = ['ru', 'uk', 'pl', 'en'];
+const NATIVE: Record<Locale, string> = {ru: 'Русский', uk: 'Українська', pl: 'Polski', en: 'English'};
 
 /**
- * The staff member's language on this browser, Russian by default (owner decision 27.10.2026). Kept in localStorage as a
+ * The staff member's language on this browser, Russian by default (owner decision 27.10.2026; English added 05.11.2026). Kept in localStorage as a
  * convenience of the viewer; a blocked or empty storage gives Russian and the page still works.
  */
 export function useStoredLocale(key: string): [Locale, (locale: Locale) => void] {

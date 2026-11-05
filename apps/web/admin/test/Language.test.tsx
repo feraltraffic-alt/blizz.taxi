@@ -25,6 +25,9 @@ describe('the admin panel', () => {
     expect(await screen.findByText('Вхід для співробітників')).toBeVisible();
     await user.selectOptions(screen.getByLabelText('Мова'), 'pl');
     expect(await screen.findByText('Logowanie pracowników')).toBeVisible();
+    await user.selectOptions(screen.getByLabelText('Język'), 'en');
+    expect(screen.getByLabelText('Language')).toHaveValue('en');
+    expect(localStorage.getItem('blizz.admin.locale')).toBe('en');
   });
 
   it('a stored value that is not a language, or a blocked storage, gives Russian', async () => {
