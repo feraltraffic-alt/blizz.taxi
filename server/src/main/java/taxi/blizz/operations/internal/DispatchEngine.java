@@ -176,9 +176,8 @@ class DispatchEngine {
             return new OrderCore.Considered(c.driverId(), c.distanceM(),
                     c.reason() == null && s != null && s > limit ? "PICKUP_TOO_LONG" : c.reason(), s);
         }).toList();
-        List<PickupTimes.Timed> within = timed.stream().filter(t -> t.seconds() <= limit)
-                .sorted(java.util.Comparator.comparingInt(PickupTimes.Timed::seconds)
-                        .thenComparingInt(t -> t.candidate().distanceM())
+        List<PickupTimes.Timed> within = timed.stream().filter(t -> limit > 0)
+                .sorted(java.util.Comparator.comparingInt((PickupTimes.Timed t) -> t.candidate().distanceM())
                         .thenComparing(t -> t.candidate().driverId()))
                 .toList();
         for (PickupTimes.Timed t : within) {
