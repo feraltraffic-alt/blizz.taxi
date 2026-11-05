@@ -52,5 +52,22 @@ export const finance: Catalogs = {
     transferSave: 'Zapisz regułę',
     transferNeeds: 'Kwoty większe od 0 (na dobę — nie mniej niż za przelew), najwyżej dwa miejsca po przecinku, i powód.',
     transferConflict: 'Regułę zmienił ktoś inny; lista odświeżona.',
+  },
+  en: {
+    transfersTitle: 'Transfers between drivers',
+    transfersIn: 'Transfers in {currency}',
+    transfersOn: 'on',
+    transfersOff: 'off',
+    transferPer: 'up to {amount} per transfer',
+    transferDay: 'up to {amount} per day (UTC)',
+    transferMin: 'balance after at least {amount}',
+    transferNoRule: 'no rule: transfers are off',
+    transferEnabled: 'Transfers on',
+    transferPerLabel: 'Per transfer',
+    transferDayLabel: 'Per day',
+    transferMinLabel: 'Balance after transfer at least',
+    transferSave: 'Save rule',
+    transferNeeds: 'Amounts above 0 (per day no less than per transfer), at most two decimal places, and a reason.',
+    transferConflict: 'Someone else changed the rule; the list is refreshed.',
   }
 };

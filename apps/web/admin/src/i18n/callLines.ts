@@ -52,5 +52,22 @@ export const callLines: Catalogs = {
     lineNeeds: 'Potrzebne są numer postaci +48221234567, którego nie ma jeszcze na liście, miasto, podpis do 80 znaków i powód do 500 znaków.',
     lineReasonNeeds: 'Potrzebny jest powód do 500 znaków.',
     lineConflict: 'Numer zmienił ktoś inny; lista odświeżona.',
+  },
+  en: {
+    linesTitle: 'Call center numbers',
+    lineNewCity: 'New city for the number',
+    lineReason: 'Reason for the number',
+    lineMove: 'Move',
+    lineRemove: 'Remove number',
+    lineAddTitle: 'New call center number',
+    lineNumber: 'New number',
+    lineCity: 'City of the new number',
+    lineLabel: 'Number label',
+    lineAddReason: 'Reason for the new number',
+    lineAdd: 'Add number',
+    settingsCallLines: 'Call center numbers',
+    lineNeeds: 'Needs a number like +380441234567 that is not on the list yet, a city, a label of up to 80 characters and a reason of up to 500 characters.',
+    lineReasonNeeds: 'Needs a reason of up to 500 characters.',
+    lineConflict: 'Someone else changed the number; the list is refreshed.',
   }
 };

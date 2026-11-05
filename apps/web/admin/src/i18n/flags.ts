@@ -49,5 +49,21 @@ export const flags: Catalogs = {
     flagTurnOn: 'Włącz: {key}',
     flagNeeds: 'Potrzebny jest powód do 500 znaków.',
     flagConflict: 'Flagę przełączył ktoś inny; lista odświeżona.',
+  },
+  en: {
+    navFlags: 'Flags',
+    flagNoStop: 'Turning a flag off does not stop what has already started.',
+    flagOn: 'on',
+    flagOff: 'off',
+    flagDefault: '(default: {state})',
+    flagOwner: 'module {owner}',
+    flagReview: 'review by {day}',
+    flagOverdue: 'The review date has passed.',
+    flagChanged: 'Changed {at}: {reason}',
+    flagReason: 'Reason: {key}',
+    flagTurnOff: 'Turn off: {key}',
+    flagTurnOn: 'Turn on: {key}',
+    flagNeeds: 'Needs a reason of up to 500 characters.',
+    flagConflict: 'Someone else switched the flag; the list is refreshed.',
   }
 };

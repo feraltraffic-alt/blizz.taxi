@@ -29,4 +29,13 @@ export const evidence: Catalogs = {
     evidenceNeeds: 'Potrzebny jest powód eksportu do 500 znaków.',
     evidenceFailed: 'Eksport się nie powiódł.',
   },
+  en: {
+    evidenceTitle: 'Evidence for the bank',
+    evidenceReason: 'Reason for the export',
+    evidenceExport: 'Export evidence',
+    evidenceSave: 'Save evidence file',
+    evidenceSummary: 'Created {at} · card operations {operations} · chat messages {chat} · support cases {cases}',
+    evidenceNeeds: 'Needs a reason for the export of up to 500 characters.',
+    evidenceFailed: 'Export failed.',
+  },
 };

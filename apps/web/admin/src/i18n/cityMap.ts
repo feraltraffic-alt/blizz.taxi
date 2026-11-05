@@ -29,4 +29,13 @@ export const cityMap: Catalogs = {
     mapZone_ARCHIVED: 'w archiwum',
     mapPriority: 'priorytet {n}',
   },
+  en: {
+    mapTitle: 'City map',
+    mapNoBoundary: 'The city has no boundary for the map.',
+    mapNoZones: 'No zones.',
+    mapZone_PUBLISHED: 'published',
+    mapZone_DRAFT: 'draft',
+    mapZone_ARCHIVED: 'archived',
+    mapPriority: 'priority {n}',
+  },
 };
