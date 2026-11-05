@@ -103,7 +103,7 @@ class JdbcOperatorBonuses implements OperatorBonuses, OutboxHandler {
             // Staff set the fault (ADR 0019 point 4): the operator's points follow a change to or from OPERATOR.
             if ("OPERATOR".equals(body.get("fault"))) {
                 apply(orderId, "OPERATOR_FAULT_CANCELLATION", null, event.occurredAt(), true);
-            } else if ("OPERATOR".equals(body.get("fault_before"))) {
+            } else if ("NOBODY".equals(body.get("fault_before"))) {
                 reverse(orderId, event.occurredAt());
             }
         }

@@ -676,7 +676,7 @@ class JdbcOrders implements Orders {
                             .param("id", orderId)
                             .query((rs, i) -> new OnOrder(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
                             .optional().orElse(null);
-                    if (onOrder != null && ("DRIVER".equals(fault) || "DRIVER".equals(before))) {
+                    if (onOrder != null && fault.isEmpty()) {
                         String code = jdbc.sql("select cancel_reason_code from ride_order where id = :id")
                                 .param("id", orderId).query(String.class).single();
                         discipline.recount(onOrder.driverId(), orderId, onOrder.assignmentId(), code,
