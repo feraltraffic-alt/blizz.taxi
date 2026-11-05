@@ -64,6 +64,7 @@ class JdbcOrders implements Orders {
     private final StaffDirectory directory;
     private final JsonMapper json;
     private final ServiceSettings settings;
+    private final CancellationDiscipline discipline;
     private final AccountDirectory accounts;
     private final Calls calls;
     private final LegalDocuments legal;
@@ -89,7 +90,8 @@ class JdbcOrders implements Orders {
                taxi.blizz.platform.RateLimits rateLimits, taxi.blizz.geo.CityOperations cityOperations,
                FeatureFlags flags, DispatchProperties dispatchProperties, taxi.blizz.geo.CityCatalog cityCatalog,
                taxi.blizz.finance.FareAccounting accounting, JdbcRiderObligations obligations,
-               taxi.blizz.identity.Services services) {
+               taxi.blizz.identity.Services services, CancellationDiscipline discipline) {
+        this.discipline = discipline;
         this.services = services;
         this.obligations = obligations;
         this.cityCatalog = cityCatalog;
@@ -490,7 +492,14 @@ class JdbcOrders implements Orders {
                         default -> throw new DomainException(ErrorCode.STATE_CONFLICT,
                                 "An order in " + order.status() + " cannot be cancelled this way");
                     }
-                    core.cancel(order, by, reason, "OrderCancelled", actor, details);
+                    CancellationFaults.Verdict verdict = core.cancel(order, by, reason, "OrderCancelled", actor,
+                            details).verdict();
+                    // The rider gave up on a late driver (ADR 0019): it counts against the driver only when the
+                    // service says so; the fault is the driver's either way.
+                    if (verdict.late() && settings.ofCity(order.cityId()).settings().cancellationFault()
+                            .countLateCancellations()) {
+                        discipline.cancelled(verdict.driverId(), orderId, verdict.assignmentId(), reason, "LATE");
+                    }
                     if (actor.type() == SubjectType.STAFF) {
                         audit.record(new AuditEntry(actor, "order.cancel", "ride_order", orderId.toString(), reason.code(),
                                 Map.of("status", order.status()), Map.of("status", "CANCELLED")));
@@ -835,7 +844,7 @@ class JdbcOrders implements Orders {
                                o.vehicle_class, o.price_minor, o.final_price_minor, o.currency, o.payment_method,
                                a.id as assignment_id, a.state as assignment_state, a.close_reason,
                                o.cancelled_by, o.cancel_reason_code, o.cancel_reason_labels::text as cancel_reason_labels,
-                               o.pickup_at,
+                               o.cancel_fault, o.pickup_at,
                                d.name as driver_name, v.make, v.model, v.color, v.registration_number
                         from ride_order o
                         left join lateral (
@@ -866,7 +875,8 @@ class JdbcOrders implements Orders {
                     (Long) rs.getObject("price_minor"), (Long) rs.getObject("final_price_minor"),
                     rs.getString("currency"), PaymentMethod.valueOf(rs.getString("payment_method")), driver,
                     assignmentId != null && !driverLeft, cancellation(rs.getString("cancelled_by"),
-                            rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels")),
+                            rs.getString("cancel_reason_code"), rs.getString("cancel_reason_labels"),
+                            rs.getString("cancel_fault")),
                     rs.getObject("pickup_at", OffsetDateTime.class));
         }).list();
     }
@@ -1009,9 +1019,10 @@ class JdbcOrders implements Orders {
     }
 
     @SuppressWarnings("unchecked")
-    private OrderView.Cancellation cancellation(String by, String code, String labels) {
+    private OrderView.Cancellation cancellation(String by, String code, String labels, String fault) {
         return by == null ? null
-                : new OrderView.Cancellation(by, code, labels == null ? Map.of() : json.readValue(labels, Map.class));
+                : new OrderView.Cancellation(by, code, labels == null ? Map.of() : json.readValue(labels, Map.class),
+                        fault);
     }
 
     @Override

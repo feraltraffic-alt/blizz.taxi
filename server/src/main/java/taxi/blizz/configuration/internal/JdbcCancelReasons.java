@@ -38,7 +38,7 @@ class JdbcCancelReasons implements CancelReasons {
     private static final int LABEL_MAX = 80;
     private static final String SELECT = """
             select id, audience, code, labels::text as labels, driver_outcome, operator_fault, not_counted, active, sort_order,
-                   version
+                   version, fault, late_driver_fault
             from cancel_reason""";
 
     private final JdbcClient jdbc;
@@ -99,9 +99,13 @@ class JdbcCancelReasons implements CancelReasons {
                         jdbc.sql("""
                                         insert into cancel_reason (id, service_id, audience, code, labels,
                                                                    driver_outcome, operator_fault, not_counted,
-                                                                   active, sort_order, created_at, updated_at)
+                                                                   active, sort_order, created_at, updated_at,
+                                                                   fault, late_driver_fault)
                                         values (:id, :service, :audience, :code, cast(:labels as jsonb), :outcome,
-                                                :operatorFault, :notCounted, :active, :sort, :now, :now)""")
+                                                :operatorFault, :notCounted, :active, :sort, :now, :now, :fault,
+                                                :late)""")
+                                .param("fault", clean.fault() == null ? null : clean.fault().name())
+                                .param("late", Boolean.TRUE.equals(clean.lateDriverFault()))
                                 .param("id", id).param("service", service).param("audience", clean.audience().name()).param("code", clean.code())
                                 .param("labels", json.writeValueAsString(clean.labels()))
                                 .param("outcome", clean.driverOutcome() == null ? null : clean.driverOutcome().name())
@@ -144,12 +148,15 @@ class JdbcCancelReasons implements CancelReasons {
                     }
                     Draft clean = validate(actor, new Draft(before.audience(), before.code(), draft.labels(),
                             draft.driverOutcome(), draft.operatorFault(), draft.notCounted(), draft.active(),
-                            draft.sortOrder()));
+                            draft.sortOrder(), kept(draft, before),
+                            draft.lateDriverFault() == null ? before.lateDriverFault() : draft.lateDriverFault()));
                     jdbc.sql("""
                                     update cancel_reason set labels = cast(:labels as jsonb), driver_outcome = :outcome,
                                            operator_fault = :operatorFault, not_counted = :notCounted, active = :active,
-                                           sort_order = :sort,
+                                           sort_order = :sort, fault = :fault, late_driver_fault = :late,
                                            updated_at = :now, version = version + 1 where id = :id""")
+                            .param("fault", clean.fault() == null ? null : clean.fault().name())
+                            .param("late", Boolean.TRUE.equals(clean.lateDriverFault()))
                             .param("labels", json.writeValueAsString(clean.labels()))
                             .param("outcome", clean.driverOutcome() == null ? null : clean.driverOutcome().name())
                             .param("operatorFault", clean.operatorFault())
@@ -211,9 +218,10 @@ class JdbcCancelReasons implements CancelReasons {
             jdbc.sql("""
                             insert into cancel_reason (id, service_id, audience, code, labels, driver_outcome,
                                                        operator_fault, not_counted, active, sort_order, created_at,
-                                                       updated_at)
+                                                       updated_at, fault, late_driver_fault)
                             select gen_random_uuid(), :service, audience, code, labels, driver_outcome,
-                                   operator_fault, not_counted, active, sort_order, :now, :now
+                                   operator_fault, not_counted, active, sort_order, :now, :now, fault,
+                                   late_driver_fault
                             from cancel_reason
                             where service_id = :first
                               and not exists (select 1 from cancel_reason where service_id = :service)
@@ -271,8 +279,38 @@ class JdbcCancelReasons implements CancelReasons {
         if (d.sortOrder() < 0 || d.sortOrder() > 10_000) {
             throw invalid("The position is between 0 and 10000");
         }
-        return new Draft(d.audience(), code, labels, d.driverOutcome(), d.operatorFault(), d.notCounted(), d.active(),
-                d.sortOrder());
+        // ADR 0019: "operator's fault" and the fault OPERATOR are one thing; REASSIGN reasons cancel nothing.
+        Fault fault = d.fault() != null ? d.fault() : Fault.startingFor(d.audience(), d.operatorFault());
+        if (d.audience() == Audience.REASSIGN) {
+            if (d.fault() != null) {
+                throw invalid("A reason for taking a driver off an order has no fault");
+            }
+        } else if (d.operatorFault() && fault != Fault.OPERATOR) {
+            throw invalid("A reason marked as operator fault has the fault OPERATOR");
+        }
+        if (fault == Fault.OPERATOR && d.audience() != Audience.STAFF) {
+            throw invalid("Only a staff cancellation reason can be the operator's fault");
+        }
+        boolean late = Boolean.TRUE.equals(d.lateDriverFault());
+        if (late && fault != Fault.CLIENT) {
+            throw invalid("Only a reason with the client's fault can turn to the driver's when the driver is late");
+        }
+        return new Draft(d.audience(), code, labels, d.driverOutcome(), fault == Fault.OPERATOR, d.notCounted(),
+                d.active(), d.sortOrder(), fault, late);
+    }
+
+    /**
+     * The fault an update leaves: the one sent, or the reason's own; a client written before ADR 0019 sends only the
+     * operator flag, which then moves the fault to OPERATOR or, when cleared, back to the starting one.
+     */
+    private static Fault kept(Draft draft, Reason before) {
+        if (draft.fault() != null) {
+            return draft.fault();
+        }
+        if (draft.operatorFault() != before.operatorFault()) {
+            return Fault.startingFor(before.audience(), draft.operatorFault());
+        }
+        return before.fault();
     }
 
     private Reason read(UUID id) {
@@ -284,7 +322,11 @@ class JdbcCancelReasons implements CancelReasons {
         return new Reason(rs.getObject("id", UUID.class), Audience.valueOf(rs.getString("audience")),
                 rs.getString("code"), json.readValue(rs.getString("labels"), new TypeReference<Map<String, String>>() {
                 }), outcome == null ? null : DriverOutcome.valueOf(outcome), rs.getBoolean("operator_fault"),
-                rs.getBoolean("not_counted"), rs.getBoolean("active"), rs.getInt("sort_order"), rs.getLong("version"));
+                rs.getBoolean("not_counted"), rs.getBoolean("active"), rs.getInt("sort_order"), rs.getLong("version"),
+                rs.getString("fault") == null
+                        ? Fault.startingFor(Audience.valueOf(rs.getString("audience")), rs.getBoolean("operator_fault"))
+                        : Fault.valueOf(rs.getString("fault")),
+                rs.getBoolean("late_driver_fault"));
     }
 
     private static String required(String reason) {

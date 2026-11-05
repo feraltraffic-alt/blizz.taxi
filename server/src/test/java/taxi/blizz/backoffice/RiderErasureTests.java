@@ -69,7 +69,7 @@ class RiderErasureTests {
             N call: called_number channel_id direction ended_reason party state
             N call_line: label number
             N call_recording: state
-            N cancel_reason: audience code driver_outcome labels
+            N cancel_reason: audience code driver_outcome fault labels
             N card_binding: failure_reason reference state
             N card_top_up: account_type currency failure_reason masked_pan reference state
             N cash_dispute: currency decision reason
@@ -88,7 +88,7 @@ class RiderErasureTests {
             O driver: language name phone_normalized
             N driver: account_state deletion_previous_state eligibility_rules review_status
             N driver_balance_top_up: currency kind reason reference
-            N driver_cancellation: not_counted_why reason_code
+            N driver_cancellation: not_counted_why reason_code source
             N driver_capacity: occupancy
             N driver_debt_limit: currency
             N driver_debt_refresh: currency
@@ -169,7 +169,7 @@ class RiderErasureTests {
             R ride_order: comment dropoff_label entrance pickup_label
             N ride_order: cancel_reason_code cancel_reason_labels cancelled_by channel created_by_type currency
             N ride_order: payment_method payment_state selected_payment_method source_ref status status_reason
-            N ride_order: vehicle_class
+            N ride_order: cancel_fault vehicle_class
             N rider_promotion: currency days_of_week kind name state value_type vehicle_class
             N rider_wallet: currency
             N rider_wallet_hold: currency state

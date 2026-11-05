@@ -51,13 +51,15 @@ class CancelReasonsController {
     record Create(@NotNull UUID commandId, @NotNull Audience audience, @NotBlank @Size(max = 40) String code,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
                   Boolean operatorFault, Boolean notCounted, @NotNull Boolean active,
-                  @NotNull @Min(0) Integer sortOrder, @NotBlank @Size(max = 500) String reason) {
+                  @NotNull @Min(0) Integer sortOrder, @NotBlank @Size(max = 500) String reason,
+                  CancelReasons.Fault fault, Boolean lateDriverFault) {
     }
 
     record Update(@NotNull UUID commandId, @NotNull @Min(0) Long expectedVersion,
                   @NotNull Map<String, String> labels, CancelReasons.DriverOutcome driverOutcome,
                   Boolean operatorFault, Boolean notCounted, @NotNull Boolean active,
-                  @NotNull @Min(0) Integer sortOrder, @NotBlank @Size(max = 500) String reason) {
+                  @NotNull @Min(0) Integer sortOrder, @NotBlank @Size(max = 500) String reason,
+                  CancelReasons.Fault fault, Boolean lateDriverFault) {
     }
 
     @GetMapping("/api/rider/v1/cancel-reasons")
@@ -93,15 +95,27 @@ class CancelReasonsController {
     CancelReasons.Reason create(AccessClaims claims, @Valid @RequestBody Create body) {
         return reasons.create(claims.actor(), body.commandId(), new CancelReasons.Draft(body.audience(), body.code(),
                 body.labels(), body.driverOutcome(), Boolean.TRUE.equals(body.operatorFault()),
-                Boolean.TRUE.equals(body.notCounted()), body.active(), body.sortOrder()), body.reason());
+                Boolean.TRUE.equals(body.notCounted()), body.active(), body.sortOrder(), body.fault(),
+                body.lateDriverFault()), body.reason());
     }
 
     @PostMapping("/api/admin/v1/settings/cancel-reasons/{reasonId}")
     CancelReasons.Reason update(AccessClaims claims, @PathVariable UUID reasonId, @Valid @RequestBody Update body) {
         return reasons.update(claims.actor(), body.commandId(), reasonId, body.expectedVersion(),
                 new CancelReasons.Draft(null, null, body.labels(), body.driverOutcome(),
-                        Boolean.TRUE.equals(body.operatorFault()), notCounted(claims, reasonId, body.notCounted()),
-                        body.active(), body.sortOrder()), body.reason());
+                        operatorFault(body), notCounted(claims, reasonId, body.notCounted()),
+                        body.active(), body.sortOrder(), body.fault(), body.lateDriverFault()), body.reason());
+    }
+
+    /**
+     * The operator flag follows the fault when only the fault is sent (ADR 0019); a client before ADR 0019 sends only
+     * the flag.
+     */
+    private static boolean operatorFault(Update body) {
+        if (body.fault() != null && body.operatorFault() == null) {
+            return body.fault() == CancelReasons.Fault.OPERATOR;
+        }
+        return Boolean.TRUE.equals(body.operatorFault());
     }
 
     /** Omitted on an update: the reason keeps its flag (a client written before ADR 0018 does not send it). */

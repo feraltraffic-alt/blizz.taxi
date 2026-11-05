@@ -3206,6 +3206,7 @@ export interface components {
         Cancellation: {
             /** @enum {string} */
             by: "RIDER" | "STAFF" | "DRIVER";
+            fault?: components["schemas"]["OrderFault"];
             reason_code: string;
             reason_labels: components["schemas"]["Labels"];
         } | null;
@@ -3217,10 +3218,10 @@ export interface components {
             city_id: components["schemas"]["Uuid"];
             counted: boolean;
             /**
-             * @description GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off.
+             * @description GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off; STAFF — staff took the fault off the driver (ADR 0019).
              * @enum {string|null}
              */
-            not_counted_why: "GRACE" | "REASON" | "OFF" | null;
+            not_counted_why: "GRACE" | "REASON" | "OFF" | "STAFF" | null;
             order_id: components["schemas"]["Uuid"];
             reason_code: string;
         };
@@ -3669,7 +3670,14 @@ export interface components {
             code: string;
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
+            /**
+             * @description Omitted, the starting one — CLIENT for riders, DRIVER for drivers, NONE (or OPERATOR) for staff.
+             * @enum {string}
+             */
+            fault?: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
             labels: components["schemas"]["Labels"];
+            /** @default false */
+            late_driver_fault: boolean;
             /**
              * @description DRIVER-only (ADR 0018 B3).
              * @default false
@@ -4825,6 +4833,11 @@ export interface components {
             refund_state: "NONE" | "WAITING_FOR_REFUND_FLOW";
             versions: components["schemas"]["FareVersion"][];
         };
+        /**
+         * @description Who is at fault for the cancelled order (owner decision 05.11.2026, ADR 0019): CLIENT_FREE — the client before a driver was on the order or within the free window after the acceptance; CLIENT — the client otherwise; DRIVER; OPERATOR; NONE — nobody (a duplicate, a test order, no cars). Null for orders cancelled before ADR 0019.
+         * @enum {string|null}
+         */
+        OrderFault: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
         OrderHistoryItem: {
             cancellation: components["schemas"]["Cancellation"];
             /** @description True for the last assigned driver only while that assignment was not released or revoked. */
@@ -5290,8 +5303,11 @@ export interface components {
             /** @description Never changes; to rename, change the labels. */
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
+            fault?: components["schemas"]["ReasonFault"];
             id: components["schemas"]["Uuid"];
             labels: components["schemas"]["Labels"];
+            /** @description With the fault CLIENT only (ADR 0019): the driver's fault when the driver is late — later than the promised pickup by more than cancellation_fault.driver_late_minutes, or with no promise not there within cancellation_fault.driver_late_without_promise_minutes of the acceptance. */
+            late_driver_fault?: boolean;
             /** @description DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel. */
             not_counted?: boolean;
             /** @description STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account. */
@@ -5300,6 +5316,11 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /**
+         * @description The fault a cancellation for this reason gives (ADR 0019): CLIENT becomes CLIENT_FREE or CLIENT by the time; OPERATOR is the same as operator_fault and only for staff reasons. Null only for REASSIGN reasons, which cancel nothing.
+         * @enum {string|null}
+         */
+        ReasonFault: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
         /** @description PENDING → RUNNING → READY (the file can be downloaded until expires_at) or FAILED (error); READY → EXPIRED, the file is dropped. */
         ReportExport: {
             city_id: components["schemas"]["Uuid"];
@@ -5582,6 +5603,17 @@ export interface components {
                 mode: "DIRECT" | "VIA_SERVICE_NUMBERS";
                 service_phone?: string | null;
             };
+            /** @description Who is at fault for a cancellation (owner decision 05.11.2026, ADR 0019); omitted when saving: the defaults. A reason with the client's fault is free (CLIENT_FREE) while no driver is on the order and within client_free_minutes of the acceptance, CLIENT after. A reason with late_driver_fault gives DRIVER when the driver is later than the promised pickup (the acceptance plus the router's pickup time of the offer, ADR 0020) by more than driver_late_minutes, or, with no promise, has not arrived within driver_late_without_promise_minutes of the acceptance. count_late_cancellations: such a cancellation also counts against the driver for the warning and the pause (ADR 0018 B); off by default, as in Uber and Bolt. */
+            cancellation_fault?: {
+                /** @default 2 */
+                client_free_minutes: number;
+                /** @default false */
+                count_late_cancellations: boolean;
+                /** @default 5 */
+                driver_late_minutes: number;
+                /** @default 15 */
+                driver_late_without_promise_minutes: number;
+            } | null;
             /** @description When the driver reports that cash (or the driver's own terminal) was not paid (owner decision 28.10.2026). The rider owes the whole fare either way. Omitted — the driver is credited the whole share. */
             cash_not_received?: {
                 /**
@@ -5973,7 +6005,14 @@ export interface components {
             driver_outcome?: components["schemas"]["DriverOutcome"];
             /** Format: int64 */
             expected_version: number;
+            /**
+             * @description Omitted, the reason keeps its fault (ADR 0019).
+             * @enum {string}
+             */
+            fault?: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
             labels: components["schemas"]["Labels"];
+            /** @description Omitted, the reason keeps its flag. */
+            late_driver_fault?: boolean;
             /** @description DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag. */
             not_counted?: boolean;
             operator_fault?: boolean;

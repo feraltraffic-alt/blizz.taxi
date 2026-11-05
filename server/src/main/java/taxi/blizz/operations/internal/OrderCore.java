@@ -43,11 +43,13 @@ class OrderCore {
     private final OrderMetrics metrics;
 
     private final taxi.blizz.geo.CityOperations cityOperations;
+    private final CancellationFaults faults;
 
     OrderCore(JdbcClient jdbc, Outbox outbox, JsonMapper json, DispatchProperties properties,
               PresenceProperties presence, Clock clock, CardPayments payments, OrderMetrics metrics,
-              taxi.blizz.geo.CityOperations cityOperations) {
+              taxi.blizz.geo.CityOperations cityOperations, CancellationFaults faults) {
         this.cityOperations = cityOperations;
+        this.faults = faults;
         this.metrics = metrics;
         this.payments = payments;
         this.jdbc = jdbc;
@@ -276,7 +278,8 @@ class OrderCore {
                                ST_X(o.pickup) as pickup_lon, o.pickup_label, ST_Y(o.dropoff) as dropoff_lat,
                                ST_X(o.dropoff) as dropoff_lon, o.dropoff_label, o.payment_method, o.payment_state, o.price_minor,
                                o.final_price_minor, o.currency, o.created_at, o.cancelled_by, o.cancel_reason_code,
-                               o.cancel_reason_labels::text as cancel_reason_labels, o.pickup_at, o.preorder, o.related_order_id,
+                               o.cancel_reason_labels::text as cancel_reason_labels, o.cancel_fault, o.pickup_at,
+                               o.preorder, o.related_order_id,
                                o.wallet_minor, o.discount_minor,
                                (select phase from dispatch_attempt a where a.order_id = o.id
                                 order by generation desc limit 1) as search_phase
@@ -350,30 +353,40 @@ class OrderCore {
         }
         String labels = rs.getString("cancel_reason_labels");
         return new OrderView.Cancellation(by, rs.getString("cancel_reason_code"),
-                labels == null ? Map.of() : json.readValue(labels, Map.class));
+                labels == null ? Map.of() : json.readValue(labels, Map.class), rs.getString("cancel_fault"));
+    }
+
+    /** The new version of the cancelled order and who is at fault (ADR 0019). */
+    record Cancelled(long version, CancellationFaults.Verdict verdict) {
     }
 
     /**
      * Cancels the order on behalf of a person (RIDER, STAFF or DRIVER) with a reason from the catalog: the status,
-     * who cancelled, the reason and its labels as they are now, and one history entry that says all of it.
+     * who cancelled, the reason and its labels as they are now, who is at fault (ADR 0019), and one history entry that
+     * says all of it.
      */
-    long cancel(LockedOrder order, String by, CancelReasons.Reason reason, String eventType, Actor actor,
-                Map<String, Object> payload) {
+    Cancelled cancel(LockedOrder order, String by, CancelReasons.Reason reason, String eventType, Actor actor,
+                     Map<String, Object> payload) {
+        CancellationFaults.Verdict verdict = faults.of(order, reason, now());
         Map<String, Object> body = new LinkedHashMap<>(payload);
         body.put("cancelled_by", by);
         body.put("reason_code", reason.code());
         body.put("reason_labels", reason.labels());
+        body.put("fault", verdict.fault());
+        if (verdict.late()) {
+            body.put("driver_late", true);
+        }
         long version = changeStatus(order, "CANCELLED", reason.code(), eventType, actor, body);
         // A card hold is released with the order (REQ-PAY-06); no fee until the cancellation policy exists (Q-07).
         payments.releaseHold(order.id(), "Order cancelled: " + reason.code());
         jdbc.sql("""
                         update ride_order set cancelled_by = :by, cancel_reason_code = :code,
-                                              cancel_reason_labels = cast(:labels as jsonb)
+                                              cancel_reason_labels = cast(:labels as jsonb), cancel_fault = :fault
                         where id = :id""")
-                .param("by", by).param("code", reason.code())
+                .param("by", by).param("code", reason.code()).param("fault", verdict.fault())
                 .param("labels", json.writeValueAsString(reason.labels())).param("id", order.id()).update();
         metrics.cancelled(by, reason.code());
-        return version;
+        return new Cancelled(version, verdict);
     }
 
     /** The current or last assignment of the order. */

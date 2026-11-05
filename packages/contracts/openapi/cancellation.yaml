@@ -44,6 +44,24 @@ components:
           type: string
         reason_labels:
           $ref: "#/components/schemas/Labels"
+        fault:
+          $ref: "#/components/schemas/OrderFault"
+
+    OrderFault:
+      description: >-
+        Who is at fault for the cancelled order (owner decision 05.11.2026, ADR 0019): CLIENT_FREE — the client before a
+        driver was on the order or within the free window after the acceptance; CLIENT — the client otherwise; DRIVER;
+        OPERATOR; NONE — nobody (a duplicate, a test order, no cars). Null for orders cancelled before ADR 0019.
+      type: [string, "null"]
+      enum: [CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE, null]
+
+    ReasonFault:
+      description: >-
+        The fault a cancellation for this reason gives (ADR 0019): CLIENT becomes CLIENT_FREE or CLIENT by the time;
+        OPERATOR is the same as operator_fault and only for staff reasons. Null only for REASSIGN reasons, which cancel
+        nothing.
+      type: [string, "null"]
+      enum: [CLIENT, DRIVER, OPERATOR, NONE, null]
 
     ReasonItem:
       type: object
@@ -103,6 +121,14 @@ components:
             DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the
             warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel.
           type: boolean
+        fault:
+          $ref: "#/components/schemas/ReasonFault"
+        late_driver_fault:
+          description: >-
+            With the fault CLIENT only (ADR 0019): the driver's fault when the driver is late — later than the promised
+            pickup by more than cancellation_fault.driver_late_minutes, or with no promise not there within
+            cancellation_fault.driver_late_without_promise_minutes of the acceptance.
+          type: boolean
         active:
           description: Inactive reasons are hidden from the apps; reasons are never deleted.
           type: boolean
@@ -150,6 +176,13 @@ components:
           description: DRIVER-only (ADR 0018 B3).
           type: boolean
           default: false
+        fault:
+          description: Omitted, the starting one — CLIENT for riders, DRIVER for drivers, NONE (or OPERATOR) for staff.
+          type: string
+          enum: [CLIENT, DRIVER, OPERATOR, NONE]
+        late_driver_fault:
+          type: boolean
+          default: false
         active:
           type: boolean
         sort_order:
@@ -180,6 +213,13 @@ components:
           type: boolean
         not_counted:
           description: DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag.
+          type: boolean
+        fault:
+          description: Omitted, the reason keeps its fault (ADR 0019).
+          type: string
+          enum: [CLIENT, DRIVER, OPERATOR, NONE]
+        late_driver_fault:
+          description: Omitted, the reason keeps its flag.
           type: boolean
         active:
           type: boolean

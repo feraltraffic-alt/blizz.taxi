@@ -6728,6 +6728,38 @@ components:
               minimum: 1
               maximum: 20
               default: 10
+        cancellation_fault:
+          description: >-
+            Who is at fault for a cancellation (owner decision 05.11.2026, ADR 0019); omitted when saving: the
+            defaults. A reason with the client's fault is free (CLIENT_FREE) while no driver is on the order and within
+            client_free_minutes of the acceptance, CLIENT after. A reason with late_driver_fault gives DRIVER when the
+            driver is later than the promised pickup (the acceptance plus the router's pickup time of the offer, ADR
+            0020) by more than driver_late_minutes, or, with no promise, has not arrived within
+            driver_late_without_promise_minutes of the acceptance. count_late_cancellations: such a cancellation also
+            counts against the driver for the warning and the pause (ADR 0018 B); off by default, as in Uber and Bolt.
+          type: [object, "null"]
+          additionalProperties: false
+          required: [client_free_minutes, driver_late_minutes, driver_late_without_promise_minutes,
+                     count_late_cancellations]
+          properties:
+            client_free_minutes:
+              type: integer
+              minimum: 0
+              maximum: 60
+              default: 2
+            driver_late_minutes:
+              type: integer
+              minimum: 1
+              maximum: 120
+              default: 5
+            driver_late_without_promise_minutes:
+              type: integer
+              minimum: 1
+              maximum: 180
+              default: 15
+            count_late_cancellations:
+              type: boolean
+              default: false
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
