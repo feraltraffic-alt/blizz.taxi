@@ -1,4 +1,4 @@
-# Lead handoff (state on 05.11.2026, midday)
+# Lead handoff (state on 05.11.2026, night)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -30,7 +30,7 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 |---|---|
 | Codex | Idle. On 05.11 the owner said "take their tasks": the lead did the proposed ones (panel languages #497/#498, load stand #499) |
 | Second Claude | Idle, same as Codex |
-| Lead | ADR 0018 part B (driver cancellations, offer discipline, priority search, issue #487) done in #489–#493. Next: refunds (ADR 0018 part A) once the owner answers Q-06 points 6–9; tariffs #30 when the owner says |
+| Lead | ADR 0019 (who is at fault for a cancellation) and ADR 0020 (drivers chosen by pickup time) done in #501–#505. Next: refunds (ADR 0018 part A) once the owner answers Q-06 points 6–9 (point 6 now follows the fault of ADR 0019); tariffs #30 when the owner says. The hourly contributor check (trig_01CLujCwiUi6S7UzFPdfiLLs) is **disabled** at the owner's "пока притормози" (05.11); enable it again when the owner asks |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -87,6 +87,26 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (05.11.2026, evening and night)
+
+- **Owner's decisions:**
+  - **Fault of a cancellation (ADR 0019):** five kinds — client free, client, driver, operator, nobody. The fault
+    comes from the reason; minutes are admin settings.
+  - **Lateness:** asked how Uber and Bolt do it (answered from memory, with that caveat). The owner chose the
+    driver's fault, counted against the driver only with a switch (off).
+  - **Dispatch (ADR 0020):** drivers chosen by pickup time on the service's own GraphHopper, with a maximum
+    (15 min). After the acceptance a changed pickup time changes nothing.
+  - **Test server:** the owner prepares one at the weekend for deploying containers. The lead needs its address, an
+    SSH key through the credential form, and the host on this environment's allowed list.
+- **Done:**
+  - #501: ADR 0019 and ADR 0020.
+  - #502: dispatch by pickup time. Routing runs inside the order's transaction; check the time to the first offer on
+    L1 once GraphHopper is up.
+  - #503: the fault computed at cancel.
+  - #504: staff correct the fault (right `orders.fault`; the driver's count and the operator's points follow).
+  - #505: panels.
+- **Known limit (#504):** an order is penalized for the operator's fault and given back at most once.
 
 ## Recent history (04–05.11.2026)
 
