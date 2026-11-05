@@ -15,14 +15,55 @@
     "partial_fare"
   ],
   "properties": {
-    "order_id": {"type": "string", "format": "uuid"},
-    "cancelled_by": {"type": "string"},
-    "reason_code": {"type": "string"},
-    "reason_labels": {"type": "object", "additionalProperties": {"type": "string"}},
-    "trip_id": {"type": "string", "format": "uuid"},
-    "driver_id": {"type": "string", "format": "uuid"},
-    "partial_fare": {"type": "string"},
-    "comment": {"type": "string"},
-    "follow_up_order_id": {"type": "string", "format": "uuid"}
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cancelled_by": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "reason_labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "trip_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "driver_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "partial_fare": {
+      "type": "string"
+    },
+    "comment": {
+      "type": "string"
+    },
+    "follow_up_order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "fault": {
+      "type": "string",
+      "enum": [
+        "CLIENT_FREE",
+        "CLIENT",
+        "DRIVER",
+        "OPERATOR",
+        "NONE"
+      ],
+      "description": "Who is at fault (ADR 0019): CLIENT_FREE — the client within the free window or before a driver; CLIENT — the client otherwise; DRIVER; OPERATOR; NONE — nobody. Left out before ADR 0019."
+    },
+    "driver_late": {
+      "type": "boolean",
+      "const": true,
+      "description": "The fault is the driver's because the driver was late (ADR 0019); left out otherwise."
+    }
   }
 }

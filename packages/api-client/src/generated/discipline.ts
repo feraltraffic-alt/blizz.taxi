@@ -21,10 +21,10 @@ export interface components {
             city_id: components["schemas"]["Uuid"];
             counted: boolean;
             /**
-             * @description GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off.
+             * @description GRACE — within the grace window; REASON — a reason that does not count; OFF — switched off; STAFF — staff took the fault off the driver (ADR 0019).
              * @enum {string|null}
              */
-            not_counted_why: "GRACE" | "REASON" | "OFF" | null;
+            not_counted_why: "GRACE" | "REASON" | "OFF" | "STAFF" | null;
             order_id: components["schemas"]["Uuid"];
             reason_code: string;
         };

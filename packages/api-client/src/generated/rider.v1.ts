@@ -1075,6 +1075,7 @@ export interface components {
         Cancellation: {
             /** @enum {string} */
             by: "RIDER" | "STAFF" | "DRIVER";
+            fault?: components["schemas"]["OrderFault"];
             reason_code: string;
             reason_labels: components["schemas"]["Labels"];
         } | null;
@@ -1593,6 +1594,11 @@ export interface components {
              */
             wallet_minor?: number;
         };
+        /**
+         * @description Who is at fault for the cancelled order (owner decision 05.11.2026, ADR 0019): CLIENT_FREE — the client before a driver was on the order or within the free window after the acceptance; CLIENT — the client otherwise; DRIVER; OPERATOR; NONE — nobody (a duplicate, a test order, no cars). Null for orders cancelled before ADR 0019.
+         * @enum {string|null}
+         */
+        OrderFault: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
         OrderHistoryItem: {
             cancellation: components["schemas"]["Cancellation"];
             /** @description True for the last assigned driver only while that assignment was not released or revoked. */

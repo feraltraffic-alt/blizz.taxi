@@ -6,6 +6,7 @@ export interface components {
         Cancellation: {
             /** @enum {string} */
             by: "RIDER" | "STAFF" | "DRIVER";
+            fault?: components["schemas"]["OrderFault"];
             reason_code: string;
             reason_labels: components["schemas"]["Labels"];
         } | null;
@@ -22,7 +23,14 @@ export interface components {
             code: string;
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
+            /**
+             * @description Omitted, the starting one — CLIENT for riders, DRIVER for drivers, NONE (or OPERATOR) for staff.
+             * @enum {string}
+             */
+            fault?: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
             labels: components["schemas"]["Labels"];
+            /** @default false */
+            late_driver_fault: boolean;
             /**
              * @description DRIVER-only (ADR 0018 B3).
              * @default false
@@ -125,6 +133,11 @@ export interface components {
         Labels: {
             [key: string]: string;
         };
+        /**
+         * @description Who is at fault for the cancelled order (owner decision 05.11.2026, ADR 0019): CLIENT_FREE — the client before a driver was on the order or within the free window after the acceptance; CLIENT — the client otherwise; DRIVER; OPERATOR; NONE — nobody (a duplicate, a test order, no cars). Null for orders cancelled before ADR 0019.
+         * @enum {string|null}
+         */
+        OrderFault: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
         Reason: {
             /** @description Inactive reasons are hidden from the apps; reasons are never deleted. */
             active: boolean;
@@ -136,8 +149,11 @@ export interface components {
             /** @description Never changes; to rename, change the labels. */
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
+            fault?: components["schemas"]["ReasonFault"];
             id: components["schemas"]["Uuid"];
             labels: components["schemas"]["Labels"];
+            /** @description With the fault CLIENT only (ADR 0019): the driver's fault when the driver is late — later than the promised pickup by more than cancellation_fault.driver_late_minutes, or with no promise not there within cancellation_fault.driver_late_without_promise_minutes of the acceptance. */
+            late_driver_fault?: boolean;
             /** @description DRIVER-only flag (ADR 0018 B3): cancelling an accepted order for this reason does not count toward the warning, the pause and the rate of the driver's cancellations, e.g. the rider asked to cancel. */
             not_counted?: boolean;
             /** @description STAFF-only flag; cancelling for such a reason may charge the order creator's bonus account. */
@@ -146,6 +162,11 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /**
+         * @description The fault a cancellation for this reason gives (ADR 0019): CLIENT becomes CLIENT_FREE or CLIENT by the time; OPERATOR is the same as operator_fault and only for staff reasons. Null only for REASSIGN reasons, which cancel nothing.
+         * @enum {string|null}
+         */
+        ReasonFault: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
         ReasonItem: {
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
@@ -206,7 +227,14 @@ export interface components {
             driver_outcome?: components["schemas"]["DriverOutcome"];
             /** Format: int64 */
             expected_version: number;
+            /**
+             * @description Omitted, the reason keeps its fault (ADR 0019).
+             * @enum {string}
+             */
+            fault?: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
             labels: components["schemas"]["Labels"];
+            /** @description Omitted, the reason keeps its flag. */
+            late_driver_fault?: boolean;
             /** @description DRIVER-only (ADR 0018 B3); omitted, the reason keeps its flag. */
             not_counted?: boolean;
             operator_fault?: boolean;

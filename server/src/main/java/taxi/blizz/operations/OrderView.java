@@ -159,9 +159,17 @@ public record OrderView(
      * Who cancelled the order (RIDER, STAFF, DRIVER) and why: the reason's code and its labels as they were at the
      * moment of cancellation (owner decision 27.10.2026). Null unless a person cancelled the order.
      */
-    public record Cancellation(String by, String reasonCode, Map<String, String> reasonLabels) {
+    /**
+     * {@code fault}: who is at fault (ADR 0019): CLIENT_FREE, CLIENT, DRIVER, OPERATOR or NONE; null for orders cancelled
+     * before it.
+     */
+    public record Cancellation(String by, String reasonCode, Map<String, String> reasonLabels, String fault) {
         public Cancellation {
             reasonLabels = reasonLabels == null ? Map.of() : Map.copyOf(reasonLabels);
+        }
+
+        public Cancellation(String by, String reasonCode, Map<String, String> reasonLabels) {
+            this(by, reasonCode, reasonLabels, null);
         }
     }
 }

@@ -35,13 +35,42 @@ public interface CancelReasons {
     }
 
     /**
+     * Who is at fault for an order cancelled for a reason (owner decision 05.11.2026, ADR 0019). CLIENT becomes the
+     * order's CLIENT_FREE or CLIENT by the time of the cancellation; OPERATOR is the same as {@code operatorFault}.
+     */
+    enum Fault {
+        CLIENT, DRIVER, OPERATOR, NONE;
+
+        /** The fault a new reason starts with: the client's, the driver's or nobody's, by the side. */
+        public static Fault startingFor(Audience audience, boolean operatorFault) {
+            if (audience == null || audience == Audience.REASSIGN) {
+                return null;
+            }
+            return switch (audience) {
+                case RIDER -> CLIENT;
+                case DRIVER -> DRIVER;
+                default -> operatorFault ? OPERATOR : NONE;
+            };
+        }
+    }
+
+    /**
      * {@code notCounted}: a driver's reason that does not count as a cancellation for the warning, the pause and the
-     * rate (ADR 0018 B3), e.g. the rider asked to cancel.
+     * rate (ADR 0018 B3), e.g. the rider asked to cancel. {@code fault}: who is at fault (ADR 0019), null for REASSIGN;
+     * {@code lateDriverFault}: with the fault CLIENT, the driver's fault when the driver is late.
      */
     record Reason(UUID id, Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                  boolean operatorFault, boolean notCounted, boolean active, int sortOrder, long version) {
+                  boolean operatorFault, boolean notCounted, boolean active, int sortOrder, long version, Fault fault,
+                  boolean lateDriverFault) {
         public Reason {
             labels = labels == null ? Map.of() : Map.copyOf(labels);
+        }
+
+        public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
+                      DriverOutcome driverOutcome, boolean operatorFault, boolean notCounted, boolean active,
+                      int sortOrder, long version) {
+            this(id, audience, code, labels, driverOutcome, operatorFault, notCounted, active, sortOrder, version,
+                    Fault.startingFor(audience, operatorFault), false);
         }
 
         public Reason(UUID id, Audience audience, String code, Map<String, String> labels,
@@ -57,10 +86,17 @@ public interface CancelReasons {
 
     /**
      * {@code driverOutcome} is required for DRIVER and must be null otherwise; operatorFault is STAFF-only, notCounted
-     * DRIVER-only.
+     * DRIVER-only. {@code fault} null: on a new reason the starting one, on an update the reason keeps its own;
+     * {@code lateDriverFault} null: false, or on an update the reason's own.
      */
     record Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
-                 boolean operatorFault, boolean notCounted, boolean active, int sortOrder) {
+                 boolean operatorFault, boolean notCounted, boolean active, int sortOrder, Fault fault,
+                 Boolean lateDriverFault) {
+        public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
+                     boolean operatorFault, boolean notCounted, boolean active, int sortOrder) {
+            this(audience, code, labels, driverOutcome, operatorFault, notCounted, active, sortOrder, null, null);
+        }
+
         public Draft(Audience audience, String code, Map<String, String> labels, DriverOutcome driverOutcome,
                      boolean operatorFault, boolean active, int sortOrder) {
             this(audience, code, labels, driverOutcome, operatorFault, false, active, sortOrder);
@@ -83,7 +119,7 @@ public interface CancelReasons {
 
     Reason create(Actor staff, UUID commandId, Draft draft, String reason);
 
-    /** Labels, driver outcome, operator-fault and not-counted flags, activity and order; side and code stay. */
+    /** Labels, driver outcome, the flags and the fault, activity and order; side and code stay. */
     Reason update(Actor staff, UUID commandId, UUID reasonId, long expectedVersion, Draft draft, String reason);
 
     /** An active reason of the side in the service of {@code within}, or {@code VALIDATION_FAILED}. */

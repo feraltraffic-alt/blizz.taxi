@@ -157,6 +157,17 @@ public interface ServiceSettings {
     record PickupTime(int maxMinutes, int routedCandidates) {
     }
 
+    /**
+     * Who is at fault for a cancellation (owner decision 05.11.2026, ADR 0019). The client's cancellation is free
+     * before a driver is on the order and within {@code clientFreeMinutes} of the acceptance. For a reason marked so,
+     * the driver is at fault when later than the promised pickup by more than {@code driverLateMinutes}, or, with no
+     * promise, not there within {@code driverLateWithoutPromiseMinutes} of the acceptance; such a cancellation counts
+     * against the driver (ADR 0018 B) only with {@code countLateCancellations}.
+     */
+    record CancellationFault(int clientFreeMinutes, int driverLateMinutes, int driverLateWithoutPromiseMinutes,
+                             boolean countLateCancellations) {
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -169,14 +180,23 @@ public interface ServiceSettings {
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                     StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
-                    OfferDiscipline offerDiscipline, PickupTime pickupTime) {
+                    OfferDiscipline offerDiscipline, PickupTime pickupTime, CancellationFault cancellationFault) {
+        /** Source compatibility for callers written before the cancellation fault settings. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
+                        OfferDiscipline offerDiscipline, PickupTime pickupTime) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    riderDebts, driverDiscipline, offerDiscipline, pickupTime, null);
+        }
+
         /** Source compatibility for callers written before the pickup time settings. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
                         OfferDiscipline offerDiscipline) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, offerDiscipline, null);
+                    riderDebts, driverDiscipline, offerDiscipline, null, null);
         }
 
         /** Source compatibility for callers written before the offer discipline settings. */
@@ -184,7 +204,7 @@ public interface ServiceSettings {
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, null, null);
+                    riderDebts, driverDiscipline, null, null, null);
         }
 
         /** Source compatibility for callers written before the driver discipline settings. */
@@ -192,7 +212,7 @@ public interface ServiceSettings {
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, null, null, null);
+                    riderDebts, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the rider debt limit. */

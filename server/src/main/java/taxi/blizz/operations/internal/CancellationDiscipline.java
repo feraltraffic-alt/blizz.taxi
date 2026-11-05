@@ -49,6 +49,14 @@ class CancellationDiscipline {
      * after ending the assignment, in the same transaction. A second call for the same assignment changes nothing.
      */
     void cancelled(UUID driverId, UUID orderId, UUID assignmentId, CancelReasons.Reason reason) {
+        cancelled(driverId, orderId, assignmentId, reason, "DRIVER");
+    }
+
+    /**
+     * The same with where it came from (ADR 0019): DRIVER — the driver cancelled; LATE — the rider cancelled because
+     * the driver was late, counted only when the service counts those.
+     */
+    void cancelled(UUID driverId, UUID orderId, UUID assignmentId, CancelReasons.Reason reason, String source) {
         jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))").param("key", "driver-discipline:" + driverId)
                 .query().singleRow();
         record Facts(UUID cityId, String timezone, OffsetDateTime acceptedAt) {
@@ -70,9 +78,11 @@ class CancellationDiscipline {
         UUID id = UUID.randomUUID();
         int inserted = jdbc.sql("""
                         insert into driver_cancellation (id, driver_id, city_id, order_id, assignment_id, reason_code,
-                                                         counted, not_counted_why, accepted_at, cancelled_at)
-                        values (:id, :driver, :city, :order, :assignment, :code, :counted, :why, :accepted, :now)
+                                                         counted, not_counted_why, accepted_at, cancelled_at, source)
+                        values (:id, :driver, :city, :order, :assignment, :code, :counted, :why, :accepted, :now,
+                                :source)
                         on conflict (assignment_id) do nothing""")
+                .param("source", source)
                 .param("id", id).param("driver", driverId).param("city", facts.cityId()).param("order", orderId)
                 .param("assignment", assignmentId).param("code", reason.code())
                 .param("counted", notCountedWhy == null).param("why", notCountedWhy)

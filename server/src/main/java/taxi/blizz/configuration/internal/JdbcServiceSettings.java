@@ -51,7 +51,8 @@ class JdbcServiceSettings implements ServiceSettings {
             new RiderDebts(Map.of()),
             new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7),
             new OfferDiscipline(true, 3, true, 20, 50, 30, 3000),
-            new PickupTime(15, 10));
+            new PickupTime(15, 10),
+            new CancellationFault(2, 5, 15, false));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -254,8 +255,11 @@ class JdbcServiceSettings implements ServiceSettings {
         validate(offers);
         PickupTime pickup = s.pickupTime() == null ? DEFAULTS.pickupTime() : s.pickupTime();
         validate(pickup);
+        CancellationFault fault = s.cancellationFault() == null ? DEFAULTS.cancellationFault()
+                : s.cancellationFault();
+        validate(fault);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps, debts, discipline, offers, pickup);
+                orders, cash, versions, topUps, debts, discipline, offers, pickup, fault);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -313,8 +317,23 @@ class JdbcServiceSettings implements ServiceSettings {
                 : s.driverDiscipline();
         OfferDiscipline offers = s.offerDiscipline() == null ? DEFAULTS.offerDiscipline() : s.offerDiscipline();
         PickupTime pickup = s.pickupTime() == null ? DEFAULTS.pickupTime() : s.pickupTime();
+        CancellationFault fault = s.cancellationFault() == null ? DEFAULTS.cancellationFault()
+                : s.cancellationFault();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps, debts, discipline, offers, pickup);
+                topUps, debts, discipline, offers, pickup, fault);
+    }
+
+    /** ADR 0019: a free window of 0 to 60 minutes; lateness of 1 to 120, without a promise 1 to 180. */
+    private static void validate(CancellationFault f) {
+        if (f.clientFreeMinutes() < 0 || f.clientFreeMinutes() > 60) {
+            throw invalid("Cancellation fault: client_free_minutes must be between 0 and 60");
+        }
+        if (f.driverLateMinutes() < 1 || f.driverLateMinutes() > 120) {
+            throw invalid("Cancellation fault: driver_late_minutes must be between 1 and 120");
+        }
+        if (f.driverLateWithoutPromiseMinutes() < 1 || f.driverLateWithoutPromiseMinutes() > 180) {
+            throw invalid("Cancellation fault: driver_late_without_promise_minutes must be between 1 and 180");
+        }
     }
 
     /** ADR 0020: a pickup time threshold of 1 to 120 minutes; 1 to 20 candidates routed (the candidate limit). */
