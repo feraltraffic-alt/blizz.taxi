@@ -158,6 +158,41 @@ describe('C3: change', () => {
   });
 });
 
+describe('C5: who is at fault (ADR 0019)', () => {
+  it('a new reason sends the fault and the lateness mark it was given', async () => {
+    const {creates} = handlers();
+    const user = await open();
+    await user.selectOptions(screen.getByLabelText('Чья вина при отмене (ADR 0019)'), 'CLIENT');
+    await user.click(screen.getByRole('checkbox', {name: 'Вина водителя, если он опаздывает'}));
+    await fill(user);
+    await waitFor(() => expect(creates).toHaveLength(1));
+    expect(creates[0]).toMatchObject({audience: 'RIDER', fault: 'CLIENT', late_driver_fault: true});
+  });
+
+  it('the lateness mark is only for the client\'s fault', async () => {
+    handlers();
+    const user = await open();
+    await user.selectOptions(screen.getByLabelText('Чья вина при отмене (ADR 0019)'), 'DRIVER');
+    expect(screen.queryByRole('checkbox', {name: 'Вина водителя, если он опаздывает'})).toBeNull();
+  });
+
+  it('a reason read with its fault shows it and sends it only when changed', async () => {
+    const {updates} = handlers({list: () => [reason(1, {fault: 'CLIENT', late_driver_fault: true}),
+      reason(5, {audience: 'STAFF', code: 'DUPLICATE', labels: {uk: 'Дубль'}, fault: 'NONE'})]});
+    const user = await open();
+    expect(screen.getByText('CHANGED_MIND · Передумав · активна · порядок 10 · вина клиента · при опоздании — вина водителя'))
+      .toBeVisible();
+    await user.click(screen.getByRole('button', {name: 'Изменить: DUPLICATE'}));
+    await user.selectOptions(screen.getByLabelText('Чья вина при отмене (ADR 0019): DUPLICATE'), 'OPERATOR');
+    expect(screen.getByRole('checkbox', {name: 'По вине оператора: DUPLICATE'})).toBeChecked();
+    await user.type(screen.getByLabelText('Причина изменения: DUPLICATE'), 'Дубли — ошибка оператора');
+    await user.click(screen.getByRole('button', {name: 'Сохранить: DUPLICATE'}));
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]!.body).toMatchObject({fault: 'OPERATOR', operator_fault: true});
+    expect('late_driver_fault' in updates[0]!.body).toBe(false);
+  });
+});
+
 describe('C4: refused on the screen', () => {
   it.each([
     ['a lower-case code', {code: 'no_car'}], ['a one-letter code', {code: 'N'}], ['no code', {code: ''}],

@@ -3,6 +3,15 @@ import type {Catalogs} from '@blizz/web-ui';
 /** The texts of drivers' cancellations and offers (ADR 0018, #487). */
 export const discipline: Catalogs = {
   ru: {
+    dscPickup: 'Выбор водителя по времени подачи (ADR 0020)',
+    dsc_max_minutes: 'Не предлагать заказ водителю с подачей дольше, минут',
+    dsc_routed_candidates: 'Сколько ближайших водителей считать по маршруту',
+    dscFault: 'Чья вина при отмене (ADR 0019)',
+    dsc_client_free_minutes: 'Бесплатная отмена клиентом после принятия заказа, минут',
+    dsc_driver_late_minutes: 'Водитель опаздывает — больше обещанного времени подачи на, минут',
+    dsc_driver_late_without_promise_minutes: 'Без обещанного времени — водитель опаздывает, если не приехал за, минут',
+    dscCountLate: 'Засчитывать водителю отмену клиентом из-за опоздания (паузы и предупреждения)',
+    dscNot_STAFF: 'нет — вину снял сотрудник',
     settingsDiscipline: 'Отказы водителей и предложения',
     dscTitle: 'Отказы водителей и предложения заказов',
     dscCancellations: 'Отмена после принятия заказа',
@@ -65,6 +74,15 @@ export const discipline: Catalogs = {
     dscReportEmpty: 'Нет водителей с отменами среди тех, у кого не меньше {min} принятых заказов.'
   },
   uk: {
+    dscPickup: 'Вибір водія за часом подачі (ADR 0020)',
+    dsc_max_minutes: 'Не пропонувати замовлення водієві з подачею довше, хвилин',
+    dsc_routed_candidates: 'Скільки найближчих водіїв рахувати за маршрутом',
+    dscFault: 'Чия вина при скасуванні (ADR 0019)',
+    dsc_client_free_minutes: 'Безкоштовне скасування клієнтом після прийняття, хвилин',
+    dsc_driver_late_minutes: 'Водій запізнюється — більше обіцяного часу подачі на, хвилин',
+    dsc_driver_late_without_promise_minutes: 'Без обіцяного часу — водій запізнюється, якщо не приїхав за, хвилин',
+    dscCountLate: 'Зараховувати водієві скасування клієнтом через запізнення (паузи й попередження)',
+    dscNot_STAFF: 'ні — провину зняв співробітник',
     settingsDiscipline: 'Відмови водіїв і пропозиції',
     dscTitle: 'Відмови водіїв і пропозиції замовлень',
     dscCancellations: 'Скасування після прийняття замовлення',
@@ -127,6 +145,15 @@ export const discipline: Catalogs = {
     dscReportEmpty: 'Немає водіїв зі скасуваннями серед тих, у кого не менше {min} прийнятих замовлень.'
   },
   pl: {
+    dscPickup: 'Wybór kierowcy według czasu dojazdu (ADR 0020)',
+    dsc_max_minutes: 'Nie proponować zlecenia kierowcy z dojazdem dłuższym niż, minut',
+    dsc_routed_candidates: 'Ilu najbliższych kierowców liczyć po trasie',
+    dscFault: 'Czyja wina przy anulowaniu (ADR 0019)',
+    dsc_client_free_minutes: 'Bezpłatne anulowanie przez klienta po przyjęciu, minut',
+    dsc_driver_late_minutes: 'Kierowca się spóźnia — ponad obiecany czas dojazdu o, minut',
+    dsc_driver_late_without_promise_minutes: 'Bez obiecanego czasu — kierowca się spóźnia, jeśli nie dojechał w, minut',
+    dscCountLate: 'Liczyć kierowcy anulowanie przez klienta z powodu spóźnienia (pauzy i ostrzeżenia)',
+    dscNot_STAFF: 'nie — winę zdjął pracownik',
     settingsDiscipline: 'Rezygnacje kierowców i propozycje',
     dscTitle: 'Rezygnacje kierowców i propozycje zleceń',
     dscCancellations: 'Rezygnacja po przyjęciu zlecenia',
@@ -189,6 +216,15 @@ export const discipline: Catalogs = {
     dscReportEmpty: 'Brak kierowców z rezygnacjami wśród tych, którzy mają co najmniej {min} przyjętych zleceń.'
   },
   en: {
+    dscPickup: 'Choosing drivers by pickup time (ADR 0020)',
+    dsc_max_minutes: 'Do not offer the order to a driver with a pickup longer than, minutes',
+    dsc_routed_candidates: 'How many nearest drivers get a road pickup time',
+    dscFault: 'Whose fault a cancellation is (ADR 0019)',
+    dsc_client_free_minutes: 'Free cancellation by the client after the acceptance, minutes',
+    dsc_driver_late_minutes: 'The driver is late — past the promised pickup by, minutes',
+    dsc_driver_late_without_promise_minutes: 'With no promise — the driver is late when not there within, minutes',
+    dscCountLate: "Count the client's cancellation for lateness against the driver (pauses and warnings)",
+    dscNot_STAFF: 'no — staff took the fault off',
     settingsDiscipline: 'Driver cancellations and offers',
     dscTitle: 'Driver cancellations and order offers',
     dscCancellations: 'Cancellation after accepting an order',

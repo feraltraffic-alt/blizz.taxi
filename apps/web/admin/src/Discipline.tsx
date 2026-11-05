@@ -9,8 +9,11 @@ type DriverRules = {enabled: boolean; grace_seconds: number; warn_after: number;
 type OfferRules = {missed_enabled: boolean; missed_in_row: number; acceptance_enabled: boolean;
   acceptance_min_offers: number; acceptance_warn_percent: number; acceptance_pause_percent: number;
   far_pickup_meters: number};
+type PickupRules = {max_minutes: number; routed_candidates: number};
+type FaultRules = {client_free_minutes: number; driver_late_minutes: number;
+  driver_late_without_promise_minutes: number; count_late_cancellations: boolean};
 type Version = {version: number; settings: Record<string, unknown> & {driver_discipline?: DriverRules | null;
-  offer_discipline?: OfferRules | null}};
+  offer_discipline?: OfferRules | null; pickup_time?: PickupRules | null; cancellation_fault?: FaultRules | null}};
 
 /** ADR 0018: the defaults of the server, shown until the service saves its own. */
 export const DRIVER_DEFAULTS: DriverRules = {enabled: true, grace_seconds: 30, warn_after: 3, pause_after: 5,
@@ -19,6 +22,11 @@ export const DRIVER_DEFAULTS: DriverRules = {enabled: true, grace_seconds: 30, w
 export const OFFER_DEFAULTS: OfferRules = {missed_enabled: true, missed_in_row: 3, acceptance_enabled: true,
   acceptance_min_offers: 20, acceptance_warn_percent: 50, acceptance_pause_percent: 30, far_pickup_meters: 3000};
 
+/** ADR 0020 and ADR 0019: the defaults of the server. */
+export const PICKUP_DEFAULTS: PickupRules = {max_minutes: 15, routed_candidates: 10};
+export const FAULT_DEFAULTS: FaultRules = {client_free_minutes: 2, driver_late_minutes: 5,
+  driver_late_without_promise_minutes: 15, count_late_cancellations: false};
+
 /** Each number with its bounds, as the server checks them. */
 const DRIVER_FIELDS: [keyof DriverRules, number, number][] = [['grace_seconds', 0, 600], ['warn_after', 1, 49],
   ['pause_after', 2, 50], ['first_pause_minutes', 1, 1440], ['second_pause_minutes', 1, 1440],
@@ -26,6 +34,10 @@ const DRIVER_FIELDS: [keyof DriverRules, number, number][] = [['grace_seconds', 
   ['uncounted_flag_above', 1, 100], ['uncounted_flag_days', 1, 30]];
 const OFFER_FIELDS: [keyof OfferRules, number, number][] = [['missed_in_row', 1, 20], ['acceptance_min_offers', 1, 1000],
   ['acceptance_warn_percent', 2, 100], ['acceptance_pause_percent', 1, 99], ['far_pickup_meters', 100, 100000]];
+
+const PICKUP_FIELDS: [keyof PickupRules, number, number][] = [['max_minutes', 1, 120], ['routed_candidates', 1, 20]];
+const FAULT_FIELDS: [keyof FaultRules, number, number][] = [['client_free_minutes', 0, 60],
+  ['driver_late_minutes', 1, 120], ['driver_late_without_promise_minutes', 1, 180]];
 
 const number = (text: string, min: number, max: number) => {
   const n = /^[0-9]{1,6}$/.test(text.trim()) ? Number(text.trim()) : NaN;
@@ -48,6 +60,19 @@ export function offerRules(missed: boolean, acceptance: boolean, text: Record<st
   return rules.acceptance_warn_percent > rules.acceptance_pause_percent ? rules : null;
 }
 
+/** The pickup time rules of a form (ADR 0020), or null when a number is out of bounds. */
+export function pickupRules(text: Record<string, string>): PickupRules | null {
+  const values = Object.fromEntries(PICKUP_FIELDS.map(([k, min, max]) => [k, number(text[k] ?? '', min, max)]));
+  return Object.values(values).some(v => v === null) ? null : values as PickupRules;
+}
+
+/** Who is at fault for a cancellation (ADR 0019), or null when a number is out of bounds. */
+export function faultRules(count: boolean, text: Record<string, string>): FaultRules | null {
+  const values = Object.fromEntries(FAULT_FIELDS.map(([k, min, max]) => [k, number(text[k] ?? '', min, max)]));
+  return Object.values(values).some(v => v === null) ? null
+    : {count_late_cancellations: count, ...values} as FaultRules;
+}
+
 const asText = (rules: object) => Object.fromEntries(Object.entries(rules)
   .filter(([, v]) => typeof v === 'number').map(([k, v]) => [k, String(v)]));
 
@@ -60,7 +85,9 @@ export function DisciplineSettings({client, t, newId}: {client: ApiClient; t: Tr
   const [current, setCurrent] = useState<Version | null>(null);
   const [driver, setDriver] = useState<Record<string, string>>({});
   const [offers, setOffers] = useState<Record<string, string>>({});
-  const [switches, setSwitches] = useState({cancellations: true, missed: true, acceptance: true});
+  const [pickup, setPickup] = useState<Record<string, string>>({});
+  const [fault, setFault] = useState<Record<string, string>>({});
+  const [switches, setSwitches] = useState({cancellations: true, missed: true, acceptance: true, countLate: false});
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -69,10 +96,15 @@ export function DisciplineSettings({client, t, newId}: {client: ApiClient; t: Tr
   const show = useCallback((value: Version) => {
     const d = value.settings.driver_discipline ?? DRIVER_DEFAULTS;
     const o = value.settings.offer_discipline ?? OFFER_DEFAULTS;
+    const p = value.settings.pickup_time ?? PICKUP_DEFAULTS;
+    const f = value.settings.cancellation_fault ?? FAULT_DEFAULTS;
     setCurrent(value);
     setDriver(asText(d));
     setOffers(asText(o));
-    setSwitches({cancellations: d.enabled, missed: o.missed_enabled, acceptance: o.acceptance_enabled});
+    setPickup(asText(p));
+    setFault(asText(f));
+    setSwitches({cancellations: d.enabled, missed: o.missed_enabled, acceptance: o.acceptance_enabled,
+      countLate: f.count_late_cancellations});
     setReason('');
   }, []);
 
@@ -88,7 +120,9 @@ export function DisciplineSettings({client, t, newId}: {client: ApiClient; t: Tr
     if (acting.current || !current) return;
     const d = driverRules(switches.cancellations, driver);
     const o = offerRules(switches.missed, switches.acceptance, offers);
-    if (!d || !o || !reason.trim()) {
+    const p = pickupRules(pickup);
+    const f = faultRules(switches.countLate, fault);
+    if (!d || !o || !p || !f || !reason.trim()) {
       setMessage(t('dscNeeds'));
       return;
     }
@@ -97,7 +131,8 @@ export function DisciplineSettings({client, t, newId}: {client: ApiClient; t: Tr
     setError(null);
     try {
       show(await client.post('/api/admin/v1/settings' as never, {body: {command_id: newId(),
-        expected_version: current.version, settings: {...current.settings, driver_discipline: d, offer_discipline: o},
+        expected_version: current.version, settings: {...current.settings, driver_discipline: d, offer_discipline: o,
+          pickup_time: p, cancellation_fault: f},
         reason: reason.trim()}} as never) as Version);
       setMessage(t('dscSaved'));
     } catch (failure) {
@@ -135,6 +170,16 @@ export function DisciplineSettings({client, t, newId}: {client: ApiClient; t: Tr
             <label><input type="checkbox" checked={switches.acceptance}
               onChange={e => setSwitches(s => ({...s, acceptance: e.target.checked}))} />{t('dscAcceptanceOn')}</label>
             {OFFER_FIELDS.map(([k]) => field(offers, setOffers, k))}
+          </fieldset>
+          <fieldset>
+            <legend>{t('dscPickup')}</legend>
+            {PICKUP_FIELDS.map(([k]) => field(pickup, setPickup, k))}
+          </fieldset>
+          <fieldset>
+            <legend>{t('dscFault')}</legend>
+            {FAULT_FIELDS.map(([k]) => field(fault, setFault, k))}
+            <label><input type="checkbox" checked={switches.countLate}
+              onChange={e => setSwitches(s => ({...s, countLate: e.target.checked}))} />{t('dscCountLate')}</label>
           </fieldset>
           <label>{t('dscReason')}<input value={reason} onChange={e => setReason(e.target.value)} /></label>
           <button type="button" onClick={() => void save()}>{t('dscSave')}</button>
