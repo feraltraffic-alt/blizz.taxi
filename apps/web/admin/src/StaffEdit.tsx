@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {ApiError, type ApiClient} from '@blizz/api-client';
+import {StaffRefundLimits} from './Refunds.js';
 import {Failure, type Translate} from '@blizz/web-ui';
 
 type Profile = {first_name: string; last_name: string; contacts: {phone?: string | null; email?: string | null;
@@ -133,6 +134,7 @@ export function StaffEdit({client, t, newId}: {client: ApiClient; t: Translate; 
       <button type="button" onClick={() => void save()}>{t('saveChanges')}</button>
       {message ? <p role="status">{message}</p> : null}
       {error ? <Failure error={error} t={t} /> : null}
+      <StaffRefundLimits client={client} t={t} newId={newId} staffId={member.id} />
       <p><Link to={'/staff/' + member.id + '/emergency'}>{t('grantOf', {name: member.profile.last_name + ' '
         + member.profile.first_name})}</Link></p>
       <p><Link to="/staff">{t('toStaff')}</Link></p>

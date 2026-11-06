@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {ApiError, type ApiClient} from '@blizz/api-client';
 import {Failure, type Translate} from '@blizz/web-ui';
 
-type Side = 'RIDER' | 'DRIVER' | 'STAFF' | 'REASSIGN';
+type Side = 'RIDER' | 'DRIVER' | 'STAFF' | 'REASSIGN' | 'REFUND';
 type Reason = {id: string; audience: Side; code: string; labels: Record<string, string>;
   driver_outcome: string | null; operator_fault?: boolean; not_counted?: boolean; fault?: string | null;
   late_driver_fault?: boolean; active: boolean; sort_order: number; version: number};
@@ -10,7 +10,7 @@ type Reason = {id: string; audience: Side; code: string; labels: Record<string, 
 type Draft = {labels: Record<string, string>; outcome: string; fault: boolean; notCounted: boolean; active: boolean;
   order: string; why: string; blame: string; late: boolean};
 
-const SIDES: Side[] = ['RIDER', 'DRIVER', 'STAFF', 'REASSIGN'];
+const SIDES: Side[] = ['RIDER', 'DRIVER', 'STAFF', 'REASSIGN', 'REFUND'];
 const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
 const ORDER = /^[0-9]{1,5}$/;
 
@@ -155,10 +155,10 @@ export function CancelReasons({client, t, newId}: {client: ApiClient; t: Transla
           <select id={'fault-' + id} value={d.blame} onChange={e => set({...d, blame: e.target.value,
             fault: e.target.value === 'OPERATOR', late: e.target.value === 'CLIENT' ? d.late : false})}>
             <option value="">{t('faultDefault')}</option>
-            {['CLIENT', 'DRIVER', ...(of === 'STAFF' ? ['OPERATOR'] : []), 'NONE'].map(f => (
+            {['CLIENT', 'DRIVER', ...(of === 'STAFF' || of === 'REFUND' ? ['OPERATOR'] : []), 'NONE'].map(f => (
               <option key={f} value={f}>{t('fault_' + f)}</option>))}
           </select>
-          {d.blame === 'CLIENT' || (d.blame === '' && of === 'RIDER') ? <label><input type="checkbox"
+          {of !== 'REFUND' && (d.blame === 'CLIENT' || (d.blame === '' && of === 'RIDER')) ? <label><input type="checkbox"
             checked={d.late} onChange={e => set({...d, late: e.target.checked})} />{t('lateBox') + suffix}</label>
             : null}
         </>

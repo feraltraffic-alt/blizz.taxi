@@ -22,7 +22,7 @@ const dm = (at: string) => {
 
 /** Kinds the app has a name for; a new kind is shown by its code (M5). */
 const KINDS = new Set(['TRIP_FARE', 'CASH_COLLECTED', 'TERMINAL_COLLECTED', 'DEPOSIT', 'BONUS', 'CARD_TOP_UP',
-  'TRANSFER_IN', 'TRANSFER_OUT', 'PROMOTION', 'TIP']);
+  'TRANSFER_IN', 'TRANSFER_OUT', 'PROMOTION', 'TIP', 'REFUND']);
 
 const amount = (minor: number, currency: string) => (Math.abs(minor) / 100).toFixed(2) + ' ' + currency;
 const signed = (minor: number, currency: string) => (minor < 0 ? '−' : '+') + amount(minor, currency);

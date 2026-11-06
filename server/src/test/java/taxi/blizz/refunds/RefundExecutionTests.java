@@ -103,6 +103,9 @@ class RefundExecutionTests {
         assertThat(wallets.available(ride.ride().payer().id(), "UAH")).isEqualTo(before + 1500);
         assertThat(lines(refund)).containsExactlyInAnyOrder("RIDER_WALLET:credit:1500",
                 "DRIVER_PAYABLE:debit:1500");
+        assertThat(jdbc.sql("select reason from journal_transaction where business_key = :k")
+                .param("k", "refund:" + refund.id()).query(String.class).single())
+                .as("the driver reads the reason in words").isIn("Длинный маршрут", "Довгий маршрут");
         assertThat(count("select count(*) from outbox where event_type = 'RefundSucceeded' and aggregate_id = :id",
                 refund.id())).isEqualTo(1);
     }
