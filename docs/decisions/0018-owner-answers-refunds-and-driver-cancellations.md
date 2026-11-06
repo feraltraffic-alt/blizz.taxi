@@ -1,4 +1,4 @@
-# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–6) and drivers cancelling accepted orders
+# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–7) and drivers cancelling accepted orders
 
 Date: 03.11.2026. Status: accepted (the owner's answers in the lead's session).
 
@@ -81,10 +81,18 @@ notice, and may dispute it through a support case, decided by finance or the sup
 refund never cancels the completed trip: it stays in the driver's history and rating. Fines are not this: they wait
 for the lawyer (Q-05).
 
+### A7. Cash trips (owner, 05.11.2026, variant A)
+
+- A trip paid in cash is refunded **only as bonuses** to the rider's account, with the mark "the rider agreed".
+- Who bears it follows A6. With the driver's fault the driver's balance is charged the **whole** sum: the driver
+  holds all the cash. With the service's fault the bonuses are the service's.
+- Limits (A2) and the second confirmation (A3) are the same as for any refund.
+- A switch in the admin panel "Allow a refund to the card for cash trips", **off** by default. If it is turned on
+  later, it is a payout to the rider's card, not a refund of a payment (the trip had none), and needs its own design.
+
 ### Still open
 
-Cash trips (point 7), the time limit (point 8), reasons and the rider's notice (point 9). Until they are answered,
-refunds are not built.
+The time limit (point 8), reasons and the rider's notice (point 9). Until they are answered, refunds are not built.
 
 ## Part B. A driver cancels an order after accepting it
 
