@@ -104,7 +104,7 @@ class NotificationFeed implements OutboxHandler {
             create(message, new Push(new Actor(SubjectType.CLIENT, r.clientId()),
                     r.cardMinor() > 0 ? "rider.refund-card" : "rider.refund-bonuses", DEFAULT_DEADLINE), r.orderId());
             // The driver who bears it learns of it, with the reason in the earnings, so as to dispute it.
-            if ("DRIVER".equals(r.fault()) && r.driverId() != null) {
+            if (r.driverId() != null) {
                 create(message, new Push(new Actor(SubjectType.DRIVER, r.driverId()), "driver.refund-charge",
                         DEFAULT_DEADLINE), r.orderId());
             }

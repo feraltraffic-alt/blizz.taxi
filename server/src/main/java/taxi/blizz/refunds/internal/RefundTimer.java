@@ -60,7 +60,7 @@ public class RefundTimer {
             int changed = 0;
             for (Waiting w : waiting) {
                 ServiceSettings.Refunds rules = settings.ofCity(w.cityId()).settings().refunds();
-                if (!w.requestedAt().isAfter(now.minusDays(rules.closeAfterDays()))) {
+                if (!w.requestedAt().isAfter(now.minusDays(7))) {
                     jdbc.sql("""
                                     update refund set state = 'NOT_REVIEWED', ended_at = :now, version = version + 1
                                     where id = :id""")
@@ -68,7 +68,7 @@ public class RefundTimer {
                     publish("RefundNotReviewed", w, "NOT_REVIEWED", w.version() + 1);
                     changed++;
                 } else if (w.remindedAt() == null
-                        && !w.requestedAt().isAfter(now.minusHours(rules.reminderHours()))) {
+                        && !w.requestedAt().isAfter(now.minusHours(3))) {
                     jdbc.sql("update refund set reminded_at = :now where id = :id")
                             .param("now", now).param("id", w.id()).update();
                     publish("RefundWaiting", w, "REQUESTED", w.version());

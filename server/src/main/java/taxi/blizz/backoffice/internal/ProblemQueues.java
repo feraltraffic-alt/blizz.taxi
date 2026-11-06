@@ -61,7 +61,7 @@ class ProblemQueues implements OutboxHandler {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
                  "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated",
                  "CardChargebackRecorded", "PaymentReconciliationDifferencesFound", "DestinationChanged",
-                 "RefundFailed", "RefundWaiting" -> true;
+                 "RefundWaiting" -> true;
             default -> false;
         };
     }
