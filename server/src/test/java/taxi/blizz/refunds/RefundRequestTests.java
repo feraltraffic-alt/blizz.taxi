@@ -92,6 +92,14 @@ class RefundRequestTests {
         assertThat(requested.fault()).as("the reason's fault").isEqualTo("DRIVER");
         assertCode(() -> refunds.confirm(admin, UUID.randomUUID(), requested.id(), requested.version()),
                 ErrorCode.ACCESS_DENIED);
+        Actor both = staff("ADMIN", true, Refunds.CREATE_PERMISSION, Refunds.CONFIRM_PERMISSION);
+        limit(both, 2000, 3000);
+        Refunds.Refund own = refunds.request(both, UUID.randomUUID(), bonuses(ride, 1000, "GOODWILL")).refund();
+        assertCode(() -> refunds.confirm(both, UUID.randomUUID(), own.id(), own.version()), ErrorCode.ACCESS_DENIED);
+        assertCode(() -> refunds.reject(both, UUID.randomUUID(), own.id(), own.version(), "Mine"),
+                ErrorCode.ACCESS_DENIED);
+        assertThat(refunds.waiting(both)).as("not one's own").extracting(Refunds.Refund::id)
+                .doesNotContain(own.id()).contains(requested.id());
         assertThat(refunds.waiting(confirmer)).extracting(Refunds.Refund::id).contains(requested.id());
         assertThat(refunds.waiting(admin)).as("not one's own").isEmpty();
         assertCode(() -> refunds.confirm(confirmer, UUID.randomUUID(), requested.id(), requested.version() + 1),
@@ -186,33 +194,39 @@ class RefundRequestTests {
     }
 
     @Test
-    void twoRequestsAtOnceCannotPassTheDailyLimitTogether() throws Exception {
-        Actor admin = admin(1500, 2000);
-        TestRides.Ride a = cashRide();
-        TestRides.Ride b = cashRide();
+    void requestsAtOnceCannotPassTheDailyLimitTogether() throws Exception {
+        Actor admin = admin(1000, 2000);
+        List<TestRides.Ride> trips = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            trips.add(cashRide());
+        }
+        List<Callable<?>> calls = new ArrayList<>();
+        trips.forEach(t -> calls.add(() -> refunds.request(admin, UUID.randomUUID(), bonuses(t, 1000, "GOODWILL"))));
 
-        List<Object> results = parallel(
-                () -> refunds.request(admin, UUID.randomUUID(), bonuses(a, 1500, "GOODWILL")),
-                () -> refunds.request(admin, UUID.randomUUID(), bonuses(b, 1500, "GOODWILL")));
+        List<Object> results = parallel(calls);
 
-        assertThat(results).filteredOn(r -> r instanceof Refunds.Requested).hasSize(1);
+        assertThat(results).filteredOn(r -> r instanceof Refunds.Requested).hasSize(2);
         assertThat(results).filteredOn(r -> r instanceof DomainException d && d.code() == ErrorCode.REFUND_LIMIT)
-                .hasSize(1);
+                .hasSize(4);
     }
 
     @Test
-    void twoRefundsOfTheWholeFareAtOnceCannotBothPass() throws Exception {
+    void refundsOfTheWholeFareAtOnceCannotPassTogether() throws Exception {
         TestRides.Ride ride = cashRide();
-        Actor one = staff("SUPER_ADMIN", true);
-        Actor two = staff("SUPER_ADMIN", true);
+        long whole = fare(ride);
+        List<Callable<?>> calls = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Actor superAdmin = staff("SUPER_ADMIN", true);
+            calls.add(() -> refunds.request(superAdmin, UUID.randomUUID(), bonuses(ride, whole, "GOODWILL")));
+        }
 
-        List<Object> results = parallel(
-                () -> refunds.request(one, UUID.randomUUID(), bonuses(ride, fare(ride), "GOODWILL")),
-                () -> refunds.request(two, UUID.randomUUID(), bonuses(ride, fare(ride), "GOODWILL")));
+        List<Object> results = parallel(calls);
 
         assertThat(results).filteredOn(r -> r instanceof Refunds.Requested).hasSize(1);
         assertThat(results).filteredOn(r -> r instanceof DomainException d && d.code() == ErrorCode.REFUND_NOT_ALLOWED)
-                .hasSize(1);
+                .hasSize(7);
+        assertThat(refunds.refundable(staff("SUPER_ADMIN", true), ride.order().id()).refundedMinor())
+                .isEqualTo(whole);
     }
 
     // ------------------------------------------------------------ what the order allows
@@ -435,12 +449,12 @@ class RefundRequestTests {
         return jdbc.sql(sql).param("id", id).query(Integer.class).single();
     }
 
-    private static List<Object> parallel(Callable<?> a, Callable<?> b) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+    private static List<Object> parallel(List<Callable<?>> calls) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(calls.size());
         CountDownLatch start = new CountDownLatch(1);
         try {
             List<Future<Object>> futures = new ArrayList<>();
-            for (Callable<?> call : List.of(a, b)) {
+            for (Callable<?> call : calls) {
                 futures.add(pool.submit(() -> {
                     start.await();
                     try {
