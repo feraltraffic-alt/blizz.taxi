@@ -68,7 +68,7 @@ public interface CardPayments {
     record Paid(String currency, long fareMinor, long tipsMinor, java.time.OffsetDateTime paidAt) {
     }
 
-    Optional<Paid> paid(UUID orderId);
+    Optional<Paid> paidByCard(UUID orderId);
 
     /**
      * When the order's card hold lapses at the provider: the hold's own {@code hold_until}, else the successful

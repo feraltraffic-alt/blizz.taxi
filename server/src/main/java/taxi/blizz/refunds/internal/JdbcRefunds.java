@@ -103,7 +103,7 @@ class JdbcRefunds implements Refunds {
         boolean card = "CARD".equals(o.paymentMethod());
         long money;
         if (card) {
-            CardPayments.Paid p = cards.paid(o.orderId()).orElse(null);
+            CardPayments.Paid p = cards.paidByCard(o.orderId()).orElse(null);
             money = p == null ? 0 : p.fareMinor() + (rules.refundTips() ? p.tipsMinor() : 0);
         } else if ("CASH".equals(o.paymentMethod()) || "TERMINAL".equals(o.paymentMethod())) {
             money = Boolean.TRUE.equals(o.cashReceived())

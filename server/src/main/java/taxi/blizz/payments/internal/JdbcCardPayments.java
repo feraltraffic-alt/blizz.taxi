@@ -174,7 +174,7 @@ class JdbcCardPayments implements CardPayments {
     }
 
     @Override
-    public Optional<Paid> paid(UUID orderId) {
+    public Optional<Paid> paidByCard(UUID orderId) {
         return jdbc.sql("""
                         select i.currency,
                                coalesce(sum(o.amount_minor) filter (where o.type in ('SETTLE', 'CHARGE')), 0),
