@@ -40,6 +40,7 @@ class StaffPermissionCatalogTests {
                 Calls.ANSWER_PERMISSION, Calls.LISTEN_PERMISSION,
                 Calls.SUPERVISE_PERMISSION, taxi.blizz.operations.DriverRiskFlags.RISK_PERMISSION,
                 taxi.blizz.payments.PaymentOperations.RETRY_PERMISSION,
-                taxi.blizz.configuration.FeatureFlags.MANAGE_PERMISSION));
+                taxi.blizz.configuration.FeatureFlags.MANAGE_PERMISSION,
+                taxi.blizz.refunds.Refunds.CREATE_PERMISSION, taxi.blizz.refunds.Refunds.CONFIRM_PERMISSION));
     }
 }
