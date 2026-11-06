@@ -1,4 +1,4 @@
-# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–8) and drivers cancelling accepted orders
+# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06) and drivers cancelling accepted orders
 
 Date: 03.11.2026. Status: accepted (the owner's answers in the lead's session).
 
@@ -104,9 +104,31 @@ for the lawyer (Q-05).
 The lead first recorded variant A from the owner's "А. Сверка бухгалтерией…", which was a remark ("by the way"), not
 the choice; the owner then chose B.
 
-### Still open
+### A9. Reasons and notices (owner, 06.11.2026)
 
-Reasons and the rider's notice (point 9). Until it is answered, refunds are not built.
+- **Reasons** come from a list edited in the admin panel like the cancellation reasons (never deleted, only hidden);
+  each has a fault (A6). Starting list:
+
+  | Reason | Fault |
+  |---|---|
+  | Long route | driver |
+  | Rude driver | driver |
+  | Dirty or faulty car | driver |
+  | Long wait for the pickup | driver |
+  | Double charge | nobody (the service) |
+  | Software or price error | nobody (the service) |
+  | Operator's error | operator |
+  | Goodwill | nobody (the service) |
+  | Other | chosen by the staff member, comment required |
+
+- **The rider** gets a push and a line in the order's history when a refund is **done** (not when it is requested or
+  waiting for the second confirmation): the sum, where it went (card or bonuses) and, for a card, that the bank
+  credits it in a few working days. The reason is not shown to the rider; a switch in the admin panel shows it
+  (off). A failed refund tells the rider nothing: it goes to the staff's problem queue.
+- **The driver**, when the driver bears it, gets a push and a line in the earnings with the trip and the reason,
+  always: without it the driver cannot dispute the charge.
+
+All points of Q-06 are decided; the refunds can be built.
 
 ## Part B. A driver cancels an order after accepting it
 

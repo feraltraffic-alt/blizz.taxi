@@ -47,7 +47,7 @@ Merging: `.claude/settings.json` on `main` allows the lead's squash merge; the h
 
 ### Open owner questions
 
-- **Q-06 refunds** (ADR 0018 part A): points 1–5 decided on 04.11 (who refunds, limits, second confirmation
+- **Q-06 refunds** (ADR 0018 part A): all points decided by 06.11 (6 the one at fault, 7 cash as bonuses, 8 30/180 days, 9 reasons and notices); earlier: points 1–5 decided on 04.11 (who refunds, limits, second confirmation
   variant В, partial refunds, card or bonuses). **Open:** 6 who pays (proposed: a setting per reason; the owner
   asked about fines, which wait for the lawyer, Q-05), 7 cash trips, 8 time limit, 9 reasons and notification.
   Owner rule: every number and switch is an admin-panel setting.
