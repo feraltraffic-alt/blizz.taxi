@@ -90,15 +90,19 @@ for the lawyer (Q-05).
 - A switch in the admin panel "Allow a refund to the card for cash trips", **off** by default. If it is turned on
   later, it is a payout to the rider's card, not a refund of a payment (the trip had none), and needs its own design.
 
-### A8. Time limit (owner, 05.11.2026, variant A)
+### A8. Time limit (owner, 05.11.2026, variant B)
 
-- **One limit for everyone**, the super admin included: a refund may be requested within **30 days** (setting) of the
-  end of the trip, or of the cancellation for a cancelled order. After it nobody refunds.
-- The owner's reason: the accountant reconciles with the tax authorities once a month, so a refund must not reach
-  into a month already reconciled long ago.
+- A staff member with the right refunds within **30 days** of the end of the trip, or of the cancellation for a
+  cancelled order; the super admin within **180 days**. After that nobody refunds. Both numbers are settings.
 - If the payment provider's own term for a card refund is shorter, a card refund after it is refused and the rider
   is offered bonuses (with the mark "the rider agreed"). The lead checks the provider's term in its documentation and
   the service's contract before the refunds are built.
+- The accountant reconciles with the tax authorities once a month (owner). A refund is therefore booked in the month
+  it is made, never back in the month of the trip, so a month already reconciled does not change; the refund report
+  shows both dates.
+
+The lead first recorded variant A from the owner's "А. Сверка бухгалтерией…", which was a remark ("by the way"), not
+the choice; the owner then chose B.
 
 ### Still open
 
