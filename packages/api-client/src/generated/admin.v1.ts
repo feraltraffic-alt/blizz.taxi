@@ -6017,6 +6017,56 @@ export interface components {
                  */
                 edit_window_hours: number;
             };
+            /** @description Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A); omitted when saving: the defaults. Sums are in minor units by currency code. minimum_minor: the smallest refund (A4). default_per_refund_minor and default_daily_minor: what a staff member's limits start with in the panel (the limits themselves are per staff member, A2). After rider_warning_count refunds to one rider in rider_warning_days days staff see a warning. Staff refund within staff_days of the trip, the super admin within super_admin_days (A8). refund_tips: tips go back with the fare; card_for_cash: a cash trip may go back to a card (A7, off; not built); show_reason_to_rider (A9, off). A request reminds the confirmers after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: 0, no end (bonuses do not expire yet). */
+            refunds?: {
+                /** @default 0 */
+                bonus_validity_days: number;
+                /** @default false */
+                card_for_cash: boolean;
+                /** @default 7 */
+                close_after_days: number;
+                /**
+                 * @example {
+                 *       "UAH": 300000
+                 *     }
+                 */
+                default_daily_minor: {
+                    [key: string]: number;
+                };
+                /**
+                 * @example {
+                 *       "UAH": 50000
+                 *     }
+                 */
+                default_per_refund_minor: {
+                    [key: string]: number;
+                };
+                /**
+                 * @example {
+                 *       "UAH": 1000
+                 *     }
+                 */
+                minimum_minor: {
+                    [key: string]: number;
+                };
+                /** @default false */
+                refund_tips: boolean;
+                /** @default 4 */
+                reminder_hours: number;
+                /** @default 3 */
+                rider_warning_count: number;
+                /** @default 30 */
+                rider_warning_days: number;
+                /** @default false */
+                show_reason_to_rider: boolean;
+                /** @default 30 */
+                staff_days: number;
+                /**
+                 * @description Not shorter than staff_days.
+                 * @default 180
+                 */
+                super_admin_days: number;
+            } | null;
             /** @description How much a rider may owe and still order, per currency (owner decision 01.11.2026, ADR 0014, Q-10). The debt is the sum of the rider's obligations in the currency: what the journal leaves them on orders whose payment has ended, as the rider sees it in the app; a payment still under way is not a debt. Above it a new order is refused at once with 403 RIDER_HAS_DEBT, no grace period; the account state does not change. A currency not listed allows no debt (0); omitted when saving: no debt allowed in any currency. */
             rider_debts?: {
                 /**

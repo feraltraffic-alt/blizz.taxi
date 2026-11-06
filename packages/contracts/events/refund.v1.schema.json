@@ -1,24 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.blizz.taxi/events/refund.v1.schema.json",
-  "title": "RefundRequested / RefundApproved / RefundRejected v1 payload",
-  "description": "A staff refund to a rider (ADR 0018 part A, issue #512): requested and waiting for a confirmation, approved (by a confirmer, or at once for the super admin's own) and waiting for the execution, or rejected by a confirmer. state is the refund's state after the change.",
+  "title": "RefundRequested / RefundApproved / RefundRejected / RefundWaiting / RefundNotReviewed v1 payload",
+  "description": "A staff refund to a rider (ADR 0018 part A, issue #512): requested and waiting for a confirmation, approved (by a confirmer, or at once for the super admin's own) and waiting for the execution, or rejected by a confirmer. state is the refund's state after the change. RefundWaiting: the request has waited the service's reminder_hours for a confirmation (a case in the problem queue reminds the confirmers, once). RefundNotReviewed: it waited close_after_days and closed without money moving.",
   "x-aggregate": "Refund",
   "type": "object",
   "additionalProperties": false,
-  "required": ["refund_id", "order_id", "city_id", "amount_minor", "currency", "state", "requested_by"],
+  "required": [
+    "refund_id",
+    "order_id",
+    "city_id",
+    "amount_minor",
+    "currency",
+    "state",
+    "requested_by"
+  ],
   "properties": {
-    "refund_id": {"type": "string", "format": "uuid"},
-    "order_id": {"type": "string", "format": "uuid"},
-    "city_id": {"type": "string", "format": "uuid"},
-    "amount_minor": {"type": "integer", "minimum": 1},
-    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
-    "state": {"type": "string", "enum": ["REQUESTED", "APPROVED", "REJECTED"]},
-    "requested_by": {"type": "string", "format": "uuid"}
+    "refund_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "city_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount_minor": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "REQUESTED",
+        "APPROVED",
+        "REJECTED",
+        "NOT_REVIEWED"
+      ]
+    },
+    "requested_by": {
+      "type": "string",
+      "format": "uuid"
+    }
   },
   "examples": [
-    {"refund_id": "0b1c2d3e-0000-4000-8000-000000000003", "order_id": "0b1c2d3e-0000-4000-8000-000000000001",
-     "city_id": "0b1c2d3e-0000-4000-8000-000000000004", "amount_minor": 12000, "currency": "UAH",
-     "state": "REQUESTED", "requested_by": "0b1c2d3e-0000-4000-8000-000000000005"}
+    {
+      "refund_id": "0b1c2d3e-0000-4000-8000-000000000003",
+      "order_id": "0b1c2d3e-0000-4000-8000-000000000001",
+      "city_id": "0b1c2d3e-0000-4000-8000-000000000004",
+      "amount_minor": 12000,
+      "currency": "UAH",
+      "state": "REQUESTED",
+      "requested_by": "0b1c2d3e-0000-4000-8000-000000000005"
+    }
   ]
 }

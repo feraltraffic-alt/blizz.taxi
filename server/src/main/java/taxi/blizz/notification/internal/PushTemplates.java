@@ -84,6 +84,22 @@ final class PushTemplates {
                     "Багато відмов від замовлень", "Ще відмови за добу призупинять нові замовлення",
                     "Dużo rezygnacji ze zleceń", "Kolejne rezygnacje w ciągu doby wstrzymają nowe zlecenia",
                     "Many cancelled orders", "More cancellations today will pause new orders")),
+            // ADR 0018 A9: the sum and the trip are in the app; the reason is not told to the rider by default.
+            Map.entry("rider.refund-card", texts(
+                    "Деньги возвращены", "Возврат за поездку отправлен на карту. Банк зачислит его за несколько рабочих дней",
+                    "Гроші повернуто", "Повернення за поїздку надіслано на картку. Банк зарахує його за кілька робочих днів",
+                    "Zwrot pieniędzy", "Zwrot za przejazd wysłano na kartę. Bank zaksięguje go w ciągu kilku dni roboczych",
+                    "Money refunded", "The refund for your ride is on its way to your card. The bank credits it in a few working days")),
+            Map.entry("rider.refund-bonuses", texts(
+                    "Бонусы начислены", "Возврат за поездку зачислен бонусами на ваш счёт",
+                    "Бонуси нараховано", "Повернення за поїздку зараховано бонусами на ваш рахунок",
+                    "Bonusy przyznane", "Zwrot za przejazd trafił na Twoje konto jako bonusy",
+                    "Bonuses added", "The refund for your ride is on your account as bonuses")),
+            Map.entry("driver.refund-charge", texts(
+                    "Списание за возврат пассажиру", "Сумма и причина — в заработке. Не согласны — напишите в поддержку",
+                    "Списання за повернення пасажиру", "Сума й причина — у заробітку. Не згодні — напишіть у підтримку",
+                    "Obciążenie za zwrot pasażerowi", "Kwota i powód są w zarobkach. Nie zgadzasz się — napisz do wsparcia",
+                    "Charge for a refund to the rider", "The sum and the reason are in your earnings. Disagree? Write to support")),
             Map.entry("driver.paused-acceptance", texts(
                     "Новые заказы на паузе", "Вы принимаете мало заказов. Время окончания — в приложении",
                     "Нові замовлення на паузі", "Ви приймаєте мало замовлень. Час закінчення — у застосунку",

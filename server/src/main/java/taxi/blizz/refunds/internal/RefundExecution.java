@@ -89,19 +89,20 @@ class RefundExecution implements OutboxHandler {
     }
 
     private record Row(UUID id, UUID orderId, UUID clientId, UUID driverId, String currency, long amount, long card,
-                       long bonus, String fault, String reasonCode, String state, long version, UUID serviceId) {
+                       long bonus, String fault, String reasonCode, String state, long version, UUID serviceId,
+                       UUID cityId) {
     }
 
     private Row lock(UUID refundId) {
         return jdbc.sql("""
                         select id, order_id, client_id, driver_id, currency, amount_minor, card_minor, bonus_minor,
-                               fault, reason_code, state, version, service_id
+                               fault, reason_code, state, version, service_id, city_id
                         from refund where id = :id for update""")
                 .param("id", refundId)
                 .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getObject(4, UUID.class), rs.getString(5), rs.getLong(6),
                         rs.getLong(7), rs.getLong(8), rs.getString(9), rs.getString(10), rs.getString(11),
-                        rs.getLong(12), rs.getObject(13, UUID.class)))
+                        rs.getLong(12), rs.getObject(13, UUID.class), rs.getObject(14, UUID.class)))
                 .optional().orElse(null);
     }
 
@@ -193,6 +194,7 @@ class RefundExecution implements OutboxHandler {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("refund_id", r.id().toString());
         payload.put("order_id", r.orderId().toString());
+        payload.put("city_id", r.cityId().toString());
         payload.put("client_id", r.clientId().toString());
         if (r.driverId() != null) {
             payload.put("driver_id", r.driverId().toString());

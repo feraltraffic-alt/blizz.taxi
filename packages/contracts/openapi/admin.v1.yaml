@@ -7003,6 +7003,93 @@ components:
             count_late_cancellations:
               type: boolean
               default: false
+        refunds:
+          description: >-
+            Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A); omitted when saving: the
+            defaults. Sums are in minor units by currency code. minimum_minor: the smallest refund (A4).
+            default_per_refund_minor and default_daily_minor: what a staff member's limits start with in the panel
+            (the limits themselves are per staff member, A2). After rider_warning_count refunds to one rider in
+            rider_warning_days days staff see a warning. Staff refund within staff_days of the trip, the super admin
+            within super_admin_days (A8). refund_tips: tips go back with the fare; card_for_cash: a cash trip may go
+            back to a card (A7, off; not built); show_reason_to_rider (A9, off). A request reminds the confirmers
+            after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: 0, no end
+            (bonuses do not expire yet).
+          type: [object, "null"]
+          additionalProperties: false
+          required: [minimum_minor, default_per_refund_minor, default_daily_minor, rider_warning_count,
+                     rider_warning_days, staff_days, super_admin_days, refund_tips, card_for_cash,
+                     show_reason_to_rider, reminder_hours, close_after_days, bonus_validity_days]
+          properties:
+            minimum_minor:
+              type: object
+              propertyNames:
+                pattern: "^[A-Z]{3}$"
+              additionalProperties:
+                type: integer
+                format: int64
+                minimum: 1
+              example: {UAH: 1000}
+            default_per_refund_minor:
+              type: object
+              propertyNames:
+                pattern: "^[A-Z]{3}$"
+              additionalProperties:
+                type: integer
+                format: int64
+                minimum: 1
+              example: {UAH: 50000}
+            default_daily_minor:
+              type: object
+              propertyNames:
+                pattern: "^[A-Z]{3}$"
+              additionalProperties:
+                type: integer
+                format: int64
+                minimum: 1
+              example: {UAH: 300000}
+            rider_warning_count:
+              type: integer
+              minimum: 1
+              maximum: 100
+              default: 3
+            rider_warning_days:
+              type: integer
+              minimum: 1
+              maximum: 365
+              default: 30
+            staff_days:
+              type: integer
+              minimum: 1
+              default: 30
+            super_admin_days:
+              description: Not shorter than staff_days.
+              type: integer
+              maximum: 3650
+              default: 180
+            refund_tips:
+              type: boolean
+              default: false
+            card_for_cash:
+              type: boolean
+              default: false
+            show_reason_to_rider:
+              type: boolean
+              default: false
+            reminder_hours:
+              type: integer
+              minimum: 1
+              maximum: 168
+              default: 4
+            close_after_days:
+              type: integer
+              minimum: 1
+              maximum: 90
+              default: 7
+            bonus_validity_days:
+              type: integer
+              minimum: 0
+              maximum: 0
+              default: 0
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:
