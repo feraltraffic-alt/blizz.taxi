@@ -46,9 +46,12 @@ class RefundExecution implements OutboxHandler {
     private final Outbox outbox;
     private final JsonMapper json;
     private final Clock clock;
+    private final taxi.blizz.configuration.ServiceSettings settings;
 
     RefundExecution(JdbcClient jdbc, CardPayments cards, Ledger ledger, FareDeltas fareDeltas, RiderWallets wallets,
-                    DriverDebts debts, Orders orders, Outbox outbox, JsonMapper json, Clock clock) {
+                    DriverDebts debts, Orders orders, Outbox outbox, JsonMapper json, Clock clock,
+                    taxi.blizz.configuration.ServiceSettings settings) {
+        this.settings = settings;
         this.jdbc = jdbc;
         this.cards = cards;
         this.ledger = ledger;
@@ -173,8 +176,14 @@ class RefundExecution implements OutboxHandler {
         } else if (rest > 0) {
             lines.add(Line.debit(Account.SERVICE_EXPENSE, null, rest));
         }
+        // The driver reads it in the earnings (A9): the reason's label in the service's language.
+        String language = settings.ofCity(r.cityId()).settings().languages().defaultLanguage();
+        Map<String, String> labels = jdbc.sql("select reason_labels::text from refund where id = :id")
+                .param("id", r.id()).query((rs, i) -> json.readValue(rs.getString(1),
+                        new TypeReference<Map<String, String>>() {
+                        })).single();
         ledger.post(new Ledger.Posting("refund:" + r.id(), "REFUND", r.orderId(), r.currency(),
-                "Refund to the rider: " + r.reasonCode(), lines, r.serviceId()));
+                labels.getOrDefault(language, r.reasonCode()), lines, r.serviceId()));
         state(r, "SUCCEEDED", true);
         if (driver) {
             debts.refresh(r.driverId(), r.currency());
