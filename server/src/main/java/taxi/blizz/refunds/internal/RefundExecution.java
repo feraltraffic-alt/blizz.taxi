@@ -89,19 +89,19 @@ class RefundExecution implements OutboxHandler {
     }
 
     private record Row(UUID id, UUID orderId, UUID clientId, UUID driverId, String currency, long amount, long card,
-                       long bonus, String fault, String reasonCode, String state, long version) {
+                       long bonus, String fault, String reasonCode, String state, long version, UUID serviceId) {
     }
 
     private Row lock(UUID refundId) {
         return jdbc.sql("""
                         select id, order_id, client_id, driver_id, currency, amount_minor, card_minor, bonus_minor,
-                               fault, reason_code, state, version
+                               fault, reason_code, state, version, service_id
                         from refund where id = :id for update""")
                 .param("id", refundId)
                 .query((rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getObject(4, UUID.class), rs.getString(5), rs.getLong(6),
                         rs.getLong(7), rs.getLong(8), rs.getString(9), rs.getString(10), rs.getString(11),
-                        rs.getLong(12)))
+                        rs.getLong(12), rs.getObject(13, UUID.class)))
                 .optional().orElse(null);
     }
 
@@ -173,7 +173,7 @@ class RefundExecution implements OutboxHandler {
             lines.add(Line.debit(Account.SERVICE_EXPENSE, null, rest));
         }
         ledger.post(new Ledger.Posting("refund:" + r.id(), "REFUND", r.orderId(), r.currency(),
-                "Refund to the rider: " + r.reasonCode(), lines));
+                "Refund to the rider: " + r.reasonCode(), lines, r.serviceId()));
         state(r, "SUCCEEDED", true);
         if (driver) {
             debts.refresh(r.driverId(), r.currency());
