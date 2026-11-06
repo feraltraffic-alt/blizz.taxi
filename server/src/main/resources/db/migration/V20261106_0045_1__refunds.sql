@@ -5,6 +5,10 @@
 alter table cancel_reason drop constraint cancel_reason_audience_check;
 alter table cancel_reason add constraint cancel_reason_audience_check
     check (audience in ('RIDER', 'DRIVER', 'STAFF', 'REASSIGN', 'REFUND'));
+-- A refund reason may carry the operator's fault without the staff-only operator flag.
+alter table cancel_reason drop constraint cancel_reason_operator_fault_check;
+alter table cancel_reason add constraint cancel_reason_operator_fault_check
+    check (fault is null or audience = 'REFUND' or operator_fault = (fault = 'OPERATOR'));
 insert into cancel_reason (id, service_id, audience, code, labels, driver_outcome, sort_order, fault, created_at,
                            updated_at)
 select gen_random_uuid(), s.service_id, 'REFUND', r.code, r.labels::jsonb, null, r.sort_order, r.fault, now(), now()
@@ -21,10 +25,6 @@ cross join (values
     ('OTHER', '{"ru": "Другое", "uk": "Інше", "pl": "Inne", "en": "Other"}', 90, 'NONE')
 ) as r(code, labels, sort_order, fault)
 on conflict (service_id, audience, code) do nothing;
--- A refund reason may carry the operator's fault without the staff-only operator flag.
-alter table cancel_reason drop constraint cancel_reason_operator_fault_check;
-alter table cancel_reason add constraint cancel_reason_operator_fault_check
-    check (fault is null or audience = 'REFUND' or operator_fault = (fault = 'OPERATOR'));
 
 -- A2: the limits of one staff member per currency, set by the super admin; none set means no refunds.
 create table staff_refund_limit (
