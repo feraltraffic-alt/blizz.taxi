@@ -174,6 +174,23 @@ class JdbcCardPayments implements CardPayments {
     }
 
     @Override
+    public Optional<Paid> paidByCard(UUID orderId) {
+        return jdbc.sql("""
+                        select i.currency,
+                               coalesce(sum(o.amount_minor) filter (where o.type in ('SETTLE', 'CHARGE')), 0),
+                               coalesce(sum(o.amount_minor) filter (where o.type = 'TIP'), 0),
+                               min(o.updated_at) filter (where o.type in ('SETTLE', 'CHARGE'))
+                        from payment_intent i
+                        left join payment_operation o on o.intent_id = i.id and o.state = 'SUCCEEDED'
+                        where i.order_id = :order
+                        group by i.currency""")
+                .param("order", orderId)
+                .query((rs, n) -> new Paid(rs.getString(1), rs.getLong(2), rs.getLong(3),
+                        rs.getObject(4, java.time.OffsetDateTime.class)))
+                .optional();
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void requestTip(UUID orderId, UUID tipId, long amountMinor, String currency) {
         record Found(UUID id, String currency) {

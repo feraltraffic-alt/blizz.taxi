@@ -51,6 +51,13 @@ public enum ErrorCode {
     CHARGEBACK_NOT_ALLOWED(422),
     /** A staff top-up over the service's limit for one staff member in 24 hours (threat model C3). */
     TOP_UP_DAILY_LIMIT(422),
+    /** A refund over the staff member's limit for one refund or for 24 hours, or with no limit set (ADR 0018 A2). */
+    REFUND_LIMIT(422),
+    /**
+     * A refund the order does not allow: more than is left of what was paid, below the minimum, too late, a card
+     * refund of a cash trip, or an order with nothing paid (ADR 0018 A4–A8).
+     */
+    REFUND_NOT_ALLOWED(422),
     RATE_LIMITED(429),
     /** Missing, expired, revoked or reused credentials. */
     UNAUTHENTICATED(401),

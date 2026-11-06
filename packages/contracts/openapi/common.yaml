@@ -124,6 +124,11 @@ components:
         rider sees the debt and pays it in the app, and may order again at once.
         TOP_UP_DAILY_LIMIT (422): a staff top-up of a driver balance or a rider wallet would take the staff member
         over the service's staff_top_ups limit for the currency in the last 24 hours; nothing is credited.
+        REFUND_LIMIT (422): a staff member's refund over their limit for one refund or for the last 24 hours, or with
+        no limit set in the currency (ADR 0018 A2); the message names what is left.
+        REFUND_NOT_ALLOWED (422): a refund the order does not allow — more than is left of what was paid, below the
+        minimum, after the staff member's term, to a card for a cash trip, or an order that is not completed or
+        cancelled (ADR 0018 A4–A8).
         ACCOUNT_BLOCKED (403): a blocked driver's limited session (REQ-DS-01, issue #141) allows every GET but the
         reads of new work (broadcast-orders, offers, preorders), the
         current trip's commands and the passenger's rating, the shift's heartbeat, pause, close and handover, location
@@ -165,6 +170,8 @@ components:
         - PHONE_COUNTRY_NOT_SERVED
         - CHARGEBACK_NOT_ALLOWED
         - TOP_UP_DAILY_LIMIT
+        - REFUND_LIMIT
+        - REFUND_NOT_ALLOWED
         - RATE_LIMITED
         - UNAUTHENTICATED
         - ACCESS_DENIED

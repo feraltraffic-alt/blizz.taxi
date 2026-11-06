@@ -16,10 +16,10 @@ export interface components {
         CreateReason: {
             active: boolean;
             /**
-             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143).
+             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143); REFUND — why staff refund a rider, each with its fault (ADR 0018 A9).
              * @enum {string}
              */
-            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN";
+            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN" | "REFUND";
             code: string;
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
@@ -142,10 +142,10 @@ export interface components {
             /** @description Inactive reasons are hidden from the apps; reasons are never deleted. */
             active: boolean;
             /**
-             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143).
+             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143); REFUND — why staff refund a rider, each with its fault (ADR 0018 A9).
              * @enum {string}
              */
-            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN";
+            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN" | "REFUND";
             /** @description Never changes; to rename, change the labels. */
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];

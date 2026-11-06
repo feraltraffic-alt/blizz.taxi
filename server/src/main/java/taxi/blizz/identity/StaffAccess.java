@@ -69,4 +69,7 @@ public interface StaffAccess {
      * all cities. For pushing to the people concerned (a ringing call); never a check of access itself.
      */
     java.util.Set<UUID> holders(String permission, UUID cityId);
+
+    /** The actor is an ACTIVE super admin of a taxi service: every check passes, and some rules differ (ADR 0018). */
+    boolean superAdmin(Actor actor);
 }

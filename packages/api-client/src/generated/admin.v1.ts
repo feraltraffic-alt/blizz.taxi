@@ -1780,6 +1780,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/v1/orders/{order_id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What an order allows to refund, and its refunds
+         * @description ADR 0018 part A. Needs refunds.create or refunds.confirm for the order's city. until is this staff member's own term (30 days for staff, 180 for the super admin, A8).
+         */
+        get: operations["getOrderRefunds"];
+        put?: never;
+        /**
+         * Request a refund to the rider
+         * @description ADR 0018 A1–A9, issue #512. Needs refunds.create for the order's city. A staff member's request waits for a confirmation (REQUESTED); the super admin's goes at once (APPROVED), without limits. Refused with REFUND_LIMIT over the staff member's limit for one refund or for 24 hours, or with no limit set; with REFUND_NOT_ALLOWED over what is left of the payment, below the minimum, too late, or to a card for a cash trip. rider_warning: the rider already had several refunds lately (a warning, not a block). Audited.
+         */
+        post: operations["requestRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/v1/orders/{order_id}/timeline": {
         parameters: {
             query?: never;
@@ -2119,6 +2143,86 @@ export interface paths {
          * @description Quotes made before keep what they got.
          */
         post: operations["changePromotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/refund-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The active refund reasons with their fault
+         * @description ADR 0018 A9; edited with the cancel reasons (side REFUND). Needs refunds.create.
+         */
+        get: operations["listRefundReasons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/refunds/{refund_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a refund requested by someone else
+         * @description ADR 0018 A3. Needs refunds.confirm for the refund's city (or the super admin); never one's own refund (403). The amount cannot be changed: reject and request another one. Audited.
+         */
+        post: operations["confirmRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/refunds/{refund_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a refund requested by someone else, with a reason
+         * @description ADR 0018 A3. As confirm; the reason is required. Audited.
+         */
+        post: operations["rejectRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/refunds/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Refunds waiting for a confirmation
+         * @description In the cities where the caller may confirm (refunds.confirm, or the super admin), not their own.
+         */
+        get: operations["listWaitingRefunds"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2672,6 +2776,30 @@ export interface paths {
          * @description Super admins only. Extra permissions from the catalog for 5 minutes to 8 hours, with a reason; never to oneself. Counted by every permission check while it lasts; ends by itself or by revoking. Audited. Needs the acting super admin's own password (REQ-ADM-10): missing or wrong → 403 ACCESS_DENIED, counted like a failed sign-in and audited as staff.emergency_grant.denied. Revoking needs none.
          */
         post: operations["grantEmergencyAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/v1/staff/{staff_id}/refund-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A staff member's refund limits
+         * @description Super admin only; a staff member reads their own (ADR 0018 A2).
+         */
+        get: operations["getStaffRefundLimits"];
+        put?: never;
+        /**
+         * Set a staff member's refund limits in a currency
+         * @description Super admin only (ADR 0018 A2): no limit set means no refunds; the panel starts from the service's refunds.default_per_refund_minor and default_daily_minor. Audited.
+         */
+        post: operations["setStaffRefundLimit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3663,10 +3791,10 @@ export interface components {
         CreateReason: {
             active: boolean;
             /**
-             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143).
+             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143); REFUND — why staff refund a rider, each with its fault (ADR 0018 A9).
              * @enum {string}
              */
-            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN";
+            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN" | "REFUND";
             code: string;
             command_id: components["schemas"]["Uuid"];
             driver_outcome?: components["schemas"]["DriverOutcome"];
@@ -3688,6 +3816,29 @@ export interface components {
             /** @description Why the list is changed; goes to the audit log. */
             reason: string;
             sort_order: number;
+        };
+        CreateRefund: {
+            /** Format: int64 */
+            amount_minor: number;
+            command_id: components["schemas"]["Uuid"];
+            comment?: string;
+            /**
+             * @description CARD or BONUSES; the part paid with bonuses goes back as bonuses either way (A5).
+             * @enum {string}
+             */
+            destination: "CARD" | "BONUSES";
+            /**
+             * @description Omitted, the reason's (or the cancelled order's); another one, or the reason OTHER, needs a comment.
+             * @enum {string}
+             */
+            fault?: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
+            /** @description A code of the REFUND reasons (GET /api/admin/v1/refund-reasons). */
+            reason_code: string;
+            /**
+             * @description Required for bonuses instead of money (A5).
+             * @default false
+             */
+            rider_agreed: boolean;
         };
         CreateStaff: {
             command_id: components["schemas"]["Uuid"];
@@ -4181,6 +4332,11 @@ export interface components {
          *     rider sees the debt and pays it in the app, and may order again at once.
          *     TOP_UP_DAILY_LIMIT (422): a staff top-up of a driver balance or a rider wallet would take the staff member
          *     over the service's staff_top_ups limit for the currency in the last 24 hours; nothing is credited.
+         *     REFUND_LIMIT (422): a staff member's refund over their limit for one refund or for the last 24 hours, or with
+         *     no limit set in the currency (ADR 0018 A2); the message names what is left.
+         *     REFUND_NOT_ALLOWED (422): a refund the order does not allow — more than is left of what was paid, below the
+         *     minimum, after the staff member's term, to a card for a cash trip, or an order that is not completed or
+         *     cancelled (ADR 0018 A4–A8).
          *     ACCOUNT_BLOCKED (403): a blocked driver's limited session (REQ-DS-01, issue #141) allows every GET but the
          *     reads of new work (broadcast-orders, offers, preorders), the
          *     current trip's commands and the passenger's rating, the shift's heartbeat, pause, close and handover, location
@@ -4195,7 +4351,7 @@ export interface components {
          *     never with a Problem (docs/decisions/0003).
          * @enum {string}
          */
-        ErrorCode: "VALIDATION_FAILED" | "QUOTE_EXPIRED" | "QUOTE_MISMATCH" | "ORDER_ALREADY_ACTIVE" | "ACTIVE_ORDER_LIMIT" | "OFFER_EXPIRED" | "OFFER_REVOKED" | "ORDER_ALREADY_ASSIGNED" | "DRIVER_BUSY" | "DRIVER_NOT_ELIGIBLE" | "STATE_CONFLICT" | "VERSION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "PAYMENT_PENDING" | "PAYMENT_UNKNOWN" | "PAYMENT_DECLINED" | "WALLET_INSUFFICIENT" | "OUTSIDE_SERVICE_AREA" | "CITY_PAUSED" | "CITY_CLOSED" | "PAYMENT_METHOD_NOT_OFFERED" | "DROPOFF_OUTSIDE_CITY" | "LOCATION_NOT_FRESH" | "PICKUP_TOO_FAR" | "PHONE_COUNTRY_NOT_SERVED" | "CHARGEBACK_NOT_ALLOWED" | "TOP_UP_DAILY_LIMIT" | "RATE_LIMITED" | "UNAUTHENTICATED" | "ACCESS_DENIED" | "ACCOUNT_NOT_ACTIVE" | "RIDER_HAS_DEBT" | "ACCOUNT_BLOCKED" | "ACCEPTANCE_REQUIRED" | "DRIVER_HAS_ACTIVE_WORK" | "DRIVER_HAS_DEBT" | "DRIVER_HAS_DISPUTE" | "NOT_FOUND" | "PROVIDER_UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "OTP_INVALID" | "UPGRADE_REQUIRED" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "QUOTE_EXPIRED" | "QUOTE_MISMATCH" | "ORDER_ALREADY_ACTIVE" | "ACTIVE_ORDER_LIMIT" | "OFFER_EXPIRED" | "OFFER_REVOKED" | "ORDER_ALREADY_ASSIGNED" | "DRIVER_BUSY" | "DRIVER_NOT_ELIGIBLE" | "STATE_CONFLICT" | "VERSION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "PAYMENT_PENDING" | "PAYMENT_UNKNOWN" | "PAYMENT_DECLINED" | "WALLET_INSUFFICIENT" | "OUTSIDE_SERVICE_AREA" | "CITY_PAUSED" | "CITY_CLOSED" | "PAYMENT_METHOD_NOT_OFFERED" | "DROPOFF_OUTSIDE_CITY" | "LOCATION_NOT_FRESH" | "PICKUP_TOO_FAR" | "PHONE_COUNTRY_NOT_SERVED" | "CHARGEBACK_NOT_ALLOWED" | "TOP_UP_DAILY_LIMIT" | "REFUND_LIMIT" | "REFUND_NOT_ALLOWED" | "RATE_LIMITED" | "UNAUTHENTICATED" | "ACCESS_DENIED" | "ACCOUNT_NOT_ACTIVE" | "RIDER_HAS_DEBT" | "ACCOUNT_BLOCKED" | "ACCEPTANCE_REQUIRED" | "DRIVER_HAS_ACTIVE_WORK" | "DRIVER_HAS_DEBT" | "DRIVER_HAS_DISPUTE" | "NOT_FOUND" | "PROVIDER_UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "OTP_INVALID" | "UPGRADE_REQUIRED" | "INTERNAL_ERROR";
         EvidenceCardOperation: {
             amount_minor: number;
             created_at: components["schemas"]["Timestamp"];
@@ -4878,6 +5034,10 @@ export interface components {
             time_zone: string;
             total: number;
         };
+        OrderRefunds: {
+            refundable: components["schemas"]["Refundable"];
+            refunds: components["schemas"]["Refund"][];
+        };
         OrderReport: {
             /** @description Most frequent first. */
             cancellation_reasons: {
@@ -5299,10 +5459,10 @@ export interface components {
             /** @description Inactive reasons are hidden from the apps; reasons are never deleted. */
             active: boolean;
             /**
-             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143).
+             * @description RIDER, DRIVER, STAFF — reasons to cancel an order; REASSIGN — reasons staff give for taking a driver off an order before the start, which then searches again (REQ-CAN-01, issue #143); REFUND — why staff refund a rider, each with its fault (ADR 0018 A9).
              * @enum {string}
              */
-            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN";
+            audience: "RIDER" | "DRIVER" | "STAFF" | "REASSIGN" | "REFUND";
             /** @description Never changes; to rename, change the labels. */
             code: string;
             driver_outcome: components["schemas"]["DriverOutcome"];
@@ -5324,6 +5484,136 @@ export interface components {
          * @enum {string|null}
          */
         ReasonFault: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
+        Refund: {
+            /** Format: int64 */
+            amount_minor: number;
+            /**
+             * Format: int64
+             * @description Goes to the rider's bonus account.
+             */
+            bonus_minor: number;
+            /**
+             * Format: int64
+             * @description Goes back to the card; card_minor + bonus_minor = amount_minor.
+             */
+            card_minor: number;
+            city_id: components["schemas"]["Uuid"];
+            client_id: components["schemas"]["Uuid"];
+            comment: string | null;
+            currency: string;
+            /** Format: date-time */
+            decided_at: string | null;
+            decided_by: components["schemas"]["Uuid"] | null;
+            decision_reason: string | null;
+            driver_id: components["schemas"]["Uuid"] | null;
+            /** Format: date-time */
+            ended_at: string | null;
+            /**
+             * @description Who bears the refund (A6, ADR 0019).
+             * @enum {string}
+             */
+            fault: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE";
+            id: components["schemas"]["Uuid"];
+            order_id: components["schemas"]["Uuid"];
+            /**
+             * Format: int64
+             * @description The part of the refund that was paid with bonuses (A5), always back as bonuses.
+             */
+            paid_bonus_minor: number;
+            reason_code: string;
+            reason_labels: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            requested_at: string;
+            requested_by: components["schemas"]["Uuid"];
+            /** @description The staff member marked that the rider agreed to bonuses instead of money (A5). */
+            rider_agreed: boolean;
+            /**
+             * @description REQUESTED waits for a confirmer; APPROVED waits for the execution; PROCESSING, SUCCEEDED, FAILED, UNKNOWN as the money moves; REJECTED by a confirmer; NOT_REVIEWED closed without a decision (A3).
+             * @enum {string}
+             */
+            state: "REQUESTED" | "APPROVED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNKNOWN" | "REJECTED" | "NOT_REVIEWED";
+            /** Format: int64 */
+            version: number;
+        };
+        /** @description What the order allows now, for the staff member asking. */
+        Refundable: {
+            /**
+             * Format: int64
+             * @description Paid with bonuses.
+             */
+            bonus_minor: number;
+            currency: string | null;
+            /**
+             * @description For a cancelled order, the order's fault (ADR 0019); null — the reason's.
+             * @enum {string|null}
+             */
+            default_fault: "CLIENT_FREE" | "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
+            /** Format: int64 */
+            left_minor: number;
+            /** Format: int64 */
+            minimum_minor: number;
+            /**
+             * Format: int64
+             * @description Paid with money — what the card paid, or the cash the driver received.
+             */
+            money_minor: number;
+            order_id: components["schemas"]["Uuid"];
+            /**
+             * Format: int64
+             * @description Taken by refunds requested, approved, in progress or done.
+             */
+            refunded_minor: number;
+            rider_refunds: number;
+            /** @description The rider already had refunds_rider_warning_count refunds in the window (A2); a warning only. */
+            rider_warning: boolean;
+            /** @description Money may go back to the card (false for a cash trip, A7). */
+            to_card: boolean;
+            /**
+             * Format: date-time
+             * @description The last moment this staff member may refund the order (A8); null without an end time.
+             */
+            until: string | null;
+        };
+        RefundDecision: {
+            command_id: components["schemas"]["Uuid"];
+            /** Format: int64 */
+            expected_version: number;
+            /** @description Required to reject. */
+            reason?: string;
+        };
+        RefundLimit: {
+            currency: string;
+            /** Format: int64 */
+            daily_minor: number;
+            /** Format: int64 */
+            per_refund_minor: number;
+            staff_id: components["schemas"]["Uuid"];
+            /**
+             * Format: int64
+             * @description Taken by this staff member's refunds in the last 24 hours (rolling).
+             */
+            used_minor: number;
+            /** Format: int64 */
+            version: number;
+        };
+        RefundLimitList: {
+            limits: components["schemas"]["RefundLimit"][];
+        };
+        RefundList: {
+            refunds: components["schemas"]["Refund"][];
+        };
+        RefundReasonList: {
+            reasons: {
+                code: string;
+                /** @enum {string|null} */
+                fault: "CLIENT" | "DRIVER" | "OPERATOR" | "NONE" | null;
+                labels: {
+                    [key: string]: string;
+                };
+            }[];
+        };
         /** @description PENDING → RUNNING → READY (the file can be downloaded until expires_at) or FAILED (error); READY → EXPIRED, the file is dropped. */
         ReportExport: {
             city_id: components["schemas"]["Uuid"];
@@ -5354,6 +5644,11 @@ export interface components {
         ReportExportList: {
             exports: components["schemas"]["ReportExport"][];
             page: components["schemas"]["PageInfo"];
+        };
+        RequestedRefund: {
+            refund: components["schemas"]["Refund"];
+            rider_refunds: number;
+            rider_warning: boolean;
         };
         RequestReportExport: {
             city_id: components["schemas"]["Uuid"];
@@ -5585,6 +5880,23 @@ export interface components {
              * @description The driver profile's version.
              */
             expected_version: number;
+            reason: string;
+        };
+        SetRefundLimit: {
+            command_id: components["schemas"]["Uuid"];
+            currency: string;
+            /**
+             * Format: int64
+             * @description Not less than per_refund_minor.
+             */
+            daily_minor: number;
+            /**
+             * Format: int64
+             * @description 0 for a currency without a limit yet.
+             */
+            expected_version: number;
+            /** Format: int64 */
+            per_refund_minor: number;
             reason: string;
         };
         Settings: {
@@ -6197,7 +6509,10 @@ export interface components {
          */
         Cursor: string;
         Limit: number;
+        OrderId: components["schemas"]["Uuid"];
+        RefundId: components["schemas"]["Uuid"];
         RiskFlagId: components["schemas"]["Uuid"];
+        StaffId: components["schemas"]["Uuid"];
     };
     requestBodies: never;
     headers: {
@@ -9387,6 +9702,70 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getOrderRefunds: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                order_id: components["parameters"]["OrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order's refunds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderRefunds"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    requestRefund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                order_id: components["parameters"]["OrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRefund"];
+            };
+        };
+        responses: {
+            /** @description The refund. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestedRefund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     getAdminOrderTimeline: {
         parameters: {
             query?: never;
@@ -9999,6 +10378,124 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listRefundReasons: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description In display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundReasonList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    confirmRefund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                refund_id: components["parameters"]["RefundId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundDecision"];
+            };
+        };
+        responses: {
+            /** @description The refund, APPROVED. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectRefund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                refund_id: components["parameters"]["RefundId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundDecision"];
+            };
+        };
+        responses: {
+            /** @description The refund, REJECTED. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listWaitingRefunds: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getDriverCancellationReport: {
@@ -11059,6 +11556,66 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getStaffRefundLimits: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                staff_id: components["parameters"]["StaffId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per currency, with what was used in the last 24 hours. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundLimitList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setStaffRefundLimit: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Propagated end to end through HTTP, events, workers and provider calls (REQ-OBS-01). Generated by the server if absent. */
+                "X-Correlation-Id"?: components["parameters"]["CorrelationId"];
+            };
+            path: {
+                staff_id: components["parameters"]["StaffId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRefundLimit"];
+            };
+        };
+        responses: {
+            /** @description The limit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundLimit"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };

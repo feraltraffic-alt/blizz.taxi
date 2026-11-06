@@ -160,6 +160,8 @@ class RiderErasureTests {
             R quote: snapshot
             N quote: currency fingerprint owner_type
             N rate_limit_hit: bucket
+            N refund: currency fault reason_code reason_labels state
+            O refund: comment decision_reason
             R rating: comment
             N rating: author_type target_type
             N refresh_token: token_hash
@@ -185,6 +187,7 @@ class RiderErasureTests {
             N staff_sign_in: audience outcome
             O staff_user: email first_name last_name login name oidc_subject phone telegram
             N staff_user: city_scope mfa_policy password_hash permissions role state
+            N staff_refund_limit: currency
             R support_case: resolution subject
             N support_case: category priority requester_type source_key state
             R support_message: body

@@ -1930,6 +1930,11 @@ export interface components {
          *     rider sees the debt and pays it in the app, and may order again at once.
          *     TOP_UP_DAILY_LIMIT (422): a staff top-up of a driver balance or a rider wallet would take the staff member
          *     over the service's staff_top_ups limit for the currency in the last 24 hours; nothing is credited.
+         *     REFUND_LIMIT (422): a staff member's refund over their limit for one refund or for the last 24 hours, or with
+         *     no limit set in the currency (ADR 0018 A2); the message names what is left.
+         *     REFUND_NOT_ALLOWED (422): a refund the order does not allow — more than is left of what was paid, below the
+         *     minimum, after the staff member's term, to a card for a cash trip, or an order that is not completed or
+         *     cancelled (ADR 0018 A4–A8).
          *     ACCOUNT_BLOCKED (403): a blocked driver's limited session (REQ-DS-01, issue #141) allows every GET but the
          *     reads of new work (broadcast-orders, offers, preorders), the
          *     current trip's commands and the passenger's rating, the shift's heartbeat, pause, close and handover, location
@@ -1944,7 +1949,7 @@ export interface components {
          *     never with a Problem (docs/decisions/0003).
          * @enum {string}
          */
-        ErrorCode: "VALIDATION_FAILED" | "QUOTE_EXPIRED" | "QUOTE_MISMATCH" | "ORDER_ALREADY_ACTIVE" | "ACTIVE_ORDER_LIMIT" | "OFFER_EXPIRED" | "OFFER_REVOKED" | "ORDER_ALREADY_ASSIGNED" | "DRIVER_BUSY" | "DRIVER_NOT_ELIGIBLE" | "STATE_CONFLICT" | "VERSION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "PAYMENT_PENDING" | "PAYMENT_UNKNOWN" | "PAYMENT_DECLINED" | "WALLET_INSUFFICIENT" | "OUTSIDE_SERVICE_AREA" | "CITY_PAUSED" | "CITY_CLOSED" | "PAYMENT_METHOD_NOT_OFFERED" | "DROPOFF_OUTSIDE_CITY" | "LOCATION_NOT_FRESH" | "PICKUP_TOO_FAR" | "PHONE_COUNTRY_NOT_SERVED" | "CHARGEBACK_NOT_ALLOWED" | "TOP_UP_DAILY_LIMIT" | "RATE_LIMITED" | "UNAUTHENTICATED" | "ACCESS_DENIED" | "ACCOUNT_NOT_ACTIVE" | "RIDER_HAS_DEBT" | "ACCOUNT_BLOCKED" | "ACCEPTANCE_REQUIRED" | "DRIVER_HAS_ACTIVE_WORK" | "DRIVER_HAS_DEBT" | "DRIVER_HAS_DISPUTE" | "NOT_FOUND" | "PROVIDER_UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "OTP_INVALID" | "UPGRADE_REQUIRED" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "QUOTE_EXPIRED" | "QUOTE_MISMATCH" | "ORDER_ALREADY_ACTIVE" | "ACTIVE_ORDER_LIMIT" | "OFFER_EXPIRED" | "OFFER_REVOKED" | "ORDER_ALREADY_ASSIGNED" | "DRIVER_BUSY" | "DRIVER_NOT_ELIGIBLE" | "STATE_CONFLICT" | "VERSION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "PAYMENT_PENDING" | "PAYMENT_UNKNOWN" | "PAYMENT_DECLINED" | "WALLET_INSUFFICIENT" | "OUTSIDE_SERVICE_AREA" | "CITY_PAUSED" | "CITY_CLOSED" | "PAYMENT_METHOD_NOT_OFFERED" | "DROPOFF_OUTSIDE_CITY" | "LOCATION_NOT_FRESH" | "PICKUP_TOO_FAR" | "PHONE_COUNTRY_NOT_SERVED" | "CHARGEBACK_NOT_ALLOWED" | "TOP_UP_DAILY_LIMIT" | "REFUND_LIMIT" | "REFUND_NOT_ALLOWED" | "RATE_LIMITED" | "UNAUTHENTICATED" | "ACCESS_DENIED" | "ACCOUNT_NOT_ACTIVE" | "RIDER_HAS_DEBT" | "ACCOUNT_BLOCKED" | "ACCEPTANCE_REQUIRED" | "DRIVER_HAS_ACTIVE_WORK" | "DRIVER_HAS_DEBT" | "DRIVER_HAS_DISPUTE" | "NOT_FOUND" | "PROVIDER_UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "OTP_INVALID" | "UPGRADE_REQUIRED" | "INTERNAL_ERROR";
         FieldError: {
             code: string;
             /** @description JSON pointer or dotted path of the offending field. */
