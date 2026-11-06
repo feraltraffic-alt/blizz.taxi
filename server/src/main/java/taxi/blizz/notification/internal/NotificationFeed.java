@@ -87,13 +87,29 @@ class NotificationFeed implements OutboxHandler {
             case "OfferMade", "AssignmentCommitted", "DriverArrived", "TripCompleted", "OrderCancelled",
                  "PassengerNoShow", "OrderUnfulfilled", "CardHoldDeclined", "TripInterrupted",
                  "DestinationChanged", "DriverCancellationsWarning", "DriverPaused",
-                 "DriverAcceptanceWarning", "DriverOffersMissed" -> true;
+                 "DriverAcceptanceWarning", "DriverOffersMissed", "RefundSucceeded" -> true;
             default -> false;
         };
     }
 
+    /** A staff refund to a rider (ADR 0018 A9, issue #512). */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    record Refund(UUID orderId, UUID clientId, UUID driverId, long cardMinor, String fault) {
+    }
+
     @Override
     public void handle(OutboxMessage message) {
+        if ("Refund".equals(message.aggregateType()) && "RefundSucceeded".equals(message.type())) {
+            Refund r = json.readValue(message.payload(), Refund.class);
+            create(message, new Push(new Actor(SubjectType.CLIENT, r.clientId()),
+                    r.cardMinor() > 0 ? "rider.refund-card" : "rider.refund-bonuses", DEFAULT_DEADLINE), r.orderId());
+            // The driver who bears it learns of it, with the reason in the earnings, so as to dispute it.
+            if ("DRIVER".equals(r.fault()) && r.driverId() != null) {
+                create(message, new Push(new Actor(SubjectType.DRIVER, r.driverId()), "driver.refund-charge",
+                        DEFAULT_DEADLINE), r.orderId());
+            }
+            return;
+        }
         if (!"Order".equals(message.aggregateType())) {
             return;
         }
@@ -169,6 +185,11 @@ class NotificationFeed implements OutboxHandler {
     }
 
     private void create(OutboxMessage message, Push push) {
+        create(message, push, message.aggregateId());
+    }
+
+    /** {@code orderId}: the order the push is about, also for an event of another aggregate (a refund). */
+    private void create(OutboxMessage message, Push push, UUID orderId) {
         String fallback = settings.of(push.recipient()).settings().languages().defaultLanguage();
         String language = language(push.recipient(), fallback);
         PushTemplates.Text text = PushTemplates.text(push.template(), language, fallback).orElseThrow();
@@ -176,7 +197,7 @@ class NotificationFeed implements OutboxHandler {
         data.put("type", push.template());
         data.put("event_type", message.type());
         data.put("event_id", message.eventId().toString());
-        data.put("order_id", message.aggregateId().toString());
+        data.put("order_id", orderId.toString());
         data.put("order_version", String.valueOf(message.aggregateVersion()));
         data.putAll(push.subject());
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);

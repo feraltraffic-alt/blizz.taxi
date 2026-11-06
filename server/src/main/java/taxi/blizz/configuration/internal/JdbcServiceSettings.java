@@ -348,8 +348,9 @@ class JdbcServiceSettings implements ServiceSettings {
         if (r.reminderHours() < 1 || r.reminderHours() > 168 || r.closeAfterDays() < 1 || r.closeAfterDays() > 90) {
             throw invalid("Refunds: reminder_hours 1–168, close_after_days 1–90");
         }
-        if (r.bonusValidityDays() < 0 || r.bonusValidityDays() > 3650) {
-            throw invalid("Refunds: bonus_validity_days 0 (no end) to 3650");
+        // Bonuses do not expire yet (the wallet keeps them for good): a term would be shown and not kept.
+        if (r.bonusValidityDays() != 0) {
+            throw invalid("Refunds: bonus_validity_days is 0 (no end) until expiring bonuses are built");
         }
     }
 

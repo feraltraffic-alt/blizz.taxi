@@ -58,6 +58,7 @@ class RefundExecutionTests {
     @Autowired TransactionTemplate tx;
     @Autowired ApplicationContext context;
     @Autowired JdbcClient jdbc;
+    @Autowired taxi.blizz.refunds.internal.RefundTimer timer;
 
     TestRides rides;
     TestPayments payments;
@@ -200,6 +201,105 @@ class RefundExecutionTests {
         assertThat(state(requested)).isEqualTo("SUCCEEDED");
     }
 
+    // ------------------------------------------------------------ part 3: notices, problem queue, timer
+
+    @Test
+    void aDoneRefundTellsTheRiderAndTheDriverWhoBearsIt() {
+        Ride cash = cashRide();
+        Refunds.Refund bonus = refunds.request(staff("SUPER_ADMIN"), UUID.randomUUID(), new Refunds.Request(
+                cash.orderId(), 1000, "BONUSES", true, "RUDE_DRIVER", null, null)).refund();
+        Ride card = cardRide();
+        Refunds.Refund money = refunds.request(staff("SUPER_ADMIN"), UUID.randomUUID(), new Refunds.Request(
+                card.orderId(), 1000, "CARD", false, "DOUBLE_CHARGE", null, null)).refund();
+        payments.settle();
+
+        assertThat(pushes(cash)).containsExactlyInAnyOrder("CLIENT:rider.refund-bonuses",
+                "DRIVER:driver.refund-charge");
+        assertThat(pushes(card)).as("nobody else bears a double charge").containsExactly("CLIENT:rider.refund-card");
+        assertThat(state(bonus)).isEqualTo("SUCCEEDED");
+        assertThat(state(money)).isEqualTo("SUCCEEDED");
+    }
+
+    @Test
+    void aFailedRefundGoesToTheProblemQueueAndTheRiderIsNotTold() {
+        Ride ride = cardRide();
+        payments.next("Declined");
+        Refunds.Refund refund = refunds.request(staff("SUPER_ADMIN"), UUID.randomUUID(), new Refunds.Request(
+                ride.orderId(), 1000, "CARD", false, "GOODWILL", null, null)).refund();
+        payments.settle();
+
+        assertThat(caseOf("refund-failed:" + refund.id())).isEqualTo("PAYMENT:HIGH");
+        assertThat(pushes(ride)).isEmpty();
+    }
+
+    @Test
+    void aWaitingRequestRemindsOnceAfterFourHoursAndClosesAfterSevenDays() {
+        Ride ride = cashRide();
+        Actor admin = staff("ADMIN", Refunds.CREATE_PERMISSION);
+        refunds.setLimit(staff("SUPER_ADMIN"), UUID.randomUUID(), admin.id(), "UAH", 5000, 9000, 0, "Test");
+        Refunds.Refund fresh = refunds.request(admin, UUID.randomUUID(), new Refunds.Request(ride.orderId(), 1000,
+                "BONUSES", true, "GOODWILL", null, null)).refund();
+        Refunds.Refund waiting = refunds.request(admin, UUID.randomUUID(), new Refunds.Request(ride.orderId(), 1000,
+                "BONUSES", true, "GOODWILL", null, null)).refund();
+        Refunds.Refund old = refunds.request(admin, UUID.randomUUID(), new Refunds.Request(ride.orderId(), 1000,
+                "BONUSES", true, "GOODWILL", null, null)).refund();
+        requestedAgo(fresh, "3 hours 50 minutes");
+        requestedAgo(waiting, "4 hours 10 minutes");
+        requestedAgo(old, "7 days 1 minute");
+
+        timer.runOnce();
+        timer.runOnce();
+        payments.settle();
+
+        assertThat(state(fresh)).isEqualTo("REQUESTED");
+        assertThat(caseOf("refund-waiting:" + fresh.id())).isNull();
+        assertThat(state(waiting)).isEqualTo("REQUESTED");
+        assertThat(caseOf("refund-waiting:" + waiting.id())).isEqualTo("PAYMENT:NORMAL");
+        assertThat(count("select count(*) from outbox where event_type = 'RefundWaiting' and aggregate_id = :id",
+                waiting.id())).as("once").isEqualTo(1);
+        assertThat(state(old)).isEqualTo("NOT_REVIEWED");
+        assertThat(lines(old)).isEmpty();
+        assertThat(refunds.refundable(admin, ride.orderId()).refundedMinor()).as("the closed one frees its sum")
+                .isEqualTo(2000);
+    }
+
+    @Test
+    void theRemindingAndClosingTermsAreTheServicesSettings() {
+        taxi.blizz.configuration.ServiceSettings settings = context.getBean(
+                taxi.blizz.configuration.ServiceSettings.class);
+        Actor superAdmin = staff("SUPER_ADMIN");
+        taxi.blizz.configuration.ServiceSettings.Version before = settings.current();
+        taxi.blizz.configuration.ServiceSettings.Settings s = before.settings();
+        taxi.blizz.configuration.ServiceSettings.Refunds r = s.refunds();
+        taxi.blizz.configuration.ServiceSettings.Version changed = settings.change(superAdmin, UUID.randomUUID(),
+                before.version(), new taxi.blizz.configuration.ServiceSettings.Settings(s.brand(), s.languages(),
+                        s.calls(), s.preorders(), s.ratings(), s.tips(), s.orders(), s.cashNotReceived(),
+                        s.appVersions(), s.staffTopUps(), s.riderDebts(), s.driverDiscipline(), s.offerDiscipline(),
+                        s.pickupTime(), s.cancellationFault(), new taxi.blizz.configuration.ServiceSettings.Refunds(
+                                r.minimumMinor(), r.defaultPerRefundMinor(), r.defaultDailyMinor(),
+                                r.riderWarningCount(), r.riderWarningDays(), r.staffDays(), r.superAdminDays(),
+                                r.refundTips(), r.cardForCash(), r.showReasonToRider(), 2, 1, 0)), "Test #512");
+        try {
+            Ride ride = cashRide();
+            Actor admin = staff("ADMIN", Refunds.CREATE_PERMISSION);
+            refunds.setLimit(superAdmin, UUID.randomUUID(), admin.id(), "UAH", 5000, 9000, 0, "Test");
+            Refunds.Refund reminded = refunds.request(admin, UUID.randomUUID(), new Refunds.Request(ride.orderId(),
+                    1000, "BONUSES", true, "GOODWILL", null, null)).refund();
+            Refunds.Refund closed = refunds.request(admin, UUID.randomUUID(), new Refunds.Request(ride.orderId(),
+                    1000, "BONUSES", true, "GOODWILL", null, null)).refund();
+            requestedAgo(reminded, "2 hours 1 minute");
+            requestedAgo(closed, "1 day 1 minute");
+
+            timer.runOnce();
+
+            assertThat(count("select count(*) from outbox where event_type = 'RefundWaiting' and aggregate_id = :id",
+                    reminded.id())).isEqualTo(1);
+            assertThat(state(closed)).isEqualTo("NOT_REVIEWED");
+        } finally {
+            settings.change(superAdmin, UUID.randomUUID(), changed.version(), s, "Back after the test");
+        }
+    }
+
     // ------------------------------------------------------------ helpers
 
     record Ride(TestRides.Ride ride, UUID orderId) {
@@ -240,6 +340,23 @@ class RefundExecutionTests {
         payments.settle();
         assertThat(intentState(new Ride(ride, order.id()))).as("the fare is paid").isEqualTo("PAID");
         return new Ride(ride, order.id());
+    }
+
+    private List<String> pushes(Ride ride) {
+        return jdbc.sql("""
+                        select recipient_type || ':' || template from notification
+                        where data ->> 'order_id' = :o and template like '%refund%'""")
+                .param("o", ride.orderId().toString()).query(String.class).list();
+    }
+
+    private String caseOf(String sourceKey) {
+        return jdbc.sql("select category || ':' || priority from support_case where source_key = :k")
+                .param("k", sourceKey).query(String.class).optional().orElse(null);
+    }
+
+    private void requestedAgo(Refunds.Refund refund, String interval) {
+        jdbc.sql("update refund set requested_at = now() - cast(:i as interval) where id = :id")
+                .param("i", interval).param("id", refund.id()).update();
     }
 
     private String intentState(Ride ride) {

@@ -60,7 +60,8 @@ class ProblemQueues implements OutboxHandler {
         return switch (eventType) {
             case "TripCompleted", "StaffSuspended", "CallerNotNotified", "OrderUnfulfilled", "DriverLostDuringOrder",
                  "PaymentResultUnknown", "CardPaymentSettled", "CashDisputeOverdue", "InvariantViolated",
-                 "CardChargebackRecorded", "PaymentReconciliationDifferencesFound", "DestinationChanged" -> true;
+                 "CardChargebackRecorded", "PaymentReconciliationDifferencesFound", "DestinationChanged",
+                 "RefundFailed", "RefundWaiting" -> true;
             default -> false;
         };
     }
@@ -73,8 +74,37 @@ class ProblemQueues implements OutboxHandler {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Invariant(String check, String objectType, UUID objectId, String detail) { }
 
+    /** A staff refund to a rider (ADR 0018, issue #512) that failed or waits for a confirmation. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record RefundProblem(UUID refundId, UUID orderId, UUID cityId, long amountMinor, Long movedMinor, String currency,
+                         String state) {
+    }
+
     @Override
     public void handle(OutboxMessage message) {
+        if ("RefundFailed".equals(message.type())) {
+            RefundProblem r = json.readValue(message.payload(), RefundProblem.class);
+            boolean part = "UNKNOWN".equals(r.state());
+            cases.openFromSystem("refund-failed:" + r.refundId(), r.cityId(), Category.PAYMENT, r.orderId(),
+                    part ? "A refund to the rider went back in part only" : "A refund to the rider failed",
+                    Priority.HIGH, part
+                            ? "Of " + r.amountMinor() + " " + r.currency() + " minor units, " + r.movedMinor()
+                                    + " went back to the card and the rest was refused. Check with the payment"
+                                    + " provider and settle the rest; the rider has not been told."
+                            : "The card refused the refund of " + r.amountMinor() + " " + r.currency()
+                                    + " minor units; nothing moved and the rider has not been told. Request it again"
+                                    + " (perhaps as bonuses with the rider's consent) or tell the rider why not.");
+            return;
+        }
+        if ("RefundWaiting".equals(message.type())) {
+            RefundProblem r = json.readValue(message.payload(), RefundProblem.class);
+            cases.openFromSystem("refund-waiting:" + r.refundId(), r.cityId(), Category.PAYMENT, r.orderId(),
+                    "A refund waits for a confirmation", Priority.NORMAL,
+                    "A refund of " + r.amountMinor() + " " + r.currency() + " minor units waits for someone with the"
+                            + " right to confirm refunds (not the one who asked for it). Confirm or reject it in the"
+                            + " admin panel; unanswered, it closes as not reviewed.");
+            return;
+        }
         if ("PaymentReconciliationDifferencesFound".equals(message.type())) {
             ReconciliationProblem p=json.readValue(message.payload(),ReconciliationProblem.class);
             cases.openFromSystem("reconciliation:"+p.runId(),p.cityId(),Category.PAYMENT,null,
