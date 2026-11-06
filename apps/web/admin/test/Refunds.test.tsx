@@ -188,6 +188,30 @@ describe('a staff member\'s limits', () => {
   });
 });
 
+describe('a staff member\'s limits, changed', () => {
+  it('a currency with a limit is changed against its version', async () => {
+    const sent: Record<string, unknown>[] = [];
+    server.use(
+      http.get(origin + '/api/admin/v1/staff/' + STAFF + '/refund-limits', () => HttpResponse.json({limits: [
+        {staff_id: STAFF, currency: 'UAH', per_refund_minor: 50000, daily_minor: 300000, used_minor: 12000,
+          version: 2}]} as never)),
+      http.post(origin + '/api/admin/v1/staff/' + STAFF + '/refund-limits', async ({request}) => {
+        sent.push(await request.json() as Record<string, unknown>);
+        return HttpResponse.json({} as never);
+      }));
+    render(<StaffRefundLimits client={api()} t={t} newId={newId} staffId={STAFF} />);
+    const user = userEvent.setup();
+    expect(await screen.findByText('UAH: один возврат до 500.00, за 24 часа до 3000.00 (использовано 120.00)'))
+      .toBeVisible();
+    await user.clear(screen.getByLabelText('За 24 часа, не больше'));
+    await user.type(screen.getByLabelText('За 24 часа, не больше'), '4000');
+    await user.type(screen.getByLabelText('Причина изменения лимита'), 'больше смен');
+    await user.click(screen.getByRole('button', {name: 'Сохранить лимит'}));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({currency: 'UAH', daily_minor: 400000, expected_version: 2});
+  });
+});
+
 describe('the service\'s rules', () => {
   it('terms and sums go with the settings; the super admin\'s term is not shorter', async () => {
     const saves: Record<string, unknown>[] = [];
