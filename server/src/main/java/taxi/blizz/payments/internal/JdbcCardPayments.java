@@ -464,8 +464,11 @@ class JdbcCardPayments implements CardPayments {
                 }
             }
             case "REFUND" -> {
+                // A hold release has none: the row is read whole, so the null is not taken for a missing row.
                 UUID refundId = jdbc.sql("select refund_id from payment_operation where id = :id")
-                        .param("id", operationId).query((rs, i) -> rs.getObject(1, UUID.class)).single();
+                        .param("id", operationId)
+                        .query((rs, i) -> java.util.Optional.ofNullable(rs.getObject(1, UUID.class))).single()
+                        .orElse(null);
                 if (refundId != null) {
                     // A rider refund (ADR 0018) leaves the payment as it is; the refund learns how it ended.
                     if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
