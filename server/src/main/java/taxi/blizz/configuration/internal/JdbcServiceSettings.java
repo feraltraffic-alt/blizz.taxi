@@ -54,7 +54,7 @@ class JdbcServiceSettings implements ServiceSettings {
             new PickupTime(15, 10),
             new CancellationFault(2, 5, 15, false),
             new Refunds(Map.of("UAH", 1_000L), Map.of("UAH", 50_000L), Map.of("UAH", 300_000L), 3, 30, 30, 180,
-                    false, false, false, 4, 7, 0));
+                    false, false, false, 4, 7, 180));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -348,9 +348,8 @@ class JdbcServiceSettings implements ServiceSettings {
         if (r.reminderHours() < 1 || r.reminderHours() > 168 || r.closeAfterDays() < 1 || r.closeAfterDays() > 90) {
             throw invalid("Refunds: reminder_hours 1–168, close_after_days 1–90");
         }
-        // Bonuses do not expire yet (the wallet keeps them for good): a term would be shown and not kept.
-        if (r.bonusValidityDays() != 0) {
-            throw invalid("Refunds: bonus_validity_days is 0 (no end) until expiring bonuses are built");
+        if (r.bonusValidityDays() < 0 || r.bonusValidityDays() > 3650) {
+            throw invalid("Refunds: bonus_validity_days 0 (no end) to 3650");
         }
     }
 

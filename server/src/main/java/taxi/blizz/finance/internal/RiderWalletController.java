@@ -38,11 +38,11 @@ class RiderWalletController {
 
     /** The account with one page of its movements (REQ-API-09); {@code page} is new and optional for older clients. */
     record WalletPage(UUID clientId, List<RiderWallets.Balance> balances, List<RiderWallets.Entry> entries,
-                      Page.Info page) {
+                      Page.Info page, List<RiderWallets.Expiring> expiring) {
 
         static WalletPage of(RiderWallets.Wallet wallet, int size) {
             Page<RiderWallets.Entry> page = Page.of(wallet.entries(), size, RiderWallets::position);
-            return new WalletPage(wallet.clientId(), wallet.balances(), page.items(), page.page());
+            return new WalletPage(wallet.clientId(), wallet.balances(), page.items(), page.page(), wallet.expiring());
         }
     }
 

@@ -7,6 +7,9 @@ export const translations: Catalogs = withCommon({
   ru: {
     wallet: 'Бонусы',
     walletAvailable: 'Доступно: {amount}',
+    walletExpiring: '{amount} бонусов за возврат сгорят {date}',
+    kind_REFUND: 'Возврат за поездку',
+    kind_BONUS_EXPIRED: 'Бонусы сгорели',
     walletCity: 'Город оплаты: {city}',
     walletKind_STAFF_TOP_UP: 'Начисление службой',
     walletKind_CARD_TOP_UP: 'Пополнение картой',
@@ -90,6 +93,9 @@ export const translations: Catalogs = withCommon({
   uk: {
     wallet: 'Бонуси',
     walletAvailable: 'Доступно: {amount}',
+    walletExpiring: '{amount} бонусів за повернення згорять {date}',
+    kind_REFUND: 'Повернення за поїздку',
+    kind_BONUS_EXPIRED: 'Бонуси згоріли',
     walletCity: 'Місто оплати: {city}',
     walletKind_STAFF_TOP_UP: 'Нарахування службою',
     walletKind_CARD_TOP_UP: 'Поповнення карткою',
@@ -173,6 +179,9 @@ export const translations: Catalogs = withCommon({
   pl: {
     wallet: 'Bonusy',
     walletAvailable: 'Dostępne: {amount}',
+    walletExpiring: '{amount} bonusów za zwrot przepadnie {date}',
+    kind_REFUND: 'Zwrot za przejazd',
+    kind_BONUS_EXPIRED: 'Bonusy przepadły',
     walletCity: 'Miasto płatności: {city}',
     walletKind_STAFF_TOP_UP: 'Zasilenie przez firmę',
     walletKind_CARD_TOP_UP: 'Doładowanie kartą',

@@ -184,6 +184,11 @@ class RefundExecution implements OutboxHandler {
                         })).single();
         ledger.post(new Ledger.Posting("refund:" + r.id(), "REFUND", r.orderId(), r.currency(),
                 labels.getOrDefault(language, r.reasonCode()), lines, r.serviceId()));
+        // A5: bonuses given as a refund end after the service's term (0: never).
+        int days = settings.ofCity(r.cityId()).settings().refunds().bonusValidityDays();
+        if (r.bonus() > 0 && days > 0) {
+            wallets.expireAt(r.clientId(), r.currency(), r.bonus(), "refund:" + r.id(), now().plusDays(days));
+        }
         state(r, "SUCCEEDED", true);
         if (driver) {
             debts.refresh(r.driverId(), r.currency());

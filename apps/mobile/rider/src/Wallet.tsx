@@ -4,11 +4,17 @@ import {Alert, Button, Screen, TopUpByCard, useTheme, type Shared} from '@blizz/
 import {ProviderPage} from './ProviderPage';
 
 type Wallet = {balances: {currency: string; available_minor: number}[]; entries: {id: string; kind: string;
-  currency: string; amount_minor: number; reason: string}[]};
+  currency: string; amount_minor: number; reason: string}[];
+  expiring?: {currency: string; amount_minor: number; expires_at: string}[]};
 type City = {id: string; name: string};
 
 /** Kinds the app has a name for; a new kind is shown by its code. */
-const KINDS = new Set(['STAFF_TOP_UP', 'CARD_TOP_UP', 'PROMOTION', 'TRIP_PAYMENT', 'TIP']);
+const KINDS = new Set(['STAFF_TOP_UP', 'CARD_TOP_UP', 'PROMOTION', 'TRIP_PAYMENT', 'TIP', 'REFUND',
+  'BONUS_EXPIRED']);
+const day = (iso: string) => {
+  const d = new Date(iso);
+  return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+};
 const amount = (minor: number, currency: string) => (Math.abs(minor) / 100).toFixed(2) + ' ' + currency;
 
 /**
@@ -48,6 +54,11 @@ export function WalletScreen({client, t, guard, failure, newId, service, pollMs,
       {(wallet?.balances ?? []).map(b => (
         <Text key={b.currency} style={{color: theme.text, fontWeight: '600'}}>
           {t('walletAvailable', {amount: amount(b.available_minor, b.currency)})}
+        </Text>
+      ))}
+      {(wallet?.expiring ?? []).map(e => (
+        <Text key={e.currency + e.expires_at} style={{color: theme.muted}}>
+          {t('walletExpiring', {amount: amount(e.amount_minor, e.currency), date: day(e.expires_at)})}
         </Text>
       ))}
       {cities.length > 1 ? (

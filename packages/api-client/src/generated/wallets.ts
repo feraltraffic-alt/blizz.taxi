@@ -60,6 +60,14 @@ export interface components {
             client_id: components["schemas"]["Uuid"];
             /** @description Newest first (time, then transaction id); one page of them when read with GET. */
             entries: components["schemas"]["WalletEntry"][];
+            /** @description Bonuses given as a refund that end (ADR 0018 A5): what is left of each and when it burns, the soonest first. Spending takes them before bonuses that never end. */
+            expiring?: {
+                /** Format: int64 */
+                amount_minor: number;
+                currency: string;
+                /** Format: date-time */
+                expires_at: string;
+            }[];
             /** @description The page of entries (REQ-API-09); only in a GET of the account, not in a top-up's answer. */
             page?: components["schemas"]["PageInfo"];
         };

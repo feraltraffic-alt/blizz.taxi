@@ -235,12 +235,14 @@ describe('the service\'s rules', () => {
     expect(saves).toHaveLength(0);
     await user.clear(staffDays);
     await user.type(staffDays, '20');
+    await user.clear(screen.getByLabelText('Бонусы за возврат действуют, дней (0 — бессрочно)'));
+    await user.type(screen.getByLabelText('Бонусы за возврат действуют, дней (0 — бессрочно)'), '90');
     await user.clear(screen.getByLabelText('Минимальный возврат'));
     await user.type(screen.getByLabelText('Минимальный возврат'), '15');
     await user.click(screen.getByRole('button', {name: 'Сохранить правила возвратов'}));
     await waitFor(() => expect(saves).toHaveLength(1));
     expect(saves[0]).toMatchObject({expected_version: 4, settings: {...base, refunds: {staff_days: 20,
       super_admin_days: 180, minimum_minor: {UAH: 1500}, default_per_refund_minor: {UAH: 50000},
-      card_for_cash: false, bonus_validity_days: 0}}});
+      card_for_cash: false, bonus_validity_days: 90}}});
   });
 });

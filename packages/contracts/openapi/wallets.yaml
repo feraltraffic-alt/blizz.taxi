@@ -80,6 +80,26 @@ components:
         page:
           description: The page of entries (REQ-API-09); only in a GET of the account, not in a top-up's answer.
           $ref: "./common.yaml#/components/schemas/PageInfo"
+        expiring:
+          description: >-
+            Bonuses given as a refund that end (ADR 0018 A5): what is left of each and when it burns, the soonest first.
+            Spending takes them before bonuses that never end.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [currency, amount_minor, expires_at]
+            properties:
+              currency:
+                type: string
+                pattern: "^[A-Z]{3}$"
+              amount_minor:
+                type: integer
+                format: int64
+                minimum: 1
+              expires_at:
+                type: string
+                format: date-time
 
     StaffTopUp:
       type: object

@@ -45,9 +45,12 @@ class JdbcRiderWallets implements RiderWallets {
     private final Clock clock;
     private final StaffTopUpLimit topUpLimit;
 
+    private final BonusLots lots;
+
     JdbcRiderWallets(JdbcClient jdbc, Ledger ledger, IdempotentCommands commands, StaffAccess staff,
                      AccountDirectory accounts, CityCatalog cities, AuditLog audit, DriverDebts debts, Clock clock,
-                     StaffTopUpLimit topUpLimit) {
+                     StaffTopUpLimit topUpLimit, BonusLots lots) {
+        this.lots = lots;
         this.jdbc = jdbc;
         this.ledger = ledger;
         this.commands = commands;
@@ -193,6 +196,23 @@ class JdbcRiderWallets implements RiderWallets {
 
     @Override
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void expireAt(UUID clientId, String currency, long amountMinor, String creditKey,
+                         OffsetDateTime expiresAt) {
+        if (amountMinor <= 0) {
+            return;
+        }
+        jdbc.sql("""
+                        insert into rider_bonus_lot (id, client_id, currency, amount_minor, credit_key, granted_at,
+                                                     expires_at)
+                        values (:id, :client, :currency, :amount, :key, :now, :expires)
+                        on conflict (credit_key) do nothing""")
+                .param("id", UUID.randomUUID()).param("client", clientId).param("currency", currency)
+                .param("amount", amountMinor).param("key", creditKey).param("now", now()).param("expires", expiresAt)
+                .update();
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public boolean creditPromotion(UUID clientId, UUID orderId, UUID promotionId, String currency, long amountMinor,
                                    String promotionName) {
         if (amountMinor <= 0) {
@@ -290,7 +310,16 @@ class JdbcRiderWallets implements RiderWallets {
                             "WALLET_TOP_UP".equals(basis) || "CARD_TOP_UP".equals(basis) ? null : basisId);
                 })
                 .list();
-        return new Wallet(clientId, balances, entries);
+        List<Expiring> expiring = new java.util.ArrayList<>();
+        for (Balance b : balances) {
+            for (BonusLots.Left left : lots.left(clientId, b.currency())) {
+                if (left.lot().expiredAt() == null && left.leftMinor() > 0) {
+                    expiring.add(new Expiring(b.currency(), left.leftMinor(), left.lot().expiresAt()));
+                }
+            }
+        }
+        expiring.sort(java.util.Comparator.comparing(Expiring::expiresAt));
+        return new Wallet(clientId, balances, entries, expiring);
     }
 
     private void requireClient(UUID clientId) {

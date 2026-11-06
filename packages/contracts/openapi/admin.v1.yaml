@@ -7012,8 +7012,8 @@ components:
             rider_warning_days days staff see a warning. Staff refund within staff_days of the trip, the super admin
             within super_admin_days (A8). refund_tips: tips go back with the fare; card_for_cash: a cash trip may go
             back to a card (A7, off; not built); show_reason_to_rider (A9, off). A request reminds the confirmers
-            after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: 0, no end
-            (bonuses do not expire yet).
+            after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: how long
+            refund bonuses last (A5).
           type: [object, "null"]
           additionalProperties: false
           required: [minimum_minor, default_per_refund_minor, default_daily_minor, rider_warning_count,
@@ -7086,10 +7086,13 @@ components:
               maximum: 90
               default: 7
             bonus_validity_days:
+              description: >-
+                Days bonuses given as a refund last (owner, 06.11.2026); 0 — no end. Spending takes them before bonuses
+                that never end; what is left at the end burns.
               type: integer
               minimum: 0
-              maximum: 0
-              default: 0
+              maximum: 3650
+              default: 180
         brand:
           $ref: "./config.v1.yaml#/components/schemas/Brand"
         languages:

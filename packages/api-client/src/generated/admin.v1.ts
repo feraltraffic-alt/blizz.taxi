@@ -6017,9 +6017,12 @@ export interface components {
                  */
                 edit_window_hours: number;
             };
-            /** @description Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A); omitted when saving: the defaults. Sums are in minor units by currency code. minimum_minor: the smallest refund (A4). default_per_refund_minor and default_daily_minor: what a staff member's limits start with in the panel (the limits themselves are per staff member, A2). After rider_warning_count refunds to one rider in rider_warning_days days staff see a warning. Staff refund within staff_days of the trip, the super admin within super_admin_days (A8). refund_tips: tips go back with the fare; card_for_cash: a cash trip may go back to a card (A7, off; not built); show_reason_to_rider (A9, off). A request reminds the confirmers after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: 0, no end (bonuses do not expire yet). */
+            /** @description Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A); omitted when saving: the defaults. Sums are in minor units by currency code. minimum_minor: the smallest refund (A4). default_per_refund_minor and default_daily_minor: what a staff member's limits start with in the panel (the limits themselves are per staff member, A2). After rider_warning_count refunds to one rider in rider_warning_days days staff see a warning. Staff refund within staff_days of the trip, the super admin within super_admin_days (A8). refund_tips: tips go back with the fare; card_for_cash: a cash trip may go back to a card (A7, off; not built); show_reason_to_rider (A9, off). A request reminds the confirmers after reminder_hours and closes as not reviewed after close_after_days (A3). bonus_validity_days: how long refund bonuses last (A5). */
             refunds?: {
-                /** @default 0 */
+                /**
+                 * @description Days bonuses given as a refund last (owner, 06.11.2026); 0 — no end. Spending takes them before bonuses that never end; what is left at the end burns.
+                 * @default 180
+                 */
                 bonus_validity_days: number;
                 /** @default false */
                 card_for_cash: boolean;
@@ -6421,6 +6424,14 @@ export interface components {
             client_id: components["schemas"]["Uuid"];
             /** @description Newest first (time, then transaction id); one page of them when read with GET. */
             entries: components["schemas"]["WalletEntry"][];
+            /** @description Bonuses given as a refund that end (ADR 0018 A5): what is left of each and when it burns, the soonest first. Spending takes them before bonuses that never end. */
+            expiring?: {
+                /** Format: int64 */
+                amount_minor: number;
+                currency: string;
+                /** Format: date-time */
+                expires_at: string;
+            }[];
             /** @description The page of entries (REQ-API-09); only in a GET of the account, not in a top-up's answer. */
             page?: components["schemas"]["PageInfo"];
         };

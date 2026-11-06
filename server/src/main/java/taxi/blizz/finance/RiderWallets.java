@@ -27,7 +27,15 @@ public interface RiderWallets {
                  UUID staffId, UUID orderId) {
     }
 
-    record Wallet(UUID clientId, List<Balance> balances, List<Entry> entries) {
+    /** Bonuses that end (ADR 0018 A5): what is left of a lot and when it burns. */
+    record Expiring(String currency, long amountMinor, OffsetDateTime expiresAt) {
+    }
+
+    /** {@code expiring}: the lots not yet ended with something left, the soonest first. */
+    record Wallet(UUID clientId, List<Balance> balances, List<Entry> entries, List<Expiring> expiring) {
+        public Wallet(UUID clientId, List<Balance> balances, List<Entry> entries) {
+            this(clientId, balances, entries, List.of());
+        }
     }
 
     /** The rider's own account with its movements, newest first (time, then transaction id), after {@code after}. */
@@ -78,6 +86,13 @@ public interface RiderWallets {
      * posting that credits it from elsewhere (a refund as bonuses, ADR 0018 A5).
      */
     void open(UUID clientId, String currency);
+
+    /**
+     * In the caller's transaction, after the posting {@code creditKey} credited {@code amountMinor} to the rider's
+     * bonuses: they end at {@code expiresAt} (ADR 0018 A5). Spending takes them before bonuses that never end; what is
+     * left at the end burns. A second call for the same posting does nothing.
+     */
+    void expireAt(UUID clientId, String currency, long amountMinor, String creditKey, OffsetDateTime expiresAt);
 
     /**
      * Bonuses of a promotion for a trip (ADR 0009), in the caller's transaction; the service's expense. Once per order

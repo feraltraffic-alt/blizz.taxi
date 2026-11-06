@@ -59,6 +59,8 @@ class RefundExecutionTests {
     @Autowired ApplicationContext context;
     @Autowired JdbcClient jdbc;
     @Autowired taxi.blizz.refunds.internal.RefundTimer timer;
+    @Autowired taxi.blizz.finance.internal.BonusExpiry expiry;
+    @Autowired taxi.blizz.finance.Ledger ledger;
 
     TestRides rides;
     TestPayments payments;
@@ -303,6 +305,91 @@ class RefundExecutionTests {
         }
     }
 
+    // ------------------------------------------------------------ refund bonuses end (owner, 06.11.2026)
+
+    @Test
+    void refundBonusesLast180DaysAndWhatIsLeftBurnsAfterTheBonusesThatNeverEndAreKept() {
+        Ride ride = cashRide();
+        UUID rider = ride.ride().payer().id();
+        credit(rider, 500, "forever-" + UUID.randomUUID());
+        Refunds.Refund refund = refunds.request(staff("SUPER_ADMIN"), UUID.randomUUID(), new Refunds.Request(
+                ride.orderId(), 1000, "BONUSES", true, "GOODWILL", null, null)).refund();
+        payments.settle();
+        Map<String, Object> lot = jdbc.sql("""
+                        select amount_minor, round(extract(epoch from expires_at - granted_at) / 86400)::int as days
+                        from rider_bonus_lot where credit_key = :k""")
+                .param("k", "refund:" + refund.id()).query().singleRow();
+        assertThat(lot).containsEntry("amount_minor", 1000L).containsEntry("days", 180);
+        assertThat(wallets.mine(ride.ride().payer(), 10).expiring()).singleElement()
+                .satisfies(e -> assertThat(e.amountMinor()).isEqualTo(1000));
+
+        spend(rider, 700);
+        assertThat(wallets.mine(ride.ride().payer(), 10).expiring()).as("spent from the lot first").singleElement()
+                .satisfies(e -> assertThat(e.amountMinor()).isEqualTo(300));
+        long before = wallets.available(rider, "UAH");
+        endLots(rider);
+        assertThat(expiry.runOnce()).as("the ended lot is handled").isPositive();
+        assertThat(expiry.runOnce()).as("a handled lot is not burnt twice").isZero();
+
+        assertThat(wallets.available(rider, "UAH")).as("300 burnt, the 500 that never end kept")
+                .isEqualTo(before - 300);
+        assertThat(jdbc.sql("select expired_minor from rider_bonus_lot where credit_key = :k")
+                .param("k", "refund:" + refund.id()).query(Long.class).single()).isEqualTo(300);
+        assertThat(wallets.mine(ride.ride().payer(), 10).expiring()).isEmpty();
+        assertThat(wallets.mine(ride.ride().payer(), 10).entries()).extracting(taxi.blizz.finance.RiderWallets.Entry::kind)
+                .contains("REFUND", "BONUS_EXPIRED");
+        assertThat(wallets.mine(ride.ride().payer(), 10).entries())
+                .filteredOn(e -> "BONUS_EXPIRED".equals(e.kind())).hasSize(1);
+    }
+
+    @Test
+    void bonusesHeldForAnOrderDoNotBurn() {
+        Ride ride = cashRide();
+        UUID rider = ride.ride().payer().id();
+        refunds.request(staff("SUPER_ADMIN"), UUID.randomUUID(), new Refunds.Request(ride.orderId(), 1000,
+                "BONUSES", true, "GOODWILL", null, null));
+        payments.settle();
+        tx.executeWithoutResult(s -> wallets.reserve(rider, ride.orderId(), "UAH", 800));
+        long free = wallets.available(rider, "UAH");
+        endLots(rider);
+
+        expiry.runOnce();
+
+        assertThat(wallets.available(rider, "UAH")).as("only the free part burns").isEqualTo(0);
+        assertThat(jdbc.sql("select max(expired_minor) from rider_bonus_lot where client_id = :c")
+                .param("c", rider).query(Long.class).single()).isEqualTo(free);
+    }
+
+    @Test
+    void withNoTermRefundBonusesNeverEnd() {
+        taxi.blizz.configuration.ServiceSettings settings = context.getBean(
+                taxi.blizz.configuration.ServiceSettings.class);
+        Actor superAdmin = staff("SUPER_ADMIN");
+        taxi.blizz.configuration.ServiceSettings.Version before = settings.current();
+        taxi.blizz.configuration.ServiceSettings.Settings s = before.settings();
+        taxi.blizz.configuration.ServiceSettings.Refunds r = s.refunds();
+        taxi.blizz.configuration.ServiceSettings.Version changed = settings.change(superAdmin, UUID.randomUUID(),
+                before.version(), new taxi.blizz.configuration.ServiceSettings.Settings(s.brand(), s.languages(),
+                        s.calls(), s.preorders(), s.ratings(), s.tips(), s.orders(), s.cashNotReceived(),
+                        s.appVersions(), s.staffTopUps(), s.riderDebts(), s.driverDiscipline(), s.offerDiscipline(),
+                        s.pickupTime(), s.cancellationFault(), new taxi.blizz.configuration.ServiceSettings.Refunds(
+                                r.minimumMinor(), r.defaultPerRefundMinor(), r.defaultDailyMinor(),
+                                r.riderWarningCount(), r.riderWarningDays(), r.staffDays(), r.superAdminDays(),
+                                r.refundTips(), r.cardForCash(), r.showReasonToRider(), r.reminderHours(),
+                                r.closeAfterDays(), 0)), "Test: no term");
+        try {
+            Ride ride = cashRide();
+            Refunds.Refund refund = refunds.request(superAdmin, UUID.randomUUID(), new Refunds.Request(
+                    ride.orderId(), 1000, "BONUSES", true, "GOODWILL", null, null)).refund();
+            payments.settle();
+            assertThat(state(refund)).isEqualTo("SUCCEEDED");
+            assertThat(count("select count(*) from rider_bonus_lot where credit_key = 'refund:' || :id",
+                    refund.id().toString())).isZero();
+        } finally {
+            settings.change(superAdmin, UUID.randomUUID(), changed.version(), s, "Back after the test");
+        }
+    }
+
     // ------------------------------------------------------------ helpers
 
     record Ride(TestRides.Ride ride, UUID orderId) {
@@ -360,6 +447,33 @@ class RefundExecutionTests {
     private void requestedAgo(Refunds.Refund refund, String interval) {
         jdbc.sql("update refund set requested_at = now() - cast(:i as interval) where id = :id")
                 .param("i", interval).param("id", refund.id()).update();
+    }
+
+    /** Bonuses that never end, from a promotion-like credit. */
+    private void credit(UUID rider, long amount, String key) {
+        tx.executeWithoutResult(st -> {
+            wallets.open(rider, "UAH");
+            ledger.post(new taxi.blizz.finance.Ledger.Posting(key, "PROMOTION", rider, "UAH", "Test bonuses",
+                    List.of(taxi.blizz.finance.Ledger.Line.debit(taxi.blizz.finance.Ledger.Account.PROMO_EXPENSE,
+                                    null, amount),
+                            taxi.blizz.finance.Ledger.Line.credit(taxi.blizz.finance.Ledger.Account.RIDER_WALLET,
+                                    rider, amount))));
+        });
+    }
+
+    /** A spending of bonuses, as a ride paid with them. */
+    private void spend(UUID rider, long amount) {
+        tx.executeWithoutResult(st -> ledger.post(new taxi.blizz.finance.Ledger.Posting("test-spend:" + UUID.randomUUID(),
+                "TRIP_PAYMENT", UUID.randomUUID(), "UAH", "Test ride",
+                List.of(taxi.blizz.finance.Ledger.Line.debit(taxi.blizz.finance.Ledger.Account.RIDER_WALLET, rider,
+                                amount),
+                        taxi.blizz.finance.Ledger.Line.credit(taxi.blizz.finance.Ledger.Account.RIDER_RECEIVABLE,
+                                rider, amount)))));
+    }
+
+    private void endLots(UUID rider) {
+        jdbc.sql("update rider_bonus_lot set expires_at = now() - interval '1 minute' where client_id = :c")
+                .param("c", rider).update();
     }
 
     private String intentState(Ride ride) {
