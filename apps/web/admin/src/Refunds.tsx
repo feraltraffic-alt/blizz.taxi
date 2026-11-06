@@ -286,15 +286,16 @@ type SettingsVersion = {version: number; settings: Record<string, unknown> & {re
 export const REFUND_DEFAULTS: RefundRules = {minimum_minor: {UAH: 1000}, default_per_refund_minor: {UAH: 50000},
   default_daily_minor: {UAH: 300000}, rider_warning_count: 3, rider_warning_days: 30, staff_days: 30,
   super_admin_days: 180, refund_tips: false, card_for_cash: false, show_reason_to_rider: false, reminder_hours: 4,
-  close_after_days: 7, bonus_validity_days: 0};
+  close_after_days: 7, bonus_validity_days: 180};
 const COUNTS: [keyof RefundRules, number, number][] = [['rider_warning_count', 1, 100], ['rider_warning_days', 1, 365],
-  ['staff_days', 1, 3650], ['super_admin_days', 1, 3650], ['reminder_hours', 1, 168], ['close_after_days', 1, 90]];
+  ['staff_days', 1, 3650], ['super_admin_days', 1, 3650], ['reminder_hours', 1, 168], ['close_after_days', 1, 90],
+  ['bonus_validity_days', 0, 3650]];
 const SUMS = ['minimum_minor', 'default_per_refund_minor', 'default_daily_minor'] as const;
 
 /**
  * The service's refund rules (ADR 0018 A2–A9), for holders of settings.manage: per currency the minimum and the limits
- * a staff card starts with; the warning, the terms, tips, the reason to the rider, the reminder and the close. A
- * card refund of a cash trip and bonus validity are not built, so they stay off and 0.
+ * a staff card starts with; the warning, the terms, tips, the reason to the rider, the reminder and the close, and how
+ * long refund bonuses last (0: no end). A card refund of a cash trip is not built, so it stays off.
  */
 export function RefundSettings({client, t, newId}: {client: ApiClient; t: Translate; newId: () => string}) {
   const [current, setCurrent] = useState<SettingsVersion | null>(null);
@@ -338,7 +339,7 @@ export function RefundSettings({client, t, newId}: {client: ApiClient; t: Transl
       return;
     }
     const refunds: RefundRules = {...r, ...(counts as Partial<RefundRules>), refund_tips: flags.tips,
-      show_reason_to_rider: flags.reason, card_for_cash: false, bonus_validity_days: 0,
+      show_reason_to_rider: flags.reason, card_for_cash: false,
       ...Object.fromEntries(SUMS.map(k => [k, {...r[k], [currency]: sums[k] as number}]))};
     acting.current = true;
     setMessage(null);

@@ -173,6 +173,7 @@ class RiderErasureTests {
             N ride_order: payment_method payment_state selected_payment_method source_ref status status_reason
             N ride_order: cancel_fault vehicle_class
             N rider_promotion: currency days_of_week kind name state value_type vehicle_class
+            N rider_bonus_lot: credit_key currency
             N rider_wallet: currency
             N rider_wallet_hold: currency state
             N rider_wallet_top_up: currency reason source state
