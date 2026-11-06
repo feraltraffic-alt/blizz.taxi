@@ -187,6 +187,12 @@ class JdbcRiderWallets implements RiderWallets {
 
     @Override
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void open(UUID clientId, String currency) {
+        ensureAccount(clientId, currency, now());
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public boolean creditPromotion(UUID clientId, UUID orderId, UUID promotionId, String currency, long amountMinor,
                                    String promotionName) {
         if (amountMinor <= 0) {

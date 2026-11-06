@@ -26,7 +26,8 @@ class ReconciliationLocals {
             ) select distinct c.target from changed c join payment_intent i on i.id=c.intent_id where i.merchant_id=:merchant
             """;
     private static final String OPERATIONS_SQL="""
-            select o.id,o.type,o.reference,o.target,o.state,o.amount_minor,i.currency,o.created_at,o.updated_at
+            select o.id,o.type,o.reference,o.target,o.state,o.amount_minor,i.currency,o.created_at,o.updated_at,
+                   o.refund_id
             from payment_operation o join payment_intent i on i.id=o.intent_id
             where o.target=any(cast(:references as text[])) and i.merchant_id=:merchant
             order by o.created_at,o.id
@@ -36,8 +37,9 @@ class ReconciliationLocals {
         boolean uncertain() { return pendingType!=null; }
         boolean succeeded() { return Set.of("HELD","CAPTURED","RELEASED").contains(effectiveState); }
     }
+    /** {@code refundId}: a REFUND to a rider (ADR 0018), which may take a part; a hold release takes all. */
     private record Operation(UUID id,String type,String reference,String target,String state,long amount,
-                             String currency,Instant createdAt,Instant updatedAt) { }
+                             String currency,Instant createdAt,Instant updatedAt,UUID refundId) { }
     private final JdbcClient jdbc;
     ReconciliationLocals(JdbcClient jdbc) { this.jdbc=jdbc; }
 
@@ -113,9 +115,15 @@ class ReconciliationLocals {
         }
         if (!refunds.isEmpty()) {
             long refunded=refunds.stream().mapToLong(Operation::amount).reduce(0,Math::addExact);
-            if (refunded!=amount) throw new IllegalStateException("RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND");
-            effective="RELEASED";
-            selected=refunds.getLast();
+            boolean riders=refunds.stream().allMatch(o->o.refundId()!=null);
+            if (refunded>amount || (refunded<amount && !riders)) {
+                throw new IllegalStateException("RECONCILIATION_UNSUPPORTED_PARTIAL_REFUND");
+            }
+            // A rider refund may take a part only (ADR 0018); the transaction stays paid until all of it came back.
+            if (refunded==amount) {
+                effective="RELEASED";
+                selected=refunds.getLast();
+            }
         }
         Operation pending=chain.stream().filter(o->Set.of("SENDING","PENDING","UNKNOWN").contains(o.state()))
                 .max(Comparator.comparing(Operation::updatedAt).thenComparing(Operation::id)).orElse(null);
@@ -130,6 +138,7 @@ class ReconciliationLocals {
     private static Operation operation(ResultSet rs,int row) throws SQLException {
         return new Operation(rs.getObject("id",UUID.class),rs.getString("type"),rs.getString("reference"),
                 rs.getString("target"),rs.getString("state"),rs.getLong("amount_minor"),rs.getString("currency"),
-                rs.getObject("created_at",OffsetDateTime.class).toInstant(),rs.getObject("updated_at",OffsetDateTime.class).toInstant());
+                rs.getObject("created_at",OffsetDateTime.class).toInstant(),rs.getObject("updated_at",OffsetDateTime.class).toInstant(),
+                rs.getObject("refund_id",UUID.class));
     }
 }

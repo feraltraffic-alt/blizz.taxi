@@ -211,16 +211,79 @@ class JdbcCardPayments implements CardPayments {
     // ---------------------------------------------------------------- shared with the worker and notifications
 
     void createOperation(UUID id, UUID intentId, String type, String reference, String target, long amountMinor) {
+        createOperation(id, intentId, type, reference, target, amountMinor, null);
+    }
+
+    private void createOperation(UUID id, UUID intentId, String type, String reference, String target,
+                                 long amountMinor, UUID refundId) {
         OffsetDateTime now = now();
         jdbc.sql("""
                         insert into payment_operation (id, intent_id, type, reference, target, amount_minor, state,
-                                                       next_check_at, created_at, updated_at, correlation_id)
+                                                       next_check_at, created_at, updated_at, correlation_id,
+                                                       refund_id)
                         values (:id, :intent, :type, :reference, :target, :amount, 'CREATED', :now, :now, :now,
-                                :correlation)""")
+                                :correlation, :refund)""")
                 .param("id", id).param("intent", intentId).param("type", type).param("reference", reference)
                 .param("target", target == null ? reference : target).param("amount", amountMinor).param("now", now)
-                .param("correlation", CorrelationId.currentOrNew())
+                .param("correlation", CorrelationId.currentOrNew()).param("refund", refundId)
                 .update();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void refund(UUID orderId, UUID refundId, long amountMinor) {
+        UUID intentId = jdbc.sql("select id from payment_intent where order_id = :order for update")
+                .param("order", orderId).query(UUID.class).optional()
+                .orElseThrow(() -> new IllegalStateException("No card payment for order " + orderId));
+        if (jdbc.sql("select count(*) from payment_operation where refund_id = :refund").param("refund", refundId)
+                .query(Integer.class).single() > 0) {
+            return;
+        }
+        record Paid(String target, long paid, long taken) {
+        }
+        // What each paid transaction holds: the settled hold (under the hold's reference), a charge, a tip; less the
+        // rider refunds not declined or cancelled. Holds released are not here: their refund names no refund.
+        List<Paid> paid = jdbc.sql("""
+                        select p.target, p.paid,
+                               coalesce((select sum(r.amount_minor) from payment_operation r
+                                         where r.intent_id = :intent and r.type = 'REFUND' and r.refund_id is not null
+                                           and r.target = p.target and r.state not in ('DECLINED', 'CANCELLED')), 0)
+                        from (select target, sum(amount_minor) as paid, min(created_at) as first,
+                                     min(case type when 'SETTLE' then 0 when 'CHARGE' then 1 else 2 end) as rank
+                              from payment_operation
+                              where intent_id = :intent and type in ('SETTLE', 'CHARGE', 'TIP') and state = 'SUCCEEDED'
+                              group by target) p
+                        order by p.rank, p.first""")
+                .param("intent", intentId)
+                .query((rs, i) -> new Paid(rs.getString(1), rs.getLong(2), rs.getLong(3))).list();
+        long left = amountMinor;
+        for (Paid p : paid) {
+            long part = Math.min(left, p.paid() - p.taken());
+            if (part <= 0) {
+                continue;
+            }
+            UUID id = UUID.randomUUID();
+            createOperation(id, intentId, "REFUND", "refund-" + id, p.target(), part, refundId);
+            left -= part;
+            if (left == 0) {
+                break;
+            }
+        }
+        if (left > 0) {
+            throw new IllegalStateException("The card paid less than the refund of order " + orderId);
+        }
+    }
+
+    @Override
+    public RefundProgress refundProgress(UUID refundId) {
+        return jdbc.sql("""
+                        select count(*), count(*) filter (where state = 'SUCCEEDED'),
+                               count(*) filter (where state in ('DECLINED', 'CANCELLED')),
+                               coalesce(sum(amount_minor) filter (where state = 'SUCCEEDED'), 0)
+                        from payment_operation where refund_id = :refund""")
+                .param("refund", refundId)
+                .query((rs, i) -> new RefundProgress(rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getLong(4)))
+                .single();
     }
 
     /**
@@ -342,11 +405,14 @@ class JdbcCardPayments implements CardPayments {
     @Transactional
     public void apply(UUID operationId, PaymentProvider.Outcome outcome, String providerStatus, String reasonCode,
                String reason) {
-        record Op(UUID intentId, String type, String state, int attempts) {
+        record Op(UUID intentId, String type, String state, int attempts, long amount) {
         }
-        Op op = jdbc.sql("select intent_id, type, state, attempts from payment_operation where id = :id for update")
+        Op op = jdbc.sql("""
+                        select intent_id, type, state, attempts, amount_minor from payment_operation
+                        where id = :id for update""")
                 .param("id", operationId)
-                .query((rs, i) -> new Op(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4)))
+                .query((rs, i) -> new Op(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4),
+                        rs.getLong(5)))
                 .single();
         if (java.util.Set.of("SUCCEEDED", "DECLINED", "CANCELLED").contains(op.state())) {
             return;
@@ -398,7 +464,16 @@ class JdbcCardPayments implements CardPayments {
                 }
             }
             case "REFUND" -> {
-                if ("SUCCEEDED".equals(state)) {
+                UUID refundId = jdbc.sql("select refund_id from payment_operation where id = :id")
+                        .param("id", operationId).query((rs, i) -> rs.getObject(1, UUID.class)).single();
+                if (refundId != null) {
+                    // A rider refund (ADR 0018) leaves the payment as it is; the refund learns how it ended.
+                    if ("SUCCEEDED".equals(state) || "DECLINED".equals(state)) {
+                        publish(REFUND_OPERATION_ENDED, intent.orderId(), intent.id(), Map.of("refund_id",
+                                refundId.toString(), "operation_id", operationId.toString(), "state", state,
+                                "amount_minor", op.amount()));
+                    }
+                } else if ("SUCCEEDED".equals(state)) {
                     intentState(intent.id(), "VOIDED");
                 }
             }

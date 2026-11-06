@@ -74,6 +74,12 @@ public interface RiderWallets {
     long available(UUID clientId, String currency);
 
     /**
+     * In the caller's transaction: opens the rider's bonus account in the currency if it is not open yet, for a
+     * posting that credits it from elsewhere (a refund as bonuses, ADR 0018 A5).
+     */
+    void open(UUID clientId, String currency);
+
+    /**
      * Bonuses of a promotion for a trip (ADR 0009), in the caller's transaction; the service's expense. Once per order
      * and promotion: returns {@code false} when already credited.
      */
