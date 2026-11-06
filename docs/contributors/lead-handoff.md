@@ -1,4 +1,4 @@
-# Lead handoff (state on 05.11.2026, night)
+# Lead handoff (state on 06.11.2026)
 
 Read this first when a new lead session (Claude) takes over. Everything else lives in GitHub: issues, PRs, reviews.
 `CLAUDE.md` (the lead's rules), `AGENTS.md` (contributors' rules, which apply to the lead too) and
@@ -30,7 +30,7 @@ Pilot proofs so far: `docs/status/2026-10-31-pilot-proofs.md`.
 |---|---|
 | Codex | Idle. On 05.11 the owner said "take their tasks": the lead did the proposed ones (panel languages #497/#498, load stand #499) |
 | Second Claude | Idle, same as Codex |
-| Lead | ADR 0019 (who is at fault for a cancellation) and ADR 0020 (drivers chosen by pickup time) done in #501–#505. Next: refunds (ADR 0018 part A) once the owner answers Q-06 points 6–9 (point 6 now follows the fault of ADR 0019); tariffs #30 when the owner says. The hourly contributor check (trig_01CLujCwiUi6S7UzFPdfiLLs) is **disabled** at the owner's "пока притормози" (05.11); enable it again when the owner asks |
+| Lead | ADR 0019 (who is at fault for a cancellation) and ADR 0020 (drivers chosen by pickup time) done in #501–#505. Refunds (ADR 0018 part A, #512) done in #513–#516. Next: tariffs #30 when the owner says; possibly expiring refund bonuses (validity stays 0 until built). The hourly contributor check (trig_01CLujCwiUi6S7UzFPdfiLLs) is **disabled** at the owner's "пока притормози" (05.11); enable it again when the owner asks |
 
 Done since 30.10: #124, #135, #139, #141, #142, #143, #144, #145, #146 (pilot proofs, all four parts), #149, #176, #178
 (L1 findings: heartbeat, relay, pool), #186, #196–#201 (acceptance review and its follow-ups), #112 (closed: every item
@@ -87,6 +87,18 @@ Q-05, 06, 07, 11, 12, 15, 16 are still open in the specification; never treat th
   Small pure-Java checks can run with a downloaded JDK (`javac` on single files).
 - Never force-push, never rewrite `main`, no secrets in the repository.
 - The owner's e-mail is used only for authorship.
+
+## Recent history (06.11.2026)
+
+- **Q-06 decided** (ADR 0018 A6–A9, #507–#511): the one at fault bears a refund; cash trips only as bonuses; 30
+  days for staff, 180 for the super admin (the owner's "А. Сверка…" was a remark, not variant A: corrected in
+  #510); reasons with their fault, notices.
+- **Refunds built** (#512, #513–#516): module `refunds`; requests within per-staff limits under locks; the second
+  confirmation; execution through the payment worker (REFUND operations naming the refund; a rider refund never
+  voids the payment) or as bonuses; the journal by fault; pushes; the problem queue; the reminder and auto-close
+  (`RefundTimer`, off in the tests); the admin panel.
+- **WayForPay docs** read at wiki.wayforpay.com (added to the environment's allowed hosts): partial refunds by
+  amount, CHECK_STATUS `refundAmount`; the status after a partial refund and any refund term are not stated.
 
 ## Recent history (05.11.2026, evening and night)
 

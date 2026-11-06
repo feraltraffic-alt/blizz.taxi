@@ -308,6 +308,22 @@ Real cases from pull requests on this repository: what was handed in, what the r
   first one and the test broke.
 - **Habit:** find elements by label or role and name, never by position on the page.
 
+## 29. Tests that passed a broken rule (#513, #516)
+
+- **Missed:** with the locks removed, a concurrency test of two threads still passed (the race seldom shows with
+  two); a test of "nobody confirms their own refund" used a requester without the confirm right, so the right's own
+  check refused first; a panel test covered only a new limit, so dropping an existing limit's version passed.
+- **Habit:** a concurrency test runs many callers at once (6–8) and counts exactly; a test of one rule gives the
+  actor everything else it needs, so only that rule can refuse; run the mutation first and strengthen what passes.
+
+## 30. Small traps met while building refunds (#514, #516)
+
+- `JdbcClient ... .query((rs, i) -> rs.getObject(1, UUID.class)).single()` throws on a null column ("Result value is
+  null"): read an optional column into an `Optional` or a record.
+- A journal posting with no driver or rider line must name its taxi service (`Ledger.Posting` with `serviceId`).
+- A new `i18n/*.ts` file of the admin panel is loaded by a glob; a stale `node_modules/.vitest-cache` shows bare keys
+  until it is deleted. CI starts clean.
+
 ## The common thread
 
 Each of these PRs was green in CI. A green build shows that the code does what its own tests check, not that it does what the issue asks. Your job before the PR is to try to prove your own work wrong and to show in the PR how you tried.

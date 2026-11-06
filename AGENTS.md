@@ -54,6 +54,7 @@ A green build is the start of your own review, not the end of it. Read [`docs/co
 21. **Order is stated, not assumed.** Rows from `UPDATE … RETURNING` or a set come in no order: sort them, and test with several rows at once (lessons case 26).
 22. **A run that measures something proves it did the work:** a gate on the failure share and a minimum of real work, shown red once (lessons case 27).
 23. **Find page elements by label or role and name,** never by position (lessons case 28).
+24. **A test of a rule gives the actor everything else,** so only that rule can refuse; concurrency tests run 6–8 callers at once and count exactly (lessons case 29).
 
 ## Rules that must not be broken
 
