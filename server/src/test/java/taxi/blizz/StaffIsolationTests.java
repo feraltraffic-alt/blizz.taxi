@@ -75,7 +75,7 @@ class StaffIsolationTests {
             "driver.review", "drivers.delete", "drivers.risk", "fares.correct", "finance.manage", "flags.manage",
             "geo.manage", "integrations.manage", "legal.manage", "orders.cancel", "orders.create",
             "operator-bonuses.manage", "orders.fault", "orders.interrupt", "orders.offer", "orders.reassign", "orders.view",
-            "payments.retry", "pricing.manage",
+            "payments.retry", "pricing.manage", "refunds.confirm", "refunds.create",
             "promotions.manage", "reports.view", "retention.manage", "settings.manage", "support.manage",
             "trips.correct", "wallets.manage"};
 
@@ -207,6 +207,12 @@ class StaffIsolationTests {
                     GLOBAL_SETTING + ": a transfer rule per currency"),
             Map.entry("POST /api/admin/v1/services/{service_id}/suspend", OWNER),
             Map.entry("POST /api/admin/v1/services/{service_id}/resume", OWNER),
+            Map.entry("POST /api/admin/v1/refunds/{refund_id}/confirm",
+                    "The refund's city, checked against refunds.confirm (RefundRequestTests.otherCities)"),
+            Map.entry("POST /api/admin/v1/refunds/{refund_id}/reject",
+                    "The refund's city, checked against refunds.confirm (RefundRequestTests.otherCities)"),
+            Map.entry("GET /api/admin/v1/staff/{staff_id}/refund-limits", SUPER_ADMIN + "; others read only themselves"),
+            Map.entry("POST /api/admin/v1/staff/{staff_id}/refund-limits", SUPER_ADMIN),
             Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/change", MERCHANT),
             Map.entry("POST /api/admin/v1/payment-merchants/{merchant_id}/check", MERCHANT));
 
@@ -450,6 +456,7 @@ class StaffIsolationTests {
         values.put("to", "RIDER");
         values.put("follow_up", false);
         values.put("fault", "NONE");
+        values.put("destination", "BONUSES");
         values.put("comment", "Staff isolation probe");
         values.put("reason_code", path.endsWith("/interrupt") ? "VEHICLE_BREAKDOWN"
                 : path.endsWith("/revoke-assignment") ? "DRIVER_NOT_RESPONDING" : "NO_CARS");

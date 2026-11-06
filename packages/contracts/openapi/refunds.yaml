@@ -1,0 +1,307 @@
+openapi: 3.1.0
+info:
+  title: Blizz Taxi — refund components
+  version: 1.0.0
+  description: >-
+    Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A, issue #512). Sums are in minor units of
+    the order's currency.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+paths: {}
+components:
+  schemas:
+    Refund:
+      type: object
+      additionalProperties: false
+      required: [id, order_id, city_id, client_id, driver_id, currency, amount_minor, card_minor, bonus_minor,
+                 paid_bonus_minor, rider_agreed, reason_code, reason_labels, fault, comment, state, requested_by,
+                 requested_at, decided_by, decided_at, decision_reason, ended_at, version]
+      properties:
+        id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        city_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        client_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        driver_id:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        card_minor:
+          description: Goes back to the card; card_minor + bonus_minor = amount_minor.
+          type: integer
+          format: int64
+          minimum: 0
+        bonus_minor:
+          description: Goes to the rider's bonus account.
+          type: integer
+          format: int64
+          minimum: 0
+        paid_bonus_minor:
+          description: The part of the refund that was paid with bonuses (A5), always back as bonuses.
+          type: integer
+          format: int64
+          minimum: 0
+        rider_agreed:
+          description: The staff member marked that the rider agreed to bonuses instead of money (A5).
+          type: boolean
+        reason_code:
+          type: string
+        reason_labels:
+          type: object
+          additionalProperties:
+            type: string
+        fault:
+          description: Who bears the refund (A6, ADR 0019).
+          type: string
+          enum: [CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE]
+        comment:
+          type: [string, "null"]
+        state:
+          description: >-
+            REQUESTED waits for a confirmer; APPROVED waits for the execution; PROCESSING, SUCCEEDED, FAILED, UNKNOWN as
+            the money moves; REJECTED by a confirmer; NOT_REVIEWED closed without a decision (A3).
+          type: string
+          enum: [REQUESTED, APPROVED, PROCESSING, SUCCEEDED, FAILED, UNKNOWN, REJECTED, NOT_REVIEWED]
+        requested_by:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        requested_at:
+          type: string
+          format: date-time
+        decided_by:
+          oneOf:
+            - $ref: "./common.yaml#/components/schemas/Uuid"
+            - type: "null"
+        decided_at:
+          type: [string, "null"]
+          format: date-time
+        decision_reason:
+          type: [string, "null"]
+        ended_at:
+          type: [string, "null"]
+          format: date-time
+        version:
+          type: integer
+          format: int64
+
+    Refundable:
+      description: What the order allows now, for the staff member asking.
+      type: object
+      additionalProperties: false
+      required: [order_id, currency, money_minor, bonus_minor, refunded_minor, left_minor, minimum_minor, to_card,
+                 until, default_fault, rider_warning, rider_refunds]
+      properties:
+        order_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: [string, "null"]
+        money_minor:
+          description: Paid with money — what the card paid, or the cash the driver received.
+          type: integer
+          format: int64
+        bonus_minor:
+          description: Paid with bonuses.
+          type: integer
+          format: int64
+        refunded_minor:
+          description: Taken by refunds requested, approved, in progress or done.
+          type: integer
+          format: int64
+        left_minor:
+          type: integer
+          format: int64
+        minimum_minor:
+          type: integer
+          format: int64
+        to_card:
+          description: Money may go back to the card (false for a cash trip, A7).
+          type: boolean
+        until:
+          description: The last moment this staff member may refund the order (A8); null without an end time.
+          type: [string, "null"]
+          format: date-time
+        default_fault:
+          description: For a cancelled order, the order's fault (ADR 0019); null — the reason's.
+          type: [string, "null"]
+          enum: [CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE, null]
+        rider_warning:
+          description: The rider already had refunds_rider_warning_count refunds in the window (A2); a warning only.
+          type: boolean
+        rider_refunds:
+          type: integer
+
+    OrderRefunds:
+      type: object
+      additionalProperties: false
+      required: [refundable, refunds]
+      properties:
+        refundable:
+          $ref: "#/components/schemas/Refundable"
+        refunds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Refund"
+
+    CreateRefund:
+      type: object
+      additionalProperties: false
+      required: [command_id, amount_minor, destination, reason_code]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        destination:
+          description: CARD or BONUSES; the part paid with bonuses goes back as bonuses either way (A5).
+          type: string
+          enum: [CARD, BONUSES]
+        rider_agreed:
+          description: Required for bonuses instead of money (A5).
+          type: boolean
+          default: false
+        reason_code:
+          description: A code of the REFUND reasons (GET /api/admin/v1/refund-reasons).
+          type: string
+          maxLength: 40
+        fault:
+          description: Omitted, the reason's (or the cancelled order's); another one, or the reason OTHER, needs a comment.
+          type: string
+          enum: [CLIENT_FREE, CLIENT, DRIVER, OPERATOR, NONE]
+        comment:
+          type: string
+          maxLength: 500
+
+    RequestedRefund:
+      type: object
+      additionalProperties: false
+      required: [refund, rider_warning, rider_refunds]
+      properties:
+        refund:
+          $ref: "#/components/schemas/Refund"
+        rider_warning:
+          type: boolean
+        rider_refunds:
+          type: integer
+
+    RefundDecision:
+      type: object
+      additionalProperties: false
+      required: [command_id, expected_version]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          description: Required to reject.
+          type: string
+          maxLength: 500
+
+    RefundList:
+      type: object
+      additionalProperties: false
+      required: [refunds]
+      properties:
+        refunds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Refund"
+
+    RefundLimit:
+      type: object
+      additionalProperties: false
+      required: [staff_id, currency, per_refund_minor, daily_minor, used_minor, version]
+      properties:
+        staff_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        per_refund_minor:
+          type: integer
+          format: int64
+        daily_minor:
+          type: integer
+          format: int64
+        used_minor:
+          description: Taken by this staff member's refunds in the last 24 hours (rolling).
+          type: integer
+          format: int64
+        version:
+          type: integer
+          format: int64
+
+    RefundLimitList:
+      type: object
+      additionalProperties: false
+      required: [limits]
+      properties:
+        limits:
+          type: array
+          items:
+            $ref: "#/components/schemas/RefundLimit"
+
+    SetRefundLimit:
+      type: object
+      additionalProperties: false
+      required: [command_id, currency, per_refund_minor, daily_minor, expected_version, reason]
+      properties:
+        command_id:
+          $ref: "./common.yaml#/components/schemas/Uuid"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        per_refund_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        daily_minor:
+          description: Not less than per_refund_minor.
+          type: integer
+          format: int64
+          minimum: 1
+        expected_version:
+          description: 0 for a currency without a limit yet.
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    RefundReasonList:
+      type: object
+      additionalProperties: false
+      required: [reasons]
+      properties:
+        reasons:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, labels, fault]
+            properties:
+              code:
+                type: string
+              labels:
+                type: object
+                additionalProperties:
+                  type: string
+              fault:
+                type: [string, "null"]
+                enum: [CLIENT, DRIVER, OPERATOR, NONE, null]

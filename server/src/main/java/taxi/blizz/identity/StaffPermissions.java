@@ -43,6 +43,8 @@ public final class StaffPermissions {
             new Permission("pricing.manage", "Pricing", "Vehicle classes and tariffs"),
             new Permission("trips.correct", "Orders",
                     "Correct a trip's start or completion after the fact and review it"),
+            new Permission("refunds.create", "Finance", "Refunds to riders, within the staff member's limits"),
+            new Permission("refunds.confirm", "Finance", "Confirm the refunds other staff members request"),
             new Permission("fares.correct", "Finance",
                     "Correct a fulfilled order's final fare (the password is asked again)"),
             new Permission("finance.manage", "Finance", "Driver debt limits and payments"),

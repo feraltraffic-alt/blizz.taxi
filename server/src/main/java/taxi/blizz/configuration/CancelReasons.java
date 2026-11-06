@@ -21,9 +21,12 @@ public interface CancelReasons {
     /** Staff cancellation reason that marks an operator-created order as the operator's fault (ADR 0011). */
     String OPERATOR_ERROR = "OPERATOR_ERROR";
 
-    /** RIDER, DRIVER, STAFF cancel an order; REASSIGN — staff take a driver off it before the start (issue #143). */
+    /**
+     * RIDER, DRIVER, STAFF cancel an order; REASSIGN — staff take a driver off it before the start (issue #143);
+     * REFUND — why staff refund a rider (ADR 0018 A9).
+     */
     enum Audience {
-        RIDER, DRIVER, STAFF, REASSIGN
+        RIDER, DRIVER, STAFF, REASSIGN, REFUND
     }
 
     /** What a driver's cancellation does to the order. */

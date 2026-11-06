@@ -1280,6 +1280,44 @@ class JdbcOrders implements Orders {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<RefundFacts> refundFacts(UUID orderId) {
+        return jdbc.sql("""
+                        select o.id, o.status, o.city_id, o.payer_client_id, o.payment_method, o.currency,
+                               o.cancel_fault, t.payload::text as trip, t.occurred_at as completed_at,
+                               (select max(e.occurred_at) from order_event e where e.order_id = o.id
+                                  and e.type in ('OrderCancelled', 'PassengerNoShow', 'TripInterrupted'))
+                                   as cancelled_at
+                        from ride_order o
+                        left join lateral (select payload, occurred_at from order_event
+                                           where order_id = o.id and type = 'TripCompleted'
+                                           order by sequence desc limit 1) t on true
+                        where o.id = :id""")
+                .param("id", orderId)
+                .query((rs, i) -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> trip = rs.getString("trip") == null ? Map.of()
+                            : json.readValue(rs.getString("trip"), Map.class);
+                    String status = rs.getString("status");
+                    String driver = trip.get("driver_id") == null ? null : trip.get("driver_id").toString();
+                    return new RefundFacts(rs.getObject("id", UUID.class), status,
+                            rs.getObject("city_id", UUID.class), rs.getObject("payer_client_id", UUID.class),
+                            driver == null ? null : UUID.fromString(driver), rs.getString("payment_method"),
+                            rs.getString("currency"), minor(trip, "amount_minor"), minor(trip, "driver_share_minor"),
+                            minor(trip, "commission_minor"), minor(trip, "wallet_minor"),
+                            minor(trip, "discount_minor"),
+                            trip.get("cash_received") instanceof Boolean b ? b : null, rs.getString("cancel_fault"),
+                            "CANCELLED".equals(status) ? rs.getObject("cancelled_at", OffsetDateTime.class)
+                                    : rs.getObject("completed_at", OffsetDateTime.class));
+                })
+                .optional();
+    }
+
+    private static long minor(Map<String, Object> payload, String key) {
+        return payload.get(key) instanceof Number n ? n.longValue() : 0L;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PayerTrips> payerTrips(UUID payerClientId, OffsetDateTime since) {
         return jdbc.sql("""
                         select currency, count(*) as trips, coalesce(sum(coalesce(final_price_minor, price_minor)), 0)

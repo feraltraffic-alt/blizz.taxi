@@ -238,6 +238,21 @@ public interface Orders {
 
     Optional<TripTimes> tripTimes(UUID orderId);
 
+    /**
+     * What a refund needs of an order (ADR 0018 part A): its status, rider and city, and for a completed trip the fare
+     * as the trip ended — its split between the driver and the service, the part paid with bonuses, the payment method
+     * and, for cash, whether the driver said it was received. {@code endedAt}: the completion, or the cancellation.
+     * {@code cancelFault}: ADR 0019, for a cancelled order.
+     */
+    record RefundFacts(UUID orderId, String status, UUID cityId, UUID payerClientId, UUID driverId,
+                       String paymentMethod, String currency, long fareMinor, long driverShareMinor,
+                       long commissionMinor, long walletMinor, long discountMinor, Boolean cashReceived,
+                       String cancelFault,
+                       OffsetDateTime endedAt) {
+    }
+
+    Optional<RefundFacts> refundFacts(UUID orderId);
+
     /** Fulfilled orders a client paid for, in one currency: how many and their final prices in total. */
     record PayerTrips(String currency, long trips, long totalMinor) {
     }

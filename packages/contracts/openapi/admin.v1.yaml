@@ -5858,6 +5858,231 @@ paths:
         "409":
           $ref: "./common.yaml#/components/responses/Conflict"
 
+  /api/admin/v1/orders/{order_id}/refunds:
+    get:
+      operationId: getOrderRefunds
+      summary: What an order allows to refund, and its refunds
+      description: >-
+        ADR 0018 part A. Needs refunds.create or refunds.confirm for the order's city. until is this staff member's own
+        term (30 days for staff, 180 for the super admin, A8).
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: The order's refunds.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/OrderRefunds"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+    post:
+      operationId: requestRefund
+      summary: Request a refund to the rider
+      description: >-
+        ADR 0018 A1–A9, issue #512. Needs refunds.create for the order's city. A staff member's request waits for a
+        confirmation (REQUESTED); the super admin's goes at once (APPROVED), without limits. Refused with
+        REFUND_LIMIT over the staff member's limit for one refund or for 24 hours, or with no limit set; with
+        REFUND_NOT_ALLOWED over what is left of the payment, below the minimum, too late, or to a card for a cash trip.
+        rider_warning: the rider already had several refunds lately (a warning, not a block). Audited.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./refunds.yaml#/components/schemas/CreateRefund"
+      responses:
+        "201":
+          description: The refund.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/RequestedRefund"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableEntity"
+
+  /api/admin/v1/refunds/waiting:
+    get:
+      operationId: listWaitingRefunds
+      summary: Refunds waiting for a confirmation
+      description: In the cities where the caller may confirm (refunds.confirm, or the super admin), not their own.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/RefundList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/admin/v1/refunds/{refund_id}/confirm:
+    post:
+      operationId: confirmRefund
+      summary: Confirm a refund requested by someone else
+      description: >-
+        ADR 0018 A3. Needs refunds.confirm for the refund's city (or the super admin); never one's own refund (403).
+        The amount cannot be changed: reject and request another one. Audited.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/RefundId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./refunds.yaml#/components/schemas/RefundDecision"
+      responses:
+        "200":
+          description: The refund, APPROVED.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/Refund"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/refunds/{refund_id}/reject:
+    post:
+      operationId: rejectRefund
+      summary: Reject a refund requested by someone else, with a reason
+      description: ADR 0018 A3. As confirm; the reason is required. Audited.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/RefundId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./refunds.yaml#/components/schemas/RefundDecision"
+      responses:
+        "200":
+          description: The refund, REJECTED.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/Refund"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/staff/{staff_id}/refund-limits:
+    get:
+      operationId: getStaffRefundLimits
+      summary: A staff member's refund limits
+      description: Super admin only; a staff member reads their own (ADR 0018 A2).
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/StaffId"
+      responses:
+        "200":
+          description: Per currency, with what was used in the last 24 hours.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/RefundLimitList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      operationId: setStaffRefundLimit
+      summary: Set a staff member's refund limits in a currency
+      description: >-
+        Super admin only (ADR 0018 A2): no limit set means no refunds; the panel starts from the service's
+        refunds.default_per_refund_minor and default_daily_minor. Audited.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./refunds.yaml#/components/schemas/SetRefundLimit"
+      responses:
+        "200":
+          description: The limit.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/RefundLimit"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+
+  /api/admin/v1/refund-reasons:
+    get:
+      operationId: listRefundReasons
+      summary: The active refund reasons with their fault
+      description: ADR 0018 A9; edited with the cancel reasons (side REFUND). Needs refunds.create.
+      tags: [Refunds]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: In display order.
+          content:
+            application/json:
+              schema:
+                $ref: "./refunds.yaml#/components/schemas/RefundReasonList"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
   /api/admin/v1/drivers/{driver_id}/discipline:
     get:
       operationId: getDriverDisciplineCard
@@ -6039,6 +6264,24 @@ tags:
 
 components:
   parameters:
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
+    RefundId:
+      name: refund_id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
+    StaffId:
+      name: staff_id
+      in: path
+      required: true
+      schema:
+        $ref: "./common.yaml#/components/schemas/Uuid"
     RiskFlagId:
       name: flag_id
       in: path

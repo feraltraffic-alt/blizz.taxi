@@ -64,6 +64,15 @@ class JdbcStaffAccess implements StaffAccess {
     }
 
     @Override
+    public boolean superAdmin(Actor actor) {
+        if (actor == null || actor.type() != taxi.blizz.platform.SubjectType.STAFF) {
+            return false;
+        }
+        return jdbc.sql("select count(*) from staff_user where id = :id and role = 'SUPER_ADMIN' and state = 'ACTIVE'")
+                .param("id", actor.id()).query(Integer.class).single() > 0;
+    }
+
+    @Override
     public void requireOverStaff(Actor actor, String permission, UUID staffId) {
         requireSameService(actor, "staff_user", staffId);
         List<Scope> target = jdbc.sql("""

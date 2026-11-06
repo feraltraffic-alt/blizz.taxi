@@ -52,7 +52,9 @@ class JdbcServiceSettings implements ServiceSettings {
             new DriverDiscipline(true, 30, 3, 5, 30, 120, 7, 20, 20, 5, 7),
             new OfferDiscipline(true, 3, true, 20, 50, 30, 3000),
             new PickupTime(15, 10),
-            new CancellationFault(2, 5, 15, false));
+            new CancellationFault(2, 5, 15, false),
+            new Refunds(Map.of("UAH", 1_000L), Map.of("UAH", 50_000L), Map.of("UAH", 300_000L), 3, 30, 30, 180,
+                    false, false, false, 4, 7, 0));
 
     /**
      * Pre-orders at most two weeks ahead (owner decision 28.10.2026: a month is too long, the service may close). It
@@ -258,8 +260,10 @@ class JdbcServiceSettings implements ServiceSettings {
         CancellationFault fault = s.cancellationFault() == null ? DEFAULTS.cancellationFault()
                 : s.cancellationFault();
         validate(fault);
+        Refunds refunds = s.refunds() == null ? DEFAULTS.refunds() : s.refunds();
+        validate(refunds);
         return new Settings(brand, new Languages(def, enabled), new Calls(c.mode(), servicePhone), p, ratings, tips,
-                orders, cash, versions, topUps, debts, discipline, offers, pickup, fault);
+                orders, cash, versions, topUps, debts, discipline, offers, pickup, fault, refunds);
     }
 
     /** No policy for a platform is "0.0.0": every build allowed. */
@@ -319,8 +323,34 @@ class JdbcServiceSettings implements ServiceSettings {
         PickupTime pickup = s.pickupTime() == null ? DEFAULTS.pickupTime() : s.pickupTime();
         CancellationFault fault = s.cancellationFault() == null ? DEFAULTS.cancellationFault()
                 : s.cancellationFault();
+        Refunds refunds = s.refunds() == null ? DEFAULTS.refunds() : s.refunds();
         return new Settings(s.brand(), s.languages(), s.calls(), preorders, ratings, tips, orders, cash, versions,
-                topUps, debts, discipline, offers, pickup, fault);
+                topUps, debts, discipline, offers, pickup, fault, refunds);
+    }
+
+    /** ADR 0018 A2–A8: positive sums per currency code, the staff term within the super admin's, sane bounds. */
+    private static void validate(Refunds r) {
+        for (Map<String, Long> sums : List.of(r.minimumMinor(), r.defaultPerRefundMinor(), r.defaultDailyMinor())) {
+            for (Map.Entry<String, Long> e : sums.entrySet()) {
+                if (e.getKey() == null || !e.getKey().matches("^[A-Z]{3}$") || e.getValue() == null
+                        || e.getValue() < 1 || e.getValue() > 1_000_000_000_000L) {
+                    throw invalid("Refunds: sums are positive, by three-letter currency code");
+                }
+            }
+        }
+        if (r.riderWarningCount() < 1 || r.riderWarningCount() > 100 || r.riderWarningDays() < 1
+                || r.riderWarningDays() > 365) {
+            throw invalid("Refunds: rider_warning_count 1–100, rider_warning_days 1–365");
+        }
+        if (r.staffDays() < 1 || r.superAdminDays() < r.staffDays() || r.superAdminDays() > 3650) {
+            throw invalid("Refunds: staff_days from 1, super_admin_days not shorter, up to 3650");
+        }
+        if (r.reminderHours() < 1 || r.reminderHours() > 168 || r.closeAfterDays() < 1 || r.closeAfterDays() > 90) {
+            throw invalid("Refunds: reminder_hours 1–168, close_after_days 1–90");
+        }
+        if (r.bonusValidityDays() < 0 || r.bonusValidityDays() > 3650) {
+            throw invalid("Refunds: bonus_validity_days 0 (no end) to 3650");
+        }
     }
 
     /** ADR 0019: a free window of 0 to 60 minutes; lateness of 1 to 120, without a promise 1 to 180. */

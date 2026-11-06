@@ -288,15 +288,17 @@ class JdbcCancelReasons implements CancelReasons {
         } else if (d.operatorFault() && fault != Fault.OPERATOR) {
             throw invalid("A reason marked as operator fault has the fault OPERATOR");
         }
-        if (fault == Fault.OPERATOR && d.audience() != Audience.STAFF) {
-            throw invalid("Only a staff cancellation reason can be the operator's fault");
+        if (fault == Fault.OPERATOR && d.audience() != Audience.STAFF && d.audience() != Audience.REFUND) {
+            throw invalid("Only a staff cancellation reason or a refund reason can be the operator's fault");
         }
         boolean late = Boolean.TRUE.equals(d.lateDriverFault());
         if (late && fault != Fault.CLIENT) {
             throw invalid("Only a reason with the client's fault can turn to the driver's when the driver is late");
         }
-        return new Draft(d.audience(), code, labels, d.driverOutcome(), fault == Fault.OPERATOR, d.notCounted(),
-                d.active(), d.sortOrder(), fault, late);
+        // The operator flag (ADR 0011) is the staff list's; a refund reason has the fault alone.
+        return new Draft(d.audience(), code, labels, d.driverOutcome(),
+                fault == Fault.OPERATOR && d.audience() == Audience.STAFF, d.notCounted(), d.active(), d.sortOrder(),
+                fault, late);
     }
 
     /**

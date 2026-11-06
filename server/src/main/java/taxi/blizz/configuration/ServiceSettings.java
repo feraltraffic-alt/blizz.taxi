@@ -1,6 +1,7 @@
 package taxi.blizz.configuration;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import taxi.blizz.platform.Actor;
 import taxi.blizz.platform.PageCursor;
@@ -168,6 +169,32 @@ public interface ServiceSettings {
                              boolean countLateCancellations) {
     }
 
+    /**
+     * Staff refunds to riders (owner decisions 03–06.11.2026, ADR 0018 part A). {@code minimumMinor}: the smallest
+     * refund per currency (A4); {@code defaultPerRefundMinor} and {@code defaultDailyMinor}: what a staff member's
+     * limits start with in the panel (A2; the limits themselves are per staff member). A warning after
+     * {@code riderWarningCount} refunds to one rider in {@code riderWarningDays} days. Staff refund within
+     * {@code staffDays} of the trip, the super admin within {@code superAdminDays} (A8). Tips go back only with
+     * {@code refundTips}; a cash trip to a card only with {@code cardForCash} (A7); the rider sees the reason only with
+     * {@code showReasonToRider} (A9). A request reminds the confirmers after {@code reminderHours} and closes after
+     * {@code closeAfterDays} (A3). Refund bonuses last {@code bonusValidityDays}, 0 for no end (A5).
+     */
+    record Refunds(Map<String, Long> minimumMinor, Map<String, Long> defaultPerRefundMinor,
+                   Map<String, Long> defaultDailyMinor, int riderWarningCount, int riderWarningDays, int staffDays,
+                   int superAdminDays, boolean refundTips, boolean cardForCash, boolean showReasonToRider,
+                   int reminderHours, int closeAfterDays, int bonusValidityDays) {
+        public Refunds {
+            minimumMinor = minimumMinor == null ? Map.of() : Map.copyOf(minimumMinor);
+            defaultPerRefundMinor = defaultPerRefundMinor == null ? Map.of() : Map.copyOf(defaultPerRefundMinor);
+            defaultDailyMinor = defaultDailyMinor == null ? Map.of() : Map.copyOf(defaultDailyMinor);
+        }
+
+        /** The minimum of a currency the service did not name: 1 minor unit. */
+        public long minimum(String currency) {
+            return minimumMinor.getOrDefault(currency, 1L);
+        }
+    }
+
     /** Per-platform version policy (REQ-API-10). */
     record PlatformVersions(String minimumVersion, String latestVersion) {
     }
@@ -180,14 +207,24 @@ public interface ServiceSettings {
     record Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                     Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                     StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
-                    OfferDiscipline offerDiscipline, PickupTime pickupTime, CancellationFault cancellationFault) {
+                    OfferDiscipline offerDiscipline, PickupTime pickupTime, CancellationFault cancellationFault,
+                    Refunds refunds) {
+        /** Source compatibility for callers written before the refund settings. */
+        public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
+                        Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
+                        StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
+                        OfferDiscipline offerDiscipline, PickupTime pickupTime, CancellationFault cancellationFault) {
+            this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
+                    riderDebts, driverDiscipline, offerDiscipline, pickupTime, cancellationFault, null);
+        }
+
         /** Source compatibility for callers written before the cancellation fault settings. */
         public Settings(Brand brand, Languages languages, Calls calls, Preorders preorders, Ratings ratings, Tips tips,
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
                         OfferDiscipline offerDiscipline, PickupTime pickupTime) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, offerDiscipline, pickupTime, null);
+                    riderDebts, driverDiscipline, offerDiscipline, pickupTime, null, null);
         }
 
         /** Source compatibility for callers written before the pickup time settings. */
@@ -196,7 +233,7 @@ public interface ServiceSettings {
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline,
                         OfferDiscipline offerDiscipline) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, offerDiscipline, null, null);
+                    riderDebts, driverDiscipline, offerDiscipline, null, null, null);
         }
 
         /** Source compatibility for callers written before the offer discipline settings. */
@@ -204,7 +241,7 @@ public interface ServiceSettings {
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts, DriverDiscipline driverDiscipline) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, driverDiscipline, null, null, null);
+                    riderDebts, driverDiscipline, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the driver discipline settings. */
@@ -212,7 +249,7 @@ public interface ServiceSettings {
                         Orders orders, CashNotReceived cashNotReceived, AppVersions appVersions,
                         StaffTopUps staffTopUps, RiderDebts riderDebts) {
             this(brand, languages, calls, preorders, ratings, tips, orders, cashNotReceived, appVersions, staffTopUps,
-                    riderDebts, null, null, null, null);
+                    riderDebts, null, null, null, null, null);
         }
 
         /** Source compatibility for callers written before the rider debt limit. */

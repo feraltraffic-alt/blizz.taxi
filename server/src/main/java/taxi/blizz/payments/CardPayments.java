@@ -62,6 +62,15 @@ public interface CardPayments {
     Optional<Intent> intent(UUID orderId);
 
     /**
+     * What the card of an order paid (ADR 0018 A4): the fare (SUCCEEDED SETTLE and CHARGE) and the tips (SUCCEEDED
+     * TIP), and when the fare was first paid; empty without a card payment.
+     */
+    record Paid(String currency, long fareMinor, long tipsMinor, java.time.OffsetDateTime paidAt) {
+    }
+
+    Optional<Paid> paid(UUID orderId);
+
+    /**
      * When the order's card hold lapses at the provider: the hold's own {@code hold_until}, else the successful
      * authorization plus the provider's hold timeout. Empty unless the hold is in place (AUTHORIZED).
      */
