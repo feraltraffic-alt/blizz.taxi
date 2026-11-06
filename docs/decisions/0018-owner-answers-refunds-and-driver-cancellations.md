@@ -1,4 +1,4 @@
-# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–7) and drivers cancelling accepted orders
+# ADR 0018. Owner answers of 03.11.2026: refunds (Q-06, points 1–8) and drivers cancelling accepted orders
 
 Date: 03.11.2026. Status: accepted (the owner's answers in the lead's session).
 
@@ -90,9 +90,19 @@ for the lawyer (Q-05).
 - A switch in the admin panel "Allow a refund to the card for cash trips", **off** by default. If it is turned on
   later, it is a payout to the rider's card, not a refund of a payment (the trip had none), and needs its own design.
 
+### A8. Time limit (owner, 05.11.2026, variant A)
+
+- **One limit for everyone**, the super admin included: a refund may be requested within **30 days** (setting) of the
+  end of the trip, or of the cancellation for a cancelled order. After it nobody refunds.
+- The owner's reason: the accountant reconciles with the tax authorities once a month, so a refund must not reach
+  into a month already reconciled long ago.
+- If the payment provider's own term for a card refund is shorter, a card refund after it is refused and the rider
+  is offered bonuses (with the mark "the rider agreed"). The lead checks the provider's term in its documentation and
+  the service's contract before the refunds are built.
+
 ### Still open
 
-The time limit (point 8), reasons and the rider's notice (point 9). Until they are answered, refunds are not built.
+Reasons and the rider's notice (point 9). Until it is answered, refunds are not built.
 
 ## Part B. A driver cancels an order after accepting it
 
