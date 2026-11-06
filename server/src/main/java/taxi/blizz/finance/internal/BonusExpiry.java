@@ -58,10 +58,10 @@ public class BonusExpiry {
             for (Rider r : due) {
                 for (BonusLots.Left left : lots.left(r.clientId(), r.currency())) {
                     BonusLots.Lot lot = left.lot();
-                    if (lot.expiredAt() != null || lot.expiresAt().isAfter(now)) {
+                    if (lot.expiresAt().isAfter(now)) {
                         continue;
                     }
-                    long burn = Math.min(left.leftMinor(), wallets.available(r.clientId(), r.currency()));
+                    long burn = left.leftMinor();
                     if (burn > 0) {
                         ledger.post(new Ledger.Posting("bonus-expired:" + lot.id(), BASIS, lot.id(), r.currency(),
                                 "Refund bonuses expired", List.of(Line.debit(Account.RIDER_WALLET, r.clientId(), burn),

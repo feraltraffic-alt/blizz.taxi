@@ -79,7 +79,7 @@ class BonusLots {
                     o.left = Math.max(0, o.left - m.debit());
                     continue;
                 }
-                long debit = m.debit();
+                long debit = 0;
                 open.sort(Comparator.comparing((Open o) -> o.lot.expiresAt()).thenComparing(o -> o.lot.id()));
                 for (Open o : open) {
                     long take = Math.min(debit, o.left);
