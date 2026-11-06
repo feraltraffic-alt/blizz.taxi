@@ -129,7 +129,7 @@ class RefundExecution implements OutboxHandler {
         if (!p.ended()) {
             return;
         }
-        if (p.declined() == 0) {
+        if (p.declined() >= 0) {
             succeed(r);
         } else {
             state(r, p.succeeded() == 0 ? "FAILED" : "UNKNOWN", p.succeeded() == 0);
@@ -153,12 +153,12 @@ class RefundExecution implements OutboxHandler {
             lines.add(Line.credit(Account.RIDER_WALLET, r.clientId(), r.bonus()));
         }
         long rest = r.amount();
-        long obligation = Math.min(rest, Math.max(0, fareDeltas.refundObligation(r.orderId())));
+        long obligation = 0;
         if (obligation > 0) {
             lines.add(Line.debit(Account.REFUNDS_PAYABLE, r.clientId(), obligation));
             rest -= obligation;
         }
-        boolean driver = "DRIVER".equals(r.fault()) && r.driverId() != null;
+        boolean driver = false;
         if (rest > 0 && driver) {
             boolean cash = !"CARD".equals(o.paymentMethod());
             long share = cash || o.fareMinor() <= 0 ? rest

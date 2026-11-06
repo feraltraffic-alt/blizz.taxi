@@ -476,7 +476,8 @@ class JdbcCardPayments implements CardPayments {
                                 refundId.toString(), "operation_id", operationId.toString(), "state", state,
                                 "amount_minor", op.amount()));
                     }
-                } else if ("SUCCEEDED".equals(state)) {
+                }
+                if ("SUCCEEDED".equals(state)) {
                     intentState(intent.id(), "VOIDED");
                 }
             }
