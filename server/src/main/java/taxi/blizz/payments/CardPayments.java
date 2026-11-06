@@ -70,6 +70,26 @@ public interface CardPayments {
 
     Optional<Paid> paidByCard(UUID orderId);
 
+    /** Event: one card operation of a rider refund ended, SUCCEEDED or DECLINED (ADR 0018, issue #512). */
+    String REFUND_OPERATION_ENDED = "CardRefundOperationEnded";
+
+    /**
+     * In the caller's transaction: returns {@code amountMinor} of the order's card payment to the card for the rider
+     * refund {@code refundId} (ADR 0018). The amount is spread over the paid transactions — the settled hold, then the
+     * charge, then the tips — less what earlier rider refunds took from each; one REFUND operation per transaction,
+     * sent by the payment worker. A repeated call for the same refund does nothing.
+     */
+    void refund(UUID orderId, UUID refundId, long amountMinor);
+
+    /** Where the card operations of a rider refund stand: how many, how many ended which way, and the sum done. */
+    record RefundProgress(int operations, int succeeded, int declined, long succeededMinor) {
+        public boolean ended() {
+            return operations > 0 && succeeded + declined == operations;
+        }
+    }
+
+    RefundProgress refundProgress(UUID refundId);
+
     /**
      * When the order's card hold lapses at the provider: the hold's own {@code hold_until}, else the successful
      * authorization plus the provider's hold timeout. Empty unless the hold is in place (AUTHORIZED).

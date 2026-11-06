@@ -51,8 +51,9 @@ public class PaymentWorker {
         this.clock = clock;
     }
 
+    /** {@code refundId}: a REFUND to a rider (ADR 0018), null for a hold release. */
     private record Claimed(UUID id, UUID intentId, String type, String reference, String target, long amount,
-                           String previous, UUID correlationId) {
+                           String previous, UUID correlationId, UUID refundId) {
     }
 
     /** Processes the due operations; returns how many were handled. */
@@ -87,14 +88,14 @@ public class PaymentWorker {
                             set state = 'SENDING', lease_until = :lease, attempts = o.attempts + 1, updated_at = :now
                             from due where o.id = due.id
                             returning o.id, o.intent_id, o.type, o.reference, o.target, o.amount_minor, due.previous,
-                                      o.correlation_id""")
+                                      o.correlation_id, o.refund_id""")
                     .param("now", now).param("lease", now.plus(LEASE)).param("limit", BATCH);
             if (orderId != null) {
                 query = query.param("order", orderId);
             }
             return query.query((rs, i) -> new Claimed(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                     rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6), rs.getString(7),
-                    rs.getObject(8, UUID.class))).list();
+                    rs.getObject(8, UUID.class), rs.getObject(9, UUID.class))).list();
         });
         return claimed == null ? List.of() : claimed;
     }
@@ -161,7 +162,8 @@ public class PaymentWorker {
             case "TIP" -> provider.charge(c.merchant(), op.reference(), c.token(), op.amount(), customer,
                     "Tip for the driver", serviceUrl);
             case "SETTLE" -> provider.settle(c.merchant(), op.target(), op.amount());
-            case "REFUND" -> provider.refund(c.merchant(), op.target(), op.amount(), "Hold released");
+            case "REFUND" -> provider.refund(c.merchant(), op.target(), op.amount(),
+                    op.refundId() == null ? "Hold released" : "Refund to the rider");
             default -> throw new IllegalStateException("Unknown operation " + op.type());
         };
     }
@@ -182,6 +184,9 @@ public class PaymentWorker {
                             + (status.reasonCode() == null ? "" : " (" + status.reasonCode() + ")"));
         }
         String s = status.providerStatus().toLowerCase(java.util.Locale.ROOT);
+        if ("REFUND".equals(op.type()) && op.refundId() != null) {
+            return riderRefund(op, status, s);
+        }
         if (("SETTLE".equals(op.type()) || "REFUND".equals(op.type())) && "waitingauthcomplete".equals(s)) {
             // The hold stands untouched: our capture or void never reached the bank. Send it again — on a hold a
             // second settle or void cannot take money twice (review of 28.10.2026: it waited until the hold lapsed).
@@ -211,6 +216,30 @@ public class PaymentWorker {
                 case "refundinprocessing" -> PaymentProvider.Outcome.PENDING;
                 default -> PaymentProvider.Outcome.UNKNOWN;
             };
+            default -> PaymentProvider.Outcome.UNKNOWN;
+        };
+        return new PaymentProvider.Result(outcome, status.providerStatus(), status.reasonCode(), status.reason());
+    }
+
+    /**
+     * A rider refund of a paid transaction (ADR 0018): "refunded" is done. A partial refund may leave the transaction
+     * "approved" (not stated in the docs); then the provider's sum of all refunds decides: done when it covers the
+     * refunds already done on the transaction plus this one, else still unknown — never sent again, since a REFUND has
+     * no reference of its own and a second one would pay twice.
+     */
+    private PaymentProvider.Result riderRefund(Claimed op, PaymentProvider.Result status, String s) {
+        PaymentProvider.Outcome outcome = switch (s) {
+            case "refunded" -> PaymentProvider.Outcome.SUCCEEDED;
+            case "refundinprocessing" -> PaymentProvider.Outcome.PENDING;
+            case "approved" -> {
+                long done = jdbc.sql("""
+                                select coalesce(sum(amount_minor), 0) from payment_operation
+                                where target = :target and type = 'REFUND' and refund_id is not null
+                                  and state = 'SUCCEEDED' and id <> :id""")
+                        .param("target", op.target()).param("id", op.id()).query(Long.class).single();
+                yield status.refundedMinor() != null && status.refundedMinor() >= done + op.amount()
+                        ? PaymentProvider.Outcome.SUCCEEDED : PaymentProvider.Outcome.UNKNOWN;
+            }
             default -> PaymentProvider.Outcome.UNKNOWN;
         };
         return new PaymentProvider.Result(outcome, status.providerStatus(), status.reasonCode(), status.reason());

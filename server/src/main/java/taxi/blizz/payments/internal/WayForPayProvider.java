@@ -324,7 +324,21 @@ class WayForPayProvider implements PaymentProvider {
             log.warn("WayForPay answer for {} has a wrong signature", body.get("orderReference"));
             return Result.unknown("The provider's answer is not signed correctly");
         }
-        return new Result(outcome(status, kind), status, reasonCode, reason);
+        return new Result(outcome(status, kind), status, reasonCode, reason,
+                kind == Kind.STATUS ? minorOrNull(text(response.get("refundAmount"))) : null);
+    }
+
+    /** A sum in major units as WayForPay writes it ("2.3"), in minor units; null when absent or not a number. */
+    static Long minorOrNull(String major) {
+        if (major == null || major.isBlank()) {
+            return null;
+        }
+        try {
+            return new java.math.BigDecimal(major.strip()).movePointRight(2)
+                    .setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** Statuses from the WayForPay response codes page; anything unexpected is UNKNOWN and gets reconciled. */

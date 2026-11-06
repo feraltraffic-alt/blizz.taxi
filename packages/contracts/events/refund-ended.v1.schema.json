@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/refund-ended.v1.schema.json",
+  "title": "RefundSucceeded / RefundFailed v1 payload",
+  "description": "A staff refund to a rider ended (ADR 0018 part A, issue #512): SUCCEEDED — the money went back (card_minor to the card, bonus_minor to the bonus account) and the journal put it on whoever is at fault; FAILED — the card refused it and nothing moved; UNKNOWN (published as RefundFailed) — the card refused a part after another part went back, moved_minor tells how much; a person decides.",
+  "x-aggregate": "Refund",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["refund_id", "order_id", "client_id", "amount_minor", "card_minor", "bonus_minor", "moved_minor", "currency",
+               "fault", "reason_code", "state"],
+  "properties": {
+    "refund_id": {"type": "string", "format": "uuid"},
+    "order_id": {"type": "string", "format": "uuid"},
+    "client_id": {"type": "string", "format": "uuid"},
+    "driver_id": {"type": "string", "format": "uuid"},
+    "amount_minor": {"type": "integer", "minimum": 1},
+    "card_minor": {"type": "integer", "minimum": 0},
+    "bonus_minor": {"type": "integer", "minimum": 0},
+    "moved_minor": {"type": "integer", "minimum": 0},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "fault": {"type": "string", "enum": ["CLIENT_FREE", "CLIENT", "DRIVER", "OPERATOR", "NONE"]},
+    "reason_code": {"type": "string"},
+    "state": {"type": "string", "enum": ["SUCCEEDED", "FAILED", "UNKNOWN"]}
+  },
+  "examples": [
+    {"refund_id": "0b1c2d3e-0000-4000-8000-000000000003", "order_id": "0b1c2d3e-0000-4000-8000-000000000001",
+     "client_id": "0b1c2d3e-0000-4000-8000-000000000006", "driver_id": "0b1c2d3e-0000-4000-8000-000000000007",
+     "amount_minor": 12000, "card_minor": 12000, "bonus_minor": 0, "moved_minor": 12000, "currency": "UAH",
+     "fault": "DRIVER", "reason_code": "LONG_ROUTE", "state": "SUCCEEDED"}
+  ]
+}

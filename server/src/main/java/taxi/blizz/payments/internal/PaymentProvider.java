@@ -19,7 +19,15 @@ interface PaymentProvider {
     /** WayForPay's reason code "Order Not Found": the bank never saw the reference (wiki.wayforpay.com/en/view/852131). */
     String ORDER_NOT_FOUND = "1127";
 
-    record Result(Outcome outcome, String providerStatus, String reasonCode, String reason) {
+    /**
+     * {@code refundedMinor}: the sum of all refunds of the transaction, when the status answer says it (WayForPay
+     * CHECK_STATUS refundAmount, https://wiki.wayforpay.com/en/view/852117); null otherwise.
+     */
+    record Result(Outcome outcome, String providerStatus, String reasonCode, String reason, Long refundedMinor) {
+
+        Result(Outcome outcome, String providerStatus, String reasonCode, String reason) {
+            this(outcome, providerStatus, reasonCode, reason, null);
+        }
 
         static Result unknown(String reason) {
             return new Result(Outcome.UNKNOWN, null, null, reason);

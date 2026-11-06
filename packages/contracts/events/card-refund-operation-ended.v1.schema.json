@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.blizz.taxi/events/card-refund-operation-ended.v1.schema.json",
+  "title": "CardRefundOperationEnded v1 payload",
+  "description": "One card operation of a staff refund to a rider ended at the provider (ADR 0018 part A, issue #512): SUCCEEDED (the money is on its way back to the card) or DECLINED. A refund spread over several paid transactions has one operation per transaction.",
+  "x-aggregate": "PaymentIntent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "intent_id", "refund_id", "operation_id", "state", "amount_minor"],
+  "properties": {
+    "order_id": {"type": "string", "format": "uuid"},
+    "intent_id": {"type": "string", "format": "uuid"},
+    "refund_id": {"type": "string", "format": "uuid"},
+    "operation_id": {"type": "string", "format": "uuid"},
+    "state": {"type": "string", "enum": ["SUCCEEDED", "DECLINED"]},
+    "amount_minor": {"type": "integer", "minimum": 1}
+  },
+  "examples": [
+    {"order_id": "0b1c2d3e-0000-4000-8000-000000000001", "intent_id": "0b1c2d3e-0000-4000-8000-000000000002",
+     "refund_id": "0b1c2d3e-0000-4000-8000-000000000003", "operation_id": "0b1c2d3e-0000-4000-8000-000000000004",
+     "state": "SUCCEEDED", "amount_minor": 12000}
+  ]
+}
