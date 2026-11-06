@@ -328,8 +328,8 @@ class RefundExecutionTests {
                 .satisfies(e -> assertThat(e.amountMinor()).isEqualTo(300));
         long before = wallets.available(rider, "UAH");
         endLots(rider);
-        expiry.runOnce();
-        expiry.runOnce();
+        assertThat(expiry.runOnce()).as("the ended lot is handled").isPositive();
+        assertThat(expiry.runOnce()).as("a handled lot is not burnt twice").isZero();
 
         assertThat(wallets.available(rider, "UAH")).as("300 burnt, the 500 that never end kept")
                 .isEqualTo(before - 300);
@@ -338,6 +338,8 @@ class RefundExecutionTests {
         assertThat(wallets.mine(ride.ride().payer(), 10).expiring()).isEmpty();
         assertThat(wallets.mine(ride.ride().payer(), 10).entries()).extracting(taxi.blizz.finance.RiderWallets.Entry::kind)
                 .contains("REFUND", "BONUS_EXPIRED");
+        assertThat(wallets.mine(ride.ride().payer(), 10).entries())
+                .filteredOn(e -> "BONUS_EXPIRED".equals(e.kind())).hasSize(1);
     }
 
     @Test
